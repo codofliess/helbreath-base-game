@@ -12,6 +12,7 @@ export const NPC_SPRITE_NAMES: readonly string[] = [
     'mcgaffin',
     'perry',
     'devlin',
+    'guard',
 ];
 
 /**

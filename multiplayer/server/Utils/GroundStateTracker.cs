@@ -96,10 +96,12 @@ public sealed class GroundItemState {
     public long ItemUid { get; }
     public int Quantity { get; }
     public ItemEffectConfig[]? EffectOverrides { get; }
+    public uint ItemAttribute { get; }
+    public int ItemColor { get; }
     public int PosX { get; }
     public int PosY { get; }
 
-    public GroundItemState(int itemId, long itemUid, int quantity, ItemEffectConfig[]? effectOverrides, int posX, int posY) {
+    public GroundItemState(int itemId, long itemUid, int quantity, ItemEffectConfig[]? effectOverrides, int posX, int posY, uint itemAttribute = 0, int itemColor = 0) {
         if (quantity <= 0) {
             throw new ArgumentOutOfRangeException(nameof(quantity), "Ground item quantity must be positive.");
         }
@@ -108,13 +110,15 @@ public sealed class GroundItemState {
         ItemUid = itemUid;
         Quantity = quantity;
         EffectOverrides = CloneEffectOverrides(effectOverrides);
+        ItemAttribute = itemAttribute;
+        ItemColor = itemColor;
         PosX = posX;
         PosY = posY;
     }
 
     public static GroundItemState FromInventoryItem(InventoryItemState item, int posX, int posY) {
         ArgumentNullException.ThrowIfNull(item);
-        return new GroundItemState(item.ItemId, item.ItemUid, item.Quantity, item.EffectOverrides, posX, posY);
+        return new GroundItemState(item.ItemId, item.ItemUid, item.Quantity, item.EffectOverrides, posX, posY, item.ItemAttribute, item.ItemColor);
     }
 
     private static ItemEffectConfig[]? CloneEffectOverrides(ItemEffectConfig[]? effectOverrides) {
@@ -366,6 +370,21 @@ public sealed class GroundStateTracker {
         stack.Add(addedItem, out _);
         activeTopGroundItemsById[addedItem.ItemUid] = addedItem;
         EnsureCellTracked(index, posX, posY);
+        return true;
+    }
+
+    public bool TryPeekTopDroppedItem(int posX, int posY, out GroundItemState? topItem) {
+        topItem = null;
+        if (!IsWithinBounds(posX, posY)) {
+            return false;
+        }
+
+        var stack = droppedItemsByCell[GetIndex(posX, posY)];
+        if (stack is null || !stack.TryPeekNewest(out var peeked)) {
+            return false;
+        }
+
+        topItem = peeked;
         return true;
     }
 

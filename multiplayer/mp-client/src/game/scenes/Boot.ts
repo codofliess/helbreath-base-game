@@ -1,7 +1,8 @@
 import { Scene } from 'phaser';
 import { PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE } from '../../Config';
 import { LOADING_BG_KEY, LOGIN_SCREEN_BG_KEY } from '../../constants/RegistryKeys';
-import { setDebugModeEnabled, setDisplayLargeItemsEnabled } from '../../utils/RegistryUtils';
+import { GROUND_ITEM_DISPLAY_STORAGE_KEY, loadGroundItemDisplaySizeFromStorage } from '../../constants/GroundItemDisplay';
+import { setDebugModeEnabled, setGroundItemDisplaySize } from '../../utils/RegistryUtils';
 
 /**
  * Initial Phaser scene. Loads loading/login backgrounds, sets registry flags (debug, displayLargeItems),
@@ -20,7 +21,7 @@ export class Boot extends Scene {
 
     public create() {
         setDebugModeEnabled(this, false);
-        setDisplayLargeItemsEnabled(this, false);
+        setGroundItemDisplaySize(this, loadGroundItemDisplaySizeFromStorage(GROUND_ITEM_DISPLAY_STORAGE_KEY));
 
         const pendingG = this.make.graphics({ x: 0, y: 0 });
         pendingG.fillStyle(0x000000, 0);

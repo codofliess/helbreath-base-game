@@ -10,9 +10,15 @@ import {
     IN_UI_TOGGLE_WATER_CELLS_HIGHLIGHT,
     IN_UI_TOGGLE_FARMABLE_CELLS_HIGHLIGHT,
     IN_UI_TOGGLE_GRID_DISPLAY,
-    IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS,
+    IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED,
     IN_UI_CHANGE_WEATHER,
 } from '../../constants/EventNames';
+import type { GroundItemDisplaySize } from '../../constants/GroundItemDisplay';
+import {
+    GROUND_ITEM_DISPLAY_STORAGE_KEY,
+    loadGroundItemDisplaySizeFromStorage,
+    persistGroundItemDisplaySize,
+} from '../../constants/GroundItemDisplay';
 
 /** Weather mode: dry (no effects), rain, or snow intensity levels */
 export type WeatherMode = 'dry' | 'rain-light' | 'rain-medium' | 'rain-heavy' | 'snow-light' | 'snow-medium' | 'snow-heavy';
@@ -28,7 +34,7 @@ interface MapDialogState {
     showWaterCells: boolean;
     showFarmableCells: boolean;
     displayGrid: boolean;
-    displayLargeItems: boolean;
+    groundItemDisplaySize: GroundItemDisplaySize;
     weather: WeatherMode;
 }
 
@@ -43,7 +49,7 @@ const initialState: MapDialogState = {
     showWaterCells: false,
     showFarmableCells: false,
     displayGrid: false,
-    displayLargeItems: false,
+    groundItemDisplaySize: loadGroundItemDisplaySizeFromStorage(GROUND_ITEM_DISPLAY_STORAGE_KEY),
     weather: 'dry',
 };
 
@@ -97,9 +103,15 @@ export const setDisplayGrid = (value: boolean) => {
     EventBus.emit(IN_UI_TOGGLE_GRID_DISPLAY, value);
 };
 
+export const setGroundItemDisplaySize = (value: GroundItemDisplaySize) => {
+    mapDialogStore.setState((state) => ({ ...state, groundItemDisplaySize: value }));
+    persistGroundItemDisplaySize(value);
+    EventBus.emit(IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED, value);
+};
+
+/** @deprecated Use setGroundItemDisplaySize */
 export const setDisplayLargeItems = (value: boolean) => {
-    mapDialogStore.setState((state) => ({ ...state, displayLargeItems: value }));
-    EventBus.emit(IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS, value);
+    setGroundItemDisplaySize(value ? 'large' : 'small');
 };
 
 export const setWeather = (value: WeatherMode) => {
@@ -124,7 +136,7 @@ export const resetMapDialogToDefaults = () => {
         showWaterCells: false,
         showFarmableCells: false,
         displayGrid: false,
-        displayLargeItems: false,
+        groundItemDisplaySize: 'small',
         weather: 'dry',
         // Note: debugMode is preserved and not reset
     }));

@@ -297,6 +297,7 @@ public static class Movement {
                         leftX,
                         leftY);
                     Combat.ApplyGroundEffectStepDamageToPlayer(wr, playerConnection);
+                    GroundItemPickup.TryAutoPickupGoldOnCell(wr, playerConnection);
                     NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, leftX, leftY));
                     return;
                 }
@@ -313,6 +314,7 @@ public static class Movement {
                         rightX,
                         rightY);
                     Combat.ApplyGroundEffectStepDamageToPlayer(wr, playerConnection);
+                    GroundItemPickup.TryAutoPickupGoldOnCell(wr, playerConnection);
                     NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, rightX, rightY));
                     return;
                 }
@@ -351,6 +353,7 @@ public static class Movement {
 
         ApplyFacingFromStep(playerConnection, previousX, previousY, requestMovement.DestX, requestMovement.DestY);
         Combat.ApplyGroundEffectStepDamageToPlayer(wr, playerConnection);
+        GroundItemPickup.TryAutoPickupGoldOnCell(wr, playerConnection);
         Combat.HandlePlayerDashAttackAfterMovement(wr, playerConnection, requestMovement);
     }
 

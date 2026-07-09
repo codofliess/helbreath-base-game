@@ -19,7 +19,9 @@ import { NPCDialog } from './ui/dialogs/NPCDialog';
 import { EffectDialog } from './ui/dialogs/EffectDialog';
 import { CastDialog } from './ui/dialogs/CastDialog';
 import { PlayerDialog } from './ui/dialogs/PlayerDialog';
+import { CharacterDialog } from './ui/dialogs/CharacterDialog';
 import { InventoryDialog } from './ui/dialogs/InventoryDialog';
+import { HotkeyBar } from './ui/components/HotkeyBar';
 import { ItemDialog } from './ui/dialogs/ItemDialog';
 import { ServerDialog } from './ui/dialogs/ServerDialog';
 import { PerformanceDialog } from './ui/dialogs/PerformanceDialog';
@@ -41,6 +43,7 @@ import { effectDialogStore } from './ui/store/EffectDialog.store';
 import { castDialogStore } from './ui/store/CastDialog.store';
 import { controlsDialogStore, setControlsDialogOpen } from './ui/store/ControlsDialog.store';
 import { playerDialogStore, setPlayerDialogOpen } from './ui/store/PlayerDialog.store';
+import { characterDialogStore, setCharacterDialogOpen } from './ui/store/CharacterDialog.store';
 import { inventoryDialogStore, setInventoryDialogOpen } from './ui/store/InventoryDialog.store';
 import { itemDialogStore, setItemDialogOpen } from './ui/store/ItemDialog.store';
 import { serverDialogStore, setServerDialogOpen } from './ui/store/ServerDialog.store';
@@ -70,6 +73,7 @@ function App()
     const [mapDialogPosition, setMapDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [cameraDialogPosition, setCameraDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [playerDialogPosition, setPlayerDialogPosition] = useState(CHILD_DIALOG_POSITION);
+    const [characterDialogPosition, setCharacterDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [minimapDialogPosition, setMinimapDialogPosition] = useState({ x: 1060, y: 20 });
     const [soundDialogPosition, setSoundDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [monsterDialogPosition, setMonsterDialogPosition] = useState(CHILD_DIALOG_POSITION);
@@ -131,6 +135,7 @@ function App()
     const [mapDialogZIndex, setMapDialogZIndex] = useState(10001);
     const [cameraDialogZIndex, setCameraDialogZIndex] = useState(10002);
     const [playerDialogZIndex, setPlayerDialogZIndex] = useState(10003);
+    const [characterDialogZIndex, setCharacterDialogZIndex] = useState(10003);
     const [minimapDialogZIndex, setMinimapDialogZIndex] = useState(10004);
     const [soundDialogZIndex, setSoundDialogZIndex] = useState(10005);
     const [monsterDialogZIndex, setMonsterDialogZIndex] = useState(10006);
@@ -149,6 +154,7 @@ function App()
     const showMapDialog = useStore(mapDialogStore, (state) => state.isOpen);
     const showCameraDialog = useStore(cameraDialogStore, (state) => state.isOpen);
     const showPlayerDialog = useStore(playerDialogStore, (state) => state.isOpen);
+    const showCharacterDialog = useStore(characterDialogStore, (state) => state.isOpen);
     const showMinimapDialog = useStore(minimapDialogStore, (state) => state.isOpen && state.minimapAvailable);
     const showSoundDialog = useStore(soundDialogStore, (state) => state.isOpen);
     const showMonsterDialog = useStore(monsterDialogStore, (state) => state.isOpen);
@@ -268,6 +274,12 @@ function App()
             bringDialogToFront('player-dialog');
         }
     }, [showPlayerDialog]);
+
+    useEffect(() => {
+        if (showCharacterDialog) {
+            bringDialogToFront('character-dialog');
+        }
+    }, [showCharacterDialog]);
 
     useEffect(() => {
         if (showMinimapDialog) {
@@ -524,6 +536,9 @@ function App()
             case 'player-dialog':
                 setPlayerDialogZIndex(currentZIndex);
                 break;
+            case 'character-dialog':
+                setCharacterDialogZIndex(currentZIndex);
+                break;
             case 'minimap-dialog':
                 setMinimapDialogZIndex(currentZIndex);
                 break;
@@ -592,6 +607,9 @@ function App()
                 break;
             case 'player-dialog':
                 currentPosition = playerDialogPosition;
+                break;
+            case 'character-dialog':
+                currentPosition = characterDialogPosition;
                 break;
             case 'minimap-dialog':
                 currentPosition = minimapDialogPosition;
@@ -673,6 +691,9 @@ function App()
                 break;
             case 'player-dialog':
                 setPlayerDialogPosition(position);
+                break;
+            case 'character-dialog':
+                setCharacterDialogPosition(position);
                 break;
             case 'minimap-dialog':
                 setMinimapDialogPosition(position);
@@ -829,6 +850,15 @@ function App()
                         onBringToFront={() => bringDialogToFront('player-dialog')}
                     />
                 )}
+
+                {showCharacterDialog && (
+                    <CharacterDialog
+                        position={characterDialogPosition}
+                        onClose={() => setCharacterDialogOpen(false)}
+                        zIndex={characterDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('character-dialog')}
+                    />
+                )}
                 
                 {isMapLoaded && showMinimapDialog && (
                     <MinimapDialog
@@ -929,6 +959,8 @@ function App()
                     />
                 )}
                 
+                {isMapLoaded && <HotkeyBar />}
+
                 <AssetDebugOverlay />
                 <InventoryItemHoverOverlay />
                 <MonsterHoverOverlay />

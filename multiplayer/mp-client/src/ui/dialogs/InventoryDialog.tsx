@@ -1,11 +1,28 @@
 import { useStore } from '@tanstack/react-store';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { DraggableDialog } from './DraggableDialog';
-import { inventoryDialogStore } from '../store/InventoryDialog.store';
+import { HeadlessDraggableDialog } from './HeadlessDraggableDialog';
+import { inventoryDialogStore, setBagDialogTab } from '../store/InventoryDialog.store';
+import { itemDropsStore, clearItemDropsLog } from '../store/ItemDrops.store';
 import { appStore } from '../store/App.store';
-import { mapDialogStore } from '../store/MapDialog.store';
-import { ItemTypes, EQUIPMENT_SLOT_TO_SLOT_ID, getItemById, getItemInventorySpriteKeyWithOverrides, getGlowEffectColor, getGlareEffectColor, getTintAppearanceEffectColor, getTintInventoryEffectColorWithOverrides, RING_SLOT_LEFT, RING_SLOT_RIGHT, type Effect, type EquipmentSlot } from '../../constants/Items';
+import { BAG_CONFIG_ICON, BAG_DIALOG_BG, BAG_TAB_LEFT, BAG_TAB_RIGHT } from '../../constants/SpriteKeys';
+import { mapDialogStore, setGroundItemDisplaySize } from '../store/MapDialog.store';
+import {
+    bagSettingsStore,
+    BAG_SCALE_LEVELS,
+    decreaseBagScale,
+    increaseBagScale,
+    persistBagGroundItemDisplaySize,
+    setBagConfigMenuOpen,
+    setBagTransparent,
+    toggleBagConfigMenu,
+} from '../store/BagSettings.store';
+import {
+    BAG_ITEM_DISPLAY_SIZE_PX,
+    GROUND_ITEM_DISPLAY_LABELS,
+    GROUND_ITEM_DISPLAY_SIZES,
+} from '../../constants/GroundItemDisplay';
+import { ITEMS, ItemTypes, getBagItemSpriteKeyWithOverrides, RING_SLOT_LEFT, type Effect, type EquipmentSlot } from '../../constants/Items';
 import { EventBus } from '../../game/EventBus';
 import {
     ITEM_MOVED_TO_BAG,
@@ -15,6 +32,7 @@ import {
     ITEM_DROP_TO_GROUND_REQUESTED,
 } from '../../constants/EventNames';
 import { setInventoryItemHoverInfo, setInventoryItemHoverOverlaySuppressed } from '../store/InventoryItemHoverOverlay.store';
+import { buildInventoryItemHoverInfo } from '../../constants/OlympiaItemName';
 import { Gender } from '../../Types';
 
 interface InventoryDialogProps {
@@ -24,8 +42,11 @@ interface InventoryDialogProps {
     onBringToFront?: () => void;
 }
 
+function stopDialogPointer(e: PointerEvent) {
+    e.stopPropagation();
+}
+
 const DRAG_GHOST_SIZE = 48;
-const BAG_ITEM_SIZE = 48;
 const BAG_PADDING = 8;
 /** Minimum pixel movement to treat as a drag; below this, release cancels drag (allows double-click to equip). */
 const DRAG_THRESHOLD_PX = 8;
@@ -33,9 +54,6 @@ const DRAG_THRESHOLD_PX = 8;
 const DOUBLE_CLICK_WINDOW_MS = 400;
 /** Delay before clearing hover overlay on mouseLeave - reduces flicker when moving between overlapping items. */
 const HOVER_LEAVE_DELAY_MS = 50;
-const BAG_ITEM_ALPHA_HIT_THRESHOLD = 1;
-/** Extra outer padding in display pixels added to the alpha hit mask to widen hover/pickup surface area. */
-const BAG_ITEM_HIT_PADDING_PX = 2;
 
 function clampBagPosition(
     bagX: number,
@@ -64,32 +82,23 @@ interface DraggedItem {
     itemType: ItemTypes;
 }
 
-interface BagItemAlphaMask {
-    width: number;
-    height: number;
-    alpha: Uint8ClampedArray;
-}
-
-interface BaggedItemData {
-    itemId: number;
-    itemUid: string;
-    bagX?: number;
-    bagY?: number;
-    quantity?: number;
-    effectOverrides?: Effect[];
-}
-
 export function InventoryDialog({
     position,
     onClose,
     zIndex,
     onBringToFront,
 }: InventoryDialogProps) {
-    const equippedItems = useStore(inventoryDialogStore, (state) => state.equippedItems);
+    const activeTab = useStore(inventoryDialogStore, (state) => state.activeTab);
     const baggedItems = useStore(inventoryDialogStore, (state) => state.baggedItems);
+    const itemDropEntries = useStore(itemDropsStore, (state) => state.entries);
     const playerGender = useStore(inventoryDialogStore, (state) => state.playerGender);
     const spriteFrameMap = useStore(appStore, (state) => state.spriteFrameMap);
     const displaySpritesInfo = useStore(mapDialogStore, (state) => state.debugMode);
+    const groundItemDisplaySize = useStore(mapDialogStore, (state) => state.groundItemDisplaySize);
+    const bagTransparent = useStore(bagSettingsStore, (state) => state.transparent);
+    const bagScaleIndex = useStore(bagSettingsStore, (state) => state.scaleIndex);
+    const bagConfigMenuOpen = useStore(bagSettingsStore, (state) => state.configMenuOpen);
+    const bagScale = BAG_SCALE_LEVELS[bagScaleIndex];
 
     const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
     const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
@@ -100,13 +109,9 @@ export function InventoryDialog({
     const bagAreaRef = useRef<HTMLDivElement>(null);
     const isBagDropTargetRef = useRef(false);
     const activeSlotDropTargetRef = useRef<EquipmentSlot | null>(null);
-    const ringLeftSlotRef = useRef<HTMLDivElement | null>(null);
-    const ringRightSlotRef = useRef<HTMLDivElement | null>(null);
     const dragStartPositionRef = useRef({ x: 0, y: 0 });
     const bagItemImageSizeCacheRef = useRef(new Map<string, { width: number; height: number }>());
-    const bagItemAlphaMaskCacheRef = useRef(new Map<string, BagItemAlphaMask>());
     const [, setBagItemImageSizesVersion] = useState(0);
-    const [hoveredBagItemUid, setHoveredBagItemUid] = useState<string | undefined>(undefined);
     /** When we cancel a drag (no movement), store item+time so second click can trigger equip if dblclick doesn't fire. */
     const lastCancelledBagDragRef = useRef<{ itemUid: string; item: { itemId: number; itemUid: string }; itemType: ItemTypes; timestamp: number } | null>(null);
     const isSecondClickOfDoubleClickRef = useRef(false);
@@ -120,6 +125,7 @@ export function InventoryDialog({
         y: number;
         item: { itemId: number; itemUid: string };
     } | null>(null);
+    const bagConfigMenuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const updatePortalTarget = () => {
@@ -159,10 +165,28 @@ export function InventoryDialog({
     }, []);
 
     useEffect(() => {
+        if (!bagConfigMenuOpen) return;
+        const closeMenu = (e: MouseEvent) => {
+            if (bagConfigMenuRef.current?.contains(e.target as Node)) {
+                return;
+            }
+            setBagConfigMenuOpen(false);
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setBagConfigMenuOpen(false);
+        };
+        window.addEventListener('mousedown', closeMenu);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('mousedown', closeMenu);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [bagConfigMenuOpen]);
+
+    useEffect(() => {
         if (!contextMenu) return;
         const closeMenu = () => {
             setContextMenu(null);
-            setHoveredBagItemUid(undefined);
             setInventoryItemHoverOverlaySuppressed(false);
         };
         const handleClick = () => closeMenu();
@@ -182,22 +206,16 @@ export function InventoryDialog({
         const loadedKeys = new Set<string>();
 
         for (const item of baggedItems) {
-            const itemDef = getItemById(item.itemId);
+            const itemDef = ITEMS.find((i) => i.id === item.itemId);
             if (!itemDef) {
                 continue;
             }
             const gender = playerGender !== undefined ? playerGender : Gender.MALE;
-            const spriteKey = getItemInventorySpriteKeyWithOverrides(itemDef, gender, item.effectOverrides);
+            const spriteKey = getBagItemSpriteKeyWithOverrides(itemDef, gender, item.effectOverrides, groundItemDisplaySize);
             if (!spriteKey) {
                 continue;
             }
-            if (
-                loadedKeys.has(spriteKey) ||
-                (
-                    bagItemImageSizeCacheRef.current.has(spriteKey) &&
-                    bagItemAlphaMaskCacheRef.current.has(spriteKey)
-                )
-            ) {
+            if (loadedKeys.has(spriteKey) || bagItemImageSizeCacheRef.current.has(spriteKey)) {
                 continue;
             }
             const imageDataUrl = spriteFrameMap.get(spriteKey);
@@ -215,23 +233,6 @@ export function InventoryDialog({
                     width: image.naturalWidth,
                     height: image.naturalHeight,
                 });
-                const canvas = document.createElement('canvas');
-                canvas.width = image.naturalWidth;
-                canvas.height = image.naturalHeight;
-                const context = canvas.getContext('2d', { willReadFrequently: true });
-                if (context) {
-                    context.drawImage(image, 0, 0);
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
-                    const alpha = new Uint8ClampedArray(canvas.width * canvas.height);
-                    for (let pixelIndex = 0; pixelIndex < alpha.length; pixelIndex += 1) {
-                        alpha[pixelIndex] = imageData[(pixelIndex * 4) + 3];
-                    }
-                    bagItemAlphaMaskCacheRef.current.set(spriteKey, {
-                        width: canvas.width,
-                        height: canvas.height,
-                        alpha,
-                    });
-                }
                 setBagItemImageSizesVersion((version) => version + 1);
             };
             image.src = imageDataUrl;
@@ -240,16 +241,17 @@ export function InventoryDialog({
         return () => {
             isDisposed = true;
         };
-    }, [baggedItems, playerGender, spriteFrameMap]);
+    }, [baggedItems, playerGender, spriteFrameMap, groundItemDisplaySize]);
 
     const getBagItemDisplaySize = useCallback(
         (itemId: number, effectOverrides?: Effect[]) => {
-            const bagItem = getItemById(itemId);
+            const baseItemSize = BAG_ITEM_DISPLAY_SIZE_PX[groundItemDisplaySize];
+            const bagItem = ITEMS.find((i) => i.id === itemId);
             if (!bagItem) {
-                return { width: BAG_ITEM_SIZE, height: BAG_ITEM_SIZE };
+                return { width: baseItemSize, height: baseItemSize };
             }
             const gender = playerGender !== undefined ? playerGender : Gender.MALE;
-            const spriteKey = getItemInventorySpriteKeyWithOverrides(bagItem, gender, effectOverrides);
+            const spriteKey = getBagItemSpriteKeyWithOverrides(bagItem, gender, effectOverrides, groundItemDisplaySize);
             const naturalSize =
                 spriteKey !== undefined
                     ? bagItemImageSizeCacheRef.current.get(spriteKey)
@@ -257,161 +259,18 @@ export function InventoryDialog({
             const scale = bagItem.scale !== undefined ? bagItem.scale : 1;
             if (naturalSize === undefined) {
                 return {
-                    width: Math.max(1, Math.round(BAG_ITEM_SIZE * scale)),
-                    height: Math.max(1, Math.round(BAG_ITEM_SIZE * scale)),
+                    width: Math.max(1, Math.round(baseItemSize * scale)),
+                    height: Math.max(1, Math.round(baseItemSize * scale)),
                 };
             }
+            const naturalMax = Math.max(naturalSize.width, naturalSize.height, 1);
+            const fitScale = baseItemSize / naturalMax;
             return {
-                width: Math.max(1, Math.round(naturalSize.width * scale)),
-                height: Math.max(1, Math.round(naturalSize.height * scale)),
+                width: Math.max(1, Math.round(naturalSize.width * fitScale * scale)),
+                height: Math.max(1, Math.round(naturalSize.height * fitScale * scale)),
             };
         },
-        [playerGender],
-    );
-
-    const setBagHoverInfo = useCallback(
-        (
-            item: BaggedItemData,
-            itemDef: NonNullable<ReturnType<typeof getItemById>>,
-            clientX: number,
-            clientY: number,
-        ) => {
-            setInventoryItemHoverInfo({
-                itemName: itemDef.name,
-                itemType: itemDef.itemType,
-                itemId: item.itemId,
-                itemUid: item.itemUid,
-                gender: itemDef.gender,
-                quantity: item.quantity ?? 1,
-                stackable: itemDef.stackable,
-                consumable: itemDef.consumable,
-                appearanceGlowColor: getGlowEffectColor(itemDef, item.effectOverrides),
-                appearanceGlareColor: getGlareEffectColor(itemDef, item.effectOverrides),
-                appearanceTintColor: getTintAppearanceEffectColor(itemDef, item.effectOverrides),
-                inventoryTintColor: getTintInventoryEffectColorWithOverrides(itemDef, item.effectOverrides),
-                mouseX: clientX,
-                mouseY: clientY,
-            });
-        },
-        [],
-    );
-
-    const getBagItemHitAtPoint = useCallback(
-        (clientX: number, clientY: number) => {
-            const bagRect = bagAreaRef.current?.getBoundingClientRect();
-            if (!bagRect) {
-                return undefined;
-            }
-
-            const localX = clientX - bagRect.left;
-            const localY = clientY - bagRect.top;
-            if (localX < 0 || localY < 0 || localX > bagRect.width || localY > bagRect.height) {
-                return undefined;
-            }
-
-            const gender = playerGender ?? Gender.MALE;
-
-            for (let itemIndex = baggedItems.length - 1; itemIndex >= 0; itemIndex -= 1) {
-                const item = baggedItems[itemIndex];
-                const itemDef = getItemById(item.itemId);
-                const displaySize = getBagItemDisplaySize(item.itemId, item.effectOverrides);
-                const centerX = item.bagX !== undefined ? item.bagX : bagRect.width / 2;
-                const centerY = item.bagY !== undefined ? item.bagY : bagRect.height / 2;
-                const itemLeft = centerX - (displaySize.width / 2);
-                const itemTop = centerY - (displaySize.height / 2);
-
-                if (
-                    localX < itemLeft - BAG_ITEM_HIT_PADDING_PX ||
-                    localX > itemLeft + displaySize.width + BAG_ITEM_HIT_PADDING_PX ||
-                    localY < itemTop - BAG_ITEM_HIT_PADDING_PX ||
-                    localY > itemTop + displaySize.height + BAG_ITEM_HIT_PADDING_PX
-                ) {
-                    continue;
-                }
-
-                if (!itemDef) {
-                    return { item, itemDef };
-                }
-
-                const spriteKey = getItemInventorySpriteKeyWithOverrides(itemDef, gender, item.effectOverrides);
-                if (!spriteKey) {
-                    return { item, itemDef };
-                }
-
-                const alphaMask = bagItemAlphaMaskCacheRef.current.get(spriteKey);
-                if (!alphaMask) {
-                    return { item, itemDef };
-                }
-
-                const centerPixelX = Math.floor(((localX - itemLeft) / displaySize.width) * alphaMask.width);
-                const centerPixelY = Math.floor(((localY - itemTop) / displaySize.height) * alphaMask.height);
-                // Convert the display-space padding into mask-space radius so the effective hit area
-                // grows by BAG_ITEM_HIT_PADDING_PX regardless of the sprite's display scale.
-                const maskRadiusX = Math.max(
-                    1,
-                    Math.ceil((BAG_ITEM_HIT_PADDING_PX / displaySize.width) * alphaMask.width),
-                );
-                const maskRadiusY = Math.max(
-                    1,
-                    Math.ceil((BAG_ITEM_HIT_PADDING_PX / displaySize.height) * alphaMask.height),
-                );
-
-                let hitOpaquePixel = false;
-                for (let dy = -maskRadiusY; dy <= maskRadiusY && !hitOpaquePixel; dy += 1) {
-                    const py = centerPixelY + dy;
-                    if (py < 0 || py >= alphaMask.height) {
-                        continue;
-                    }
-                    for (let dx = -maskRadiusX; dx <= maskRadiusX && !hitOpaquePixel; dx += 1) {
-                        const px = centerPixelX + dx;
-                        if (px < 0 || px >= alphaMask.width) {
-                            continue;
-                        }
-                        if (alphaMask.alpha[(py * alphaMask.width) + px] >= BAG_ITEM_ALPHA_HIT_THRESHOLD) {
-                            hitOpaquePixel = true;
-                        }
-                    }
-                }
-                if (hitOpaquePixel) {
-                    return { item, itemDef };
-                }
-            }
-
-            return undefined;
-        },
-        [baggedItems, getBagItemDisplaySize, playerGender],
-    );
-
-    const updateBagHoverAtPoint = useCallback(
-        (clientX: number, clientY: number) => {
-            if (draggedItem || contextMenu) {
-                return;
-            }
-
-            const hit = getBagItemHitAtPoint(clientX, clientY);
-            if (!hit?.itemDef) {
-                setHoveredBagItemUid(undefined);
-                clearHoverDebounced();
-                return;
-            }
-
-            cancelHoverClear();
-            setHoveredBagItemUid(hit.item.itemUid);
-            setBagHoverInfo(hit.item, hit.itemDef, clientX, clientY);
-        },
-        [cancelHoverClear, clearHoverDebounced, contextMenu, draggedItem, getBagItemHitAtPoint, setBagHoverInfo],
-    );
-
-    const getSlotData = useCallback(
-        (slot: EquipmentSlot) => {
-            const equipped = equippedItems[slot];
-            const itemDef = equipped !== undefined ? getItemById(equipped.itemId) : undefined;
-            const gender = playerGender ?? Gender.MALE;
-            const spriteKey = itemDef !== undefined ? getItemInventorySpriteKeyWithOverrides(itemDef, gender, equipped?.effectOverrides) : undefined;
-            const imageDataUrl = spriteKey !== undefined ? spriteFrameMap.get(spriteKey) : undefined;
-            return { equipped, itemDef, imageDataUrl };
-        },
-        [equippedItems, playerGender, spriteFrameMap],
+        [playerGender, groundItemDisplaySize],
     );
 
     const isItemEquippable = useCallback(
@@ -426,51 +285,14 @@ export function InventoryDialog({
 
     const getItemImageUrl = useCallback(
         (itemId: number, effectOverrides?: Effect[]) => {
-            const item = getItemById(itemId);
+            const item = ITEMS.find((i) => i.id === itemId);
             if (!item) return undefined;
             const gender = playerGender ?? Gender.MALE;
-            const key = getItemInventorySpriteKeyWithOverrides(item, gender, effectOverrides);
+            const key = getBagItemSpriteKeyWithOverrides(item, gender, effectOverrides, groundItemDisplaySize);
             if (!key) return undefined;
             return spriteFrameMap.get(key);
         },
-        [playerGender, spriteFrameMap],
-    );
-
-    const handleSlotMouseDown = useCallback(
-        (e: React.MouseEvent, slot: EquipmentSlot) => {
-            const { equipped, imageDataUrl } = getSlotData(slot);
-            if (e.button !== 0 || !imageDataUrl || !equipped) return;
-            e.preventDefault();
-            cancelHoverClear();
-            setInventoryItemHoverInfo(undefined);
-            isBagDropTargetRef.current = false;
-            activeSlotDropTargetRef.current = slot;
-            setIsBagDropTarget(false);
-            setActiveSlotDropTarget(slot);
-            dragStartPositionRef.current = { x: e.clientX, y: e.clientY };
-            const itemDef = getItemById(equipped.itemId);
-            setDraggedItem({
-                item: equipped,
-                source: slot,
-                itemType: itemDef?.itemType ?? ItemTypes.RING,
-            });
-            setDragPosition({ x: e.clientX, y: e.clientY });
-        },
-        [getSlotData],
-    );
-
-    const handleSlotDoubleClick = useCallback(
-        (slot: EquipmentSlot) => {
-            const { equipped, imageDataUrl } = getSlotData(slot);
-            if (!equipped || !imageDataUrl) return;
-            EventBus.emit(ITEM_MOVED_TO_BAG, {
-                itemUid: equipped.itemUid,
-                itemType: slot,
-                bagX: equipped.bagX,
-                bagY: equipped.bagY,
-            });
-        },
-        [getSlotData],
+        [playerGender, spriteFrameMap, groundItemDisplaySize],
     );
 
     const handleBagItemDoubleClick = useCallback(
@@ -479,7 +301,7 @@ export function InventoryDialog({
                 skipNextDblclickRef.current = false;
                 return;
             }
-            const itemDef = getItemById(item.itemId);
+            const itemDef = ITEMS.find((i) => i.id === item.itemId);
             if (!itemDef) return;
             if (itemDef.itemType === ItemTypes.MISC && itemDef.consumable) {
                 EventBus.emit(ITEM_CONSUMED_REQUESTED, { item });
@@ -497,12 +319,11 @@ export function InventoryDialog({
     const handleBagItemMouseDown = useCallback(
         (e: React.MouseEvent, item: { itemId: number; itemUid: string; effectOverrides?: Effect[] }) => {
             if (e.button !== 0) return;
-            const itemDef = getItemById(item.itemId);
+            const itemDef = ITEMS.find((i) => i.id === item.itemId);
             if (!itemDef) return;
             e.preventDefault();
             cancelHoverClear();
             setInventoryItemHoverInfo(undefined);
-            setHoveredBagItemUid(undefined);
             EventBus.emit(ITEM_BAG_ITEM_BRING_TO_FRONT_REQUESTED, { itemUid: item.itemUid });
             isBagDropTargetRef.current = true;
             activeSlotDropTargetRef.current = null;
@@ -535,19 +356,6 @@ export function InventoryDialog({
     useEffect(() => {
         if (!draggedItem) return;
 
-        const getCloserRingSlot = (clientX: number, clientY: number): EquipmentSlot | null => {
-            const left = ringLeftSlotRef.current?.getBoundingClientRect();
-            const right = ringRightSlotRef.current?.getBoundingClientRect();
-            if (!left || !right) return RING_SLOT_LEFT;
-            const leftCenterX = left.left + left.width / 2;
-            const leftCenterY = left.top + left.height / 2;
-            const rightCenterX = right.left + right.width / 2;
-            const rightCenterY = right.top + right.height / 2;
-            const distLeft = Math.hypot(clientX - leftCenterX, clientY - leftCenterY);
-            const distRight = Math.hypot(clientX - rightCenterX, clientY - rightCenterY);
-            return distLeft <= distRight ? RING_SLOT_LEFT : RING_SLOT_RIGHT;
-        };
-
         const handleMouseMove = (e: MouseEvent) => {
             setDragPosition({ x: e.clientX, y: e.clientY });
             const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -569,7 +377,7 @@ export function InventoryDialog({
             let slotTarget: EquipmentSlot | null = null;
             if (!overBag && !dropToGround) {
                 if (draggedItem.source === 'bag' && draggedItem.itemType === ItemTypes.RING) {
-                    slotTarget = getCloserRingSlot(e.clientX, e.clientY);
+                    slotTarget = RING_SLOT_LEFT;
                 } else if (draggedItem.source === 'bag' && draggedItem.itemType === ItemTypes.MISC) {
                     slotTarget = null; // MISC is not equippable
                 } else if (draggedItem.source !== 'bag') {
@@ -590,7 +398,7 @@ export function InventoryDialog({
             if (!hasMoved) {
                 // No movement: cancel drag so double-click can equip or consume
                 if (isSecondClickOfDoubleClickRef.current && draggedItem.source === 'bag') {
-                    const itemDef = getItemById(draggedItem.item.itemId);
+                    const itemDef = ITEMS.find((i) => i.id === draggedItem.item.itemId);
                     if (itemDef?.consumable && itemDef.itemType === ItemTypes.MISC) {
                         EventBus.emit(ITEM_CONSUMED_REQUESTED, { item: draggedItem.item });
                         skipNextDblclickRef.current = true;
@@ -637,18 +445,13 @@ export function InventoryDialog({
                     bagX = clamped.bagX;
                     bagY = clamped.bagY;
                 }
-                const bagMoveTargets = draggedItem.source === 'bag' && e.shiftKey
-                    ? baggedItems.filter((item) => item.itemId === draggedItem.item.itemId)
-                    : [draggedItem.item];
                 const slotForMove: EquipmentSlot = draggedItem.source === 'bag' ? (draggedItem.itemType as EquipmentSlot) : draggedItem.source;
-                for (const item of bagMoveTargets) {
-                    EventBus.emit(ITEM_MOVED_TO_BAG, {
-                        itemUid: item.itemUid,
-                        itemType: slotForMove,
-                        bagX,
-                        bagY,
-                    });
-                }
+                EventBus.emit(ITEM_MOVED_TO_BAG, {
+                    itemUid: draggedItem.item.itemUid,
+                    itemType: slotForMove,
+                    bagX,
+                    bagY,
+                });
             } else if (draggedItem.source === 'bag') {
                 const dialogEl = document.querySelector<HTMLElement>('[data-dialog-id="inventory-dialog"]');
                 const dialogRect = dialogEl?.getBoundingClientRect();
@@ -686,11 +489,17 @@ export function InventoryDialog({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [baggedItems, draggedItem, getBagItemDisplaySize]);
+    }, [draggedItem, getBagItemDisplaySize]);
+
+    const bagBg = spriteFrameMap.get(BAG_DIALOG_BG);
+    const tabLeftSprite = spriteFrameMap.get(BAG_TAB_LEFT);
+    const tabRightSprite = spriteFrameMap.get(BAG_TAB_RIGHT);
+    const configIconSprite = spriteFrameMap.get(BAG_CONFIG_ICON);
+    const canDecreaseBagScale = bagScaleIndex > 0;
+    const canIncreaseBagScale = bagScaleIndex < BAG_SCALE_LEVELS.length - 1;
 
     return (
-        <DraggableDialog
-            title="Inventory"
+        <HeadlessDraggableDialog
             position={position}
             id="inventory-dialog"
             zIndex={zIndex}
@@ -699,155 +508,115 @@ export function InventoryDialog({
                 e.preventDefault();
                 onClose();
             }}
-        >
-            <div className="inventory-dialog-content" data-drop-to-ground={isDropToGroundIntent ? 'true' : undefined}>
-                <div className="inventory-equipped-area">
-                    {(() => {
-                        const getSlotLabel = (slot: EquipmentSlot) => {
-                            if (slot === ItemTypes.ACCESSORY) return 'ACC';
-                            if (slot === ItemTypes.NECKLACE) return 'NECK';
-                            if (slot === RING_SLOT_LEFT || slot === RING_SLOT_RIGHT) return 'Ring';
-                            const slotId = EQUIPMENT_SLOT_TO_SLOT_ID[slot];
-                            return slotId.charAt(0).toUpperCase() + slotId.slice(1);
-                        };
-                        const renderEquippableSlot = (slot: EquipmentSlot, slotRef?: React.RefObject<HTMLDivElement | null>) => {
-                            const slotId = EQUIPMENT_SLOT_TO_SLOT_ID[slot];
-                            const { equipped, itemDef, imageDataUrl } = getSlotData(slot);
-                            const isDropTarget = activeSlotDropTarget === slot;
-                            const slotLabel = getSlotLabel(slot);
-                            return (
-                                <div
-                                    key={slot}
-                                    ref={slotRef ?? undefined}
-                                    data-slot-type={slot}
-                                    className={`inventory-slot inventory-slot-${slotId}${imageDataUrl ? ' inventory-slot-has-item' : ''}${isDropTarget ? ' inventory-slot-drop-target' : ''}`}
-                                    onMouseDown={(e) => handleSlotMouseDown(e, slot)}
-                                    onDoubleClick={imageDataUrl ? () => handleSlotDoubleClick(slot) : undefined}
-                                    onMouseEnter={
-                                        imageDataUrl && itemDef && equipped && !draggedItem && !contextMenu
-                                            ? (e) => {
-                                                  cancelHoverClear();
-                                                  setInventoryItemHoverInfo({
-                                                      itemName: itemDef.name,
-                                                      itemType: itemDef.itemType,
-                                                      itemId: equipped.itemId,
-                                                      itemUid: equipped.itemUid,
-                                                      gender: itemDef.gender,
-                                                      quantity: equipped.quantity ?? 1,
-                                                      stackable: itemDef.stackable,
-                                                      consumable: itemDef.consumable,
-                                                      appearanceGlowColor: getGlowEffectColor(itemDef, equipped.effectOverrides),
-                                                      appearanceGlareColor: getGlareEffectColor(itemDef, equipped.effectOverrides),
-                                                      appearanceTintColor: getTintAppearanceEffectColor(itemDef, equipped.effectOverrides),
-                                                      inventoryTintColor: getTintInventoryEffectColorWithOverrides(itemDef, equipped.effectOverrides),
-                                                      mouseX: e.clientX,
-                                                      mouseY: e.clientY,
-                                                  });
-                                              }
-                                            : undefined
-                                    }
-                                    onMouseMove={
-                                        imageDataUrl && itemDef && equipped && !draggedItem && !contextMenu
-                                            ? (e) =>
-                                                  setInventoryItemHoverInfo({
-                                                      itemName: itemDef.name,
-                                                      itemType: itemDef.itemType,
-                                                      itemId: equipped.itemId,
-                                                      itemUid: equipped.itemUid,
-                                                      gender: itemDef.gender,
-                                                      quantity: equipped.quantity ?? 1,
-                                                      stackable: itemDef.stackable,
-                                                      consumable: itemDef.consumable,
-                                                      appearanceGlowColor: getGlowEffectColor(itemDef, equipped.effectOverrides),
-                                                      appearanceGlareColor: getGlareEffectColor(itemDef, equipped.effectOverrides),
-                                                      appearanceTintColor: getTintAppearanceEffectColor(itemDef, equipped.effectOverrides),
-                                                      mouseX: e.clientX,
-                                                      mouseY: e.clientY,
-                                                  })
-                                            : undefined
-                                    }
-                                    onMouseLeave={
-                                        imageDataUrl ? () => clearHoverDebounced() : undefined
-                                    }
-                                    style={{ cursor: imageDataUrl ? 'grab' : undefined }}
-                                >
-                                    {imageDataUrl ? (
-                                        <img
-                                            src={imageDataUrl}
-                                            alt={`Equipped ${slotLabel}`}
-                                            className="inventory-slot-item-image"
-                                            draggable={false}
-                                            style={{
-                                                imageRendering: 'pixelated',
-                                                visibility: draggedItem?.source === slot ? 'hidden' : 'visible',
-                                                ...(displaySpritesInfo && { border: '1px solid red' }),
-                                                ...(itemDef?.scale != null && { transform: `scale(${itemDef.scale})` }),
-                                            }}
-                                        />
-                                    ) : (
-                                        <span className="inventory-slot-label">{slotLabel}</span>
-                                    )}
-                                </div>
-                            );
-                        };
-                        return (
-                            <>
-                                {renderEquippableSlot(ItemTypes.HELMET)}
-                                {renderEquippableSlot(ItemTypes.WEAPON)}
-                                {renderEquippableSlot(ItemTypes.ARMOR)}
-                                {renderEquippableSlot(ItemTypes.HAUBERK)}
-                                {renderEquippableSlot(ItemTypes.SHIELD)}
-                                {renderEquippableSlot(ItemTypes.LEGGINGS)}
-                                {renderEquippableSlot(ItemTypes.CAPE)}
-                                {renderEquippableSlot(ItemTypes.BOOTS)}
-                                {renderEquippableSlot(ItemTypes.ACCESSORY)}
-                                {renderEquippableSlot(ItemTypes.NECKLACE)}
-                                {renderEquippableSlot(RING_SLOT_LEFT, ringLeftSlotRef)}
-                                {renderEquippableSlot(RING_SLOT_RIGHT, ringRightSlotRef)}
-                            </>
-                        );
-                    })()}
-                </div>
+            renderHeader={(listeners, attributes, isDragging) => (
                 <div
-                    ref={bagAreaRef}
-                    className={`inventory-bag-area${isBagDropTarget ? ' inventory-bag-area-drop-target' : ''}`}
-                    onMouseDown={(e) => {
-                        const hit = getBagItemHitAtPoint(e.clientX, e.clientY);
-                        if (!hit) {
-                            return;
-                        }
-                        handleBagItemMouseDown(e, hit.item);
-                    }}
-                    onDoubleClick={(e) => {
-                        const hit = getBagItemHitAtPoint(e.clientX, e.clientY);
-                        if (!hit) {
-                            return;
-                        }
-                        handleBagItemDoubleClick(hit.item);
-                    }}
-                    onContextMenu={(e) => {
-                        const hit = getBagItemHitAtPoint(e.clientX, e.clientY);
-                        if (!hit) {
-                            return;
-                        }
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setHoveredBagItemUid(hit.item.itemUid);
-                        setInventoryItemHoverInfo(undefined);
-                        setInventoryItemHoverOverlaySuppressed(true);
-                        setContextMenu({ x: e.clientX, y: e.clientY, item: hit.item });
-                    }}
-                    onMouseMove={(e) => updateBagHoverAtPoint(e.clientX, e.clientY)}
-                    onMouseLeave={() => {
-                        setHoveredBagItemUid(undefined);
-                        clearHoverDebounced();
-                    }}
-                    style={{ cursor: draggedItem ? 'grabbing' : contextMenu ? undefined : hoveredBagItemUid ? 'grab' : undefined }}
-                >
+                    className="bag-dialog-drag-handle"
+                    title="Arrastrar ventana"
+                    {...listeners}
+                    {...attributes}
+                    style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                />
+            )}
+        >
+            <div
+                className={`olympia-dialog-root bag-dialog-root${bagTransparent ? ' bag-dialog-transparent' : ''}`}
+                style={{ ['--bag-scale' as string]: String(bagScale) }}
+            >
+                {bagBg && (
+                    <div
+                        className="bag-dialog-bg-layer"
+                        style={{
+                            backgroundImage: `url(${bagBg})`,
+                            opacity: bagTransparent ? 0.45 : 1,
+                        }}
+                        aria-hidden
+                    />
+                )}
+                <div className="bag-config-anchor" ref={bagConfigMenuRef}>
+                    <button
+                        type="button"
+                        className="bag-config-btn"
+                        title="Configuración de la bag"
+                        onPointerDown={stopDialogPointer}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBagConfigMenu();
+                        }}
+                    >
+                        {configIconSprite ? (
+                            <img src={configIconSprite} alt="" draggable={false} />
+                        ) : (
+                            <span className="bag-config-btn-fallback" aria-hidden>⚙</span>
+                        )}
+                    </button>
+                    {bagConfigMenuOpen && (
+                        <div className="bag-config-menu" onClick={(e) => e.stopPropagation()}>
+                            <label className="bag-config-row">
+                                <input
+                                    type="checkbox"
+                                    checked={bagTransparent}
+                                    onChange={(e) => setBagTransparent(e.target.checked)}
+                                />
+                                <span>Bag traslúcida</span>
+                            </label>
+                            <div className="bag-config-row bag-config-scale-row">
+                                <span>Tamaño bag</span>
+                                <div className="bag-config-scale-controls">
+                                    <button
+                                        type="button"
+                                        className="bag-config-scale-btn"
+                                        disabled={!canDecreaseBagScale}
+                                        onClick={decreaseBagScale}
+                                        title="Achicar bag"
+                                    >
+                                        −
+                                    </button>
+                                    <span className="bag-config-scale-label">{Math.round(bagScale * 100)}%</span>
+                                    <button
+                                        type="button"
+                                        className="bag-config-scale-btn"
+                                        disabled={!canIncreaseBagScale}
+                                        onClick={increaseBagScale}
+                                        title="Agrandar bag"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="bag-config-row bag-config-size-row">
+                                <span>Ítems en el suelo</span>
+                                <div className="bag-config-size-options">
+                                    {GROUND_ITEM_DISPLAY_SIZES.map((size) => (
+                                        <button
+                                            key={size}
+                                            type="button"
+                                            className={`bag-config-size-option${groundItemDisplaySize === size ? ' bag-config-size-option-active' : ''}`}
+                                            onClick={() => {
+                                                setGroundItemDisplaySize(size);
+                                                persistBagGroundItemDisplaySize(size);
+                                            }}
+                                            title={GROUND_ITEM_DISPLAY_LABELS[size]}
+                                        >
+                                            {GROUND_ITEM_DISPLAY_LABELS[size]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {activeTab === 'bag' && (
+                    <div className="bag-dialog-content" data-drop-to-ground={isDropToGroundIntent ? 'true' : undefined}>
+                        <div
+                            ref={bagAreaRef}
+                            className={`inventory-bag-area bag-only-area${isBagDropTarget ? ' inventory-bag-area-drop-target' : ''}`}
+                        >
                     {baggedItems.map((item) => {
-                        const bagItem = getItemById(item.itemId);
+                        const bagItem = ITEMS.find((i) => i.id === item.itemId);
                         const gender = playerGender ?? Gender.MALE;
-                        const spriteKey = bagItem !== undefined ? getItemInventorySpriteKeyWithOverrides(bagItem, gender, item.effectOverrides) : undefined;
+                        const spriteKey = bagItem !== undefined
+                            ? getBagItemSpriteKeyWithOverrides(bagItem, gender, item.effectOverrides, groundItemDisplaySize)
+                            : undefined;
                         const imageDataUrl = spriteKey !== undefined ? spriteFrameMap.get(spriteKey) : undefined;
                         const isThisItemDragged =
                             draggedItem?.source === 'bag' &&
@@ -858,8 +627,36 @@ export function InventoryDialog({
                             <div
                                 key={item.itemUid}
                                 className={`inventory-bag-item${displaySpritesInfo ? ' inventory-bag-item-debug' : ''}`}
+                                onMouseDown={(e) => handleBagItemMouseDown(e, item)}
+                                onDoubleClick={() => handleBagItemDoubleClick(item)}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setInventoryItemHoverInfo(undefined);
+                                    setInventoryItemHoverOverlaySuppressed(true);
+                                    setContextMenu({ x: e.clientX, y: e.clientY, item });
+                                }}
+                                onMouseEnter={
+                                    bagItem && !draggedItem && !contextMenu
+                                        ? (e) => {
+                                              cancelHoverClear();
+                                              setInventoryItemHoverInfo(
+                                                  buildInventoryItemHoverInfo(bagItem, item, e.clientX, e.clientY),
+                                              );
+                                          }
+                                        : undefined
+                                }
+                                onMouseMove={
+                                    bagItem && !draggedItem && !contextMenu
+                                        ? (e) =>
+                                              setInventoryItemHoverInfo(
+                                                  buildInventoryItemHoverInfo(bagItem, item, e.clientX, e.clientY),
+                                              )
+                                        : undefined
+                                }
+                                onMouseLeave={() => clearHoverDebounced()}
                                 style={{
-                                    cursor: 'inherit',
+                                    cursor: 'grab',
                                     left: hasPosition ? item.bagX : '50%',
                                     top: hasPosition ? item.bagY : '50%',
                                     transform: 'translate(-50%, -50%)',
@@ -912,12 +709,72 @@ export function InventoryDialog({
                             </div>
                         );
                     })}
+                        </div>
+                        <p className="bag-dialog-hint">Doble clic para equipar · Arrastrá fuera para tirar al suelo</p>
+                    </div>
+                )}
+
+                {activeTab === 'itemDrops' && (
+                    <div className="item-drops-panel">
+                        <div className="item-drops-list">
+                            {itemDropEntries.length === 0 ? (
+                                <p className="item-drops-empty">Aún no hay drops importantes registrados.</p>
+                            ) : (
+                                itemDropEntries.map((entry) => (
+                                    <button
+                                        key={entry.id}
+                                        type="button"
+                                        className={`item-drops-row${entry.isRare ? ' item-drops-rare' : ''}`}
+                                    >
+                                        <span className="item-drops-name">{entry.itemName}</span>
+                                        <span className="item-drops-meta">
+                                            {entry.source === 'drop' ? 'Drop' : 'Pickup'} · {new Date(entry.timestamp).toLocaleTimeString()}
+                                        </span>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                        {itemDropEntries.length > 0 && (
+                            <button type="button" className="bag-tab-text-btn" onClick={clearItemDropsLog}>
+                                Limpiar
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                <div className="bag-dialog-tabs">
+                    <button
+                        type="button"
+                        className={`bag-tab-btn${activeTab === 'bag' ? ' bag-tab-active' : ''}`}
+                        onClick={() => setBagDialogTab('bag')}
+                        onPointerDown={stopDialogPointer}
+                        title="Bag"
+                    >
+                        {tabLeftSprite && activeTab === 'bag' ? (
+                            <img src={tabLeftSprite} alt="Bag" draggable={false} />
+                        ) : (
+                            <span>Bag</span>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        className={`bag-tab-btn${activeTab === 'itemDrops' ? ' bag-tab-active' : ''}`}
+                        onClick={() => setBagDialogTab('itemDrops')}
+                        onPointerDown={stopDialogPointer}
+                        title="Item Drops"
+                    >
+                        {tabRightSprite && activeTab === 'itemDrops' ? (
+                            <img src={tabRightSprite} alt="Item Drops" draggable={false} />
+                        ) : (
+                            <span>Item Drops</span>
+                        )}
+                    </button>
                 </div>
             </div>
             {draggedItem &&
                 getItemImageUrl(draggedItem.item.itemId, draggedItem.item.effectOverrides) &&
                 (() => {
-                    const draggedItemDef = getItemById(draggedItem.item.itemId);
+                    const draggedItemDef = ITEMS.find((i) => i.id === draggedItem.item.itemId);
                     const itemScale = draggedItemDef?.scale ?? 1;
                     // For consistency: smaller items stay small, larger items scale down to fit
                     const ghostSize = itemScale < 1 ? DRAG_GHOST_SIZE * itemScale : DRAG_GHOST_SIZE;
@@ -977,7 +834,7 @@ export function InventoryDialog({
                 })()}
             {contextMenu &&
                 (() => {
-                    const bagItemDef = getItemById(contextMenu.item.itemId);
+                    const bagItemDef = ITEMS.find((i) => i.id === contextMenu.item.itemId);
                     const showEquip = bagItemDef ? isItemEquippable(bagItemDef) : false;
                     const showConsume = !!(bagItemDef?.itemType === ItemTypes.MISC && bagItemDef?.consumable);
                     const options: { label: string; onClick: () => void }[] = [];
@@ -1030,6 +887,6 @@ export function InventoryDialog({
                         dragGhostPortalTarget,
                     );
                 })()}
-        </DraggableDialog>
+        </HeadlessDraggableDialog>
     );
 }

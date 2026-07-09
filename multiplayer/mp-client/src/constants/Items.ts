@@ -16,6 +16,10 @@ export interface InventoryItem {
     bagZIndex?: number;
     /** Per-instance effect overrides (e.g. Appearance Glow from ItemDialog). Merged with item effects, overrides take precedence. */
     effectOverrides?: Effect[];
+    /** Olympia m_dwAttribute bitfield (shards, fragments, rep suffix). */
+    itemAttribute?: number;
+    /** Olympia item name color tier (1–8); 0 = default catalog name color. */
+    itemColor?: number;
 }
 
 export enum ItemTypes {
@@ -175,6 +179,28 @@ export function getItemInventorySpriteKeyWithOverrides(itemDef: Item, gender: Ge
     return `${baseKey}-${effectColorHex}`;
 }
 
+/** Bag sprite key aligned with the user's ground item size preference. */
+export function getBagItemSpriteKeyWithOverrides(
+    itemDef: Item,
+    gender: Gender,
+    effectOverrides: Effect[] | undefined,
+    displaySize: GroundItemDisplaySize,
+): string | undefined {
+    if (displaySize !== 'small') {
+        return getItemInventorySpriteKeyWithOverrides(itemDef, gender, effectOverrides);
+    }
+    const sheetIndex = getItemSheetIndex(itemDef, gender);
+    const spriteIndex = getDroppedItemSpriteIndex(itemDef, gender);
+    if (sheetIndex === undefined || spriteIndex === undefined) return undefined;
+    const baseKey = `sprite-item-ground-${sheetIndex}-${spriteIndex}`;
+    const merged = effectOverrides?.length ? mergeItemEffects(itemDef.effects, effectOverrides) : itemDef.effects;
+    const eff = merged?.find((e) => e.effect === ItemEffect.TINT_INVENTORY);
+    if (!eff) return baseKey;
+    const effectColor = eff.effectColor ?? TINT_INVENTORY_DEFAULT_COLOR;
+    const effectColorHex = effectColor.toString(16).padStart(6, '0');
+    return `${baseKey}-${effectColorHex}`;
+}
+
 /** Maps equippable ItemTypes to equipment slot IDs. MISC is excluded (not equippable). */
 export const ITEM_TYPE_TO_SLOT_ID: Record<Exclude<ItemTypes, ItemTypes.MISC>, string> = {
     [ItemTypes.WEAPON]: 'weapon',
@@ -223,6 +249,7 @@ export function isEquipmentSlot(value: string): value is EquipmentSlot {
     return EQUIPPABLE_SLOTS.includes(value as EquipmentSlot);
 }
 
+import type { GroundItemDisplaySize } from './GroundItemDisplay';
 import { Gender } from '../Types';
 import { PlayerGender, type ItemDirectoryEntry } from '../proto/generated/network';
 

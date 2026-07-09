@@ -14,7 +14,9 @@ public sealed record PersistedInventoryItem(
     int? BagY,
     int Quantity,
     int BagZIndex,
-    ItemEffectConfig[]? EffectOverrides);
+    ItemEffectConfig[]? EffectOverrides,
+    uint ItemAttribute = 0,
+    int ItemColor = 0);
 
 /// <summary>Persisted equipped item row keyed by server slot name (for example <c>weapon</c> or <c>ring-left</c>).</summary>
 public sealed record PersistedEquippedItem(
@@ -22,7 +24,9 @@ public sealed record PersistedEquippedItem(
     long ItemUid,
     int? BagX,
     int? BagY,
-    ItemEffectConfig[]? EffectOverrides);
+    ItemEffectConfig[]? EffectOverrides,
+    uint ItemAttribute = 0,
+    int ItemColor = 0);
 
 /// <summary>Persisted equipped item row keyed by server slot name (for example <c>weapon</c> or <c>ring-left</c>); omits bag-only runtime fields like quantity and z-order.</summary>
 public sealed record PersistedEquippedInventoryItem(

@@ -1,7 +1,15 @@
 import { useStore } from '@tanstack/react-store';
 import { DraggableDialog } from './DraggableDialog';
-import { RpgButton } from '../components/RpgButton';
-import { castDialogStore, setSelectedSpellId, castSpell, setCastDialogOpen } from '../store/CastDialog.store';
+import { RpgCheckbox } from '../components/RpgCheckbox';
+import {
+    castDialogStore,
+    castSpellById,
+    setUseCastAnimation,
+    setActiveCircle,
+    setCastDialogOpen,
+} from '../store/CastDialog.store';
+import { getSpellCircles } from '../../constants/Spells';
+import { getCastableSpells, magicShopDialogStore } from '../store/MagicShopDialog.store';
 
 interface CastDialogProps {
     position: { x: number; y: number };
@@ -14,16 +22,15 @@ export function CastDialog({
     zIndex,
     onBringToFront,
 }: CastDialogProps) {
-    const spells = useStore(castDialogStore, (state) => state.spells);
-    const selectedSpellId = useStore(castDialogStore, (state) => state.selectedSpellId);
+    const activeCircle = useStore(castDialogStore, (state) => state.activeCircle);
+    const useCastAnimation = useStore(castDialogStore, (state) => state.useCastAnimation);
+    useStore(magicShopDialogStore, (state) => state.learnedSpellIds);
 
-    const handleCast = () => {
-        castSpell();
-    };
+    const circleSpells = getCastableSpells().filter((s) => s.circle === activeCircle);
 
     return (
         <DraggableDialog
-            title="Cast Spell"
+            title="Libro de Magias"
             position={position}
             id="cast-dialog"
             zIndex={zIndex}
@@ -33,39 +40,92 @@ export function CastDialog({
                 setCastDialogOpen(false);
             }}
         >
-            <div style={{ display: 'flex', flexDirection: 'column', minHeight: 100 }}>
-                <div style={{ marginBottom: '8px' }}>
-                    <div className="rpg-section-title" style={{ marginBottom: '3px' }}>Spell</div>
-                    <select
-                        id="spell-select"
-                        className="rpg-select"
-                        value={selectedSpellId ?? ''}
-                        onChange={(e) => setSelectedSpellId(Number(e.target.value))}
-                        style={{ width: '100%' }}
-                        disabled={spells.length === 0}
-                    >
-                        {spells.length === 0 ? (
-                            <option value="">No spells available</option>
-                        ) : spells.map((spell) => (
-                            <option key={spell.id} value={spell.id}>
-                                {spell.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px', flexDirection: 'column', gap: '8px' }}>
-                    <RpgButton
-                        onClick={handleCast}
-                        disabled={spells.length === 0 || selectedSpellId === undefined}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                {getSpellCircles().map((circle) => (
+                    <button
+                        key={circle}
+                        type="button"
+                        onClick={() => setActiveCircle(circle)}
                         style={{
-                            padding: '8px 24px',
-                            fontSize: '14px',
-                            minWidth: '100px',
+                            padding: '6px 14px',
+                            backgroundColor: activeCircle === circle ? '#8b5a2b' : '#222',
+                            color: activeCircle === circle ? '#ffd700' : '#ccc',
+                            border: '2px solid #5c4033',
+                            minWidth: '36px',
+                            fontWeight: activeCircle === circle ? 'bold' : 'normal',
+                            cursor: 'pointer',
                         }}
                     >
-                        Cast
-                    </RpgButton>
-                </div>
+                        {circle === 10 ? '0' : circle}
+                    </button>
+                ))}
+            </div>
+
+            <div style={{
+                color: '#a0ff80',
+                fontSize: '13px',
+                marginBottom: '8px',
+                fontFamily: 'Courier New, monospace',
+            }}>
+                Círculo {activeCircle === 10 ? '10' : activeCircle} — {circleSpells.length} hechizo(s)
+            </div>
+
+            <div style={{
+                maxHeight: '340px',
+                overflowY: 'auto',
+                backgroundColor: '#111',
+                padding: '8px',
+                border: '3px solid #5c4033',
+                borderRadius: '6px',
+            }}>
+                {circleSpells.length === 0 && (
+                    <div style={{ color: '#888', padding: '12px' }}>Sin hechizos en este círculo.</div>
+                )}
+                {circleSpells.map((spell) => (
+                    <div
+                        key={spell.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => castSpellById(spell.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && castSpellById(spell.id)}
+                        style={{
+                            padding: '8px 12px',
+                            marginBottom: '4px',
+                            backgroundColor: '#1f1f1f',
+                            color: '#ddd',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontSize: '14px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#8b5a2b';
+                            e.currentTarget.style.color = '#ffd700';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1f1f1f';
+                            e.currentTarget.style.color = '#ddd';
+                        }}
+                    >
+                        <span>{spell.name}</span>
+                        <span style={{ color: '#80a0ff', fontSize: '12px' }}>{spell.mpCost} MP</span>
+                    </div>
+                ))}
+            </div>
+
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <RpgCheckbox
+                    id="cast-animation-checkbox"
+                    label="Animación de casteo"
+                    checked={useCastAnimation}
+                    onCheckedChange={(checked) => setUseCastAnimation(checked === true)}
+                />
+            </div>
+
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
+                Clic en un hechizo para lanzarlo (como Olympia). Ctrl+1..9 / Ctrl+0 abre el círculo indicado.
             </div>
         </DraggableDialog>
     );

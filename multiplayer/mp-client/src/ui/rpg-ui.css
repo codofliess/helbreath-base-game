@@ -451,9 +451,245 @@
     padding: 8px;
 }
 
-/* Inventory Dialog */
+/* Inventory Dialog — width set in Olympia section below */
+
+/* Dark red background when hovering outside dialog (drop-to-ground intent) */
+.draggable-dialog[data-dialog-id="inventory-dialog"]:has([data-drop-to-ground="true"]) {
+    background: linear-gradient(135deg, rgba(80, 20, 20, 0.98) 0%, rgba(50, 10, 10, 1) 100%);
+    border-color: rgba(139, 0, 0, 0.8);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(139, 0, 0, 0.2),
+        0 0 0 1px rgba(80, 20, 20, 0.9);
+}
+
+.inventory-dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 5px;
+}
+
+.inventory-equipped-area {
+    display: grid;
+    grid-template-columns: 76px 66px 66px 76px;
+    grid-template-rows: 70px 53px 100px 90px 70px;
+    grid-template-areas:
+        ". hlt hlt ut"
+        ". nck nck ."
+        "wpn arm hbk shld"
+        "lrg leg cpe rrg"
+        ". bts bts .";
+    gap: 6px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg,
+        rgba(74, 44, 26, 0.5) 0%,
+        rgba(45, 24, 16, 0.5) 100%);
+    border: 2px solid var(--rpg-leather);
+    border-radius: 6px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.inventory-slot {
+    background: linear-gradient(160deg,
+        rgba(74, 44, 26, 0.7) 0%,
+        rgba(26, 15, 10, 0.9) 100%);
+    border: 2px solid var(--rpg-leather);
+    border-radius: 4px;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.5),
+        0 1px 2px var(--rpg-shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 3px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    cursor: default;
+    position: relative;
+}
+
+.inventory-slot:hover,
+.inventory-slot-drop-target {
+    border-color: var(--rpg-gold);
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.3),
+        0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+.inventory-slot-label {
+    font-family: 'Georgia', serif;
+    font-size: 9px;
+    color: rgba(212, 175, 55, 0.55);
+    letter-spacing: 0.3px;
+    text-align: center;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+    text-transform: uppercase;
+}
+
+.inventory-slot:hover .inventory-slot-label {
+    color: rgba(212, 175, 55, 0.85);
+}
+
+.inventory-slot-item-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* Center item images vertically; empty slots keep label at bottom */
+.inventory-slot-has-item {
+    justify-content: center;
+    padding-bottom: 0; /* Remove asymmetric padding for true vertical centering */
+}
+
+/* Grid area assignments */
+.inventory-slot-helmet   { grid-area: hlt; width: 68px; height: 68px; justify-self: center; align-self: center; }
+.inventory-slot-necklace { grid-area: nck; width: 43px; height: 41px; min-height: 41px; justify-self: center; align-self: center; contain: size; overflow: hidden; }
+.inventory-slot-accessory { grid-area: ut;  width: 43px; height: 41px; min-height: 41px; justify-self: center; align-self: center; contain: size; overflow: hidden; }
+.inventory-slot-weapon   { grid-area: wpn; }
+.inventory-slot-shield   { grid-area: shld; }
+.inventory-slot-armor    { grid-area: arm; }
+.inventory-slot-hauberk  { grid-area: hbk; }
+.inventory-slot-leggings { grid-area: leg; }
+.inventory-slot-cape     { grid-area: cpe; }
+.inventory-slot-boots    { grid-area: bts; width: 68px; height: 68px; justify-self: center; align-self: center; }
+.inventory-slot-ring-left  { grid-area: lrg; width: 34px; height: 34px; justify-self: center; align-self: center; }
+.inventory-slot-ring-right { grid-area: rrg; width: 34px; height: 34px; justify-self: center; align-self: center; }
+
+/* Smaller label text for tiny slots */
+.inventory-slot-necklace .inventory-slot-label,
+.inventory-slot-accessory .inventory-slot-label,
+.inventory-slot-ring-left .inventory-slot-label,
+.inventory-slot-ring-right .inventory-slot-label {
+    font-size: 8px;
+}
+
+/* Drag ghost - follows cursor during weapon slot drag */
+.inventory-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inventory-bag-area {
+    min-height: 120px;
+    background: linear-gradient(135deg,
+        rgba(74, 44, 26, 0.5) 0%,
+        rgba(45, 24, 16, 0.5) 100%);
+    border: 2px solid var(--rpg-leather);
+    border-radius: 6px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    padding: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.inventory-bag-item {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inventory-bag-item.inventory-bag-item-debug {
+    border: 1px solid red;
+}
+
+.inventory-bag-item img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.inventory-bag-area-drop-target {
+    border-color: var(--rpg-gold);
+    box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.3),
+        0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+/* Inventory bag item context menu */
+.rpg-context-menu {
+    position: fixed;
+    min-width: 140px;
+    padding: 4px 0;
+    background: linear-gradient(135deg,
+        rgba(74, 44, 26, 0.98) 0%,
+        rgba(45, 24, 16, 0.98) 100%);
+    border: 2px solid var(--rpg-leather);
+    border-radius: 6px;
+    box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(112, 66, 20, 0.5);
+    z-index: 100000;
+    font-family: 'Georgia', serif;
+    font-size: 14px;
+}
+
+.rpg-context-menu-item {
+    padding: 8px 14px;
+    color: var(--rpg-parchment);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.rpg-context-menu-item:hover {
+    background: linear-gradient(180deg, var(--rpg-brown-light) 0%, var(--rpg-brown-medium) 100%);
+    color: var(--rpg-gold-light);
+}
+
+/* Olympia sprite-backed dialogs (F5/F6) — sprite fills panel, no double chrome */
+.draggable-dialog.headless-draggable-dialog:has(.olympia-dialog-root) {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    min-width: 0;
+}
+
+.draggable-dialog.headless-draggable-dialog:has(.olympia-dialog-root)::before {
+    display: none;
+}
+
+.draggable-dialog.headless-draggable-dialog:has(.olympia-dialog-root) .draggable-dialog-content {
+    padding: 0;
+    overflow: visible;
+    gap: 0;
+}
+
+.olympia-dialog-root {
+    position: relative;
+    box-sizing: border-box;
+    background-repeat: no-repeat;
+    background-position: left top;
+    background-size: 100% 100%;
+}
+
+.olympia-dialog-title-bar {
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    color: #2d1810;
+    padding-top: 36px;
+    margin-bottom: 8px;
+}
+
+/* Inventory Dialog (F6 — Bag) */
 .draggable-dialog[data-dialog-id="inventory-dialog"] {
-    min-width: 360px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
 }
 
 /* Dark red background when hovering outside dialog (drop-to-ground intent) */
@@ -650,3 +886,637 @@
     background: linear-gradient(180deg, var(--rpg-brown-light) 0%, var(--rpg-brown-medium) 100%);
     color: var(--rpg-gold-light);
 }
+
+/* Character dialog (F5) — Olympia / Helbreath layout (270×376, Client.cpp) */
+.draggable-dialog[data-dialog-id="character-dialog"] {
+    width: 270px;
+    min-width: 270px;
+    max-width: 270px;
+}
+
+.draggable-dialog[data-dialog-id="mob-kills-dialog"] {
+    width: 270px;
+    min-width: 270px;
+    max-width: 270px;
+}
+
+.character-dialog-drag-handle {
+    height: 32px;
+    min-height: 32px;
+    flex-shrink: 0;
+}
+
+.character-dialog-root,
+.mob-kills-dialog-root {
+    width: 270px;
+    min-height: 376px;
+    overflow: hidden;
+    padding: 0 8px 40px;
+    color: #2d1810;
+    font-family: 'Georgia', serif;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.character-dialog-header {
+    text-align: center;
+    margin-bottom: 6px;
+    padding-top: 4px;
+}
+
+.character-dialog-name {
+    font-size: 11px;
+    color: #2d1810;
+    font-weight: bold;
+}
+
+.character-dialog-status {
+    font-size: 11px;
+    color: #4a2010;
+    margin-top: 2px;
+}
+
+.character-dialog-body {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.character-dialog-equip {
+    flex: 0 0 auto;
+}
+
+.character-equipped-compact {
+    transform: scale(0.72);
+    transform-origin: top left;
+    margin-bottom: -24px;
+    padding: 8px 10px;
+}
+
+.character-equip-hint {
+    font-size: 9px;
+    color: #5c4033;
+    margin: 0;
+    max-width: 200px;
+    opacity: 0.85;
+}
+
+.character-dialog-stats {
+    flex: 1;
+    min-width: 0;
+    padding-top: 4px;
+}
+
+.character-stat-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 1px;
+}
+
+.character-stat-label {
+    color: #3d2810;
+    font-weight: normal;
+}
+
+.character-stat-value {
+    color: #1a1008;
+    text-align: right;
+}
+
+.character-stat-divider {
+    height: 4px;
+}
+
+.character-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 8px;
+}
+
+.character-talents {
+    margin-top: 4px;
+    font-size: 10px;
+    color: #4a3018;
+}
+
+.character-dialog-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 8px 4px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.character-dialog-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.character-dialog-footer-sprites {
+    position: relative;
+    height: 24px;
+}
+
+.character-dialog-footer-extra {
+    margin-bottom: 26px;
+}
+
+.character-dialog-footer-extra .character-dialog-text-btn {
+    padding: 3px 7px;
+    min-height: 18px;
+    font-size: 9px;
+}
+
+.character-dialog-footer .character-footer-btn,
+.character-dialog-footer .character-dialog-text-btn,
+.character-dialog-footer .character-sprite-btn {
+    pointer-events: auto;
+}
+
+/* Helbreath Client.cpp — botones en y+340 */
+.character-footer-btn-quest {
+    position: absolute;
+    left: 7px;
+    top: 0;
+    min-width: 72px;
+    min-height: 22px;
+}
+
+.character-footer-btn-stats {
+    position: absolute;
+    left: 90px;
+    top: 0;
+    min-width: 72px;
+    min-height: 22px;
+    padding: 3px 6px;
+    font-size: 9px;
+}
+
+.character-footer-btn-levelset {
+    position: absolute;
+    left: 172px;
+    top: 0;
+    min-width: 72px;
+    min-height: 22px;
+}
+
+.character-sprite-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+}
+
+.character-sprite-btn-img {
+    display: block;
+    height: 22px;
+    width: auto;
+    image-rendering: pixelated;
+}
+
+.character-dialog-text-btn {
+    background: linear-gradient(180deg, #5c4033 0%, #3d2817 100%);
+    color: #f5e6c8;
+    border: 1px solid #8b6914;
+    border-radius: 3px;
+    padding: 5px 11px;
+    min-height: 22px;
+    font-size: 11px;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
+    line-height: 1.2;
+}
+
+.character-dialog-text-btn:hover {
+    background: linear-gradient(180deg, #8b5a2b 0%, #5c4033 100%);
+    color: #ffd700;
+}
+
+.character-subpanel {
+    min-height: 300px;
+    padding-top: 36px;
+}
+
+.character-subpanel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.character-subpanel-title {
+    font-weight: bold;
+    color: #2d1810;
+    font-size: 14px;
+}
+
+.character-subpanel-body {
+    color: #2d1810;
+    margin: 0 0 8px;
+}
+
+.character-quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.character-quest-entry {
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid #5c4033;
+    border-radius: 4px;
+}
+
+.character-quest-name {
+    font-weight: bold;
+    color: #2d1810;
+    font-size: 13px;
+}
+
+.character-quest-ready {
+    color: #1a6b1a;
+    font-size: 11px;
+}
+
+.character-quest-progress {
+    color: #5c4033;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.character-subpanel-hint {
+    color: #5c4033;
+    font-size: 11px;
+    margin: 0;
+}
+
+.character-levelset-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.character-levelset-row {
+    display: grid;
+    grid-template-columns: 36px 32px 32px 24px 24px;
+    gap: 4px;
+    align-items: center;
+}
+
+.character-levelset-btn {
+    background: #5c4033;
+    color: #ffd700;
+    border: 1px solid #8b6914;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 0;
+}
+
+.character-levelset-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Bag dialog (F6) — 225×185, tabs at bottom (Client.cpp DrawDialogBox_Inventory) */
+.bag-dialog-drag-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    z-index: 2;
+}
+
+.bag-dialog-root {
+    --bag-scale: 1;
+    position: relative;
+    width: calc(225px * var(--bag-scale));
+    min-height: calc(185px * var(--bag-scale));
+    overflow: visible;
+}
+
+.bag-dialog-bg-layer {
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.bag-config-anchor {
+    position: absolute;
+    top: calc(6px * var(--bag-scale));
+    right: calc(6px * var(--bag-scale));
+    z-index: 5;
+}
+
+.bag-config-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(18px * var(--bag-scale));
+    height: calc(18px * var(--bag-scale));
+    padding: 0;
+    border: none;
+    background: rgba(45, 24, 16, 0.55);
+    border-radius: 3px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.bag-config-btn:hover {
+    background: rgba(74, 44, 26, 0.85);
+}
+
+.bag-config-btn img {
+    width: calc(14px * var(--bag-scale));
+    height: calc(14px * var(--bag-scale));
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.bag-config-btn-fallback {
+    font-size: calc(12px * var(--bag-scale));
+    line-height: 1;
+    color: #f5e6c8;
+}
+
+.bag-config-menu {
+    position: absolute;
+    top: calc(20px * var(--bag-scale));
+    right: 0;
+    min-width: calc(168px * var(--bag-scale));
+    padding: calc(6px * var(--bag-scale)) calc(8px * var(--bag-scale));
+    background: linear-gradient(135deg, rgba(74, 44, 26, 0.98) 0%, rgba(45, 24, 16, 0.98) 100%);
+    border: 1px solid #8b6914;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: calc(6px * var(--bag-scale));
+}
+
+.bag-config-row {
+    display: flex;
+    align-items: center;
+    gap: calc(6px * var(--bag-scale));
+    font-size: calc(10px * var(--bag-scale));
+    color: #f5e6c8;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.bag-config-row input[type="checkbox"] {
+    accent-color: #d4af37;
+    cursor: pointer;
+}
+
+.bag-config-scale-row {
+    justify-content: space-between;
+    cursor: default;
+}
+
+.bag-config-scale-controls {
+    display: flex;
+    align-items: center;
+    gap: calc(4px * var(--bag-scale));
+}
+
+.bag-config-scale-btn {
+    width: calc(18px * var(--bag-scale));
+    height: calc(18px * var(--bag-scale));
+    padding: 0;
+    border: 1px solid #8b6914;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #5c4033 0%, #3d2817 100%);
+    color: #ffd700;
+    font-size: calc(12px * var(--bag-scale));
+    line-height: 1;
+    cursor: pointer;
+}
+
+.bag-config-scale-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.bag-config-scale-label {
+    min-width: calc(34px * var(--bag-scale));
+    text-align: center;
+    font-size: calc(9px * var(--bag-scale));
+    color: #d4af37;
+}
+
+.bag-config-size-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(4px * var(--bag-scale));
+    cursor: default;
+}
+
+.bag-config-size-options {
+    display: flex;
+    gap: calc(3px * var(--bag-scale));
+}
+
+.bag-config-size-option {
+    flex: 1;
+    padding: calc(3px * var(--bag-scale)) calc(2px * var(--bag-scale));
+    border: 1px solid #8b6914;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #5c4033 0%, #3d2817 100%);
+    color: #f5e6c8;
+    font-size: calc(8px * var(--bag-scale));
+    font-family: 'Georgia', serif;
+    cursor: pointer;
+    line-height: 1.1;
+}
+
+.bag-config-size-option:hover {
+    color: #ffd700;
+}
+
+.bag-config-size-option-active {
+    border-color: #d4af37;
+    color: #ffd700;
+    box-shadow: inset 0 0 4px rgba(212, 175, 55, 0.35);
+}
+
+.bag-dialog-content {
+    padding: calc(44px * var(--bag-scale)) 0 calc(22px * var(--bag-scale)) calc(32px * var(--bag-scale));
+    box-sizing: border-box;
+}
+
+.bag-dialog-root .bag-only-area {
+    width: calc(148px * var(--bag-scale));
+    height: calc(120px * var(--bag-scale));
+    min-height: calc(120px * var(--bag-scale));
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.bag-dialog-root .inventory-bag-area-drop-target {
+    outline: 1px dashed rgba(212, 175, 55, 0.6);
+    outline-offset: -2px;
+}
+
+.bag-dialog-hint {
+    margin: calc(4px * var(--bag-scale)) 0 0;
+    padding-right: calc(8px * var(--bag-scale));
+    font-size: calc(8px * var(--bag-scale));
+    color: #5c4033;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+.bag-dialog-tabs {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 calc(20px * var(--bag-scale)) calc(2px * var(--bag-scale)) calc(20px * var(--bag-scale));
+    pointer-events: none;
+}
+
+.bag-tab-btn {
+    pointer-events: auto;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    min-width: 72px;
+    min-height: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bag-tab-btn img {
+    display: block;
+    max-height: 13px;
+    width: auto;
+    image-rendering: pixelated;
+}
+
+.bag-tab-btn span {
+    font-size: 9px;
+    color: #3d2810;
+    font-family: 'Georgia', serif;
+}
+
+.bag-tab-active span {
+    color: #1a1008;
+    font-weight: bold;
+}
+
+.bag-tab-text-btn {
+    background: linear-gradient(180deg, #5c4033 0%, #3d2817 100%);
+    color: #f5e6c8;
+    border: 1px solid #8b6914;
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
+    align-self: flex-end;
+    margin-top: 4px;
+}
+
+.bag-tab-text-btn:hover {
+    color: #ffd700;
+}
+
+.item-drops-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 36px 10px 22px 10px;
+    min-height: 148px;
+    box-sizing: border-box;
+}
+
+.item-drops-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 108px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.item-drops-empty {
+    margin: 0;
+    font-size: 10px;
+    color: #5c4033;
+    text-align: center;
+    padding: 12px 4px;
+}
+
+.item-drops-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(92, 64, 51, 0.5);
+    border-radius: 3px;
+    cursor: default;
+    text-align: left;
+}
+
+.item-drops-row.item-drops-rare {
+    border-color: rgba(212, 175, 55, 0.7);
+    background: rgba(212, 175, 55, 0.12);
+}
+
+.item-drops-name {
+    font-size: 11px;
+    font-weight: bold;
+    color: #2d1810;
+}
+
+.item-drops-rare .item-drops-name {
+    color: #6b4a00;
+}
+
+.item-drops-meta {
+    font-size: 9px;
+    color: #5c4033;
+    margin-top: 1px;
+}
+
+.mob-kills-body {
+    padding: 0 12px 12px;
+}
+
+.mob-kills-total {
+    margin: 0 0 8px;
+    font-size: 12px;
+}
+
+.mob-kills-hint {
+    margin: 8px 0 0;
+    font-size: 10px;
+    color: #5c4033;
+}
+

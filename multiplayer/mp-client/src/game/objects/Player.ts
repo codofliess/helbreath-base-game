@@ -24,6 +24,7 @@ import { calculateAnimationDuration, calculateFrameRateFromDuration } from '../.
 import { FloatingText } from '../effects/FloatingText';
 import { ItemTypes, ItemEffect, WeaponType, RING_SLOT_LEFT, RING_SLOT_RIGHT, getItemById, hasEquippedItemEffect, type Effect, type EquipmentSlot, type InventoryItem, type Item } from '../../constants/Items';
 import { getInventoryManager, getNetworkManager, setPlayerPosition } from '../../utils/RegistryUtils';
+import { getSpellById } from '../../constants/Spells';
 import { DEFAULT_GEAR, GearConfig, PlayerAppearanceManager, type PlayerAppearanceAnimationConfig, PlayerState } from '../../utils/PlayerAppearanceManager';
 import { PlayerMovementManager, type PendingSyncCommand } from '../../utils/PlayerMovementManager';
 import { PlayerRangedCombatManager } from '../../utils/PlayerRangedCombatManager';
@@ -143,6 +144,8 @@ export class Player extends GameObject {
 
     /** Queued spell cast when player is moving - executed when reaching next cell */
     private queuedCastSpellId: number | undefined = undefined;
+    private pendingUseCastAnimation = true;
+    private queuedCastUseAnimation = true;
 
 
     /**
@@ -1298,27 +1301,64 @@ export class Player extends GameObject {
     }
 
     /**
-     * Called when cast is commanded from UI. Always plays the cast animation before entering CastReady.
+     * Called when cast is commanded from UI (Olympia magic book).
      * When moving, queues the cast until the player reaches the next cell.
      */
-    public requestCast(spellId: number): void {
+    public requestCast(spellId: number, useCastAnimation = true): void {
         if (this.dead || this.hasPendingSpell()) {
             return;
         }
-        const spellName = this.resolveSpellName(spellId);
-        if (!spellName) {
+        const spellConfig = getSpellById(spellId);
+        if (!spellConfig) {
             return;
         }
-        this.activeSpellName = spellName;
-        if (this.moving) {
+        this.activeSpellName = spellConfig.name;
+        if (useCastAnimation && this.moving) {
             this.queuedCastSpellId = spellId;
+            this.queuedCastUseAnimation = useCastAnimation;
             this.cancelMovement();
             return;
         }
         this.pendingSpellId = spellId;
-        this.cancelMovement();
-        this.switchPlayerState(PlayerState.Cast, true);
-        this.emitCastStarted(spellId);
+        this.pendingUseCastAnimation = useCastAnimation;
+        if (useCastAnimation) {
+            this.cancelMovement();
+            this.switchPlayerState(PlayerState.Cast, true);
+            this.emitCastStarted(spellId);
+        } else {
+            EventBus.emit(OUT_UI_CAST_READY);
+            if (spellConfig.targetType === 'self') {
+                this.tryAutoConfirmSelfSpell();
+            }
+        }
+    }
+
+    /** Self-target spells (Recall, Heal, shields…) fire immediately without a ground click. */
+    private tryAutoConfirmSelfSpell(): void {
+        if (this.pendingSpellId === undefined) {
+            return;
+        }
+        const spellConfig = getSpellById(this.pendingSpellId);
+        if (spellConfig?.targetType !== 'self') {
+            return;
+        }
+        const spellId = this.pendingSpellId;
+        this.pendingSpellId = undefined;
+        this.pendingUseCastAnimation = false;
+        if (this.currentState === PlayerState.CastReady || this.currentState === PlayerState.Cast) {
+            this.switchToIdle();
+        }
+        this.activeSpellName = undefined;
+        const originPixelX = this.getAnimatedPixelX();
+        const originPixelY = this.getAnimatedPixelY();
+        EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
+            spellId,
+            originPixelX,
+            originPixelY,
+            targetPixelX: originPixelX,
+            targetPixelY: originPixelY,
+        });
+        EventBus.emit(OUT_UI_CAST_REMOVED);
     }
 
     /**
@@ -1326,11 +1366,15 @@ export class Player extends GameObject {
      * PLAYER_CONFIRM_SPELL_TARGET. Returns true if handled.
      */
     public onLeftClickAt(cursorPixelX: number, cursorPixelY: number): boolean {
-        if (this.pendingSpellId === undefined || this.currentState !== PlayerState.CastReady) {
+        if (this.pendingSpellId === undefined) {
+            return false;
+        }
+        if (this.pendingUseCastAnimation && this.currentState !== PlayerState.CastReady) {
             return false;
         }
         const spellId = this.pendingSpellId;
         this.pendingSpellId = undefined;
+        this.pendingUseCastAnimation = false;
         if (this.currentState === PlayerState.CastReady) {
             this.switchToIdle();
         }
@@ -2324,10 +2368,6 @@ export class Player extends GameObject {
                 playerId: dashAttackPlayerId,
                 attackType: dashAttackMonsterId !== undefined || dashAttackPlayerId !== undefined ? this.attackType : undefined,
             });
-            const gameWorldScene = this.scene as GameWorldScene;
-            if (gameWorldScene.tryBeginTeleportAt(nextX, nextY)) {
-                return;
-            }
         }
         super.move(direction);
     }
@@ -2645,12 +2685,18 @@ export class Player extends GameObject {
         switch (state) {
             case GameObjectState.Idle:
                 if (this.queuedCastSpellId !== undefined) {
-                    // Player reached next cell with queued cast - stop run and switch to cast
                     const spellId = this.queuedCastSpellId;
+                    const useCastAnimation = this.queuedCastUseAnimation;
                     this.queuedCastSpellId = undefined;
                     this.pendingSpellId = spellId;
-                    this.switchPlayerState(PlayerState.Cast, true);
-                    this.emitCastStarted(spellId);
+                    this.pendingUseCastAnimation = useCastAnimation;
+                    if (useCastAnimation) {
+                        this.switchPlayerState(PlayerState.Cast, true);
+                        this.emitCastStarted(spellId);
+                    } else {
+                        EventBus.emit(OUT_UI_CAST_READY);
+                        this.tryAutoConfirmSelfSpell();
+                    }
                 } else {
                     this.switchToIdle();
                 }
@@ -2927,10 +2973,6 @@ export class Player extends GameObject {
         });
     }
 
-    private resolveSpellName(spellId: number): string | undefined {
-        return getNetworkManager(this.scene.game)?.getSpellById(spellId)?.name;
-    }
-
     private emitCastStarted(spellId: number): void {
         EventBus.emit(OUT_UI_CAST_STARTED);
         EventBus.emit(PLAYER_CAST_ANIMATION_STARTED, { spellId });
@@ -2939,6 +2981,8 @@ export class Player extends GameObject {
     private clearSpellState(): void {
         this.pendingSpellId = undefined;
         this.queuedCastSpellId = undefined;
+        this.pendingUseCastAnimation = true;
+        this.queuedCastUseAnimation = true;
         this.activeSpellName = undefined;
     }
 

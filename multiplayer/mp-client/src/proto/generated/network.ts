@@ -374,6 +374,8 @@ export interface GroundItemEntry {
   itemUid: bigint;
   quantity?: number | undefined;
   effectOverrides: ItemEffectEntry[];
+  itemAttribute?: number | undefined;
+  itemColor?: number | undefined;
 }
 
 export interface GroundStateCell {
@@ -520,6 +522,8 @@ export interface InventoryItemEntry {
   quantity?: number | undefined;
   effectOverrides: ItemEffectEntry[];
   bagZIndex?: number | undefined;
+  itemAttribute?: number | undefined;
+  itemColor?: number | undefined;
 }
 
 export interface EquippedInventoryItemEntry {
@@ -531,6 +535,8 @@ export interface VisibleEquippedItemEntry {
   slot: string;
   itemId: number;
   effectOverrides: ItemEffectEntry[];
+  itemAttribute?: number | undefined;
+  itemColor?: number | undefined;
 }
 
 /** Authoritative item directory from server Config/Items.json (ids match client sprite table). */
@@ -4827,7 +4833,7 @@ export const GroundEffectEntry: MessageFns<GroundEffectEntry> = {
 };
 
 function createBaseGroundItemEntry(): GroundItemEntry {
-  return { itemId: 0, itemUid: 0n, quantity: undefined, effectOverrides: [] };
+  return { itemId: 0, itemUid: 0n, quantity: undefined, effectOverrides: [], itemAttribute: undefined, itemColor: undefined };
 }
 
 export const GroundItemEntry: MessageFns<GroundItemEntry> = {
@@ -4846,6 +4852,12 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
     }
     for (const v of message.effectOverrides) {
       ItemEffectEntry.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.itemAttribute !== undefined) {
+      writer.uint32(40).uint32(message.itemAttribute);
+    }
+    if (message.itemColor !== undefined) {
+      writer.uint32(48).int32(message.itemColor);
     }
     return writer;
   },
@@ -4889,6 +4901,22 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
           message.effectOverrides.push(ItemEffectEntry.decode(reader, reader.uint32()));
           continue;
         }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.itemColor = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4907,6 +4935,8 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
     message.itemUid = object.itemUid ?? 0n;
     message.quantity = object.quantity ?? undefined;
     message.effectOverrides = object.effectOverrides?.map((e) => ItemEffectEntry.fromPartial(e)) || [];
+    message.itemAttribute = object.itemAttribute ?? undefined;
+    message.itemColor = object.itemColor ?? undefined;
     return message;
   },
 };
@@ -6903,6 +6933,8 @@ function createBaseInventoryItemEntry(): InventoryItemEntry {
     quantity: undefined,
     effectOverrides: [],
     bagZIndex: undefined,
+    itemAttribute: undefined,
+    itemColor: undefined,
   };
 }
 
@@ -6931,6 +6963,12 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
     }
     if (message.bagZIndex !== undefined) {
       writer.uint32(56).int32(message.bagZIndex);
+    }
+    if (message.itemAttribute !== undefined) {
+      writer.uint32(64).uint32(message.itemAttribute);
+    }
+    if (message.itemColor !== undefined) {
+      writer.uint32(72).int32(message.itemColor);
     }
     return writer;
   },
@@ -6998,6 +7036,22 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
           message.bagZIndex = reader.int32();
           continue;
         }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.itemColor = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7019,6 +7073,8 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
     message.quantity = object.quantity ?? undefined;
     message.effectOverrides = object.effectOverrides?.map((e) => ItemEffectEntry.fromPartial(e)) || [];
     message.bagZIndex = object.bagZIndex ?? undefined;
+    message.itemAttribute = object.itemAttribute ?? undefined;
+    message.itemColor = object.itemColor ?? undefined;
     return message;
   },
 };
@@ -7084,7 +7140,7 @@ export const EquippedInventoryItemEntry: MessageFns<EquippedInventoryItemEntry> 
 };
 
 function createBaseVisibleEquippedItemEntry(): VisibleEquippedItemEntry {
-  return { slot: "", itemId: 0, effectOverrides: [] };
+  return { slot: "", itemId: 0, effectOverrides: [], itemAttribute: undefined, itemColor: undefined };
 }
 
 export const VisibleEquippedItemEntry: MessageFns<VisibleEquippedItemEntry> = {
@@ -7097,6 +7153,12 @@ export const VisibleEquippedItemEntry: MessageFns<VisibleEquippedItemEntry> = {
     }
     for (const v of message.effectOverrides) {
       ItemEffectEntry.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.itemAttribute !== undefined) {
+      writer.uint32(32).uint32(message.itemAttribute);
+    }
+    if (message.itemColor !== undefined) {
+      writer.uint32(40).int32(message.itemColor);
     }
     return writer;
   },
@@ -7132,6 +7194,22 @@ export const VisibleEquippedItemEntry: MessageFns<VisibleEquippedItemEntry> = {
           message.effectOverrides.push(ItemEffectEntry.decode(reader, reader.uint32()));
           continue;
         }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemColor = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7149,6 +7227,8 @@ export const VisibleEquippedItemEntry: MessageFns<VisibleEquippedItemEntry> = {
     message.slot = object.slot ?? "";
     message.itemId = object.itemId ?? 0;
     message.effectOverrides = object.effectOverrides?.map((e) => ItemEffectEntry.fromPartial(e)) || [];
+    message.itemAttribute = object.itemAttribute ?? undefined;
+    message.itemColor = object.itemColor ?? undefined;
     return message;
   },
 };

@@ -12,8 +12,11 @@ import {
 import { ItemTypes, type Effect, type InventoryItem, type EquipmentSlot } from '../../constants/Items';
 import type { Gender } from '../../Types';
 
+export type BagDialogTab = 'bag' | 'itemDrops';
+
 interface InventoryDialogState {
     isOpen: boolean;
+    activeTab: BagDialogTab;
     equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>;
     baggedItems: InventoryItem[];
     playerGender: Gender | undefined;
@@ -21,6 +24,7 @@ interface InventoryDialogState {
 
 const initialState: InventoryDialogState = {
     isOpen: false,
+    activeTab: 'bag',
     equippedItems: {},
     baggedItems: [],
     playerGender: undefined,
@@ -30,6 +34,10 @@ const { store: inventoryDialogStore, toggle: toggleInventoryDialog, setOpen: set
     createDialogStore(initialState);
 
 export { inventoryDialogStore, toggleInventoryDialog, setInventoryDialogOpen };
+
+export const setBagDialogTab = (tab: BagDialogTab) => {
+    inventoryDialogStore.setState((state) => ({ ...state, activeTab: tab }));
+};
 
 export const setEquippedItem = (slot: EquipmentSlot, equipped: InventoryItem | undefined) => {
     inventoryDialogStore.setState((state) => ({

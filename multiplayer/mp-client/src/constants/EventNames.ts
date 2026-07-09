@@ -40,7 +40,9 @@ export const IN_UI_TOGGLE_SERVER_TELEPORT_CELLS_HIGHLIGHT = 'ui-toggle-server-te
 export const IN_UI_TOGGLE_WATER_CELLS_HIGHLIGHT = 'ui-toggle-water-cells-highlight';
 export const IN_UI_TOGGLE_FARMABLE_CELLS_HIGHLIGHT = 'ui-toggle-farmable-cells-highlight';
 export const IN_UI_TOGGLE_GRID_DISPLAY = 'ui-toggle-grid-display';
-export const IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS = 'ui-toggle-display-large-items';
+export const IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED = 'ui-ground-item-display-size-changed';
+/** @deprecated Use IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED */
+export const IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS = IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED;
 export const IN_UI_CHANGE_WEATHER = 'ui-change-weather';
 
 /** Server broadcast: authoritative weather for the current game world (see WeatherChanged). */
@@ -220,6 +222,12 @@ export const ITEM_QUANTITY_UPDATED = 'item-quantity-updated';
 
 /** Emitted from UI when bag item is dropped outside InventoryDialog (user intent). Payload: { itemUid: string } */
 export const ITEM_DROP_TO_GROUND_REQUESTED = 'item-drop-to-ground-requested';
+
+/** Emitted when an item lands on the ground (for Item Drops log). */
+export const ITEM_DROPPED_TO_GROUND = 'item-dropped-to-ground';
+
+/** Emitted when the player picks up a notable item from the ground. */
+export const ITEM_ADD_FROM_GROUND = 'item-add-from-ground';
 
 /** Emitted when monster attack animation hits frame 2 (player should take damage). */
 export const MONSTER_ATTACK_HIT_PLAYER = 'monster-attack-hit-player';

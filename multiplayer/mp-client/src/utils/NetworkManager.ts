@@ -288,6 +288,8 @@ function inventoryItemFromEntry(entry: InventoryItemEntry): InventoryItem {
         quantity: entry.quantity,
         bagZIndex: entry.bagZIndex,
         effectOverrides: effectsFromDirectoryEntries(entry.effectOverrides),
+        ...(entry.itemAttribute !== undefined && entry.itemAttribute !== 0 && { itemAttribute: entry.itemAttribute }),
+        ...(entry.itemColor !== undefined && entry.itemColor !== 0 && { itemColor: entry.itemColor }),
     };
 }
 
@@ -303,8 +305,8 @@ function equippedItemsFromEntries(entries: EquippedInventoryItemEntry[]): Partia
     return equippedItems;
 }
 
-function visibleEquippedItemsFromEntries(entries: VisibleEquippedItemEntry[]): Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>> {
-    const visibleEquippedItems: Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>> = {};
+function visibleEquippedItemsFromEntries(entries: VisibleEquippedItemEntry[]): Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemAttribute?: number; itemColor?: number }>> {
+    const visibleEquippedItems: Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemAttribute?: number; itemColor?: number }>> = {};
     for (const entry of entries) {
         if (!isEquipmentSlot(entry.slot)) {
             continue;
@@ -316,6 +318,8 @@ function visibleEquippedItemsFromEntries(entries: VisibleEquippedItemEntry[]): P
         visibleEquippedItems[entry.slot as ItemTypes] = {
             itemId: entry.itemId,
             effectOverrides: effectsFromDirectoryEntries(entry.effectOverrides),
+            ...(entry.itemAttribute !== undefined && entry.itemAttribute !== 0 && { itemAttribute: entry.itemAttribute }),
+            ...(entry.itemColor !== undefined && entry.itemColor !== 0 && { itemColor: entry.itemColor }),
         };
     }
     return visibleEquippedItems;
@@ -1761,6 +1765,12 @@ export class NetworkManager {
                         itemUid: state.groundItem.itemUid.toString(),
                         quantity: state.groundItem.quantity ?? 1,
                         effectOverrides: effectsFromDirectoryEntries(state.groundItem.effectOverrides),
+                        ...(state.groundItem.itemAttribute !== undefined && state.groundItem.itemAttribute !== 0 && {
+                            itemAttribute: state.groundItem.itemAttribute,
+                        }),
+                        ...(state.groundItem.itemColor !== undefined && state.groundItem.itemColor !== 0 && {
+                            itemColor: state.groundItem.itemColor,
+                        }),
                     }
                     : existing?.groundItem,
             };

@@ -19,6 +19,10 @@ public sealed class InventoryItemState {
     public int BagZIndex { get; set; }
     /// <summary>Per-instance effect overrides requested by the client (for example custom tint/glow in the item dialog).</summary>
     public ItemEffectConfig[]? EffectOverrides { get; set; }
+    /// <summary>Olympia <c>m_dwAttribute</c> bitfield (shards, fragments, rep suffix).</summary>
+    public uint ItemAttribute { get; set; }
+    /// <summary>Olympia item name color tier (1–8); 0 = default catalog name color.</summary>
+    public int ItemColor { get; set; }
 
     public InventoryItemState(
         int itemId,
@@ -27,7 +31,9 @@ public sealed class InventoryItemState {
         int? bagY,
         int quantity,
         int bagZIndex,
-        ItemEffectConfig[]? effectOverrides) {
+        ItemEffectConfig[]? effectOverrides,
+        uint itemAttribute = 0,
+        int itemColor = 0) {
         ItemId = itemId;
         ItemUid = itemUid;
         BagX = bagX;
@@ -35,33 +41,35 @@ public sealed class InventoryItemState {
         Quantity = quantity;
         BagZIndex = bagZIndex;
         EffectOverrides = CloneEffectOverrides(effectOverrides);
+        ItemAttribute = itemAttribute;
+        ItemColor = itemColor;
     }
 
     /// <summary>Creates a detached copy for outgoing messages and mutation results.</summary>
     public InventoryItemState Clone() {
-        return new InventoryItemState(ItemId, ItemUid, BagX, BagY, Quantity, BagZIndex, EffectOverrides);
+        return new InventoryItemState(ItemId, ItemUid, BagX, BagY, Quantity, BagZIndex, EffectOverrides, ItemAttribute, ItemColor);
     }
 
     /// <summary>Converts live state into the persistence record stored on disk and world transfers.</summary>
     public PersistedInventoryItem ToPersistedItem() {
-        return new PersistedInventoryItem(ItemId, ItemUid, BagX, BagY, Quantity, BagZIndex, CloneEffectOverrides(EffectOverrides));
+        return new PersistedInventoryItem(ItemId, ItemUid, BagX, BagY, Quantity, BagZIndex, CloneEffectOverrides(EffectOverrides), ItemAttribute, ItemColor);
     }
 
     /// <summary>Converts equipped live state into the slimmer persistence record that omits bag-only runtime fields.</summary>
     public PersistedEquippedItem ToPersistedEquippedItem() {
-        return new PersistedEquippedItem(ItemId, ItemUid, BagX, BagY, CloneEffectOverrides(EffectOverrides));
+        return new PersistedEquippedItem(ItemId, ItemUid, BagX, BagY, CloneEffectOverrides(EffectOverrides), ItemAttribute, ItemColor);
     }
 
     /// <summary>Rehydrates live inventory state from persisted storage.</summary>
     public static InventoryItemState FromPersistedItem(PersistedInventoryItem item) {
         ArgumentNullException.ThrowIfNull(item);
-        return new InventoryItemState(item.ItemId, item.ItemUid, item.BagX, item.BagY, item.Quantity, item.BagZIndex, item.EffectOverrides);
+        return new InventoryItemState(item.ItemId, item.ItemUid, item.BagX, item.BagY, item.Quantity, item.BagZIndex, item.EffectOverrides, item.ItemAttribute, item.ItemColor);
     }
 
     /// <summary>Rehydrates equipped live state from persisted storage, restoring only fields that matter while the item is equipped.</summary>
     public static InventoryItemState FromPersistedEquippedItem(PersistedEquippedItem item) {
         ArgumentNullException.ThrowIfNull(item);
-        return new InventoryItemState(item.ItemId, item.ItemUid, item.BagX, item.BagY, quantity: 1, bagZIndex: 0, item.EffectOverrides);
+        return new InventoryItemState(item.ItemId, item.ItemUid, item.BagX, item.BagY, quantity: 1, bagZIndex: 0, item.EffectOverrides, item.ItemAttribute, item.ItemColor);
     }
 
     private static ItemEffectConfig[]? CloneEffectOverrides(ItemEffectConfig[]? effectOverrides) {

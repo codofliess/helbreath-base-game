@@ -16,6 +16,10 @@
     --custom-cursor: auto;
 }
 
+body.dialog-transparent .draggable-dialog {
+    opacity: 0.55;
+}
+
 body {
     margin: 0;
     padding: 0;

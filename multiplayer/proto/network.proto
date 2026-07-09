@@ -354,6 +354,10 @@ message GroundItemEntry {
   int64 item_uid = 2;
   optional int32 quantity = 3;
   repeated ItemEffectEntry effect_overrides = 4;
+  // Helbreath Olympia m_dwAttribute bitfield (shards/fragments/rep bonus).
+  optional uint32 item_attribute = 5;
+  // Olympia item name color tier (1–8); 0 = default.
+  optional int32 item_color = 6;
 }
 
 message GroundStateCell {
@@ -497,6 +501,8 @@ message InventoryItemEntry {
   optional int32 quantity = 5;
   repeated ItemEffectEntry effect_overrides = 6;
   optional int32 bag_z_index = 7;
+  optional uint32 item_attribute = 8;
+  optional int32 item_color = 9;
 }
 
 message EquippedInventoryItemEntry {
@@ -508,6 +514,8 @@ message VisibleEquippedItemEntry {
   string slot = 1;
   int32 item_id = 2;
   repeated ItemEffectEntry effect_overrides = 3;
+  optional uint32 item_attribute = 4;
+  optional int32 item_color = 5;
 }
 
 // Authoritative item directory from server Config/Items.json (ids match client sprite table).

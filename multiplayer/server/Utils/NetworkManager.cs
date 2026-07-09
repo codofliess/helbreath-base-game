@@ -402,6 +402,12 @@ public static class NetworkManager {
             entry.EffectOverrides.Add(effectEntry);
         }
         entry.BagZIndex = item.BagZIndex;
+        if (item.ItemAttribute != 0) {
+            entry.ItemAttribute = item.ItemAttribute;
+        }
+        if (item.ItemColor != 0) {
+            entry.ItemColor = item.ItemColor;
+        }
         return entry;
     }
 
@@ -422,6 +428,12 @@ public static class NetworkManager {
                 effectEntry.EffectColor = (uint)effectColor;
             }
             entry.EffectOverrides.Add(effectEntry);
+        }
+        if (item.ItemAttribute != 0) {
+            entry.ItemAttribute = item.ItemAttribute;
+        }
+        if (item.ItemColor != 0) {
+            entry.ItemColor = item.ItemColor;
         }
         return entry;
     }
@@ -450,6 +462,12 @@ public static class NetworkManager {
                 effectEntry.EffectColor = (uint)effectColor;
             }
             entry.EffectOverrides.Add(effectEntry);
+        }
+        if (item.ItemAttribute != 0) {
+            entry.ItemAttribute = item.ItemAttribute;
+        }
+        if (item.ItemColor != 0) {
+            entry.ItemColor = item.ItemColor;
         }
         return entry;
     }

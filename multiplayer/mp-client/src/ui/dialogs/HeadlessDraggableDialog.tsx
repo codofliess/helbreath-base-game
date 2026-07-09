@@ -113,6 +113,7 @@ interface HeadlessDraggableDialogProps {
     disableDrag?: boolean;
     zIndex?: number;
     onBringToFront?: () => void;
+    renderHeader?: BaseDraggableDialogProps['renderHeader'];
 }
 
 export function HeadlessDraggableDialog(props: HeadlessDraggableDialogProps) {

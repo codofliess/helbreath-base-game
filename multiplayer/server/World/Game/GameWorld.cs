@@ -41,6 +41,8 @@ public struct GameWorldRef {
     public IReadOnlyDictionary<int, SpellConfig> SpellsById;
     /// <summary>Item catalog for <see cref="Mmorpg.Network.InitialState"/> <c>items_directory</c> (stable id order in the wire payload).</summary>
     public IReadOnlyDictionary<int, ItemConfig> ItemsById;
+    /// <summary>Monster catalog keyed by <c>Monsters.json</c> id for loot and dwell spawning.</summary>
+    public IReadOnlyDictionary<int, MonsterConfig> MonstersById;
     /// <summary>NPC catalog for <see cref="Mmorpg.Network.InitialState"/> <c>npc_directory</c> (display names; client maps ids to sprites).</summary>
     public IReadOnlyDictionary<int, NpcConfig> NpcsById;
     /// <summary>Spatial index of NPCs for neighborhood queries.</summary>
@@ -262,6 +264,7 @@ public sealed class GameWorld : IWorkerWorld {
             TeleportLocs = this.teleportLocs,
             SpellsById = spellsById,
             ItemsById = itemsById,
+            MonstersById = monstersById,
             NpcsById = npcsById,
             PlayerSpatialGrid = playerSpatialGrid,
             MonsterSpatialGrid = monsterSpatialGrid,
@@ -1154,6 +1157,7 @@ public sealed class GameWorld : IWorkerWorld {
 
     /// <summary>Finds the nearest configured teleport source cell within a small Chebyshev radius so ordered packet handling can tolerate slight position lag.</summary>
     private GameWorldTeleportTarget? ResolveTeleportTargetNearPlayer(GameWorldPlayer player, string requestedWorldId) {
+        // Standing on a configured teleport cell is authoritative — client worldId is advisory only.
         if (teleportTargetsBySourceCell.TryGetValue((player.PosX, player.PosY), out var exactTarget)) {
             if (!string.IsNullOrWhiteSpace(requestedWorldId) &&
                 !string.Equals(exactTarget.WorldId, requestedWorldId, StringComparison.Ordinal)) {

@@ -6,6 +6,12 @@ import { Gender } from '../../Types';
 
 export interface InventoryItemHoverInfo {
     itemName: string;
+    /** Olympia magic stat line (primary shard). */
+    magicStatLine1?: string;
+    /** Olympia magic stat line (secondary fragment). */
+    magicStatLine2?: string;
+    /** Colored name for magic items (Olympia green or itemColor palette). */
+    itemNameColor?: string;
     itemType: ItemTypes;
     itemId: number;
     itemUid: string;

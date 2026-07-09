@@ -12,7 +12,7 @@ import {
     INVENTORY_MANAGER_KEY,
     NETWORK_MANAGER_KEY,
     DEBUG_KEY,
-    DISPLAY_LARGE_ITEMS_KEY,
+    GROUND_ITEM_DISPLAY_SIZE_KEY,
     LOADING_BG_KEY,
     ITEM_PACK_SPRITE_SHEETS_KEY,
     ITEM_PACK_EMITTED_TINT_KEYS_KEY,
@@ -21,6 +21,8 @@ import {
     PENDING_PLAYER_ITEM_APPEARANCE_PREFETCH_KEY,
 } from '../constants/RegistryKeys';
 import type { HBSpriteSheet } from '../game/assets/HBSprite';
+import type { GroundItemDisplaySize } from '../constants/GroundItemDisplay';
+import { parseGroundItemDisplaySize } from '../constants/GroundItemDisplay';
 import { NetworkManager } from './NetworkManager';
 import type { Gender, SkinColor, TeleportLocSet } from '../Types';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
@@ -290,24 +292,27 @@ export function setDebugModeEnabled(scene: Scene, enabled: boolean): void {
 }
 
 /**
- * Checks if display large items is enabled in the scene's registry.
- * When enabled, ground items use sprite-item-pack-* instead of sprite-item-ground-*.
- * 
- * @param scene - The Phaser scene instance
- * @returns True if display large items is enabled, false otherwise
+ * Returns the user-selected ground item display size from the scene registry.
  */
-export function isDisplayLargeItemsEnabled(scene: Scene): boolean {
-    return scene.registry.get(DISPLAY_LARGE_ITEMS_KEY) === true;
+export function getGroundItemDisplaySize(scene: Scene): GroundItemDisplaySize {
+    return parseGroundItemDisplaySize(scene.registry.get(GROUND_ITEM_DISPLAY_SIZE_KEY));
 }
 
 /**
- * Sets the display large items flag in the scene's registry.
- * 
- * @param scene - The Phaser scene instance
- * @param enabled - Whether display large items should be enabled
+ * Persists the ground item display size in the scene registry.
  */
+export function setGroundItemDisplaySize(scene: Scene, size: GroundItemDisplaySize): void {
+    scene.registry.set(GROUND_ITEM_DISPLAY_SIZE_KEY, size);
+}
+
+/** @deprecated Use getGroundItemDisplaySize(scene) === 'large' */
+export function isDisplayLargeItemsEnabled(scene: Scene): boolean {
+    return getGroundItemDisplaySize(scene) === 'large';
+}
+
+/** @deprecated Use setGroundItemDisplaySize */
 export function setDisplayLargeItemsEnabled(scene: Scene, enabled: boolean): void {
-    scene.registry.set(DISPLAY_LARGE_ITEMS_KEY, enabled);
+    setGroundItemDisplaySize(scene, enabled ? 'large' : 'small');
 }
 
 /**

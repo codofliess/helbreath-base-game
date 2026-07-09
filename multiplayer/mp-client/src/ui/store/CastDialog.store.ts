@@ -1,18 +1,21 @@
 import { EventBus } from '../../game/EventBus';
-import { IN_UI_CAST_SPELL, OUT_UI_SET_SPELLS } from '../../constants/EventNames';
-import type { CastSpellEvent, SpellEntry } from '../../Types';
+import { IN_UI_CAST_SPELL } from '../../constants/EventNames';
+import { SPELL_ENERGY_BOLT_ID } from '../../constants/Spells';
+import type { CastSpellEvent } from '../../Types';
 import { createDialogStore } from './utils';
 
 interface CastDialogState {
     isOpen: boolean;
-    spells: SpellEntry[];
-    selectedSpellId: number | undefined;
+    selectedSpellId: number;
+    activeCircle: number;
+    useCastAnimation: boolean;
 }
 
 const initialState: CastDialogState = {
     isOpen: false,
-    spells: [],
-    selectedSpellId: undefined,
+    selectedSpellId: SPELL_ENERGY_BOLT_ID,
+    activeCircle: 1,
+    useCastAnimation: true,
 };
 
 const { store: castDialogStore, toggle: toggleCastDialog, setOpen: setCastDialogOpen } = createDialogStore(initialState);
@@ -23,31 +26,32 @@ export const setSelectedSpellId = (spellId: number) => {
     castDialogStore.setState((state) => ({ ...state, selectedSpellId: spellId }));
 };
 
-export const setSpells = (spells: SpellEntry[]) => {
-    castDialogStore.setState((state) => {
-        const sorted = [...spells].sort((a, b) => a.id - b.id);
-        const nextSelectedSpellId = sorted.some((spell) => spell.id === state.selectedSpellId)
-            ? state.selectedSpellId
-            : sorted[0]?.id;
-        return {
-            ...state,
-            spells: sorted,
-            selectedSpellId: nextSelectedSpellId,
-        };
-    });
+export const setActiveCircle = (circle: number) => {
+    const clamped = Math.max(1, Math.min(10, circle));
+    castDialogStore.setState((state) => ({ ...state, activeCircle: clamped }));
 };
 
-export const castSpell = () => {
+export const setUseCastAnimation = (useCastAnimation: boolean) => {
+    castDialogStore.setState((state) => ({ ...state, useCastAnimation }));
+};
+
+/** Opens magic book on a specific circle (F7 / Ctrl+1..0). */
+export const openCastDialogOnCircle = (circle: number) => {
+    setActiveCircle(circle);
+    setCastDialogOpen(true);
+};
+
+/** Olympia / Helbreath: single click on a spell enters cast/targeting mode. */
+export const castSpellById = (spellId: number) => {
+    setSelectedSpellId(spellId);
     const state = castDialogStore.state;
-    if (state.selectedSpellId === undefined) {
-        return;
-    }
     EventBus.emit(IN_UI_CAST_SPELL, {
-        spellId: state.selectedSpellId,
+        spellId,
+        useCastAnimation: state.useCastAnimation,
     } satisfies CastSpellEvent);
-    setCastDialogOpen(false);
 };
 
-EventBus.on(OUT_UI_SET_SPELLS, (spells: SpellEntry[]) => {
-    setSpells(spells);
-});
+/** Quick cast selected spell (F4). */
+export const prepareSelectedSpell = () => {
+    castSpellById(castDialogStore.state.selectedSpellId);
+};

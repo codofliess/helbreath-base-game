@@ -1,13 +1,15 @@
 import type { Scene } from 'phaser';
 import { GameAsset } from './GameAsset';
 import { convertWorldPosToPixelPos } from '../../utils/CoordinateUtils';
-import { getItemById, getItemSheetIndex, getDroppedItemSpriteIndex, getGlowEffectColor, getGlareEffectColor, getTintAppearanceEffectColor, getTintInventoryEffectColorWithOverrides, type Effect } from '../../constants/Items';
+import { getItemById, getItemSheetIndex, getDroppedItemSpriteIndex, getTintInventoryEffectColorWithOverrides, type Effect } from '../../constants/Items';
+import { buildItemHoverInfo } from '../../constants/OlympiaItemName';
+import { GROUND_ITEM_DISPLAY_CONFIG } from '../../constants/GroundItemDisplay';
 import { Gender } from '../../Types';
 import type { InventoryItemHoverInfo } from '../../ui/store/InventoryItemHoverOverlay.store';
 import { TILE_SIZE } from '../assets/HBMap';
 import { EventBus } from '../EventBus';
-import { IN_UI_CHANGE_GENDER, IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS } from '../../constants/EventNames';
-import { isDisplayLargeItemsEnabled } from '../../utils/RegistryUtils';
+import { IN_UI_CHANGE_GENDER, IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED } from '../../constants/EventNames';
+import { getGroundItemDisplaySize } from '../../utils/RegistryUtils';
 
 /**
  * Represents an item dropped on the ground.
@@ -21,6 +23,8 @@ export class GroundItem extends GameAsset {
     public readonly itemId: number;
     public readonly quantity: number;
     private readonly effectOverrides?: Effect[];
+    private readonly itemAttribute?: number;
+    private readonly itemColor?: number;
 
     constructor(
         scene: Scene,
@@ -31,7 +35,9 @@ export class GroundItem extends GameAsset {
         quantity: number,
         playerGender: Gender,
         tint?: number,
-        effectOverrides?: Effect[]
+        effectOverrides?: Effect[],
+        itemAttribute?: number,
+        itemColor?: number,
     ) {
         const itemDef = getItemById(itemId);
         if (!itemDef) {
@@ -50,11 +56,11 @@ export class GroundItem extends GameAsset {
         const pixelX = convertWorldPosToPixelPos(worldX) + TILE_SIZE / 2;
         const pixelY = convertWorldPosToPixelPos(worldY) + TILE_SIZE / 2;
 
-        const spritePrefix = isDisplayLargeItemsEnabled(scene) ? 'item-pack' : 'item-ground';
+        const displayConfig = GROUND_ITEM_DISPLAY_CONFIG[getGroundItemDisplaySize(scene)];
         super(scene, {
             x: pixelX,
             y: pixelY,
-            spriteName: spritePrefix,
+            spriteName: displayConfig.spritePrefix,
             spriteSheetIndex: sheetIndex,
             frameIndex: spriteIndex,
             ...(resolvedTint !== undefined && { tint: resolvedTint }),
@@ -68,6 +74,10 @@ export class GroundItem extends GameAsset {
         this.currentGender = effectiveGender;
         this.tintColor = resolvedTint;
         this.effectOverrides = effectOverrides;
+        this.itemAttribute = itemAttribute;
+        this.itemColor = itemColor;
+
+        this.applyDisplayScale(displayConfig.displayScale);
 
         // Apply tint after super() - GameAsset.applyItemEffects clears tint when effects is empty
         if (resolvedTint !== undefined) {
@@ -75,18 +85,18 @@ export class GroundItem extends GameAsset {
         }
 
         this.genderChangeHandler = (newGender: Gender) => this.updateAppearanceForGender(newGender);
-        this.displayLargeItemsChangeHandler = () => this.updateTexture();
+        this.displaySizeChangeHandler = () => this.updateTexture();
         EventBus.on(IN_UI_CHANGE_GENDER, this.genderChangeHandler);
-        EventBus.on(IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS, this.displayLargeItemsChangeHandler);
+        EventBus.on(IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED, this.displaySizeChangeHandler);
     }
 
     private currentGender: Gender;
     private tintColor?: number;
     private genderChangeHandler?: (gender: Gender) => void;
-    private displayLargeItemsChangeHandler?: () => void;
+    private displaySizeChangeHandler?: () => void;
 
-    private getTexturePrefix(): 'item-ground' | 'item-pack' {
-        return isDisplayLargeItemsEnabled(this.scene) ? 'item-pack' : 'item-ground';
+    private applyDisplayScale(scale: number): void {
+        this.sprite.setScale(scale);
     }
 
     private updateTexture(): void {
@@ -102,11 +112,12 @@ export class GroundItem extends GameAsset {
             return;
         }
 
-        const prefix = this.getTexturePrefix();
-        const textureKey = `sprite-${prefix}-${sheetIndex}`;
+        const displayConfig = GROUND_ITEM_DISPLAY_CONFIG[getGroundItemDisplaySize(this.scene)];
+        const textureKey = `sprite-${displayConfig.spritePrefix}-${sheetIndex}`;
         if (this.scene.textures.exists(textureKey)) {
             this.sprite.setTexture(textureKey, spriteIndex);
         }
+        this.applyDisplayScale(displayConfig.displayScale);
         if (this.tintColor !== undefined) {
             this.sprite.setTint(this.tintColor);
         }
@@ -125,23 +136,17 @@ export class GroundItem extends GameAsset {
     /** Returns hover overlay info for this ground item at the given screen coordinates. */
     public getHoverInfo(mouseX: number, mouseY: number): InventoryItemHoverInfo {
         const itemDef = getItemById(this.itemId)!;
-        return {
-            itemName: itemDef.name,
-            itemType: itemDef.itemType,
+        return buildItemHoverInfo(itemDef, {
             itemId: this.itemId,
             itemUid: this.itemUid,
-            source: 'ground',
-            gender: itemDef.gender,
+            itemAttribute: this.itemAttribute,
+            itemColor: this.itemColor,
+            effectOverrides: this.effectOverrides,
             quantity: this.quantity,
-            stackable: itemDef.stackable,
-            consumable: itemDef.consumable,
-            appearanceGlowColor: getGlowEffectColor(itemDef, this.effectOverrides),
-            appearanceGlareColor: getGlareEffectColor(itemDef, this.effectOverrides),
-            appearanceTintColor: getTintAppearanceEffectColor(itemDef, this.effectOverrides),
-            inventoryTintColor: getTintInventoryEffectColorWithOverrides(itemDef, this.effectOverrides),
+            source: 'ground',
             mouseX,
             mouseY,
-        };
+        });
     }
 
     public override destroy(): void {
@@ -149,9 +154,9 @@ export class GroundItem extends GameAsset {
             EventBus.off(IN_UI_CHANGE_GENDER, this.genderChangeHandler);
             this.genderChangeHandler = undefined;
         }
-        if (this.displayLargeItemsChangeHandler) {
-            EventBus.off(IN_UI_TOGGLE_DISPLAY_LARGE_ITEMS, this.displayLargeItemsChangeHandler);
-            this.displayLargeItemsChangeHandler = undefined;
+        if (this.displaySizeChangeHandler) {
+            EventBus.off(IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED, this.displaySizeChangeHandler);
+            this.displaySizeChangeHandler = undefined;
         }
         super.destroy();
     }

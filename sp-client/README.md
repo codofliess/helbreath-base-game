@@ -1,118 +1,27 @@
-# Helbreath Base Game
+# Helbreath single player base game
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Built with Phaser 3](https://img.shields.io/badge/Engine-Phaser%203-8A2BE2)](https://phaser.io/)
-[![UI: React](https://img.shields.io/badge/UI-React-61DAFB)](https://react.dev/)
-[![Play Demo](https://img.shields.io/badge/Demo-Live-blue)](https://hbexplorer.helbreath.workers.dev/)
-[![Discord](https://img.shields.io/badge/Chat-Discord-5865F2)](https://discord.gg/P4tBdGRC3q)
+A Phaser 3 Helbreath single player client built with React, TypeScript, and Vite. This client supports custom sprite formats (.spr), Helbreath-style maps (.amd), and a full game loop including combat, spells, inventory, and spatial audio.
 
-Helbreath Base Game is a browser-based recreation of the classic [Helbreath](https://helbreath.fandom.com/wiki/Helbreath_Wiki) client, built with [Phaser 3](https://phaser.io/) and [React](https://react.dev/), paired with an authoritative multiplayer game server written in **C# / .NET 10** that communicates over **WebSockets** with **Protobuf** messages. It is designed as a foundation for building 2D (MMO)(A)RPG-style projects and is best thought of as a playable base client + server or lightweight game framework rather than a complete game.
-
-The repository already includes a substantial amount of core functionality:
-
-- Maps and world rendering
-- Monsters and NPCs
-- Player character customization
-- Grid-based movement
-- Spells and visual effects
-- Items and inventory
-- Combat supporting melee, ranged, and spell attacks in PvP, PvM, and MvM settings (spell damage and MvM only supported in server implementation)
-- Music and audio
-
-Server only:
-- Chat
-- Buffs and debuffs
-- Authoritative multiplayer server with client-side prediction and reconciliation
-- Anti-hack timing guards, anti-combat-log disconnect grace, and bump prevention
-- Multi-threaded world scheduling with single-threaded per-map simulation
-
-The project has been developed heavily with AI assistance and is intentionally kept approachable for AI-assisted workflows and iterative expansion.
-
-Join the [Discord server](https://discord.gg/P4tBdGRC3q) for discussion, questions, and project showcases. If you build something on top of this project, feel free to share it there.
-
-## Demo
-
-![Helbreath Base Game screenshot](./screenshot.png)
-
-Play the live demos here:
-
-- Single-player client: [hbexplorer.helbreath.workers.dev](https://hbexplorer.helbreath.workers.dev/)
-- Multiplayer client (connects to a hosted instance of the C# server): [hbexplorermp.helbreath.workers.dev](https://hbexplorermp.helbreath.workers.dev/)
-
-## Built on or inspired by this project
-
-Projects that extend this codebase or took inspiration from it:
-
-- **[Helbreath.xyz](https://www.helbreath.xyz/)** — browser-based Helbreath MMORPG ([source on GitHub](https://github.com/juanrossi/helbreath))
-- **[Mobile mini game](https://doepiccoding.com/)**
-
-## What This Is / Is Not
-
-This project is:
-
-- A browser-based Helbreath-inspired base client and a MMO server to go with it
-- A foundation for hobby RPG and MMORPG-style projects
-- A practical codebase for experimenting with Helbreath assets, mechanics, and tooling
-
-This project is not:
-
-- A finished standalone game
-- A drop-in replacement for the original Helbreath client or the old community C++ server — the multiplayer client and server here use their own WebSocket + Protobuf protocol and are not wire-compatible with the legacy C++ server
-
-## Why This Project Exists
-
-The goal of this repository is to preserve and modernize a large amount of Helbreath client-side content in a form that is easier to understand, extend, and build on. Instead of starting from scratch with rendering, maps, sprites, effects, UI, and core gameplay systems, developers can use this as a working base for fan projects, experiments, and original games built on similar foundations.
-
-It also exists as a **base MMORPG project** — a working, authoritative-server-plus-client template — so that anyone wanting to build a 2D MMORPG does not have to design the full stack (netcode, world threading, visibility, anti-cheat, prediction, reconciliation) from zero.
-
-## Who This Is For
-
-- Helbreath fans who want to explore or extend the game in a modern browser-based form
-- Hobby developers building 2D RPG or MMORPG-style projects
-- Developers interested in Phaser setup with web based UI built in React
-- Developers who want to experiment with or learn from an MMORPG server written in C# / .NET
-- People experimenting with AI-assisted iteration on an existing gameplay codebase
-
-## About Helbreath
-
-[Helbreath](https://helbreath.fandom.com/wiki/Helbreath_Wiki) is an old-school 2D fantasy MMORPG. While the original developer is no longer in business and the only licensed server is, as far as I know, in Korea and only accessible from Korean IPs, there are still a couple of private servers around that you can find from [this list](https://helbreathhub.com/server_list).
-
-[Helbreath Olympia](https://www.helbreath.net/) is the longest-running successful private server in terms of sustained player count, and is the recommended option for the original experience, although the server has been tastefully rebalanced and the game client heavily upgraded to reduce clunkiness and add quality-of-life improvements.
-
-If you're interested in a modern 3D remake that is a spiritual successor to Helbreath, check out the [Helrift project](https://helrift.com/).
-
-## Licensing
-
-The source code in this repository is released under the MIT License, but the Helbreath game assets are not original to this project. Those assets remain proprietary to Siementech Co. Ltd. or its successors.
-
-To my knowledge, Helbreath private servers and related fan projects have existed for many years without legal ramifications, including some commercial ones with cash shops. That said, you should treat the asset situation carefully and make your own legal assessment before using this project, especially for anything beyond hobby or community use.
+---
 
 ## Tech Stack
 
-The client is built with:
+| Technology | Purpose |
+|------------|---------|
+| [TypeScript](https://www.typescriptlang.org) | Type-safe development |
+| [Phaser 3](https://phaser.io) | Game engine and rendering |
+| [React](https://react.dev) | UI layer |
+| [Vite](https://vite.dev) | Build tooling and dev server |
+| [Radix UI](https://www.radix-ui.com) | Accessible UI primitives |
+| [TanStack Store](https://tanstack.com/store/latest) | Reactive state management |
 
-- [TypeScript](https://www.typescriptlang.org/)
-- [Phaser 3](https://phaser.io/)
-- [React](https://react.dev/)
-- [Radix UI](https://www.radix-ui.com/)
+**Prerequisites:** [Node.js](https://nodejs.org) (LTS recommended)
 
-The UI is rendered outside the game canvas as standard web UI, which makes it easier to build, scale, and test. For more detail, see [`sp-client/docs/UI_LAYER.md`](./sp-client/docs/UI_LAYER.md).
+---
 
-The multiplayer server is built with:
+## Quick Start
 
-- [C# / .NET 10](https://dotnet.microsoft.com/)
-- [ASP.NET Core WebSockets](https://learn.microsoft.com/aspnet/core/fundamentals/websockets) for transport
-- [Google.Protobuf](https://protobuf.dev/) for the wire format (shared `.proto` schemas in [`multiplayer/proto`](./multiplayer/proto))
-
-For the full server design, see [`multiplayer/server/README.md`](./multiplayer/server/README.md).
-
-## Getting Started
-
-The playable client lives in [`sp-client`](./sp-client/). For full setup and development notes, see [`sp-client/README.md`](./sp-client/README.md).
-
-Requirement: [Node.js](https://nodejs.org/) LTS recommended. The client uses `pnpm` by default, though other package managers also work.
-
-Quick start:
+This project uses `pnpm` by default; npm or yarn work as well.
 
 ```bash
 cd sp-client
@@ -120,93 +29,150 @@ pnpm install
 pnpm dev
 ```
 
-More setup and development details:
+The client runs at **http://localhost:8080**.
 
-- Client setup and scripts: [`sp-client/README.md`](./sp-client/README.md)
-- UI architecture: [`sp-client/docs/UI_LAYER.md`](./sp-client/docs/UI_LAYER.md)
-- Full docs folder: [`sp-client/docs`](./sp-client/docs/)
+---
 
-### Optional: multiplayer server
+## Scripts
 
-To also run the authoritative multiplayer server locally, install the [.NET 10 SDK](https://dotnet.microsoft.com/download) and start it:
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start development server (localhost:8080) |
+| `pnpm build` | Production build → output in `sp-client/dist` |
+| `pnpm compress-assets` | Build `assets.zip` for faster loading (see [Asset Loading](#asset-loading)) |
 
-```bash
-cd multiplayer/server
-dotnet run
-```
-
-The multiplayer client lives in [`multiplayer/mp-client`](./multiplayer/mp-client) and connects to the server over WebSockets. See [`multiplayer/server/README.md`](./multiplayer/server/README.md) for the full server setup, configuration reference, and performance / stress-test notes.
+---
 
 ## Project Structure
 
-- `sp-client` - Browser-based single-player client
-- `multiplayer` - MMO server and networked client (C# / .NET 10 server in `multiplayer/server`, browser client in `multiplayer/mp-client`, shared protobuf schemas in `multiplayer/proto`, design docs in `multiplayer/docs`)
-- `tools` - Asset and development utilities
-- `reference` - Reference material, including community C++ client/server logic and some configuration files
+```
+sp-client/src/
+├── App.tsx              # Root React app, mounts Phaser + UI
+├── Config.ts             # Game constants (speeds, depths, collision, etc.)
+├── PhaserGame.tsx        # Phaser canvas wrapper and React bridge
+├── Types.ts              # Shared type definitions
+├── main.tsx              # React entry point
+│
+├── constants/            # Configuration and asset definitions
+│   ├── Assets.ts         # Asset registry (sprites, maps, sounds)
+│   ├── Effects.ts        # Visual effect definitions
+│   ├── EventNames.ts     # IN_UI_*, OUT_UI_* event constants
+│   ├── Items.ts          # Item definitions
+│   ├── Maps.ts           # Map metadata and helpers
+│   ├── Monsters.ts       # Monster definitions
+│   ├── NPCs.ts           # NPC definitions
+│   ├── RegistryKeys.ts   # Phaser registry keys
+│   ├── SoundFileNames.ts # Audio file references
+│   ├── Spells.ts         # Spell definitions
+│   └── SpriteKeys.ts     # Sprite key constants
+│
+├── game/                 # Phaser game logic
+│   ├── EventBus.ts       # Intra-Phaser event bus
+│   ├── main.ts           # Phaser bootstrap
+│   ├── assets/           # Custom asset loaders
+│   │   ├── HBMap.ts      # .amd map format parser
+│   │   └── HBSprite.ts   # .spr sprite format parser
+│   ├── effects/          # Visual effects and projectiles
+│   │   ├── Effect.ts, FloatingText.ts
+│   │   ├── ArrowProjectile.ts, CriticalStrikeProjectile.ts
+│   │   └── DirectionalProjectile.ts, StormBringerEffect.ts
+│   ├── objects/          # Game entities
+│   │   ├── GameObject.ts # Base class for all entities
+│   │   ├── Player.ts, Monster.ts, NPC.ts
+│   │   ├── GroundItem.ts # Dropped items
+│   │   └── GameAsset.ts  # Base drawable game object
+│   ├── scenes/
+│   │   ├── Boot.ts       # Initial setup
+│   │   ├── LoadingScreen.ts  # Asset loading (ZIP or per-file)
+│   │   ├── LoginScreen.ts    # Character selection
+│   │   └── GameWorld.ts  # Main game scene
+│   └── spells/          # Spell implementations (FireBall, LightningBolt, etc.)
+│
+├── ui/                   # React UI layer
+│   ├── components/       # Reusable Rpg* components (Button, Checkbox, Slider, etc.)
+│   ├── dialogs/          # Modal dialogs (Inventory, Map, Monster, etc.)
+│   ├── overlays/         # Hover overlays (Monster, InventoryItem, AssetDebug)
+│   └── store/            # TanStack stores (one per dialog)
+│
+└── utils/                # Shared utilities
+    ├── AnimationUtils.ts, CoordinateUtils.ts, EffectUtils.ts
+    ├── CameraManager.ts, CastManager.ts, GameStateManager.ts
+    ├── InputManager.ts, InventoryManager.ts, LootManager.ts
+    ├── MapManager.ts, MusicManager.ts, ShadowManager.ts
+    ├── MapAssets.ts, MonsterAssets.ts, SoundManager.ts, SoundTracker.ts, SpatialAudioUtils.ts
+    ├── SpatialGrid.ts, SpriteUtils.ts
+    ├── PlayerAppearanceManager.ts, WeatherManager.ts
+    └── RegistryUtils.ts  # Phaser registry helpers
+```
 
-## Contributing
+---
 
-This repository is intended to stay focused on being a strong base game rather than evolving into a finished standalone MMORPG. Contributions are especially welcome in the following areas:
+## Asset Loading
 
-- Fixes that bring behavior closer to the original Helbreath experience where appropriate
-- Work on open tasks and missing content
-- Documentation improvements and project tooling that make the codebase easier to understand and extend
-- Expansion of original assets. New sprites, sprite upscaling (quite difficult since map tiles and player appearance sprites need to retain perfect pixel-location accuracy), new spells, new maps, and new effects (new effects and spells could be created with the particle system, and more sprite effects can be added using [FX Pipeline](https://docs.phaser.io/phaser/concepts/fx)), as long as they remain aesthetically accurate (subject to review)
+The client supports two loading modes:
 
-If you plan to work on a larger improvement, it helps to mention it in [Discord](https://discord.gg/P4tBdGRC3q) first so contributors do not duplicate effort.
+| Mode | Use case | How to enable |
+|------|----------|---------------|
+| **Per-file** | Development, debugging, CDN limitations | Set `ENABLE_ZIP_LOADING = false` in `src/Config.ts` |
+| **ZIP** | Production, slower networks | Set `ENABLE_ZIP_LOADING = true` in `src/Config.ts` |
 
-## More Docs
+**Local development:** Per-file loading is recommended for local dev: set `ENABLE_ZIP_LOADING` to `false` in `src/Config.ts`. It avoids decompression overhead and Phaser's native audio loading is faster when loading files directly.
 
-Client docs ([`sp-client/docs`](./sp-client/docs/)):
+**CDN limitations:** Some CDNs don't support large files (e.g. multi-megabyte `assets.zip`). Use per-file loading in those cases.
 
-- Asset loading: [`sp-client/docs/ASSET_LOADING.md`](./sp-client/docs/ASSET_LOADING.md)
-- Map rendering: [`sp-client/docs/MAP_RENDERING.md`](./sp-client/docs/MAP_RENDERING.md)
-- Movement system: [`sp-client/docs/MOVEMENT_SYSTEM.md`](./sp-client/docs/MOVEMENT_SYSTEM.md)
-- Player mechanics: [`sp-client/docs/PLAYER_MECHANICS.md`](./sp-client/docs/PLAYER_MECHANICS.md)
-- Monster mechanics: [`sp-client/docs/MONSTER_MECHANICS.md`](./sp-client/docs/MONSTER_MECHANICS.md)
-- Inventory and loot: [`sp-client/docs/INVENTORY_AND_LOOT_MECHANICS.md`](./sp-client/docs/INVENTORY_AND_LOOT_MECHANICS.md)
-- Spells and effects: [`sp-client/docs/SPELLS_AND_EFFECTS_MECHANICS.md`](./sp-client/docs/SPELLS_AND_EFFECTS_MECHANICS.md)
+**Building `assets.zip`:** Run `pnpm compress-assets` from `sp-client`. Output: `sp-client/public/assets.zip`. Existing ZIPs are deleted before writing a new one. If ZIP loading fails, the client falls back to per-file loading automatically.
 
-Multiplayer docs ([`multiplayer/docs`](./multiplayer/docs/)):
+**Monster assets:** `LOAD_MONSTER_ASSETS_ON_DEMAND` controls whether monster sprite and sound assets are loaded up front or fetched when a monster is spawned. When enabled, only `MONSTER_PLACEHOLDER_SPRITE` and its configured sounds are included in the eager manifest/ZIP; the real monster assets are fetched and registered by `utils/MonsterAssets.ts`, then swapped onto the monster at runtime.
 
-- Server configuration: [`multiplayer/docs/SERVER_CONFIGURATION.md`](./multiplayer/docs/SERVER_CONFIGURATION.md)
-- Authorization and storage: [`multiplayer/docs/AUTHORIZATION_AND_STORAGE.md`](./multiplayer/docs/AUTHORIZATION_AND_STORAGE.md)
-- Threading and packet flow: [`multiplayer/docs/SERVER_THREADING_AND_PACKET_FLOW.md`](./multiplayer/docs/SERVER_THREADING_AND_PACKET_FLOW.md)
-- Performance optimizations: [`multiplayer/docs/SERVER_PERFORMANCE_OPTIMIZATIONS.md`](./multiplayer/docs/SERVER_PERFORMANCE_OPTIMIZATIONS.md)
-- Visibility tracking: [`multiplayer/docs/SERVER_VISIBILITY_TRACKING.md`](./multiplayer/docs/SERVER_VISIBILITY_TRACKING.md)
-- Client–server sync: [`multiplayer/docs/CLIENT_SERVER_SYNC.md`](./multiplayer/docs/CLIENT_SERVER_SYNC.md)
-- Network debugging (Server / Performance dialogs, simulated latency): [`multiplayer/docs/NETWORK_DEBUGGING.md`](./multiplayer/docs/NETWORK_DEBUGGING.md)
-- Movement system: [`multiplayer/docs/MOVEMENT_SYSTEM.md`](./multiplayer/docs/MOVEMENT_SYSTEM.md)
-- Combat system: [`multiplayer/docs/COMBAT_SYSTEM.md`](./multiplayer/docs/COMBAT_SYSTEM.md)
-- Spell casting: [`multiplayer/docs/SPELL_CASTING_SYSTEM.md`](./multiplayer/docs/SPELL_CASTING_SYSTEM.md)
-- Inventory and items: [`multiplayer/docs/INVENTORY_AND_ITEMS_SYSTEM.md`](./multiplayer/docs/INVENTORY_AND_ITEMS_SYSTEM.md)
-- Server monster AI: [`multiplayer/docs/SERVER_MONSTER_AI.md`](./multiplayer/docs/SERVER_MONSTER_AI.md)
+**Map and tile assets:** `LOAD_MAP_ASSETS_ON_DEMAND` controls whether all `.amd` maps and tile `.spr` packs load during `LoadingScreen` or only when `GameWorld` opens the current map. When enabled, `utils/MapAssets.ts` fetches the map binary, loads the tile sheets that map actually needs (including treeshadow textures for trees), registers the `HBMap`, then the usual render/minimap path runs. Pair with **`ENABLE_ZIP_LOADING = false`** (or serve `assets/maps/` and `assets/sprites/` outside a zip) so those fetches succeed. `pnpm compress-assets` omits map/tile files from `assets.zip` when this flag is `true` in `Config.ts`.
 
-## Top Priorities
+**Player equipment appearance:** `LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND` controls whether equipped-item `.spr` layers (from the item catalog) are in the eager manifest/ZIP or fetched when needed (`utils/ItemAssets.ts`). When enabled, `pnpm compress-assets` omits those sprites from `assets.zip`. Single-player prefetch uses `GameStateManager` inventory + gender; multiplayer also prefetches from the server snapshot when joining.
 
-### Client-side
+**ZIP vs lazy loading:** With monsters, maps/tiles, and/or player equipment loading on demand, the generated **`assets.zip` is much smaller** and most content loads as separate HTTP files. **ZIP optimization then stops being a major advantage** (you are no longer bundling the bulk of the game into one archive). It can still be a **small** win if your CDN charges **per file or per request**, since one tiny zip may mean fewer initial downloads than pulling many eager assets individually. Often, lazy loading is paired with **`ENABLE_ZIP_LOADING = false`** and static `public/assets/` hosting. See [`docs/ASSET_LOADING.md`](./docs/ASSET_LOADING.md).
 
-- Re-create missing original damaging spells, such as Magic Missile, Lightning Arrow, Fire Field, Mass Lightning Arrow, Mass Magic Missile, and perhaps even Hellfire and Fury of Thor.
-- Abaddon fixes:
-  - Taking-damage sprite pivot points seem to be off (needs confirming), and probably need client-level readjustment.
-  - Abaddon effects are not hooked up (surrounding sprites, aura, etc.).
-  - M136-M139 sounds are missing.
-- Some monster and a couple of static map object sprites have green and blue artifacts. They need to be reconverted with `PakToSprConverter` using `NearTransparency` mode, and then recompressed using the `recompress-sprite-files` tool.
-- Quite a few map tiles need to be reconverted without taking the transparency pixel from the `0,0` location. Either transparency should not be applied, or the key location needs to be taken from the correct location, which for many map tiles is not `0,0`. `PakToSprConverter` currently does not support this.
-- `Effect12` sprites need to be converted properly with `BlendedTransparency` mode. `PakToSprConverter` `BlendedTransparency` mode does not work properly and needs fixing first.
-- Earth Shock Wave sprites are transparent; they probably should not have been converted with the blended transparency setting. They need special treatment, since other sprites in that file need to be converted with blended transparency. `PakToSprConverter` currently does not support variable transparency settings per sprite sheet.
-- The sprites format could be changed if a fixed set of PNG-converted PAK files already exists and just needs to be hooked up.
-- Make adjacent static game objects transparent when someone is behind them, mostly rooftops. For example, look up all adjacent or connected static map objects and make them transparent as well when the player is behind one of the connected objects.
-- Shadows could use some attention. The default base sprite transformation does not look good on some monsters, especially longitudinal monsters. This probably is not an easy fix, but it could be solved with per-animation, per-direction shadow transformation data in the monster data file (`Monsters.ts`). It is just a lot of work to realign each of them.
-- Various effect pivot points are off and need manual corrections using offsets in `Effects.ts`. Check how the Storm Bringer effect is corrected.
-- Some dropped or ground item large sprite pivots or offsets could use readjusting.
-- GM effect (originally enabled when equipped with GM Shield) is not hooked up. Add a flag in the Player dialog to enable it.
-- Weapon hit sounds need to vary based on weapon type, including unarmed. Currently they are fixed to a single sound.
-- BUG: Wyvern special animation frames currently work with a start index of `3`, but should be `4`, so there is probably an off-by-one error somewhere.
+---
 
-### Server-side
+## Dev Guides
 
-- Set up map teleport points as in the original game.
-- Set up map monster pits as in the original game.
-- Set up NPC locations as in the original game.
+See [ASSET_LOADING.md](./docs/ASSET_LOADING.md) for for how assets are loaded. For creating pre-generated minimap images, see [GENERATING_MINIMAP_SNAPSHOTS.md](./docs/GENERATING_MINIMAP_SNAPSHOTS.md). For how `.spr` sprite files are loaded and parsed, see [SPRITE_FILE_FORMAT.md](./docs/SPRITE_FILE_FORMAT.md). For how sprites render, animation types, and player appearance composition, see [ANIMATIONS_RENDERING.md](./docs/ANIMATIONS_RENDERING.md). For how maps are loaded and rendered (tiles, objects, sprite lookup), see [MAP_RENDERING.md](./docs/MAP_RENDERING.md). For how the grid-based movement system works (GameObject, Player, Monster, pathfinding, knockback, stunlock), see [MOVEMENT_SYSTEM.md](./docs/MOVEMENT_SYSTEM.md). For how the camera system works (follow, zoom, bounds, UI pan, camera shake), see [CAMERA_SYSTEM.md](./docs/CAMERA_SYSTEM.md). For how shadows are rendered beneath map objects, Player, and Monster (ShadowManager, position sync, animation), see [SHADOWS_RENDERING.md](./docs/SHADOWS_RENDERING.md). For how the audio system and spatial audio work (MusicManager, SoundManager, SoundTracker, SpatialAudioUtils), see [AUDIO_SYSTEM.md](./docs/AUDIO_SYSTEM.md). For the React UI layer architecture, EventBus communication with Phaser, and benefits of HTML-based UI, see [UI_LAYER.md](./docs/UI_LAYER.md). For how mouse input flows from InputManager to GameWorld and Player (movement, attack, pickup, spell targeting), see [INPUT_HANDLING.md](./docs/INPUT_HANDLING.md). For Player mechanics, state machine, combat, spell casting, and interaction with GameWorld and other objects, see [PLAYER_MECHANICS.md](./docs/PLAYER_MECHANICS.md). For Monster mechanics, AI behavior, combat, death/corpse, and interaction with GameWorld and Player, see [MONSTER_MECHANICS.md](./docs/MONSTER_MECHANICS.md). For inventory, bag, equipment, ground loot, and pickup/drop flow, see [INVENTORY_AND_LOOT_MECHANICS.md](./docs/INVENTORY_AND_LOOT_MECHANICS.md). For spells, effects, CastManager, and adding new spells or effects, see [SPELLS_AND_EFFECTS_MECHANICS.md](./docs/SPELLS_AND_EFFECTS_MECHANICS.md).
 
+---
+
+## Development Tips
+
+- **Faster loading:** Comment out unused maps in `constants/Assets.ts`, enable `LOAD_MONSTER_ASSETS_ON_DEMAND` for monsters, and/or `LOAD_MAP_ASSETS_ON_DEMAND` so maps and tile packs load only for the active map (see [Asset Loading](#asset-loading)).
+- **Local dev:** Set `ENABLE_ZIP_LOADING` to `false` in `src/Config.ts` for quicker iteration; per-file loading is often faster on localhost.
+- **AI guidance:** Cursor rules live in `sp-client/.cursor/` and can be adapted for other AI tools.
+
+---
+
+## AI Assistance
+
+Cursor-specific configuration is in `sp-client/.cursor/`. The rules cover:
+
+- Code guidelines and patterns
+- Sprites, assets, and map system
+- UI layer (React ↔ Phaser via EventBus)
+- Core systems (GameObject, managers, effects)
+
+These files can be retrofitted for other AI coding assistants.
+
+---
+
+## Community Tools
+
+| Tool | Description |
+|------|-------------|
+| [PAK Sprite Editor](https://helbreath.dev/sprite-editor/) | Web-based editor for exploring PAK files. Use `tools` scripts to extract `.spr` contents for this project. |
+| [Map Editor](https://helbreath.dev/map-editor/) | Web-based editor for `.amd` Helbreath maps. |
+| [Helbreath Hub](https://www.helbreathhub.com/downloads) | Additional community tools and resources. |
+
+---
+
+## Production Build
+
+```bash
+pnpm build
+```
+
+Output is in `sp-client/dist`. Host the contents on any static file server or CDN.

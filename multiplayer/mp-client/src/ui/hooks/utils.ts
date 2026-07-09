@@ -9,7 +9,9 @@ function computeFullscreenPortalRoot(): HTMLElement {
  * Optionally notifies when the root changes (e.g. sync into a TanStack store for tooltips).
  */
 export function useFullscreenPortalTarget(onTargetChange?: (target: HTMLElement) => void): HTMLElement | undefined {
-    const [portalTarget, setPortalTarget] = useState<HTMLElement | undefined>(undefined);
+    const [portalTarget, setPortalTarget] = useState<HTMLElement | undefined>(() =>
+        typeof document !== 'undefined' ? computeFullscreenPortalRoot() : undefined,
+    );
 
     useEffect(() => {
         const update = () => {

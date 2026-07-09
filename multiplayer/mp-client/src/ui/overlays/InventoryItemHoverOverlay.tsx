@@ -72,8 +72,25 @@ export function InventoryItemHoverOverlay() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 12px' }}>
                 <div className="rpg-stat-item">
                     <span className="rpg-stat-label">Item name:</span>
-                    <span className="rpg-stat-value">{hoverInfo.itemName}</span>
+                    <span
+                        className="rpg-stat-value"
+                        style={hoverInfo.itemNameColor ? { color: hoverInfo.itemNameColor } : undefined}
+                    >
+                        {hoverInfo.itemName}
+                    </span>
                 </div>
+                {hoverInfo.magicStatLine1 && (
+                    <div className="rpg-stat-item">
+                        <span className="rpg-stat-label">Primary:</span>
+                        <span className="rpg-stat-value" style={{ color: '#969696' }}>{hoverInfo.magicStatLine1}</span>
+                    </div>
+                )}
+                {hoverInfo.magicStatLine2 && (
+                    <div className="rpg-stat-item">
+                        <span className="rpg-stat-label">Secondary:</span>
+                        <span className="rpg-stat-value" style={{ color: '#969696' }}>{hoverInfo.magicStatLine2}</span>
+                    </div>
+                )}
                 <div className="rpg-stat-item">
                     <span className="rpg-stat-label">Item type:</span>
                     <span className="rpg-stat-value">{hoverInfo.itemType}</span>

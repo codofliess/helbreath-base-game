@@ -180,6 +180,7 @@ public static class MonsterVisibility {
     public static void BroadcastMonsterDied(GameWorldRef wr, GameWorldMonster monster) {
         ArgumentNullException.ThrowIfNull(monster);
 
+        MonsterLoot.TryDropLootOnDeath(wr, monster);
         monster.ClearAllTemporaryEffects(wr);
 
         var message = NetworkManager.CreateMonsterDied(monster.MonsterId, monster.CorpseDecayDurationMs);

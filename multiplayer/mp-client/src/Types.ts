@@ -125,6 +125,7 @@ export interface SummonMonsterEvent {
  */
 export interface CastSpellEvent {
     spellId: number;
+    useCastAnimation?: boolean;
 }
 
 export enum DamageType {
@@ -623,6 +624,8 @@ export interface GroundItemEventData {
     itemUid: string;
     quantity: number;
     effectOverrides?: Effect[];
+    itemAttribute?: number;
+    itemColor?: number;
 }
 
 export interface GroundStateCellEventData {

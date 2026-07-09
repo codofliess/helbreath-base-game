@@ -23,7 +23,9 @@ import {
     ITEM_BAG_POSITION_UPDATED,
     ITEM_CONSUMED_REQUESTED,
     ITEM_CREATE_REQUESTED,
+    ITEM_ADD_FROM_GROUND,
     ITEM_DROP_TO_GROUND_REQUESTED,
+    ITEM_DROPPED_TO_GROUND,
     ITEM_EQUIP_REQUESTED,
     ITEM_MOVED_TO_BAG,
     ITEM_REMOVED_FROM_BAG,
@@ -399,6 +401,12 @@ export class InventoryManager {
             this.sortBaggedItemsByZIndex();
             if (!suppressSound && (item.quantity ?? 1) > previousQuantity) {
                 this.playSound(ITEM_ADDED_SOUND);
+                EventBus.emit(ITEM_ADD_FROM_GROUND, {
+                    itemId: item.itemId,
+                    effectOverrides: item.effectOverrides,
+                    itemAttribute: item.itemAttribute,
+                    itemColor: item.itemColor,
+                });
             }
             EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid: item.itemUid });
             EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(item) });
@@ -411,6 +419,14 @@ export class InventoryManager {
             this.playSound(existingSlot ? ITEM_MOVED_TO_BAG_SOUND : ITEM_ADDED_SOUND);
         }
         EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(item) });
+        if (!existingSlot && !suppressSound) {
+            EventBus.emit(ITEM_ADD_FROM_GROUND, {
+                itemId: item.itemId,
+                effectOverrides: item.effectOverrides,
+                itemAttribute: item.itemAttribute,
+                itemColor: item.itemColor,
+            });
+        }
     }
 
     private applyItemRemovedFromBag(itemUid: string): void {
@@ -420,10 +436,17 @@ export class InventoryManager {
             return;
         }
 
+        const removedItem = this.baggedItems[index];
+        const wasGroundDrop = this.pendingGroundDropSoundConfirmations.delete(itemUid);
+
         this.baggedItems.splice(index, 1);
         this.resequenceBagZIndices();
-        if (this.pendingGroundDropSoundConfirmations.delete(itemUid)) {
+        if (wasGroundDrop) {
             this.playSound(ITEM_DROPPED_SOUND);
+            EventBus.emit(ITEM_DROPPED_TO_GROUND, {
+                itemId: removedItem.itemId,
+                effectOverrides: removedItem.effectOverrides,
+            });
         }
         EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
     }

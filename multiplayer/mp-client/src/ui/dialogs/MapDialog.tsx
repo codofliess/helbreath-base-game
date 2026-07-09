@@ -13,11 +13,12 @@ import {
     setShowWaterCells,
     setShowFarmableCells,
     setDisplayGrid,
-    setDisplayLargeItems,
+    setGroundItemDisplaySize,
     setWeather,
     resetMapDialogToDefaults,
     type WeatherMode
 } from '../store/MapDialog.store';
+import { GROUND_ITEM_DISPLAY_LABELS, GROUND_ITEM_DISPLAY_SIZES } from '../../constants/GroundItemDisplay';
 import { controlsDialogStore, setSelectedMap } from '../store/ControlsDialog.store';
 
 interface MapDialogProps {
@@ -44,7 +45,7 @@ export function MapDialog({
     const showWaterCells = useStore(mapDialogStore, (state) => state.showWaterCells);
     const showFarmableCells = useStore(mapDialogStore, (state) => state.showFarmableCells);
     const displayGrid = useStore(mapDialogStore, (state) => state.displayGrid);
-    const displayLargeItems = useStore(mapDialogStore, (state) => state.displayLargeItems);
+    const groundItemDisplaySize = useStore(mapDialogStore, (state) => state.groundItemDisplaySize);
     const weather = useStore(mapDialogStore, (state) => state.weather);
 
     const weatherOptions: { value: WeatherMode; label: string }[] = [
@@ -162,12 +163,24 @@ export function MapDialog({
                 onCheckedChange={setDisplayGrid}
             />
             
-            <RpgCheckbox
-                id="display-large-items"
-                label="Display large items"
-                checked={displayLargeItems}
-                onCheckedChange={setDisplayLargeItems}
-            />
+            <div style={{ marginTop: '4px' }}>
+                <label htmlFor="ground-item-size-select" className="rpg-label" style={{ display: 'block', marginBottom: '4px' }}>
+                    Ground item size
+                </label>
+                <select
+                    id="ground-item-size-select"
+                    className="rpg-select"
+                    value={groundItemDisplaySize}
+                    onChange={(e) => setGroundItemDisplaySize(e.target.value as typeof groundItemDisplaySize)}
+                    style={{ width: '100%' }}
+                >
+                    {GROUND_ITEM_DISPLAY_SIZES.map((size) => (
+                        <option key={size} value={size}>
+                            {GROUND_ITEM_DISPLAY_LABELS[size]}
+                        </option>
+                    ))}
+                </select>
+            </div>
 
             <div style={{ marginTop: '12px', marginBottom: '8px' }}>
                 <label htmlFor="weather-select" style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Weather</label>

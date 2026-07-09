@@ -6,8 +6,15 @@ import { HBMap } from '../assets/HBMap';
 import { getMapNames } from '../../constants/Maps';
 import { drawAppTitle, drawVersionNumber } from '../../utils/SpriteUtils';
 import { getAssets, AssetType, getCreatePhaseTotalActivities, type AssetData } from '../../constants/Assets';
-import { getLoadingBgKey, setItemPackSpriteSheets, setItemPackEmittedTintKeys, setMap } from '../../utils/RegistryUtils';
+import { getLoadingBgKey, setItemPackSpriteSheets, setItemPackEmittedTintKeys, setMap, getGameStateManager } from '../../utils/RegistryUtils';
 import { ENABLE_ZIP_LOADING, LOAD_MAP_ASSETS_ON_DEMAND } from '../../Config';
+
+type LoadingScreenInitData = {
+    enableZipLoading?: boolean;
+    targetMap?: string;
+    targetX?: number;
+    targetY?: number;
+};
 
 /**
  * Initial loading scene. Displays progress bar while loading assets (sprites, maps, music).
@@ -26,7 +33,10 @@ export class LoadingScreen extends Scene {
     private usingZipLoading: boolean = false;
     private loadingAssets: AssetData[] = [];
     private createPhaseTotalActivities: number = 0;
-    
+    private warpTargetMap?: string;
+    private warpTargetX?: number;
+    private warpTargetY?: number;
+
     // Timing metrics
     private phaseTimings: {
         downloadAssets?: number;
@@ -42,96 +52,79 @@ export class LoadingScreen extends Scene {
         super('LoadingScreen');
     }
 
-    public init(data?: { enableZipLoading?: boolean }) {
+    public init(data?: LoadingScreenInitData) {
         // Store loading start time for performance measurement
         this.loadingStartTime = Date.now();
         this.usingZipLoading = data?.enableZipLoading ?? ENABLE_ZIP_LOADING;
         this.loadingAssets = this.getLoadingAssets();
         this.createPhaseTotalActivities = getCreatePhaseTotalActivities(this.loadingAssets);
-        
+        this.warpTargetMap = data?.targetMap;
+        this.warpTargetX = data?.targetX;
+        this.warpTargetY = data?.targetY;
+
         // Set black background as fallback before image loads
         this.cameras.main.setBackgroundColor(0x000000);
+
+        // === SOPORTE PARA WARP AUTOMÁTICO ===
+        if (this.warpTargetMap) {
+            try {
+                const gameStateManager = getGameStateManager(this.game);
+                const mapFileName = this.warpTargetMap.endsWith('.amd')
+                    ? this.warpTargetMap
+                    : `${this.warpTargetMap}.amd`;
+                console.log(`📍 [LoadingScreen] Warp detectado → Cargando mapa: ${mapFileName}`);
+                gameStateManager.setMap(mapFileName);
+                gameStateManager.setWorldPos(this.warpTargetX ?? 50, this.warpTargetY ?? 50);
+                gameStateManager.saveGameState();
+            } catch (error) {
+                console.error('[LoadingScreen] No se pudo aplicar el warp al estado guardado:', error);
+            }
+        }
         
         // Get scene dimensions
         const width = this.scale.width;
         const height = this.scale.height;
 
         // Display background image immediately (loaded in Boot.ts)
-        // Get loading background image key from registry (loaded in Boot.ts)
         const loadingBgKey = getLoadingBgKey(this);
         
-        // Add background image immediately so it displays before cache fetching
         if (loadingBgKey && this.textures.exists(loadingBgKey)) {
             this.backgroundImage = this.add.image(width / 2, height / 2, loadingBgKey);
-            // Scale background to cover the entire scene
             const scaleX = width / this.backgroundImage.width;
             const scaleY = height / this.backgroundImage.height;
             const scale = Math.max(scaleX, scaleY);
             this.backgroundImage.setScale(scale);
-            // Send background to back so progress bar appears on top
             this.backgroundImage.setDepth(0);
         }
 
         // RPG-themed progress bar at the bottom
-        // Colors matching UI theme: leather border, brown-dark background, gold fill
         const barWidth = 320;
         const barHeight = 12;
-        const barY = height - 40; // 40px from bottom
+        const barY = height - 40;
         const barX = width / 2;
 
-        // Calculate track boundaries
         const trackLeftEdge = barX - barWidth / 2;
         const trackRightEdge = barX + barWidth / 2;
         
-        // Progress bar should fit inside track with 1px padding on each side
         const padding = 1;
         this.progressBarLeftEdge = trackLeftEdge + padding;
         const progressBarRightEdge = trackRightEdge - padding;
         this.progressBarMaxWidth = progressBarRightEdge - this.progressBarLeftEdge;
 
-        // Progress bar outline (border) - leather color
         this.progressBarOutline = this.add.rectangle(barX, barY, barWidth + 4, barHeight + 4, 0x704214);
         this.progressBarOutline.setStrokeStyle(2, 0x704214);
-        this.progressBarOutline.setAlpha(1.0); // Fully opaque
-
-        // Progress bar background track - dark brown
         this.progressBarTrack = this.add.rectangle(barX, barY, barWidth, barHeight, 0x2d1810);
-        this.progressBarTrack.setAlpha(1.0); // Fully opaque
-
-        // Progress bar fill - gold color (starts at 0 width, aligned with track)
-        // Height is barHeight - 2 to have 1px padding top and bottom
-        // Set origin to left-center so it grows from left to right
-        this.progressBar = this.add.rectangle(
-            this.progressBarLeftEdge, 
-            barY, 
-            0, 
-            barHeight - 2, 
-            0xd4af37
-        );
-        this.progressBar.setOrigin(0, 0.5); // Left-center origin
-        this.progressBar.setAlpha(1.0); // Fully opaque
+        this.progressBar = this.add.rectangle(this.progressBarLeftEdge, barY, 0, barHeight - 2, 0xd4af37);
+        this.progressBar.setOrigin(0, 0.5);
 
         drawVersionNumber(this);
 
-        // Ensure progress bar elements are on top of background
-        if (this.progressBarOutline) {
-            this.progressBarOutline.setDepth(10);
-        }
-        if (this.progressBarTrack) {
-            this.progressBarTrack.setDepth(10);
-        }
-        if (this.progressBar) {
-            this.progressBar.setDepth(11);
-        }
+        if (this.progressBarOutline) this.progressBarOutline.setDepth(10);
+        if (this.progressBarTrack) this.progressBarTrack.setDepth(10);
+        if (this.progressBar) this.progressBar.setDepth(11);
 
-        if (this.usingZipLoading) {
-            // For zip loading, we manually control progress in create()
-            // Progress phases: 0-25% fetch, 25-50% decompress, 50-100% process
-        } else {
-            // Use the 'progress' event emitted by the LoaderPlugin to update the loading bar
-            // LoaderPlugin progress (0-1) maps to 0-50% of total progress
+        if (!this.usingZipLoading) {
             this.load.on('progress', (progress: number) => {
-                // Update current progress and refresh bar
                 this.currentProgress = progress * 0.5;
                 this.updateProgressBar();
             });
@@ -269,7 +262,12 @@ export class LoadingScreen extends Scene {
         
         // Wait briefly to ensure progress bar renders at 100% before transitioning
         this.time.delayedCall(300, () => {
-            this.scene.start('LoginScreen');
+            if (this.warpTargetMap) {
+                console.log(`✅ [LoadingScreen] Warp completado → GameWorld`);
+                this.scene.start('GameWorld');
+            } else {
+                this.scene.start('LoginScreen');
+            }
         });
     }
 

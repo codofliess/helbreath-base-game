@@ -693,6 +693,9 @@ public record NpcConfig(int Id, string Name);
 /// <summary>Optional spell cast entry for <see cref="MonsterConfig.Spells"/>: <c>spellId</c> matches <c>Spells.json</c>; <c>castProbability</c> is an independent roll each AI tick (0–1).</summary>
 public record MonsterSpellEntry(int SpellId, double CastProbability);
 
+/// <summary>One loot row for <see cref="MonsterConfig.Loot"/>: independent roll on death using <c>chance</c> (0–1).</summary>
+public record MonsterLootEntry(int ItemId, double Chance, int MinQuantity = 1, int MaxQuantity = 1);
+
 /// <summary>Server-authoritative monster catalog entry: stable id for world dwell config, display name, client sprite id, default step duration in ms (0 = no movement; melee when a player is in range still applies), optional chase distance in Chebyshev cells (default at spawn when omitted), optional max chase follow distance in cells, optional melee attack range in cells (default 1 when omitted), optional attack animation duration in ms, optional damage roll bounds (defaults from settings when omitted), optional post-hit AI idle gate extension in ms (defaults from settings when omitted), optional wander rest duration bounds in ms (defaults from settings when omitted), optional hit mode (<see cref="AttackType"/>, default <see cref="AttackType.NoInterrupt"/>), optional auto-aggro allegiance (<see cref="MonsterAllegiance"/>, default <see cref="MonsterAllegiance.Hostile"/>), optional player stunlock duration in ms after a <see cref="AttackType.Stun"/> hit only (ignored for <see cref="AttackType.Interrupt"/>; default 100 when omitted; JSON <c>attackStunDuration</c>), optional ranged attacks (JSON <c>rangedAttack</c>) using <c>arrowSpeed</c> for damage delay, optional <see cref="Spells"/> for AI spell casts.</summary>
 public record MonsterConfig(
     int Id,
@@ -720,7 +723,11 @@ public record MonsterConfig(
     /// <summary>Delay in ms before a dwell-spawned monster respawns after corpse removal when omitted; uses <c>monsterDefaults.respawnTime</c> in <c>Settings.json</c>.</summary>
     int? RespawnTime = null,
     /// <summary>Optional AI spell list; each entry references <c>Spells.json</c> by id (ground-effect spells are rejected at startup).</summary>
-    MonsterSpellEntry[]? Spells = null);
+    MonsterSpellEntry[]? Spells = null,
+    /// <summary>Optional death loot table; each entry rolls independently when the monster dies.</summary>
+    MonsterLootEntry[]? Loot = null,
+    /// <summary>Olympia loot gen tier (1–10); caps magic attribute values on drops. Ettin=10.</summary>
+    int? GenLevel = null);
 
 /// <summary>Ranged vs melee for catalog <c>weaponType</c> (JSON and <see cref="Mmorpg.Network.ItemDirectoryEntry"/>).</summary>
 public enum ItemWeaponType {
@@ -743,7 +750,9 @@ public record ItemConfig(
     /// <summary>0 = melee, 1 = bow; omit from JSON for melee.</summary>
     int? WeaponType = null,
     /// <summary>When set, only this gender may equip the item; 0 = male, 1 = female (matches <see cref="Mmorpg.Network.PlayerGender"/>).</summary>
-    int? Gender = null);
+    int? Gender = null,
+    /// <summary>Olympia <c>Item.cfg</c> effect type for magic rolls (1=attack, 2=defense, 13=mana-save wand). Inferred from <c>itemType</c> when omitted.</summary>
+    int? OlympiaEffectType = null);
 
 /// <summary>One timed effect row from <c>Spells.json</c> <c>temporaryEffects</c>; <c>duration</c> is ms. Optional modifiers are additive to 1 for speed: effective duration ms = base / (1 + sum(modifiers)); see <see cref="TemporaryEffectSpeedModifierMath"/>.</summary>
 public record SpellTimedEffectSpec(

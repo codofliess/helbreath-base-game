@@ -41,27 +41,27 @@ import type {
     MonsterCastDirectionalAoeSpellEventData,
 } from '../Types';
 import {
-    SPELL_ARMOR_BREAK_ID,
-    SPELL_CHILL_WIND_ID,
-    SPELL_EARTHWORM_STRIKE_ID,
-    SPELL_ENERGY_BOLT_ID,
-    SPELL_ENERGY_STRIKE_ID,
-    SPELL_FIRE_BALL_ID,
-    SPELL_FIRE_STRIKE_ID,
-    SPELL_ICE_STRIKE_ID,
-    SPELL_LIGHTNING_STRIKE_ID,
-    SPELL_MASS_CHILL_WIND_ID,
-    SPELL_MASS_FIRE_STRIKE_ID,
-    SPELL_MASS_ICE_STRIKE_ID,
-    SPELL_MASS_LIGHTNING_STRIKE_ID,
-    SPELL_METEOR_STRIKE_ID,
-    SPELL_TRIPLE_ENERGY_BOLT_ID,
-    SPELL_BLIZZARD_ID,
-    SPELL_MASS_BLIZZARD_ID,
-    SPELL_EARTH_SHOCK_WAVE_ID,
-    SPELL_BLOODY_SHOCK_WAVE_ID,
-    SPELL_LIGHTNING_BOLT_ID,
-} from '../constants/Spells';
+    SERVER_SPELL_ARMOR_BREAK_ID,
+    SERVER_SPELL_BLOODY_SHOCK_WAVE_ID,
+    SERVER_SPELL_BLIZZARD_ID,
+    SERVER_SPELL_CHILL_WIND_ID,
+    SERVER_SPELL_EARTH_SHOCK_WAVE_ID,
+    SERVER_SPELL_EARTHWORM_STRIKE_ID,
+    SERVER_SPELL_ENERGY_BOLT_ID,
+    SERVER_SPELL_ENERGY_STRIKE_ID,
+    SERVER_SPELL_FIRE_BALL_ID,
+    SERVER_SPELL_FIRE_STRIKE_ID,
+    SERVER_SPELL_ICE_STRIKE_ID,
+    SERVER_SPELL_LIGHTNING_BOLT_ID,
+    SERVER_SPELL_LIGHTNING_STRIKE_ID,
+    SERVER_SPELL_MASS_BLIZZARD_ID,
+    SERVER_SPELL_MASS_CHILL_WIND_ID,
+    SERVER_SPELL_MASS_FIRE_STRIKE_ID,
+    SERVER_SPELL_MASS_ICE_STRIKE_ID,
+    SERVER_SPELL_MASS_LIGHTNING_STRIKE_ID,
+    SERVER_SPELL_METEOR_STRIKE_ID,
+    SERVER_SPELL_TRIPLE_ENERGY_BOLT_ID,
+} from '../constants/ServerSpellIds';
 
 export interface CastManagerConfig {
     scene: Scene;
@@ -712,19 +712,19 @@ export class CastManager {
         spell: SpellEntry,
     ): void {
         switch (spellId) {
-            case SPELL_FIRE_BALL_ID:
+            case SERVER_SPELL_FIRE_BALL_ID:
                 this.castFireBall(originPixelX, originPixelY, targetWorldX, targetWorldY, spell.projectileSpeed ?? 1500);
                 break;
-            case SPELL_LIGHTNING_STRIKE_ID:
+            case SERVER_SPELL_LIGHTNING_STRIKE_ID:
                 this.castLightningStrike(originPixelX, originPixelY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_MASS_LIGHTNING_STRIKE_ID:
+            case SERVER_SPELL_MASS_LIGHTNING_STRIKE_ID:
                 this.castMassLightningStrike(originPixelX, originPixelY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_ENERGY_STRIKE_ID:
+            case SERVER_SPELL_ENERGY_STRIKE_ID:
                 this.castEnergyStrike(originPixelX, originPixelY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_ENERGY_BOLT_ID: {
+            case SERVER_SPELL_ENERGY_BOLT_ID: {
                 if (spell.projectileSpeed === undefined) {
                     console.warn('[CastManager] Energy Bolt missing projectileSpeed.', { spell });
                     break;
@@ -732,7 +732,7 @@ export class CastManager {
                 this.castEnergyBolt(originPixelX, originPixelY, targetWorldX, targetWorldY, spell.projectileSpeed);
                 break;
             }
-            case SPELL_TRIPLE_ENERGY_BOLT_ID: {
+            case SERVER_SPELL_TRIPLE_ENERGY_BOLT_ID: {
                 if (spell.projectileSpeed === undefined) {
                     console.warn('[CastManager] Triple Energy Bolt missing projectileSpeed.', { spell });
                     break;
@@ -740,7 +740,7 @@ export class CastManager {
                 this.castTripleEnergyBolt(originPixelX, originPixelY, targetWorldX, targetWorldY, spell.projectileSpeed);
                 break;
             }
-            case SPELL_FIRE_STRIKE_ID: {
+            case SERVER_SPELL_FIRE_STRIKE_ID: {
                 if (spell.projectileSpeed === undefined) {
                     console.warn('[CastManager] Fire Strike missing projectileSpeed.', { spell });
                     break;
@@ -748,7 +748,7 @@ export class CastManager {
                 this.castFireStrike(originPixelX, originPixelY, targetWorldX, targetWorldY, spell.projectileSpeed);
                 break;
             }
-            case SPELL_MASS_FIRE_STRIKE_ID: {
+            case SERVER_SPELL_MASS_FIRE_STRIKE_ID: {
                 if (spell.projectileSpeed === undefined) {
                     console.warn('[CastManager] Mass Fire Strike missing projectileSpeed.', { spell });
                     break;
@@ -756,25 +756,25 @@ export class CastManager {
                 this.castMassFireStrike(originPixelX, originPixelY, targetWorldX, targetWorldY, spell.projectileSpeed);
                 break;
             }
-            case SPELL_CHILL_WIND_ID:
+            case SERVER_SPELL_CHILL_WIND_ID:
                 this.castChillWind(targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_MASS_CHILL_WIND_ID:
+            case SERVER_SPELL_MASS_CHILL_WIND_ID:
                 this.castMassChillWind(targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_ICE_STRIKE_ID:
+            case SERVER_SPELL_ICE_STRIKE_ID:
                 this.castIceStrike(targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_MASS_ICE_STRIKE_ID:
+            case SERVER_SPELL_MASS_ICE_STRIKE_ID:
                 this.castMassIceStrike(targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_METEOR_STRIKE_ID:
+            case SERVER_SPELL_METEOR_STRIKE_ID:
                 this.castMeteorStrike(targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_EARTHWORM_STRIKE_ID:
+            case SERVER_SPELL_EARTHWORM_STRIKE_ID:
                 this.castEarthwormStrike(originPixelX, originPixelY, targetWorldX, targetWorldY);
                 break;
-            case SPELL_ARMOR_BREAK_ID:
+            case SERVER_SPELL_ARMOR_BREAK_ID:
                 this.castArmorBreak(originPixelX, originPixelY, targetWorldX, targetWorldY);
                 break;
         }
@@ -813,17 +813,17 @@ export class CastManager {
         spell: SpellEntry,
     ): void {
         switch (spellId) {
-            case SPELL_BLIZZARD_ID:
-            case SPELL_MASS_BLIZZARD_ID:
+            case SERVER_SPELL_BLIZZARD_ID:
+            case SERVER_SPELL_MASS_BLIZZARD_ID:
                 this.castDirectionalBlizzard(casterWorldX, casterWorldY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_EARTH_SHOCK_WAVE_ID:
+            case SERVER_SPELL_EARTH_SHOCK_WAVE_ID:
                 this.castEarthShockWave(casterWorldX, casterWorldY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_BLOODY_SHOCK_WAVE_ID:
+            case SERVER_SPELL_BLOODY_SHOCK_WAVE_ID:
                 this.castBloodyShockWave(casterWorldX, casterWorldY, targetWorldX, targetWorldY, spell);
                 break;
-            case SPELL_LIGHTNING_BOLT_ID:
+            case SERVER_SPELL_LIGHTNING_BOLT_ID:
                 this.castLightningBolt(casterWorldX, casterWorldY, targetWorldX, targetWorldY);
                 break;
             default:

@@ -1,0 +1,867 @@
+[
+	{
+		"id": 0,
+		"person": 1,
+		"name": "Humble Beginning",
+		"text": "Greetings, traveller. As you are new here, I suggest you assess your survival in these lands by slaying a few Slimes south of here. Come back to me when you have done so!",
+		"obsolete_level": 20,
+		"period": 2,
+
+		"objectives": {
+			"kill": [{
+				"name": "slime",
+				"count": 50
+			}]
+		},
+		"reward": {
+			"text": "You are off to a good start. But don't think this is enough to survive around here. There much dangerous perils ahead and you will need to train hard to overcome them. When you get stronger, come see me again.",
+			"contribution": 10,
+			"experience": 20000,
+			"item_pick": [
+				{
+					"id": 4,
+					"attribute": 51315970
+				},
+				{
+					"id": 258,
+					"attribute": 50595074
+				},
+				{
+					"id": 90,
+					"count": 500
+				}
+			]
+		}
+	},{
+		"id": 1,
+		"person": 1,
+		"name": "A New Challenge",
+		"text": "You seem to have gotten a bit stronger. Perhaps it's time for a new challenge.",
+		"required_level": 10,
+		"obsolete_level": 40,
+		
+		"objectives": {
+			"kill": [{
+				"name": "orc",
+				"count": 200
+			},{
+				"name": "orc",
+				"is_elite": true,
+				"count": 2
+			}]
+		},
+		"reward": {
+			"text": "Good job! Keep training like that and you may one day fight for the glory of your nation.",
+			"contribution": 10,
+			"experience": 125000,
+			"items": [
+				{
+					"id": 90,
+					"count": 3000
+				}
+			]
+		}
+	},{
+		"id": 2,
+		"person": 2,
+		"name": "Epidemy",
+		"text": "Greetings, traveller. We are currently in the middle of an epidemy and I need some ingredients to make some antidotes for everyone. Can you gather some for me please?",
+		"required_level": 10,
+		"repeatable": false,
+		
+		"objectives": {
+			"gather": [{
+				"id": 190,
+				"count": 3
+			},{
+				"id": 189,
+				"count": 3
+			},{
+				"id": 191,
+				"count": 3
+			}]
+		},
+		"reward": {
+			"contribution": 25,
+			"experience": 100000,
+			"items": [
+				{
+					"id": 90,
+					"count": 3000
+				}
+			]
+		}
+	},{
+		"id": 3,
+		"person": 3,
+		"name": "Daara's Struggle",
+		"text": "Damn these Orcs! I can never seem to get rid of them. Would you help me out?",
+		
+		"objectives": {
+			"kill": [{
+				"name": "orc",
+				"map": "middled1n",
+				"count": 300
+			}]
+		},
+		"reward": {
+			"text": "Thank you! You seem to be doing much better than I! I would appreciate if you could also help my sister Oxyia north-west of here if you haven't done so already.",
+			"contribution": 15,
+			"experience": 150000,
+			"items": [
+				{
+					"id": 90,
+					"count": 2000
+				}
+			]
+		}
+	},{
+		"id": 4,
+		"person": 4,
+		"name": "Oxyia's Strife",
+		"text": "Argh! I'm doing fine until these Elites come around! Can you lend a hand?",
+		
+		"objectives": {
+			"kill": [{
+				"name": "orc",
+				"map": "middled1n",
+				"is_elite": true,
+				"count": 10
+			}]
+		},
+		"reward": {
+			"text": "Not too shabby! My sister Daara is also fighting Orcs south-west of this dungeon. Say hi to her for me!",
+			"contribution": 15,
+			"experience": 150000,
+			"items": [
+				{
+					"id": 90,
+					"count": 3000
+				}
+			]
+		}
+	},{
+		"id": 5,
+		"person": 5,
+		"name": "Unusual Meal",
+		"text": "I just can't get enough of these Scorpion! They are so tasty! Could you get me some?",
+		
+		"objectives": {
+			"kill": [{
+				"name": "scorpion",
+				"map": "middled1n",
+				"count": 200
+			}],
+			"gather": [{
+				"id": 218,
+				"count": 5
+			}]
+		},
+		"reward": {
+			"text": "Mmmmm...",
+			"contribution": 15,
+			"experience": 200000,
+			"items": [
+				{
+					"id": 90,
+					"count": 3000
+				}
+			]
+		}
+	},{
+		"id": 6,
+		"person": 8,
+		"name": "Garden Trolls",
+		
+		"objectives": {
+			"kill": [{
+				"name": "troll",
+				"map": "areuni",
+				"count": 800
+			}]
+		},
+		"reward": {
+			"contribution": 20,
+			"experience": 800000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 40000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 7,
+		"person": 8,
+		"name": "Garden Trolls Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "troll",
+				"map": "areuni",
+				"count": 400
+			},{
+				"name": "orc",
+				"map": "areuni",
+				"count": 400
+			}]
+		},
+		"reward": {
+			"contribution": 25,
+			"experience": 800000,
+			"item_pick": [
+				{
+					"id": 223,
+					"count": 20
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 25,
+		"person": 8,
+		"name": "Garden Unicorns",
+		
+		"objectives": {
+			"kill": [{
+				"name": "unicorn",
+				"map": "areuni",
+				"count": 100
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 546,
+					"count": 30
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 26,
+		"person": 8,
+		"name": "Garden Unicorns Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "unicorn",
+				"map": "areuni",
+				"count": 40
+			}]
+		},
+		"reward": {
+			"contribution": 35,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 50000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 21,
+		"person": 12,
+		"name": "Garden Trolls",
+		
+		"objectives": {
+			"kill": [{
+				"name": "troll",
+				"map": "elvuni",
+				"count": 800
+			}]
+		},
+		"reward": {
+			"contribution": 20,
+			"experience": 800000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 40000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 22,
+		"person": 12,
+		"name": "Garden Trolls Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "troll",
+				"map": "elvuni",
+				"count": 400
+			},{
+				"name": "orc",
+				"map": "elvuni",
+				"count": 400
+			}]
+		},
+		"reward": {
+			"contribution": 25,
+			"experience": 800000,
+			"item_pick": [
+				{
+					"id": 223,
+					"count": 20
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 23,
+		"person": 12,
+		"name": "Garden Unicorns",
+		
+		"objectives": {
+			"kill": [{
+				"name": "unicorn",
+				"map": "elvuni",
+				"count": 100
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 546,
+					"count": 30
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 24,
+		"person": 12,
+		"name": "Garden Unicorns Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "unicorn",
+				"map": "elvuni",
+				"count": 40
+			}]
+		},
+		"reward": {
+			"contribution": 40,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 50000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 8,
+		"person": 9,
+		"name": "ML Trolls",
+		
+		"objectives": {
+			"kill": [{
+				"name": "troll",
+				"map": "middleland",
+				"count": 1200
+			}]
+		},
+		"reward": {
+			"contribution": 25,
+			"experience": 1200000,
+			"item_pick": [
+				{
+					"id": 223,
+					"count": 30
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 9,
+		"person": 10,
+		"name": "D2 Cyclops",
+		
+		"objectives": {
+			"kill": [{
+				"name": "cyclops",
+				"map": "dglv2",
+				"count": 1000
+			}]
+		},
+		"reward": {
+			"contribution": 25,
+			"experience": 800000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 40000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 10,
+		"person": 9,
+		"name": "ML Cyclops",
+		
+		"objectives": {
+			"kill": [{
+				"name": "cyclops",
+				"map": "middleland",
+				"count": 800
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1200000,
+			"item_pick": [
+				{
+					"id": 197,
+					"count": 40
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 11,
+		"person": 11,
+		"name": "Ice Golems",
+		
+		"objectives": {
+			"kill": [{
+				"name": "icegolem",
+				"map": "icebound",
+				"count": 700
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1000000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 60000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 12,
+		"person": 11,
+		"name": "Ice Golems Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "icegolem",
+				"map": "icebound",
+				"count": 300
+			}]
+		},
+		"reward": {
+			"contribution": 35,
+			"experience": 1000000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 60000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 13,
+		"person": 11,
+		"name": "Beholders",
+		
+		"objectives": {
+			"kill": [{
+				"name": "beholder",
+				"map": "icebound",
+				"count": 600
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1000000,
+			"item_pick": [
+				{
+					"id": 273,
+					"count": 8
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 14,
+		"person": 11,
+		"name": "Beholders Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "beholder",
+				"map": "icebound",
+				"count": 250
+			}]
+		},
+		"reward": {
+			"contribution": 35,
+			"experience": 1000000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 60000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 15,
+		"person": 11,
+		"name": "Frosts",
+		
+		"objectives": {
+			"kill": [{
+				"name": "frost",
+				"map": "icebound",
+				"count": 600
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1250000,
+			"item_pick": [
+				{
+					"id": 731,
+					"count": 4
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 16,
+		"person": 11,
+		"name": "Frosts Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "frost",
+				"map": "icebound",
+				"count": 250
+			}]
+		},
+		"reward": {
+			"contribution": 35,
+			"experience": 1250000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 65000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 17,
+		"person": 9,
+		"name": "ML Ogres",
+		
+		"objectives": {
+			"kill": [{
+				"name": "ogre",
+				"map": "middleland",
+				"count": 500
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 211,
+					"count": 35
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 18,
+		"person": 9,
+		"name": "ML Ogres Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "ogre",
+				"map": "middleland",
+				"count": 200
+			}]
+		},
+		"reward": {
+			"contribution": 40,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 60000
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 19,
+		"person": 9,
+		"name": "ML Werewolves",
+		
+		"objectives": {
+			"kill": [{
+				"name": "werewolf",
+				"map": "middleland",
+				"count": 500
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 550,
+					"count": 35
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 20,
+		"person": 9,
+		"name": "ML Werewolves Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "werewolf",
+				"map": "middleland",
+				"count": 200
+			}]
+		},
+		"reward": {
+			"contribution": 40,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 60000
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 27,
+		"person": 13,
+		"name": "ToH3 Demons",
+		
+		"objectives": {
+			"kill": [{
+				"name": "demon",
+				"map": "toh3",
+				"count": 200
+			}]
+		},
+		"reward": {
+			"contribution": 35,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 542,
+					"count": 30
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 28,
+		"person": 13,
+		"name": "ToH3 Demons Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "demon",
+				"map": "toh3",
+				"count": 80
+			}]
+		},
+		"reward": {
+			"contribution": 45,
+			"experience": 1750000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 70000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 29,
+		"person": 13,
+		"name": "ToH3 Gargoyles",
+		
+		"objectives": {
+			"kill": [{
+				"name": "gargoyle",
+				"map": "toh3",
+				"count": 150
+			}]
+		},
+		"reward": {
+			"contribution": 45,
+			"experience": 2000000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 100000
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 30,
+		"person": 13,
+		"name": "ToH3 Gargoyles Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "gargoyle",
+				"map": "toh3",
+				"count": 60
+			}]
+		},
+		"reward": {
+			"contribution": 55,
+			"experience": 2000000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 100000
+				},{
+					"id": 856,
+					"count": 2
+				}
+			]
+		}
+	},{
+		"id": 31,
+		"person": 13,
+		"name": "ToH3 Dark Elves",
+		
+		"objectives": {
+			"kill": [{
+				"name": "darkelf",
+				"map": "toh3",
+				"count": 500
+			}]
+		},
+		"reward": {
+			"contribution": 30,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 65000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	},{
+		"id": 32,
+		"person": 13,
+		"name": "ToH3 Dark Elves Daily",
+		"period": 20,
+		
+		"objectives": {
+			"kill": [{
+				"name": "darkelf",
+				"map": "toh3",
+				"count": 200
+			}]
+		},
+		"reward": {
+			"contribution": 40,
+			"experience": 1500000,
+			"item_pick": [
+				{
+					"id": 90,
+					"count": 65000
+				},{
+					"id": 856,
+					"count": 1
+				}
+			]
+		}
+	}
+]

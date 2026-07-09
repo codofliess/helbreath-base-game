@@ -1154,6 +1154,15 @@ public sealed class GameWorld : IWorkerWorld {
 
     /// <summary>Finds the nearest configured teleport source cell within a small Chebyshev radius so ordered packet handling can tolerate slight position lag.</summary>
     private GameWorldTeleportTarget? ResolveTeleportTargetNearPlayer(GameWorldPlayer player, string requestedWorldId) {
+        if (teleportTargetsBySourceCell.TryGetValue((player.PosX, player.PosY), out var exactTarget)) {
+            if (!string.IsNullOrWhiteSpace(requestedWorldId) &&
+                !string.Equals(exactTarget.WorldId, requestedWorldId, StringComparison.Ordinal)) {
+                Console.WriteLine(
+                    $"[GameWorld:{id}] Teleport cell ({player.PosX}, {player.PosY}) → '{exactTarget.WorldId}' (client requested '{requestedWorldId}').");
+            }
+            return exactTarget;
+        }
+
         GameWorldTeleportTarget? matchedTeleportTarget = null;
         var bestDistance = int.MaxValue;
 

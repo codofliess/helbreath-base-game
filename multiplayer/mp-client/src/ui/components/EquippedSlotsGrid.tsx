@@ -11,6 +11,8 @@ import {
     RING_SLOT_RIGHT,
     type EquipmentSlot,
 } from '../../constants/Items';
+import { buildItemHoverInfo } from '../../constants/OlympiaItemName';
+import { setInventoryItemHoverInfo } from '../store/InventoryItemHoverOverlay.store';
 import { EventBus } from '../../game/EventBus';
 import { ITEM_MOVED_TO_BAG } from '../../constants/EventNames';
 import { Gender } from '../../Types';
@@ -38,7 +40,12 @@ export function EquippedSlotsGrid({
             const itemDef = equipped !== undefined ? ITEMS.find((i) => i.id === equipped.itemId) : undefined;
             const gender = playerGender ?? Gender.MALE;
             const spriteKey = itemDef !== undefined
-                ? getItemInventorySpriteKeyWithOverrides(itemDef, gender, equipped?.effectOverrides)
+                ? getItemInventorySpriteKeyWithOverrides(
+                    itemDef,
+                    gender,
+                    equipped?.effectOverrides,
+                    equipped?.itemColor,
+                )
                 : undefined;
             const imageDataUrl = spriteKey !== undefined ? spriteFrameMap.get(spriteKey) : undefined;
             return { equipped, itemDef, imageDataUrl };
@@ -81,8 +88,48 @@ export function EquippedSlotsGrid({
                 className={`inventory-slot inventory-slot-${slotId}${imageDataUrl ? ' inventory-slot-has-item' : ''}${isDropTarget ? ' inventory-slot-drop-target' : ''}`}
                 onMouseDown={onSlotMouseDown ? (e) => onSlotMouseDown(e, slot) : undefined}
                 onDoubleClick={imageDataUrl ? () => handleSlotDoubleClick(slot) : undefined}
+                onMouseEnter={
+                    equipped && itemDef
+                        ? (e) => {
+                              setInventoryItemHoverInfo(
+                                  buildItemHoverInfo(itemDef, {
+                                      itemId: equipped.itemId,
+                                      itemUid: equipped.itemUid,
+                                      itemAttribute: equipped.itemAttribute,
+                                      itemColor: equipped.itemColor,
+                                      effectOverrides: equipped.effectOverrides,
+                                      quantity: equipped.quantity,
+                                      source: 'equipped',
+                                      mouseX: e.clientX,
+                                      mouseY: e.clientY,
+                                  }),
+                              );
+                          }
+                        : undefined
+                }
+                onMouseMove={
+                    equipped && itemDef
+                        ? (e) => {
+                              setInventoryItemHoverInfo(
+                                  buildItemHoverInfo(itemDef, {
+                                      itemId: equipped.itemId,
+                                      itemUid: equipped.itemUid,
+                                      itemAttribute: equipped.itemAttribute,
+                                      itemColor: equipped.itemColor,
+                                      effectOverrides: equipped.effectOverrides,
+                                      quantity: equipped.quantity,
+                                      source: 'equipped',
+                                      mouseX: e.clientX,
+                                      mouseY: e.clientY,
+                                  }),
+                              );
+                          }
+                        : undefined
+                }
+                onMouseLeave={() => {
+                    setInventoryItemHoverInfo(undefined);
+                }}
                 style={{ cursor: imageDataUrl ? 'grab' : undefined }}
-                title={imageDataUrl ? `${itemDef?.name ?? slotLabel} — doble clic para desequipar` : slotLabel}
             >
                 {imageDataUrl ? (
                     <img

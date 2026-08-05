@@ -179,8 +179,11 @@ public static class Movement {
         Console.WriteLine($"[GameWorld:{worldIdForLog}] Cell occupied manually at ({x}, {y})");
     }
 
-    /// <summary>Moves the requesting player to a free cell, updates occupancy, runs visibility sync, then sends <see cref="PlayerTeleported"/> to that client.</summary>
+    /// <summary>Moves the requesting player to a free cell, updates occupancy, runs visibility sync, then sends <see cref="PlayerTeleported"/> to that client. GM sandbox only.</summary>
     public static void HandlePlayerTeleportRequested(GameWorldRef wr, GameWorldPlayer player, PlayerTeleportRequested request, string worldIdForLog) {
+        if (AdminSecurity.RejectIfNotGm(player, "PlayerTeleport")) {
+            return;
+        }
         if (player.IsDead) {
             return;
         }
@@ -220,8 +223,32 @@ public static class Movement {
     /// applies anti-cheat paralysis and rollback on excessive speed.
     /// Also requires <c>dest</c> to be exactly one Chebyshev step from the server cell so stale packets (e.g. after knockback) cannot teleport;
     /// when <c>dest</c> equals the server cell (distance 0), the packet is treated as a duplicate and ignored.
+    /// Blocks movement while anti-cheat forced paralysis or spell <see cref="TemporaryEffectType.Paralyze"/> (Olympia HOLDOBJECT) is active.
     /// </summary>
     public static void HandleRequestMovement(GameWorldRef wr, GameWorldPlayer playerConnection, RequestMovement requestMovement) {
+        if (playerConnection.IsDead) {
+            return;
+        }
+
+        // Arena duel equalizer (optional): delay movement when tech_apply_to_movement is ON.
+        var duelMoveDelay = ArenaPact.GetMovementDelayMs(playerConnection);
+        if (duelMoveDelay > 0) {
+            var sessionId = playerConnection.SessionId;
+            // Snapshot request fields — protobuf message may be reused by caller.
+            var delayed = requestMovement.Clone();
+            wr.Scheduler.SetTimeout(duelMoveDelay, () => {
+                if (!wr.World.TryGetPlayerBySessionId(sessionId, out var p) || p.IsDead || p.Disconnected) {
+                    return;
+                }
+                HandleRequestMovementImmediate(wr, p, delayed);
+            });
+            return;
+        }
+
+        HandleRequestMovementImmediate(wr, playerConnection, requestMovement);
+    }
+
+    private static void HandleRequestMovementImmediate(GameWorldRef wr, GameWorldPlayer playerConnection, RequestMovement requestMovement) {
         if (playerConnection.IsDead) {
             return;
         }
@@ -234,7 +261,10 @@ public static class Movement {
         }
 
         var deltaMs = playerConnection.GetAndUpdateLastMovementRequestMs();
-        if (playerConnection.IsServerForcedParalysisActive()) {
+        AntiBotTools.NoteGameplayActivity(playerConnection);
+        AntiBotTools.NoteTournamentMove(playerConnection, wr.WorldId, wr.World.IsTournamentArena, deltaMs);
+        if (playerConnection.IsServerForcedParalysisActive() ||
+            playerConnection.HasTemporaryEffect(TemporaryEffectType.Paralyze)) {
             NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreateResetPosition(wr.WorldId, playerConnection.PosX, playerConnection.PosY));
             return;
         }
@@ -279,47 +309,27 @@ public static class Movement {
                     remainingStunlockMs));
             return;
         }
+        // Live duel on Bleeding Island arena: cannot re-enter the safe lobby until death / match end.
+        if (ArenaBleeding.BlocksSafeEntry(playerConnection, wr.WorldId, requestMovement.DestX, requestMovement.DestY)) {
+            NetworkManager.SendToPlayer(
+                playerConnection,
+                NetworkManager.CreateResetPosition(wr.WorldId, playerConnection.PosX, playerConnection.PosY));
+            return;
+        }
         if (!wr.OccupancyTracker.IsFree(requestMovement.DestX, requestMovement.DestY)) {
             var curX = playerConnection.PosX;
             var curY = playerConnection.PosY;
             if (wr.Settings.CourseCorrection) {
-                var (leftX, leftY, rightX, rightY) = Location.GetAdjacentCellsAt45DegreeOffset(curX, curY, requestMovement.DestX, requestMovement.DestY);
-                if (wr.OccupancyTracker.IsFree(leftX, leftY)) {
-                    wr.OccupancyTracker.SetFree(curX, curY);
-                    wr.OccupancyTracker.SetOccupied(leftX, leftY);
-                    SetPlayerPosition(wr, playerConnection, leftX, leftY);
-                    ApplyFacingFromStep(playerConnection, curX, curY, leftX, leftY);
-                    SyncPlayerVisibilityAfterMovement(
-                        wr,
-                        playerConnection,
-                        curX,
-                        curY,
-                        leftX,
-                        leftY);
-                    Combat.ApplyGroundEffectStepDamageToPlayer(wr, playerConnection);
-                    GroundItemPickup.TryAutoPickupGoldOnCell(wr, playerConnection);
-                    NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, leftX, leftY));
-                    return;
-                }
-                if (wr.OccupancyTracker.IsFree(rightX, rightY)) {
-                    wr.OccupancyTracker.SetFree(curX, curY);
-                    wr.OccupancyTracker.SetOccupied(rightX, rightY);
-                    SetPlayerPosition(wr, playerConnection, rightX, rightY);
-                    ApplyFacingFromStep(playerConnection, curX, curY, rightX, rightY);
-                    SyncPlayerVisibilityAfterMovement(
-                        wr,
-                        playerConnection,
-                        curX,
-                        curY,
-                        rightX,
-                        rightY);
-                    Combat.ApplyGroundEffectStepDamageToPlayer(wr, playerConnection);
-                    GroundItemPickup.TryAutoPickupGoldOnCell(wr, playerConnection);
-                    NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, rightX, rightY));
+                // Prefer 45° slide, then any free neighbor that gets closer to intended dest (wall-slide feel).
+                if (TryCourseCorrectStep(wr, playerConnection, curX, curY, requestMovement.DestX, requestMovement.DestY)) {
                     return;
                 }
             }
-            NetworkManager.SendToPlayer(playerConnection, NetworkManager.CreateResetPosition(wr.WorldId, playerConnection.PosX, playerConnection.PosY));
+            // Feel B: do not rubber-band on a simple wall bump — client pathfind will re-route.
+            // Soft-correct to authoritative cell without combat stunlock residual.
+            NetworkManager.SendToPlayer(
+                playerConnection,
+                NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, curX, curY));
             return;
         }
         var previousX = playerConnection.PosX;
@@ -364,7 +374,76 @@ public static class Movement {
         }
     }
 
+    /// <summary>
+    /// Wall-slide: 45° offsets first, then best free Chebyshev neighbor toward blocked dest.
+    /// Returns true if a step was applied and client notified via PositionCorrected.
+    /// </summary>
+    static bool TryCourseCorrectStep(
+        GameWorldRef wr,
+        GameWorldPlayer player,
+        int curX,
+        int curY,
+        int blockedDestX,
+        int blockedDestY) {
+        var (leftX, leftY, rightX, rightY) = Location.GetAdjacentCellsAt45DegreeOffset(curX, curY, blockedDestX, blockedDestY);
+        if (TryApplyCourseCorrectCell(wr, player, curX, curY, leftX, leftY)) {
+            return true;
+        }
+        if (TryApplyCourseCorrectCell(wr, player, curX, curY, rightX, rightY)) {
+            return true;
+        }
+
+        // Broader slide: any free neighbor that reduces distance to intended dest.
+        var bestX = curX;
+        var bestY = curY;
+        var bestDist = Location.GetDistance(curX, curY, blockedDestX, blockedDestY);
+        var found = false;
+        for (var dir = 0; dir < 8; dir++) {
+            Location.GetDirectionDelta(dir, out var dx, out var dy);
+            var nx = curX + dx;
+            var ny = curY + dy;
+            if (!wr.OccupancyTracker.IsFree(nx, ny)) {
+                continue;
+            }
+            var d = Location.GetDistance(nx, ny, blockedDestX, blockedDestY);
+            if (d < bestDist) {
+                bestDist = d;
+                bestX = nx;
+                bestY = ny;
+                found = true;
+            }
+        }
+        return found && TryApplyCourseCorrectCell(wr, player, curX, curY, bestX, bestY);
+    }
+
+    static bool TryApplyCourseCorrectCell(
+        GameWorldRef wr,
+        GameWorldPlayer player,
+        int curX,
+        int curY,
+        int nextX,
+        int nextY) {
+        if (nextX == curX && nextY == curY) {
+            return false;
+        }
+        if (!wr.OccupancyTracker.IsFree(nextX, nextY)) {
+            return false;
+        }
+        wr.OccupancyTracker.SetFree(curX, curY);
+        wr.OccupancyTracker.SetOccupied(nextX, nextY);
+        SetPlayerPosition(wr, player, nextX, nextY);
+        ApplyFacingFromStep(player, curX, curY, nextX, nextY);
+        SyncPlayerVisibilityAfterMovement(wr, player, curX, curY, nextX, nextY);
+        Combat.ApplyGroundEffectStepDamageToPlayer(wr, player);
+        GroundItemPickup.TryAutoPickupGoldOnCell(wr, player);
+        NetworkManager.SendToPlayer(player, NetworkManager.CreatePositionCorrected(wr.WorldId, curX, curY, nextX, nextY));
+        return true;
+    }
+
     public static void HandleChangePlayerMovementSpeed(GameWorldRef wr, GameWorldPlayer player, ChangePlayerMovementSpeedRequest request) {
+        if (AdminSecurity.RejectIfNotGm(player, "ChangeMovementSpeed")) {
+            return;
+        }
         if (player.IsPickupOrBowStanceLockoutActive(DateTimeOffset.UtcNow)) {
             return;
         }
@@ -395,6 +474,16 @@ public static class Movement {
         foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
             NetworkManager.SendToPlayer(nearbyPlayer, message);
         }
+    }
+
+    /// <summary>Olympia Safe Attack toggle (Home); echoes only to the requesting client.</summary>
+    public static void HandlePlayerSafeAttackModeChange(GameWorldRef wr, GameWorldPlayer player, PlayerSafeAttackModeChangeRequest request) {
+        _ = wr;
+        if (player.IsPickupOrBowStanceLockoutActive(DateTimeOffset.UtcNow)) {
+            return;
+        }
+        player.SetSafeAttackMode(request.SafeAttackMode);
+        NetworkManager.SendToPlayer(player, NetworkManager.CreatePlayerSafeAttackModeChanged(player.SafeAttackMode));
     }
 
     /// <summary>Authoritative idle facing (grid 0–7); fans out to nearby observers. Sender already applied locally.</summary>

@@ -19,9 +19,25 @@ export interface CharacterStats {
     majestics: number;
     weight: number;
     maxWeight: number;
+    /** Enemy kills (current / session slice when server sends both). */
     enemyKills: number;
+    /** Lifetime / total enemy kills for Olympia `12/1539` display. */
+    enemyKillsTotal: number;
     contribution: number;
     reputation: number;
+    /** Hunger percent 0–100. Server feed TBD — client stub defaults to 50. */
+    hunger: number;
+    /** Display title (e.g. `!RIVER!`). Empty = none. Clear Title is client-local until proto. */
+    title: string;
+    /** True when hunger is a placeholder (label TBD in UI). */
+    hungerIsStub: boolean;
+    /** True when title system is not wired (label TBD). */
+    titleIsStub: boolean;
+    /** Olympia Super Attack charges (critical swings left / max). */
+    superAttackLeft: number;
+    maxSuperAttack: number;
+    /** True when Super Attack is armed (melee hits consume charges as crits). */
+    superAttackArmed: boolean;
     hp: number;
     maxHp: number;
     mp: number;
@@ -36,6 +52,8 @@ export interface CharacterStats {
     chr: number;
     faction: string;
     talents: string;
+    /** Local player has Olympia Poison temporary effect (HotkeyBar HP label). */
+    isPoisoned: boolean;
 }
 
 export interface LevelUpDraft {
@@ -65,8 +83,16 @@ const initialStats: CharacterStats = {
     weight: 0,
     maxWeight: 500,
     enemyKills: 0,
+    enemyKillsTotal: 0,
     contribution: 0,
     reputation: 0,
+    hunger: 100,
+    title: '',
+    hungerIsStub: true,
+    titleIsStub: true,
+    superAttackLeft: 0,
+    maxSuperAttack: 1,
+    superAttackArmed: false,
     hp: 100,
     maxHp: 100,
     mp: 50,
@@ -81,6 +107,7 @@ const initialStats: CharacterStats = {
     chr: 10,
     faction: 'Traveller',
     talents: '',
+    isPoisoned: false,
 };
 
 const initialLevelUpDraft: LevelUpDraft = {
@@ -123,10 +150,39 @@ export const adjustLevelUpStat = (stat: keyof Omit<LevelUpDraft, 'pointsLeft'>, 
     });
 };
 
+/** Returns allocated draft points to the pool (does not invent new LU points). */
 export const resetLevelUpDraft = () => {
+    characterDialogStore.setState((state) => {
+        const d = state.levelUpDraft;
+        const returned = d.str + d.vit + d.dex + d.int + d.mag + d.chr;
+        return {
+            ...state,
+            levelUpDraft: {
+                pointsLeft: d.pointsLeft + returned,
+                str: 0,
+                vit: 0,
+                dex: 0,
+                int: 0,
+                mag: 0,
+                chr: 0,
+            },
+        };
+    });
+};
+
+/** Sets unspent LU points and clears any in-progress Level Set draft allocation. */
+export const setLevelUpPointsLeft = (pointsLeft: number) => {
     characterDialogStore.setState((state) => ({
         ...state,
-        levelUpDraft: { ...initialLevelUpDraft },
+        levelUpDraft: {
+            pointsLeft: Math.max(0, pointsLeft),
+            str: 0,
+            vit: 0,
+            dex: 0,
+            int: 0,
+            mag: 0,
+            chr: 0,
+        },
     }));
 };
 
@@ -134,5 +190,13 @@ export const setCharacterStats = (partial: Partial<CharacterStats>) => {
     characterDialogStore.setState((state) => ({
         ...state,
         stats: { ...state.stats, ...partial },
+    }));
+};
+
+/** Clears local display title until server title proto lands. */
+export const clearCharacterTitle = () => {
+    characterDialogStore.setState((state) => ({
+        ...state,
+        stats: { ...state.stats, title: '', titleIsStub: true },
     }));
 };

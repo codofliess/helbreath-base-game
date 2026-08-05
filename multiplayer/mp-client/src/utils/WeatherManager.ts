@@ -1,5 +1,6 @@
 import type { Scene } from 'phaser';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
+import { sysMenuDialogStore } from '../ui/store/SysMenuDialog.store';
 import { RAIN_SOUND } from '../constants/SoundFileNames';
 import { HIGH_DEPTH, DEPTH_MULTIPLIER } from '../Config';
 import { convertPixelPosToWorldPos } from './CoordinateUtils';
@@ -60,6 +61,9 @@ export class WeatherManager {
     private particles: PrecipParticle[] = [];
     private lastFrameUpdateTime = 0;
     private rainSoundId: number | undefined = undefined;
+    private rainSoundsEnabled = true;
+    /** SysMenu Detail Level: 0=Low 1=Normal 2=High — scales precipitation particle count. */
+    private detailLevel: 0 | 1 | 2 = 1;
     /** Last camera scroll and view size (for spawn positioning when switching weather) */
     private lastScrollX = 0;
     private lastScrollY = 0;
@@ -69,6 +73,22 @@ export class WeatherManager {
     constructor(scene: Scene, soundManager: SoundManager) {
         this.scene = scene;
         this.soundManager = soundManager;
+        this.rainSoundsEnabled = sysMenuDialogStore.state.rainSoundsEnabled;
+        const dl = sysMenuDialogStore.state.detailLevel;
+        this.detailLevel = dl === 0 || dl === 1 || dl === 2 ? dl : 1;
+    }
+
+    /**
+     * SysMenu Detail Level — rebuilds particles so density changes immediately while raining/snowing.
+     */
+    public setDetailLevel(level: 0 | 1 | 2): void {
+        if (this.detailLevel === level) {
+            return;
+        }
+        this.detailLevel = level;
+        if (this.weatherMode !== 'dry') {
+            this.initializeParticles();
+        }
     }
 
     /**
@@ -98,6 +118,18 @@ export class WeatherManager {
             } else {
                 this.stopRainSound();
             }
+        }
+    }
+
+    /** Olympia SysMenu "Rain sounds" — mute/unmute loop without clearing particles. */
+    public setRainSoundsEnabled(enabled: boolean): void {
+        this.rainSoundsEnabled = enabled;
+        if (!enabled) {
+            this.stopRainSound();
+            return;
+        }
+        if (isRain(this.weatherMode)) {
+            this.startRainSound();
         }
     }
 
@@ -139,17 +171,31 @@ export class WeatherManager {
         this.stopRainSound();
     }
 
+    private detailScale(): number {
+        switch (this.detailLevel) {
+            case 0:
+                return 0.35;
+            case 2:
+                return 1;
+            case 1:
+            default:
+                return 0.65;
+        }
+    }
+
     private getParticleCount(): number {
+        const scale = this.detailScale();
+        const scaled = (base: number) => Math.max(1, Math.floor(base * scale));
         switch (this.weatherMode) {
             case 'rain-light':
             case 'snow-light':
-                return Math.floor(MAX_PARTICLES / 5);
+                return scaled(Math.floor(MAX_PARTICLES / 5));
             case 'rain-medium':
             case 'snow-medium':
-                return Math.floor(MAX_PARTICLES / 2);
+                return scaled(Math.floor(MAX_PARTICLES / 2));
             case 'rain-heavy':
             case 'snow-heavy':
-                return MAX_PARTICLES;
+                return scaled(MAX_PARTICLES);
             default:
                 return 0;
         }
@@ -282,7 +328,7 @@ export class WeatherManager {
     }
 
     private startRainSound(): void {
-        if (this.rainSoundId !== undefined) {
+        if (!this.rainSoundsEnabled || this.rainSoundId !== undefined) {
             return;
         }
         try {

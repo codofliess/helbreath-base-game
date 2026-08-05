@@ -1,5 +1,4 @@
 import type { Game } from 'phaser';
-import type { HBMap } from '../game/assets/HBMap';
 import { TILE_SIZE } from '../game/assets/HBMap';
 import {
     getInteriorDoorTiles,
@@ -8,6 +7,18 @@ import {
     isKnownWarpCell,
     normalizeMapId,
 } from '../constants/MapTeleportLocs';
+
+/** Walkability query surface shared by sp-client and mp-client HBMap implementations. */
+export interface MapWalkGrid {
+    readonly sizeX: number;
+    readonly sizeY: number;
+    getTile(x: number, y: number): {
+        isMoveAllowed: boolean;
+        isWater?: boolean;
+        isTeleport?: boolean;
+        occupiedByGameObject?: boolean;
+    } | undefined;
+}
 
 /**
  * Converts canvas/viewport coordinates to screen (DOM) coordinates.
@@ -277,7 +288,7 @@ export function getDirectionFromScreenSector(
  * @returns Object with x and y coordinates of the first movable location found, or undefined if none found
  */
 export function findMovableLocation(
-    map: HBMap,
+    map: MapWalkGrid,
     startX: number,
     startY: number,
     maxRadius = 50
@@ -345,7 +356,7 @@ export function findMovableLocation(
  * Like findMovableLocation but never returns warp (teleport) tiles.
  */
 export function findSafeMovableLocation(
-    map: HBMap,
+    map: MapWalkGrid,
     startX: number,
     startY: number,
     maxRadius = 50,
@@ -389,7 +400,7 @@ export function findSafeMovableLocation(
  * Resolves a player spawn position that is never on a blue warp tile.
  * Uses MapTeleportLocs clusters when the saved coords sit on a known warp cell.
  */
-export function resolveSafePlayerSpawn(map: HBMap, mapId: string, x: number, y: number): { x: number; y: number } {
+export function resolveSafePlayerSpawn(map: MapWalkGrid, mapId: string, x: number, y: number): { x: number; y: number } {
     const normalized = normalizeMapId(mapId);
     const tile = map.getTile(x, y);
     const onWarp = isKnownWarpCell(normalized, x, y) || !!tile?.isTeleport;
@@ -431,7 +442,7 @@ export function resolveSafePlayerSpawn(map: HBMap, mapId: string, x: number, y: 
  * @param y - Y coordinate in world grid
  * @returns True if the cell can be moved to
  */
-export function isCellMovable(map: HBMap, x: number, y: number): boolean {
+export function isCellMovable(map: MapWalkGrid, x: number, y: number): boolean {
     const tile = map.getTile(x, y);
     return !!(tile && tile.isMoveAllowed && !tile.occupiedByGameObject);
 }
@@ -439,9 +450,9 @@ export function isCellMovable(map: HBMap, x: number, y: number): boolean {
 /**
  * Checks if a cell is a valid player spawn (walkable, not a warp tile, not occupied).
  */
-export function isCellSafeSpawn(map: HBMap, x: number, y: number): boolean {
+export function isCellSafeSpawn(map: MapWalkGrid, x: number, y: number): boolean {
     const tile = map.getTile(x, y);
-    return !!(tile && tile.isMoveAllowed && !tile.isTeleport && !tile.occupiedByGameObject);
+    return !!(tile && tile.isMoveAllowed && !tile.isWater && !tile.isTeleport && !tile.occupiedByGameObject);
 }
 
 /**
@@ -449,7 +460,7 @@ export function isCellSafeSpawn(map: HBMap, x: number, y: number): boolean {
  * Uses BFS outward from the door centroid so the player lands just inside the building entrance.
  */
 export function findSafeSpawnNearDoor(
-    map: HBMap,
+    map: MapWalkGrid,
     doorTiles: readonly (readonly [number, number])[],
     maxRadius = 12,
 ): { x: number; y: number } | undefined {
@@ -481,12 +492,17 @@ export function findSafeSpawnNearDoor(
         }
 
         if (isCellSafeSpawn(map, current.x, current.y)) {
+            const minDoorTileDist = Math.min(
+                ...doorTiles.map(([dx, dy]) => getDistance(current.x, current.y, dx, dy)),
+            );
+            // Require at least 2 cells from any warp door tile to avoid enter/exit loops.
+            if (minDoorTileDist < 2) {
+                continue;
+            }
+
             const score = getDistance(current.x, current.y, doorX, doorY);
             if (!best || score < best.score) {
                 best = { x: current.x, y: current.y, score };
-            }
-            if (score <= 1) {
-                return { x: current.x, y: current.y };
             }
         }
 

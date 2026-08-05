@@ -24,7 +24,8 @@ const initialState: ServerDialogState = {
     outgoingLatency: 0,
     incomingFluctuation: 0,
     outgoingFluctuation: 0,
-    gracePeriod: 100,
+    /** ms to keep Move anim after a step before Idle (monsters/remotes). Higher = less flicker. */
+    gracePeriod: 220,
     syncWithServer: true,
 };
 

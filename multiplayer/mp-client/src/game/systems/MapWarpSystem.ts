@@ -6,7 +6,7 @@ import {
     normalizeMapId,
     resolveTeleportDestination,
 } from '../../../../../sp-client/src/constants/MapTeleportLocs';
-import { resolveOlympiaServerWorldTransfer } from '../../utils/OlympiaTeleportResolver';
+import { resolveOlympiaServerWorldTransfer, getLastOutdoorMapForInterior } from '../../utils/OlympiaTeleportResolver';
 
 export interface MapWarpTransfer {
     worldId: string;
@@ -30,7 +30,7 @@ export class MapWarpSystem {
     }
 
     /** Avoid chain-warps immediately after a map loads (spawn tiles, exit doors). */
-    public beginPostLoadGrace(ms = 1500): void {
+    public beginPostLoadGrace(ms = 4000): void {
         this.postLoadGraceUntil = Date.now() + ms;
     }
 
@@ -44,7 +44,7 @@ export class MapWarpSystem {
     }
 
     /**
-     * Olympia-style warp: idle on a configured teleport tile.
+     * Olympia-style warp: idle on a configured teleport tile (or its doorstep).
      * Returns the multiplayer server world transfer when a warp should fire.
      */
     public checkWarp(
@@ -60,7 +60,8 @@ export class MapWarpSystem {
         }
 
         const normalizedMapId = normalizeMapId(mapName);
-        if (!isKnownWarpCell(normalizedMapId, tileX, tileY)) {
+        const warpCell = findNearestKnownWarpCell(normalizedMapId, tileX, tileY);
+        if (!warpCell) {
             const tile = map?.getTile(tileX, tileY);
             if (tile?.isTeleport) {
                 console.warn(
@@ -70,12 +71,23 @@ export class MapWarpSystem {
             return null;
         }
 
-        const transfer = resolveOlympiaServerWorldTransfer(gameWorldId, normalizedMapId, tileX, tileY);
+        const transfer = resolveOlympiaServerWorldTransfer(
+            gameWorldId,
+            normalizedMapId,
+            warpCell.x,
+            warpCell.y,
+        );
         if (!transfer || transfer.worldId === gameWorldId) {
             return null;
         }
 
-        const destination = resolveTeleportDestination(normalizedMapId, tileX, tileY);
+        const lastOutdoorMap = getLastOutdoorMapForInterior(gameWorldId);
+        const destination = resolveTeleportDestination(
+            normalizedMapId,
+            warpCell.x,
+            warpCell.y,
+            lastOutdoorMap,
+        );
         if (!destination) {
             return null;
         }
@@ -86,4 +98,39 @@ export class MapWarpSystem {
 
         return transfer;
     }
+}
+
+/**
+ * Exact warp cell, or Chebyshev-1 doorstep (street south of guild/shop pads).
+ * Server validates with radius 3 — doorstep matches how players stand at building doors.
+ */
+function findNearestKnownWarpCell(
+    mapId: string,
+    tileX: number,
+    tileY: number,
+): { x: number; y: number } | null {
+    if (isKnownWarpCell(mapId, tileX, tileY)) {
+        return { x: tileX, y: tileY };
+    }
+
+    let best: { x: number; y: number } | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) {
+                continue;
+            }
+            const x = tileX + dx;
+            const y = tileY + dy;
+            if (!isKnownWarpCell(mapId, x, y)) {
+                continue;
+            }
+            const dist = Math.max(Math.abs(dx), Math.abs(dy));
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = { x, y };
+            }
+        }
+    }
+    return best;
 }

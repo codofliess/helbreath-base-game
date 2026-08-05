@@ -9,5 +9,12 @@
   { "id": 7, "name": "McGaffin" },
   { "id": 8, "name": "Perry" },
   { "id": 9, "name": "Devlin" },
-  { "id": 10, "name": "Guard" }
+  { "id": 10, "name": "Guard" },
+  { "id": 11, "name": "Enzu" },
+  { "id": 12, "name": "Drillmaster" },
+  { "id": 13, "name": "Merc Captain" },
+  { "id": 14, "name": "Cashier" },
+  { "id": 15, "name": "Drill Instructor" },
+  { "id": 16, "name": "Arena Master" },
+  { "id": 17, "name": "Garden Warden" }
 ]

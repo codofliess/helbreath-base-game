@@ -1,0 +1,657 @@
+{
+  "generatedAtUtc": "2026-08-03T15:42:07.697874+00:00",
+  "repo": "C:\\Users\\54116\\helbreath-base-game",
+  "counts": {
+    "itemCfgRows": 575,
+    "magicRows": 65,
+    "npcRows": 0,
+    "olympiaDocs": 10,
+    "weaponishRows": 128,
+    "clMissingLowIdWeaponish": 0
+  },
+  "docs": [
+    {
+      "file": "OLYMPIA-ANGELS.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-ANGELS.md",
+      "bytes": 2777,
+      "headings": [
+        "Olympia Tutelary Angels (Angelic Pendants)",
+        "Olympia (source)",
+        "Chain Lords \u2014 status",
+        "Player flow (CL)",
+        "Files",
+        "Not in scope (Olympia extras)"
+      ]
+    },
+    {
+      "file": "OLYMPIA-CHARACTER-LIST-NOTES.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-CHARACTER-LIST-NOTES.md",
+      "bytes": 6117,
+      "headings": [
+        "Olympia Character List \u2014 live notes (2026-07-15)",
+        "Window / presentation",
+        "Layout (top \u2192 bottom)",
+        "Character card (selected vs idle)",
+        "Lower-left help well (exact spirit)",
+        "Action buttons (right stack, top \u2192 bottom)",
+        "Email bar",
+        "Gaps vs our traveler (PauPau capture)",
+        "Implementation checklist (traveler)",
+        "SELECTCHAR letterbox (code contract)",
+        "Presentation / scale \u2014 measured from `Helbreath Olympia #306.jpg`",
+        "Capture meta"
+      ]
+    },
+    {
+      "file": "OLYMPIA-DROPS-AND-MAGIC.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-DROPS-AND-MAGIC.md",
+      "bytes": 7008,
+      "headings": [
+        "Olympia drops: rates, gen pools, magic attributes",
+        "1. Does Olympia show drop rate per item?",
+        "Overall probabilities (rating 0, Primary=6500, Secondary=9000)",
+        "2. Gen level (which mob \u2192 which weapon/armor pool)",
+        "Gen-1 weapons (example)",
+        "Gen-1 shields",
+        "Wand branch (valuable weapon path, ~20% of weapon rolls)",
+        "3. Standard band (potions / candies / stones)",
+        "4. Special parameters (magic attributes) \u2014 **yes, Olympia rolls them**",
+        "Effect type gate (`m_sItemEffectType`)",
+        "Bit layout (`m_dwAttribute`) \u2014 same as client `GetItemName`",
+        "Value curve (`iDice(1,30000)`)",
+        "Secondary attribute",
+        "Item color",
+        "MP port",
+        "5. How MP applies this today",
+        "Why drops can feel \u201ccompletely wrong\u201d",
+        "6. How to re-sync loot",
+        "Restart multiplayer server (loads Monsters.json + Items.json)",
+        "7. Next engineering steps (if drops still wrong in-game)",
+        "8. Extract location"
+      ]
+    },
+    {
+      "file": "OLYMPIA-F5-CHARACTER-NOTES.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-F5-CHARACTER-NOTES.md",
+      "bytes": 3914,
+      "headings": [
+        "Olympia F5 Character \u2014 design notes (from CHAIN LORDS\\315.jpg)",
+        "Layout (L \u2192 R, top \u2192 bottom)",
+        "Key differences vs our current Chain Lord F5",
+        "Vitals (critical)",
+        "Avatar rules",
+        "Stat tooltips (to implement later)",
+        "Footer buttons (Olympia)",
+        "HUD context in 315 (not F5 but visible)",
+        "Implementation checklist (when we code)"
+      ]
+    },
+    {
+      "file": "OLYMPIA-ITEM-MAGIC-AFFIXES.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-ITEM-MAGIC-AFFIXES.md",
+      "bytes": 4901,
+      "headings": [
+        "Olympia item magic affixes (primary / secondary / color)",
+        "1. Quality tier + **flat base damage** (physical weapons)",
+        "2. Weapon primary (bits 20\u201323) + **item color**",
+        "3. Weapon / wand secondary (bits 12\u201315) \u2014 ~40%+ by gen",
+        "4. Wands (effect type 13 ATTACK_MANASAVE)",
+        "5. Armor / shield primary & secondary",
+        "6. Rares = pure",
+        "7. Gen scaling (harder mob \u2192 better stated)",
+        "8. Equip application (server)",
+        "9. Files"
+      ]
+    },
+    {
+      "file": "OLYMPIA-MOB-SPECIALTY-LADDER.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-MOB-SPECIALTY-LADDER.md",
+      "bytes": 10010,
+      "headings": [
+        "Olympia Mob Specialty ladder (from #315 UI)",
+        "1. What the UI shows (Orc example)",
+        "Upcoming bonuses (from tooltip)",
+        "Kill thresholds pattern",
+        "2. Bonus ladder structure (Olympia)",
+        "3. Drop % progression (L3+)",
+        "4. List UI columns (Olympia #315)",
+        "5. CL implementation mapping",
+        "Effective level with stake",
+        "6. Full species table (Olympia `contents/specialties.json` \u2192 CL `MobSpecialties.json`)",
+        "7. Open / follow-ups",
+        "7. Integrity / production note"
+      ]
+    },
+    {
+      "file": "OLYMPIA-MONSTER-ATTACK-PARITY.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-MONSTER-ATTACK-PARITY.md",
+      "bytes": 2603,
+      "headings": [
+        "Olympia monster attack / magic parity",
+        "Physical attack",
+        "Magic (all casters)",
+        "Magic-level ladder \u2192 Spells.json",
+        "Config fields (`Monsters.json`)",
+        "Notable casters (Npc.cfg)",
+        "Academy"
+      ]
+    },
+    {
+      "file": "OLYMPIA-PARITY-GAP.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-PARITY-GAP.md",
+      "bytes": 9802,
+      "headings": [
+        "Olympia / Helbreath cl\u00e1sico \u2014 parity gap (producci\u00f3n)",
+        "0. Excluido: anti-speedhack cl\u00e1sico",
+        "1. Movimiento y control del avatar (P0)",
+        "2. Combate melee (P0\u2013P1)",
+        "3. Magia / book / Magic Tower (P0)",
+        "4. Exp / rebirth / majestics (P0\u2013P1)",
+        "5. Inventario / oro / items (P0)",
+        "6. NPCs de ciudad / shops (P0\u2013P1)",
+        "7. Mapas / spawn / teleports (P1)",
+        "8. Social / party / guild (P2)",
+        "9. Guerra / crusade / Heldenian (P3)",
+        "10. UI / UX Olympia feel (P0\u2013P1)",
+        "11. Sistemas propios (no son \u201cgaps Olympia\u201d)",
+        "12. Ola de producci\u00f3n recomendada (orden de PR)",
+        "Ola P0 \u2014 \u201cpuedo city-jugar como en Olympia\u201d",
+        "Ola P1 \u2014 \u201cprogresi\u00f3n y mapa\u201d",
+        "Ola P2 \u2014 \u201csocial PvP\u201d",
+        "Ola P3 \u2014 \u201cguerra\u201d",
+        "Ola P4 \u2014 \u201cChain Lord\u201d",
+        "13. Criterio \u201clisto para prod\u201d por gap",
+        "14. Changelog de este doc"
+      ]
+    },
+    {
+      "file": "OLYMPIA-PVP-FEEL-GAP.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-PVP-FEEL-GAP.md",
+      "bytes": 11645,
+      "headings": [
+        "Olympia vs Chain Lords \u2014 PvP feel gap (Capa A + B)",
+        "0. Objetivo de producto (PO \u00b7 2026-07-30)",
+        "0.1 Scope del feel (qu\u00e9 medimos)",
+        "1. Capa A \u2014 Olympia (source of truth)",
+        "1.1 DamageMove = umbral de da\u00f1o (no \u201clista de bichos\u201d)",
+        "1.2 Client olympia \u2014 c\u00f3mo se siente el kick",
+        "1.3 Super Attack / \u201ccritical feel\u201d",
+        "1.4 Magia",
+        "1.5 Qu\u00e9 NO es Olympia DamageMove",
+        "1.6 Fuentes A",
+        "2. Capa B \u2014 Chain Lords (runtime)",
+        "2.0 Shipped 2026-07-30 \u2014 DamageMove umbral (KB-1 cerrado en c\u00f3digo)",
+        "2.1 Modelo de hit: `AttackType` (cliente \u2192 server)",
+        "2.2 Mobs \u2192 player",
+        "2.3 Player \u2192 player (PvP)",
+        "2.4 Client CL",
+        "2.5 Fight zone",
+        "2.6 Fuentes B",
+        "3. Matriz de gap (A vs B)",
+        "Hip\u00f3tesis P0 \u2014 status",
+        "4. C\u00f3mo medir (listo para Capa C / Tola)",
+        "4.1 Brief de grabaci\u00f3n (Tola)",
+        "4.2 Log server (cuando implementemos feel-debug)",
+        "4.3 Criterios de \u201ccerrado\u201d",
+        "5. Plan de implementaci\u00f3n (post-videos, no ciego)",
+        "6. Estado de instrumentaci\u00f3n",
+        "7. Mensaje corto para Tola (copiar)",
+        "8. Resumen ejecutivo"
+      ]
+    },
+    {
+      "file": "OLYMPIA-TYPOGRAPHY.md",
+      "path": "C:/Users/54116/helbreath-base-game/docs/OLYMPIA-TYPOGRAPHY.md",
+      "bytes": 4593,
+      "headings": [
+        "Olympia Typography \u2014 specs & gaps",
+        "Qu\u00e9 usa Olympia realmente",
+        "1. Texto GDI din\u00e1mico (di\u00e1logos, SELECTCHAR, chat)",
+        "2. Sprite fonts (`sprites\\sprfonts.pak`)",
+        "3. Labels horneados en sprites",
+        "Traveler \u2014 qu\u00e9 se aplic\u00f3",
+        "Gaps restantes",
+        "Screenshot checklist (cuando haya login Olympia)",
+        "Nota de m\u00e9todo"
+      ]
+    }
+  ],
+  "paths": {
+    "itemCfg": [
+      "C:/Users/54116/helbreath-base-game/reference/Item.cfg",
+      "C:/Users/54116/helbreath-base-game/reference/Item2.cfg",
+      "C:/Users/54116/helbreath-base-game/reference/Item3.cfg"
+    ],
+    "magicCfg": "C:/Users/54116/helbreath-base-game/reference/Magic.cfg",
+    "npcCfg": "C:/Users/54116/helbreath-base-game/reference/Npc.cfg",
+    "clientCpp": "C:/Users/54116/helbreath-base-game/reference/Client.cpp",
+    "serverCpp": "C:/Users/54116/helbreath-base-game/reference/Server.cpp",
+    "dropDoc": "docs/OLYMPIA-DROPS-AND-MAGIC.md",
+    "pvpFeelDoc": "docs/OLYMPIA-PVP-FEEL-GAP.md",
+    "specialtyDoc": "docs/OLYMPIA-MOB-SPECIALTY-LADDER.md",
+    "affixDoc": "docs/OLYMPIA-ITEM-MAGIC-AFFIXES.md",
+    "generatedItemsTs": "multiplayer/mp-client/src/constants/OlympiaItems.generated.ts"
+  },
+  "standingOrders": "AGENTS.md \u2014 auto-ingest; no per-turn user permission for these sources",
+  "wiki": {
+    "rare-items": {
+      "url": "https://helbreath.net/wiki/Rare_Items",
+      "chars": 16407
+    }
+  },
+  "sampleWands": [
+    {
+      "id": 250,
+      "name": "WandAttackManual",
+      "itemType": 3,
+      "equipPos": 0,
+      "effectType": 9,
+      "v1": 21,
+      "v2": 20,
+      "v3": 0,
+      "v4": 0,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 256,
+      "name": "MagicWand(MS20)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 2,
+      "v2": 4,
+      "v3": 0,
+      "v4": 20,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 257,
+      "name": "MagicWand(MS10)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 2,
+      "v2": 4,
+      "v3": 0,
+      "v4": 10,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 258,
+      "name": "MagicWand(MS0)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 2,
+      "v2": 4,
+      "v3": 0,
+      "v4": 0,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 259,
+      "name": "MagicWand(M.Shield)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 20,
+      "v1": 2,
+      "v2": 4,
+      "v3": 0,
+      "v4": 0,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 291,
+      "name": "MagicWand(MS30-LLF)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 2,
+      "v2": 4,
+      "v3": 0,
+      "v4": 30,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item.cfg"
+    },
+    {
+      "id": 683,
+      "name": "WizMagicWand(MS20)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 20,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 684,
+      "name": "WizMagicWand(MS10)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 10,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 738,
+      "name": "DarkMageMagicWand",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 28,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 861,
+      "name": "BerserkWand(MS.20)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 20,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 862,
+      "name": "BerserkWand(MS.10)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 10,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 863,
+      "name": "KlonessWand(MS.20)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 20,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 864,
+      "name": "KlonessWand(MS.10)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 10,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 865,
+      "name": "ResurWand(MS.20)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 20,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    },
+    {
+      "id": 866,
+      "name": "ResurWand(MS.10)",
+      "itemType": 1,
+      "equipPos": 8,
+      "effectType": 13,
+      "v1": 1,
+      "v2": 6,
+      "v3": 0,
+      "v4": 10,
+      "v5": 0,
+      "v6": 0,
+      "source": "Item3.cfg"
+    }
+  ],
+  "sampleMagic": [
+    {
+      "id": 0,
+      "name": "Magic-Missile",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 1,
+      "name": "Heal",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 2,
+      "name": "Create-Food",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 10,
+      "name": "Energy-Bolt",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 11,
+      "name": "Staminar-Drain",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 12,
+      "name": "Recall",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 13,
+      "name": "Defense-Shield",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 14,
+      "name": "Celebrating-Light",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 20,
+      "name": "Fire-Ball",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 21,
+      "name": "Great-Heal",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 23,
+      "name": "Staminar-Recovery",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 24,
+      "name": "Protection-From-Arrow",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 25,
+      "name": "Hold-Person",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 26,
+      "name": "Possession",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 27,
+      "name": "Poison",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 28,
+      "name": "Great-Staminar-Recov.",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 30,
+      "name": "Fire-Strike",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 31,
+      "name": "Summon-Creature",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 32,
+      "name": "Invisibility",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 33,
+      "name": "Protection-From-Magic",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 34,
+      "name": "Detect-Invisibility",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 35,
+      "name": "Paralyze",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 36,
+      "name": "Cure",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 37,
+      "name": "Lightning-Arrow",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 38,
+      "name": "Tremor",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 40,
+      "name": "Fire-Wall",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 41,
+      "name": "Fire-Field",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 42,
+      "name": "Confuse-Language",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 43,
+      "name": "Lightning",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 44,
+      "name": "Great-Defense-Shield",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 45,
+      "name": "Chill-Wind",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 46,
+      "name": "Poison-Cloud",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 47,
+      "name": "Triple-Energy-Bolt",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 50,
+      "name": "Berserk",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 51,
+      "name": "Lightning-Bolt",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 53,
+      "name": "Mass-Poison",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 54,
+      "name": "Spike-Field",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 55,
+      "name": "Ice-Storm",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 56,
+      "name": "Mass-Lightning-Arrow",
+      "source": "Magic.cfg"
+    },
+    {
+      "id": 57,
+      "name": "Ice-Strike",
+      "source": "Magic.cfg"
+    }
+  ],
+  "clMissingLowIdWeaponishSample": []
+}

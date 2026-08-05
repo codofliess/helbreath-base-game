@@ -12,6 +12,7 @@ import {
     getItemSpriteIndex,
     getTintInventoryEffectColorWithOverrides,
     isEquipmentSlot,
+    isItemTypeCompatibleWithSlot,
     type RingSlot,
 } from '../constants/Items';
 import {
@@ -35,6 +36,11 @@ import {
     SERVER_ITEM_MOVED_IN_BAG_RECEIVED,
     SERVER_ITEM_REMOVED_FROM_BAG_RECEIVED,
     SERVER_ITEM_UNEQUIPPED_RECEIVED,
+    SERVER_ITEM_LIFE_SPAN_UPDATED_RECEIVED,
+    STONE_ITEM_UPGRADE_RESULT_RECEIVED,
+    MAJESTIC_UPGRADE_RESULT_RECEIVED,
+    CIC_ITEM_MERGE_RESULT_RECEIVED,
+    SIPHON_GEM_UPGRADE_RESULT_RECEIVED,
 } from '../constants/EventNames';
 import {
     ITEM_ADDED_SOUND,
@@ -42,6 +48,8 @@ import {
     ITEM_EQUIP_SOUND,
     ITEM_MOVED_TO_BAG_SOUND,
 } from '../constants/SoundFileNames';
+import { applyRememberedBagLayout, rememberBagItemPosition } from './bagLayoutMemory';
+import { characterDialogStore } from '../ui/store/CharacterDialog.store';
 import { Gender } from '../Types';
 import type { NetworkManager } from './NetworkManager';
 import type { InventorySnapshotEventData, ItemEquippedEventData, ItemUnequippedEventData } from '../Types';
@@ -60,6 +68,11 @@ type EquipItemEventPayload = {
     bagY?: number;
     quantity?: number;
     effectOverrides?: Effect[];
+    itemAttribute?: number;
+    itemColor?: number;
+    curLifeSpan?: number;
+    maxLifeSpan?: number;
+    bindState?: number;
 };
 
 type BagItemMoveEvent = {
@@ -108,6 +121,82 @@ export class InventoryManager {
         EventBus.on(SERVER_ITEM_UNEQUIPPED_RECEIVED, (payload: ItemUnequippedEventData) => {
             this.applyItemUnequipped(payload);
         });
+        EventBus.on(
+            SERVER_ITEM_LIFE_SPAN_UPDATED_RECEIVED,
+            (payload: { itemUid: string; curLifeSpan: number; maxLifeSpan: number }) => {
+                this.applyItemLifeSpanUpdated(payload.itemUid, payload.curLifeSpan, payload.maxLifeSpan);
+            },
+        );
+
+        // Xelima/Merien (+ Integrity): patch +N / remove on burn without full inventory resync.
+        EventBus.on(
+            STONE_ITEM_UPGRADE_RESULT_RECEIVED,
+            (data: {
+                success: boolean;
+                itemUid: bigint | string | number;
+                itemAttribute: number;
+                burned: boolean;
+            }) => {
+                const uid = String(data.itemUid ?? '');
+                if (!uid || uid === '0') {
+                    return;
+                }
+                if (data.burned) {
+                    this.applyItemDestroyed(uid);
+                    return;
+                }
+                // Success, fail-safe, fail-downgrade, or Integrity-protected: always apply server attr.
+                this.applyItemAttributeUpdated(uid, data.itemAttribute >>> 0);
+            },
+        );
+
+        EventBus.on(
+            MAJESTIC_UPGRADE_RESULT_RECEIVED,
+            (data: { success: boolean; itemUid?: bigint | string | number; itemAttribute?: number }) => {
+                if (!data.success || data.itemAttribute === undefined || data.itemUid === undefined) {
+                    return;
+                }
+                const uid = String(data.itemUid ?? '');
+                if (!uid || uid === '0') {
+                    return;
+                }
+                this.applyItemAttributeUpdated(uid, data.itemAttribute >>> 0);
+            },
+        );
+
+        EventBus.on(
+            CIC_ITEM_MERGE_RESULT_RECEIVED,
+            (data: {
+                success: boolean;
+                itemUid?: bigint | string | number;
+                cicLevel?: number;
+                cicStatKind?: number;
+                cicStatValue?: number;
+            }) => {
+                if (!data.success || data.itemUid === undefined) {
+                    return;
+                }
+                const uid = String(data.itemUid ?? '');
+                if (!uid || uid === '0') {
+                    return;
+                }
+                this.applyItemCicUpdated(uid, data.cicLevel ?? 0, data.cicStatKind ?? 0, data.cicStatValue ?? 0);
+            },
+        );
+
+        EventBus.on(
+            SIPHON_GEM_UPGRADE_RESULT_RECEIVED,
+            (data: { success: boolean; itemUid?: bigint | string | number; siphonLevel?: number }) => {
+                if (!data.success || data.itemUid === undefined) {
+                    return;
+                }
+                const uid = String(data.itemUid ?? '');
+                if (!uid || uid === '0') {
+                    return;
+                }
+                this.applyItemSiphonUpdated(uid, data.siphonLevel ?? 0);
+            },
+        );
 
         EventBus.on(ITEM_CREATE_REQUESTED, (payload: { itemId: number; effectOverrides?: Effect[] }) => {
             this.getNetworkManager()?.sendCreateItemRequest(payload.itemId, payload.effectOverrides);
@@ -138,6 +227,15 @@ export class InventoryManager {
                 bagX: payload.bagX,
                 bagY: payload.bagY,
             };
+            const moved = this.baggedItems[bagIndex];
+            const charName = characterDialogStore.state.stats?.playerName || undefined;
+            rememberBagItemPosition(
+                charName,
+                moved.itemId,
+                moved.itemAttribute,
+                payload.bagX,
+                payload.bagY,
+            );
             EventBus.emit(ITEM_BAG_POSITION_UPDATED, {
                 itemUid: payload.itemUid,
                 bagX: payload.bagX,
@@ -157,6 +255,9 @@ export class InventoryManager {
             if (!itemDef) {
                 return;
             }
+            if (itemDef.itemType !== payload.itemType) {
+                return;
+            }
             if (itemDef.gender !== undefined) {
                 const playerGender = playerDialogStore.state.gender;
                 if (itemDef.gender !== playerGender) {
@@ -168,8 +269,16 @@ export class InventoryManager {
                 ? (payload.targetSlot ?? this.resolveRingTargetSlot())
                 : payload.itemType;
 
+            // Mirror server: never predict/send weapon→ring/accessory/necklace (or any type↔slot mismatch).
+            if (!isItemTypeCompatibleWithSlot(payload.itemType, targetSlot)) {
+                return;
+            }
+            if (payload.targetSlot !== undefined && !isItemTypeCompatibleWithSlot(payload.itemType, payload.targetSlot)) {
+                return;
+            }
+
             this.predictEquipItem(item, payload.itemType, targetSlot);
-            this.getNetworkManager()?.sendEquipItemRequest(item.itemUid, payload.itemType === ItemTypes.RING ? targetSlot : undefined);
+            this.getNetworkManager()?.sendEquipItemRequest(item.itemUid, targetSlot);
         });
 
         EventBus.on(ITEM_CONSUMED_REQUESTED, (payload: { item: InventoryItem }) => {
@@ -178,8 +287,26 @@ export class InventoryManager {
                 return;
             }
 
-            const itemDef = getItemById(payload.item.itemId);
-            if (!itemDef || itemDef.itemType !== ItemTypes.MISC || !itemDef.consumable) {
+            const bagItem = this.baggedItems[index];
+            const itemDef = getItemById(payload.item.itemId) ?? getItemById(bagItem.itemId);
+            // Integrity must never free-consume (only spent on upgrade with reconfirm).
+            if (
+                payload.item.itemId === 1112 ||
+                bagItem.itemId === 1112 ||
+                itemDef?.id === 1112
+            ) {
+                return;
+            }
+            // Catalog may omit consumable after a bad directory merge; still allow MISC bag items
+            // (server rejects non-consumables). Block only clear non-MISC types.
+            // Cash tablets (1310–1313) always allowed as consumables.
+            const isCashTablet =
+                [1310, 1311, 1312, 1313].includes(payload.item.itemId) ||
+                [1310, 1311, 1312, 1313].includes(bagItem.itemId);
+            if (itemDef && itemDef.itemType !== ItemTypes.MISC && !isCashTablet) {
+                return;
+            }
+            if (itemDef && itemDef.consumable === false && !isCashTablet) {
                 return;
             }
 
@@ -188,7 +315,7 @@ export class InventoryManager {
                 return;
             }
 
-            if (itemDef.consumptionSound) {
+            if (itemDef?.consumptionSound) {
                 this.playSound(itemDef.consumptionSound);
             }
             networkManager.sendConsumeItemRequest(payload.item.itemUid);
@@ -292,12 +419,111 @@ export class InventoryManager {
                 bagY: item.bagY,
                 quantity: item.quantity,
                 effectOverrides: item.effectOverrides,
+                itemAttribute: item.itemAttribute,
+                itemColor: item.itemColor,
+                curLifeSpan: item.curLifeSpan,
+                maxLifeSpan: item.maxLifeSpan,
+                bindState: item.bindState,
             }
             : {
                 itemType: slot,
                 itemUid: '',
             };
         EventBus.emit(EQUIP_ITEM, payload);
+    }
+
+    /** Apply server-authoritative magic/upgrade bits after stone or majestic upgrade. */
+    private applyItemAttributeUpdated(itemUid: string, itemAttribute: number): void {
+        const bagIndex = this.findBagIndex(itemUid);
+        if (bagIndex >= 0) {
+            const next = this.cloneItem(this.baggedItems[bagIndex]);
+            next.itemAttribute = itemAttribute;
+            this.baggedItems[bagIndex] = next;
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
+            EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(next) });
+            return;
+        }
+
+        const slot = this.findEquippedSlotByItemUid(itemUid);
+        if (!slot) {
+            return;
+        }
+        const equipped = this.equippedItems[slot];
+        if (!equipped) {
+            return;
+        }
+        const next = this.cloneItem(equipped);
+        next.itemAttribute = itemAttribute;
+        this.equippedItems[slot] = next;
+        this.emitEquippedItem(slot, next);
+    }
+
+    private applyItemCicUpdated(itemUid: string, cicLevel: number, cicStatKind: number, cicStatValue: number): void {
+        const bagIndex = this.findBagIndex(itemUid);
+        if (bagIndex >= 0) {
+            const next = this.cloneItem(this.baggedItems[bagIndex]);
+            next.cicLevel = cicLevel;
+            next.cicStatKind = cicStatKind;
+            next.cicStatValue = cicStatValue;
+            this.baggedItems[bagIndex] = next;
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
+            EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(next) });
+            return;
+        }
+        const slot = this.findEquippedSlotByItemUid(itemUid);
+        if (!slot) {
+            return;
+        }
+        const equipped = this.equippedItems[slot];
+        if (!equipped) {
+            return;
+        }
+        const next = this.cloneItem(equipped);
+        next.cicLevel = cicLevel;
+        next.cicStatKind = cicStatKind;
+        next.cicStatValue = cicStatValue;
+        this.equippedItems[slot] = next;
+        this.emitEquippedItem(slot, next);
+    }
+
+    private applyItemSiphonUpdated(itemUid: string, siphonLevel: number): void {
+        const bagIndex = this.findBagIndex(itemUid);
+        if (bagIndex >= 0) {
+            const next = this.cloneItem(this.baggedItems[bagIndex]);
+            next.siphonLevel = siphonLevel;
+            this.baggedItems[bagIndex] = next;
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
+            EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(next) });
+            return;
+        }
+        const slot = this.findEquippedSlotByItemUid(itemUid);
+        if (!slot) {
+            return;
+        }
+        const equipped = this.equippedItems[slot];
+        if (!equipped) {
+            return;
+        }
+        const next = this.cloneItem(equipped);
+        next.siphonLevel = siphonLevel;
+        this.equippedItems[slot] = next;
+        this.emitEquippedItem(slot, next);
+    }
+
+    /** Remove bag/equipped gear destroyed by failed upgrade past +7 (burn). */
+    private applyItemDestroyed(itemUid: string): void {
+        const bagIndex = this.findBagIndex(itemUid);
+        if (bagIndex >= 0) {
+            this.baggedItems.splice(bagIndex, 1);
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
+            return;
+        }
+        const slot = this.findEquippedSlotByItemUid(itemUid);
+        if (!slot) {
+            return;
+        }
+        delete this.equippedItems[slot];
+        this.emitEquippedItem(slot, undefined);
     }
 
     private findBagIndex(itemUid: string): number {
@@ -383,7 +609,82 @@ export class InventoryManager {
         this.clearUiState();
         this.equippedItems = this.cloneEquippedItems(snapshot.equippedItems);
         this.baggedItems = snapshot.bagItems.map((item) => this.cloneItem(item));
+        this.stripTypeMismatchedEquipmentLocally();
+        this.restoreRememberedBagLayoutAndSync();
         this.emitFullState();
+    }
+
+    /**
+     * Re-apply last bag piles the player arranged for this character
+     * (arena re-entry mints new UIDs; keys by itemId+magic attr).
+     */
+    private restoreRememberedBagLayoutAndSync(): void {
+        const charName = characterDialogStore.state.stats?.playerName || undefined;
+        if (!charName || charName === 'Player') {
+            return;
+        }
+        const moves = applyRememberedBagLayout(charName, this.baggedItems);
+        const nm = this.getNetworkManager();
+        for (const m of moves) {
+            nm?.sendMoveItemInBagRequest?.(m.itemUid, m.bagX, m.bagY);
+        }
+    }
+
+    /**
+     * Mirrors server TryUnequipAllTypeMismatchedEquipment for stale snapshots: move type↔slot mismatches into the bag
+     * so a weapon never stays rendered in ring/accessory/necklace UI or appearance slots.
+     */
+    private stripTypeMismatchedEquipmentLocally(): void {
+        const mismatchedSlots: EquipmentSlot[] = [];
+        for (const [slot, equipped] of Object.entries(this.equippedItems)) {
+            if (!equipped || !isEquipmentSlot(slot)) {
+                continue;
+            }
+            const itemDef = getItemById(equipped.itemId);
+            if (!itemDef || !isItemTypeCompatibleWithSlot(itemDef.itemType, slot)) {
+                mismatchedSlots.push(slot);
+            }
+        }
+        for (const slot of mismatchedSlots) {
+            const equipped = this.equippedItems[slot];
+            if (!equipped) {
+                continue;
+            }
+            this.equippedItems[slot] = undefined;
+            this.baggedItems.push(this.cloneItem(equipped));
+        }
+        if (mismatchedSlots.length > 0) {
+            this.resequenceBagZIndices();
+        }
+    }
+
+    private applyItemLifeSpanUpdated(itemUid: string, curLifeSpan: number, maxLifeSpan: number): void {
+        const bagIndex = this.findBagIndex(itemUid);
+        if (bagIndex >= 0) {
+            const next = this.cloneItem(this.baggedItems[bagIndex]);
+            next.curLifeSpan = curLifeSpan;
+            next.maxLifeSpan = maxLifeSpan;
+            this.baggedItems[bagIndex] = next;
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
+            EventBus.emit(ITEM_ADDED_TO_BAG, { item: this.cloneItem(next) });
+            return;
+        }
+
+        const slot = this.findEquippedSlotByItemUid(itemUid);
+        if (!slot) {
+            return;
+        }
+
+        const equipped = this.equippedItems[slot];
+        if (!equipped) {
+            return;
+        }
+
+        const next = this.cloneItem(equipped);
+        next.curLifeSpan = curLifeSpan;
+        next.maxLifeSpan = maxLifeSpan;
+        this.equippedItems[slot] = next;
+        this.emitEquippedItem(slot, next);
     }
 
     private applyItemAddedToBag(item: InventoryItem): void {
@@ -406,6 +707,8 @@ export class InventoryManager {
                     effectOverrides: item.effectOverrides,
                     itemAttribute: item.itemAttribute,
                     itemColor: item.itemColor,
+                    itemUid: item.itemUid,
+                    cicLevel: item.cicLevel,
                 });
             }
             EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid: item.itemUid });
@@ -425,6 +728,8 @@ export class InventoryManager {
                 effectOverrides: item.effectOverrides,
                 itemAttribute: item.itemAttribute,
                 itemColor: item.itemColor,
+                itemUid: item.itemUid,
+                cicLevel: item.cicLevel,
             });
         }
     }
@@ -446,6 +751,9 @@ export class InventoryManager {
             EventBus.emit(ITEM_DROPPED_TO_GROUND, {
                 itemId: removedItem.itemId,
                 effectOverrides: removedItem.effectOverrides,
+                itemAttribute: removedItem.itemAttribute,
+                itemColor: removedItem.itemColor,
+                itemUid: removedItem.itemUid,
             });
         }
         EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid });
@@ -465,6 +773,14 @@ export class InventoryManager {
         };
         this.sortBaggedItemsByZIndex();
         if (payload.bagX !== undefined && payload.bagY !== undefined) {
+            const it = this.baggedItems[index];
+            rememberBagItemPosition(
+                characterDialogStore.state.stats?.playerName || undefined,
+                it.itemId,
+                it.itemAttribute,
+                payload.bagX,
+                payload.bagY,
+            );
             EventBus.emit(ITEM_BAG_POSITION_UPDATED, {
                 itemUid: payload.itemUid,
                 bagX: payload.bagX,
@@ -475,6 +791,33 @@ export class InventoryManager {
     }
 
     private applyItemEquipped(payload: ItemEquippedEventData): void {
+        if (!isEquipmentSlot(payload.slot)) {
+            return;
+        }
+        const itemDef = getItemById(payload.item.itemId);
+        if (!itemDef || !isItemTypeCompatibleWithSlot(itemDef.itemType, payload.slot)) {
+            return;
+        }
+
+        // Clear optimistic/wrong-slot copies of the same instance before applying the authoritative slot.
+        for (const [slot, equipped] of Object.entries(this.equippedItems)) {
+            if (!equipped || !isEquipmentSlot(slot) || slot === payload.slot) {
+                continue;
+            }
+            if (equipped.itemUid === payload.item.itemUid) {
+                this.equippedItems[slot] = undefined;
+                this.emitEquippedItem(slot, undefined);
+            }
+        }
+
+        // Ensure the equipped instance is not still rendered in the bag (packet reordering / missed remove).
+        const bagIndex = this.findBagIndex(payload.item.itemUid);
+        if (bagIndex >= 0) {
+            this.baggedItems.splice(bagIndex, 1);
+            this.resequenceBagZIndices();
+            EventBus.emit(ITEM_REMOVED_FROM_BAG, { itemUid: payload.item.itemUid });
+        }
+
         this.equippedItems[payload.slot] = this.cloneItem(payload.item);
         if (!this.pendingEquipSoundConfirmations.delete(payload.item.itemUid)) {
             this.playSound(ITEM_EQUIP_SOUND);

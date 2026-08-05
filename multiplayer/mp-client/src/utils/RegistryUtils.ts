@@ -14,6 +14,7 @@ import {
     DEBUG_KEY,
     GROUND_ITEM_DISPLAY_SIZE_KEY,
     LOADING_BG_KEY,
+    LOGIN_SCREEN_BG_KEY,
     ITEM_PACK_SPRITE_SHEETS_KEY,
     ITEM_PACK_EMITTED_TINT_KEYS_KEY,
     PLAYER_POSITION_KEY,
@@ -341,8 +342,7 @@ export function getLoadingBgKey(scene: Scene): string | undefined {
  * Login-screen background texture id (e.g. `login-screen-bg`). Set in Boot under `LOGIN_SCREEN_BG_KEY`.
  */
 export function getLoginScreenBgKey(scene: Scene): string | undefined {
-    //return getRegistryValue<string>(scene.registry, LOGIN_SCREEN_BG_KEY);
-    return getRegistryValue<string>(scene.registry, LOADING_BG_KEY);
+    return getRegistryValue<string>(scene.registry, LOGIN_SCREEN_BG_KEY);
 }
 
 /**
@@ -421,6 +421,10 @@ export interface InitialGameWorldState {
     movementSpeedMs?: number;
     runMode?: boolean;
     attackMode?: boolean;
+    /** Olympia Safe Attack (Home); blocks non-enemy PvP while armed. */
+    safeAttackMode?: boolean;
+    /** Local citizenship side from InitialState. */
+    citizenshipSide?: string;
     attackType?: number;
     allowDashAttack?: boolean;
     teleportLocs?: TeleportLocSet[];

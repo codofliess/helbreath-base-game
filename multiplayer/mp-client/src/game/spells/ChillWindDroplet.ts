@@ -5,7 +5,7 @@ import { CHILL_WIND_DROPLET } from '../../constants/Effects';
 import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../utils/EffectUtils';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { createLightRadiusOverlay } from '../../utils/SpriteUtils';
 import type { SoundManager } from '../../utils/SoundManager';
 
@@ -93,7 +93,7 @@ export class ChillWindDroplet {
             });
 
             const worldY = convertPixelPosToWorldPos(startY);
-            this.mainAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+            this.mainAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
             this.mainAsset.sprite.anims.stop();
             this.mainAsset.sprite.play(dropletAnimKey);
@@ -141,12 +141,12 @@ export class ChillWindDroplet {
                     if (this.mainAsset) {
                         this.mainAsset.setPosition(this.pixelX, currentY);
                         const worldY = convertPixelPosToWorldPos(currentY);
-                        this.mainAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+                        this.mainAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
                     }
                     if (this.overlaySprite) {
                         this.overlaySprite.setPosition(this.pixelX, currentY);
                         const worldY = convertPixelPosToWorldPos(currentY);
-                        this.overlaySprite.setDepth(worldY * DEPTH_MULTIPLIER - 10);
+                        this.overlaySprite.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS - 10);
                     }
                 },
             });

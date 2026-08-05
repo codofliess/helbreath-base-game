@@ -175,7 +175,7 @@ export const SPELLS: SpellConfig[] = [
     { id: 74, name: 'Lightning Strike', baseDamage: 245, mpCost: 90, effectType: 'lightning', targetType: 'ground', category: 'offensive', circle: 8, hasVfx: true, acquisition: 'shop' },
     { id: 76, name: 'Cancellation', baseDamage: 0, mpCost: 120, effectType: 'dark', targetType: 'entity', category: 'offensive', circle: 8, hasVfx: true, acquisition: 'shop' },
     { id: 77, name: 'Illusion Movement', baseDamage: 0, mpCost: 130, effectType: 'dark', targetType: 'ground', category: 'offensive', circle: 8, hasVfx: true, acquisition: 'shop' },
-    { id: 78, name: 'Haste', baseDamage: 0, mpCost: 60, effectType: 'holy', targetType: 'self', category: 'buff', circle: 8, hasVfx: true, acquisition: 'shop' },
+    { id: 78, name: 'Haste', baseDamage: 0, mpCost: 60, effectType: 'holy', targetType: 'entity', category: 'buff', circle: 8, hasVfx: true, acquisition: 'shop' },
     // Circle 9
     { id: 80, name: 'Illusion', baseDamage: 0, mpCost: 143, effectType: 'dark', targetType: 'ground', category: 'offensive', circle: 9, hasVfx: true, acquisition: 'shop' },
     { id: 81, name: 'Meteor Strike', baseDamage: 320, mpCost: 120, effectType: 'meteor', targetType: 'ground', category: 'offensive', circle: 9, hasVfx: true, acquisition: 'shop' },

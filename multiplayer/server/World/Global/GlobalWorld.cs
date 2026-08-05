@@ -191,15 +191,73 @@ public sealed class GlobalWorld : IWorkerWorld {
             return;
         }
 
+        string? sourceLanguageTag = null;
+        if (request.HasSourceLanguageTag) {
+            var tag = request.SourceLanguageTag.Trim();
+            if (tag.Length > 0 && tag.Length <= 16) {
+                sourceLanguageTag = tag;
+            }
+        }
+
+        var channel = request.HasChannel ? request.Channel : ChatChannel.Global;
+        string? whisperTarget = null;
+        if (channel == ChatChannel.Whisper) {
+            if (!request.HasWhisperTargetCharacterName) {
+                sender.Send(NetworkManager.CreateSendMessage("Whisper requires a target name. Use /w Name message."));
+                return;
+            }
+            whisperTarget = request.WhisperTargetCharacterName.Trim();
+            if (string.IsNullOrEmpty(whisperTarget) || whisperTarget.Length > 20) {
+                sender.Send(NetworkManager.CreateSendMessage("Invalid whisper target."));
+                return;
+            }
+        }
+
         var chatMessage = NetworkManager.CreateChatMessageReceived(
             sender.CharacterName,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            message);
+            message,
+            sourceLanguageTag,
+            channel,
+            whisperTarget);
+
+        if (channel == ChatChannel.Whisper) {
+            DeliverWhisper(sender, whisperTarget!, chatMessage);
+            return;
+        }
 
         foreach (var player in playersBySessionId.Values) {
             if (!player.Disconnected) {
                 player.Send(chatMessage);
             }
+        }
+    }
+
+    /// <summary>
+    /// Routes a whisper to the sender and the online target character (case-insensitive name match).
+    /// </summary>
+    private void DeliverWhisper(GlobalWorldPlayer sender, string targetName, ServerMessage chatMessage) {
+        GlobalWorldPlayer? target = null;
+        foreach (var player in playersBySessionId.Values) {
+            if (player.Disconnected) {
+                continue;
+            }
+            if (string.Equals(player.CharacterName, targetName, StringComparison.OrdinalIgnoreCase)) {
+                target = player;
+                break;
+            }
+        }
+
+        if (target is null) {
+            sender.Send(NetworkManager.CreateSendMessage($"Player '{targetName}' is not online."));
+            return;
+        }
+
+        if (!sender.Disconnected) {
+            sender.Send(chatMessage);
+        }
+        if (!ReferenceEquals(target, sender) && !target.Disconnected) {
+            target.Send(chatMessage);
         }
     }
 }

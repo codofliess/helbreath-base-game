@@ -11,6 +11,7 @@ import {
     OUT_UI_SET_ALLOW_DASH_ATTACK,
     OUT_UI_SET_CAST_SPEED,
     OUT_UI_SET_ATTACK_MODE,
+    OUT_UI_SET_SAFE_ATTACK_MODE,
     OUT_UI_SET_RUN_MODE,
     OUT_UI_SET_GENDER,
     OUT_UI_SET_SKIN_COLOR,
@@ -25,6 +26,7 @@ import {
     IN_UI_CHANGE_ALLOW_DASH_ATTACK,
     IN_UI_CHANGE_CAST_SPEED,
     IN_UI_CHANGE_ATTACK_MODE,
+    IN_UI_CHANGE_SAFE_ATTACK_MODE,
     IN_UI_CHANGE_RUN_MODE,
     IN_UI_CHANGE_GENDER,
     IN_UI_CHANGE_SKIN_COLOR,
@@ -35,7 +37,8 @@ import { DEFAULT_PLAYER_ATTACK_SPEED_MS, DEFAULT_PLAYER_ATTACK_RANGE } from '../
 import { AttackType, Gender, SkinColor } from '../../Types';
 
 /** Default movement speed in ms (server-side default). Used until server sends InitialGameWorldState. */
-const DEFAULT_MOVEMENT_SPEED_MS = 220;
+/** Per-tile run ms (walk = ×2). Matches server traveler default / Olympia-feel calibration. */
+const DEFAULT_MOVEMENT_SPEED_MS = 260;
 
 /** Full melee swing duration (ms); matches Player dialog slider and server `attack_speed_ms`. */
 export const PLAYER_ATTACK_SPEED_MS_MIN = 200;
@@ -64,6 +67,8 @@ interface PlayerDialogState {
     /** Full spell cast bar duration in ms (200–2000); synced with server when enabled. */
     castSpeedMs: number;
     attackMode: boolean;
+    /** Olympia Safe Attack (Home): blocks non-enemy PvP while in Attack mode. */
+    safeAttackMode: boolean;
     runMode: boolean;
     allowDashAttack: boolean;
 }
@@ -82,6 +87,7 @@ const initialState: PlayerDialogState = {
     attackType: AttackType.Stun,
     castSpeedMs: 1200,
     attackMode: true,
+    safeAttackMode: false,
     runMode: true,
     allowDashAttack: true,
 };
@@ -192,6 +198,62 @@ export const setAttackMode = (enabled: boolean, notifyPhaser = true) => {
     }
 };
 
+export const setSafeAttackMode = (enabled: boolean, notifyPhaser = true) => {
+    playerDialogStore.setState((state) => ({ ...state, safeAttackMode: enabled }));
+    if (notifyPhaser) {
+        EventBus.emit(IN_UI_CHANGE_SAFE_ATTACK_MODE, enabled);
+    }
+};
+
+/** Olympia Tab: toggle Peace ↔ Attack (combat stance). */
+export const toggleCombatMode = () => {
+    setAttackMode(!playerDialogStore.state.attackMode, true);
+};
+
+/** Toggle Safe Attack independently of Peace/Attack (dock cycle / Character panel). Home is green pots. */
+export const toggleSafeAttackMode = () => {
+    setSafeAttackMode(!playerDialogStore.state.safeAttackMode, true);
+};
+
+/**
+ * Dock mode seal cycle: Peace → Attack → Safe Attack → Peace.
+ * Sets both attackMode and safeAttackMode so network/player state stay consistent.
+ */
+export const cycleCombatStance = () => {
+    const { attackMode, safeAttackMode } = playerDialogStore.state;
+    if (!attackMode) {
+        if (safeAttackMode) {
+            setSafeAttackMode(false, true);
+        }
+        setAttackMode(true, true);
+        return;
+    }
+    if (!safeAttackMode) {
+        setSafeAttackMode(true, true);
+        return;
+    }
+    setSafeAttackMode(false, true);
+    setAttackMode(false, true);
+};
+
+/** Display label for HUD tooltip: Peace | Attack | Safe Attack. */
+export function getCombatModeLabel(): string {
+    const { attackMode, safeAttackMode } = playerDialogStore.state;
+    if (!attackMode) {
+        return 'Peace';
+    }
+    return safeAttackMode ? 'Safe Attack' : 'Attack';
+}
+
+/** Aura class suffix for the dock mode seal: peace | attack | safe. */
+export function getCombatModeAura(): 'peace' | 'attack' | 'safe' {
+    const { attackMode, safeAttackMode } = playerDialogStore.state;
+    if (!attackMode) {
+        return 'peace';
+    }
+    return safeAttackMode ? 'safe' : 'attack';
+}
+
 export const setRunMode = (enabled: boolean, notifyPhaser = true) => {
     playerDialogStore.setState((state) => ({ ...state, runMode: enabled }));
     if (notifyPhaser) {
@@ -271,6 +333,10 @@ EventBus.on(OUT_UI_SET_CAST_SPEED, (ms: number) => {
 
 EventBus.on(OUT_UI_SET_ATTACK_MODE, (enabled: boolean) => {
     setAttackMode(enabled, false);
+});
+
+EventBus.on(OUT_UI_SET_SAFE_ATTACK_MODE, (enabled: boolean) => {
+    setSafeAttackMode(enabled, false);
 });
 
 EventBus.on(OUT_UI_SET_RUN_MODE, (enabled: boolean) => {

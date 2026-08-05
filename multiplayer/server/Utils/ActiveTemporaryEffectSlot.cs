@@ -10,4 +10,12 @@ public sealed class ActiveTemporaryEffectSlot {
     public double AttackSpeedModifier { get; init; }
     /// <summary>Sum of <c>castSpeedModifier</c> from the applying spell row; 0 when omitted (players only).</summary>
     public double CastSpeedModifier { get; init; }
+    /// <summary>Olympia poison level for DoT ticks; 0 when not a poison effect.</summary>
+    public int PoisonLevel { get; init; }
+    /// <summary>Repeating poison tick timer id; 0 when unused.</summary>
+    public int PoisonTickTimerId { get; set; }
+    /// <summary>UTC ms when the effect was applied (arena DC snapshot remaining time).</summary>
+    public long AppliedAtUnixMs { get; init; }
+    /// <summary>Authoritative duration requested at apply time (ms).</summary>
+    public int DurationMs { get; init; }
 }

@@ -16,10 +16,16 @@ const initialState: AppState = {
 export const appStore = new Store<AppState>(initialState);
 
 export const setSpriteFrame = (key: string, dataUrl: string) => {
-    appStore.setState((state) => ({
-        ...state,
-        spriteFrameMap: new Map(state.spriteFrameMap).set(key, dataUrl),
-    }));
+    appStore.setState((state) => {
+        // Skip no-op updates — minimap thumb retries must not re-render the whole app.
+        if (state.spriteFrameMap.get(key) === dataUrl) {
+            return state;
+        }
+        return {
+            ...state,
+            spriteFrameMap: new Map(state.spriteFrameMap).set(key, dataUrl),
+        };
+    });
 };
 
 export const setCursorSpriteKey = (key: string) => {
@@ -28,5 +34,14 @@ export const setCursorSpriteKey = (key: string) => {
 
 // Listen to sprite frame extraction events from Phaser via EventBus
 EventBus.on(OUT_SPRITE_FRAME_EXTRACTED, (key: string, dataUrl: string) => {
+    // Empty string = clear layer (e.g. bald paper-doll hair).
+    if (!dataUrl) {
+        appStore.setState((state) => {
+            const next = new Map(state.spriteFrameMap);
+            next.delete(key);
+            return { ...state, spriteFrameMap: next };
+        });
+        return;
+    }
     setSpriteFrame(key, dataUrl);
 });

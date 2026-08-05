@@ -1,10 +1,10 @@
 import type { Scene } from 'phaser';
 import { GameAsset, type GameAssetConfig } from './GameAsset';
-import { FloatingText } from '../effects/FloatingText';
+import { DamageChainFloatingText } from '../effects/FloatingText';
 import { convertWorldPosToPixelPos, Direction, getDirectionOffset, getNextDirection, getDirectionFromScreenSector, isCellMovable, toDirection, worldCellCenterPixelX, worldCellCenterPixelY } from '../../utils/CoordinateUtils';
 import { SoundManager } from '../../utils/SoundManager';
 import { SoundTracker } from '../../utils/SoundTracker';
-import { DEPTH_MULTIPLIER, KNOCKBACK_DURATION_MS } from '../../Config';
+import { DEPTH_MULTIPLIER, ENTITY_DEPTH_BIAS, KNOCKBACK_DURATION_MS } from '../../Config';
 import { isPlayerItemAppearanceLazyEligible } from '../../utils/ItemAssets';
 import { HBMap, TILE_SIZE } from '../assets/HBMap';
 import type { ShadowManager } from '../../utils/ShadowManager';
@@ -113,6 +113,9 @@ export abstract class GameObject {
     /** Maximum hit points. Defaults to 100. */
     protected maxHp: number = 100;
 
+    /** Olympia-style chained damage / heal floating numbers (`-45-45-45!`). */
+    private readonly damageChainText = new DamageChainFloatingText();
+
     /** Stunlock elapsed time in ms (-1 = not active). Used when TakeDamageOnMove completes at cell. */
     protected stunlockElapsedMs: number = -1;
 
@@ -145,21 +148,39 @@ export abstract class GameObject {
 
         // Create GameAssets at the pixel position
         for (const assetConfig of config.assets) {
+            // Honor explicit pending from buildAssetConfigs (unequipped armament placeholders) even when a
+            // catalog sheet is already cached — otherwise ITEMS[0]/msw would render as a real visible sprite.
             const pendingLazyPlayerItemAppearance =
-                !assetConfig.mapObject &&
-                assetConfig.spriteSheetIndex !== undefined &&
-                isPlayerItemAppearanceLazyEligible(scene, assetConfig.spriteName);
-            const asset = new GameAsset(scene, {
-                ...assetConfig,
-                x: pixelX,
-                y: pixelY,
-                ...(pendingLazyPlayerItemAppearance ? { pendingLazyPlayerItemAppearance: true } : {}),
-            });
-            
-            // Set depth based on world position Y (world Y coordinate * DEPTH_MULTIPLIER)
-            asset.setDepth(this.worldY * DEPTH_MULTIPLIER);
-            
-            this.assets.push(asset);
+                assetConfig.pendingLazyPlayerItemAppearance === true ||
+                (!assetConfig.mapObject &&
+                    assetConfig.spriteSheetIndex !== undefined &&
+                    isPlayerItemAppearanceLazyEligible(scene, assetConfig.spriteName));
+            try {
+                const asset = new GameAsset(scene, {
+                    ...assetConfig,
+                    x: pixelX,
+                    y: pixelY,
+                    ...(pendingLazyPlayerItemAppearance ? { pendingLazyPlayerItemAppearance: true } : {}),
+                });
+
+                // Same-row map objects (carpets/furniture) use y*DEPTH_MULTIPLIER; bias entities
+                // above so mobs/players never render under pads / carpets on the same tile.
+                asset.setDepth(this.worldY * DEPTH_MULTIPLIER + ENTITY_DEPTH_BIAS);
+
+                this.assets.push(asset);
+            } catch (error) {
+                // Missing equip .spr / frame must NOT black-screen the whole world (Map setup failed).
+                // Skip broken layers; body/hair still playable.
+                console.warn(
+                    `[GameObject] Skipping asset sprite='${assetConfig.spriteName}' sheet=${assetConfig.spriteSheetIndex}:`,
+                    error,
+                );
+            }
+        }
+        if (this.assets.length === 0) {
+            throw new Error(
+                `[GameObject] No renderable assets (all layers failed) at (${config.x},${config.y})`,
+            );
         }
         
         // Create SoundTracker instance for tracking sounds per state
@@ -307,12 +328,21 @@ export abstract class GameObject {
     }
 
     /**
-     * Gets the current depth of this GameObject based on world Y position.
-     * 
-     * @returns The depth value (worldY * DEPTH_MULTIPLIER)
+     * Visual grid-Y including movement interpolation (feet position while sliding between cells).
+     * Using logical worldY alone cuts feet when moving north (sprite still on southern cell
+     * while depth already jumped to the lower northern cell).
+     */
+    protected getVisualWorldY(): number {
+        return this.worldY + this.offsetY / TILE_SIZE;
+    }
+
+    /**
+     * Gets the current depth of this GameObject based on **visual** world Y (feet).
+     *
+     * @returns The depth value (visualWorldY * DEPTH_MULTIPLIER + ENTITY_DEPTH_BIAS)
      */
     public getDepth(): number {
-        return this.worldY * DEPTH_MULTIPLIER;
+        return this.getVisualWorldY() * DEPTH_MULTIPLIER + ENTITY_DEPTH_BIAS;
     }
 
     /**
@@ -381,11 +411,11 @@ export abstract class GameObject {
     }
 
     /**
-     * Updates the depth of all assets based on current world Y position.
-     * Should be called when the GameObject's world Y position changes.
+     * Updates the depth of all assets based on current **visual** world Y (incl. move offset).
+     * Called every frame during movement via {@link updatePixelPosition}.
      */
     protected updateDepth(): void {
-        const depth = this.worldY * DEPTH_MULTIPLIER;
+        const depth = this.getDepth();
         for (const asset of this.assets) {
             asset.setDepth(depth);
         }
@@ -827,16 +857,31 @@ export abstract class GameObject {
             this.playerTurn = this.playerTurn === 0 ? 1 : 0;
             
             // Stop trying to reach destination
-            this.destinationX = -1;
-            this.destinationY = -1;
-            this.isDirectMovementMode = false;
-            
-            // Stop movement and switch back to idle animation
-            this.moving = false;
-            this.moveReady = true;
-            this.switchState(GameObjectState.Idle);
-            
+            this.clearMovementDestinationIdle();
             return;
+        }
+
+        // Click-to-move (pathfinding): when preferred step is blocked, only side-step if
+        // it gets closer to the goal — prevents endless wall-slide when clicking buildings.
+        // Hold-run (direct mode): skip this gate so skimming a body/wall/water with LMB held
+        // keeps momentum (Olympia continuous-run feel for PvP).
+        if (!this.isDirectMovementMode) {
+            const preferredBlocked = !this.canMove(nextDirection);
+            if (preferredBlocked && movableDirection !== nextDirection) {
+                const [sideDx, sideDy] = getDirectionOffset(movableDirection);
+                const nextDist = Math.max(
+                    Math.abs(this.worldX + sideDx - this.destinationX),
+                    Math.abs(this.worldY + sideDy - this.destinationY),
+                );
+                const curDist = Math.max(
+                    Math.abs(this.worldX - this.destinationX),
+                    Math.abs(this.worldY - this.destinationY),
+                );
+                if (nextDist >= curDist) {
+                    this.clearMovementDestinationIdle();
+                    return;
+                }
+            }
         }
         
         // Clear blocked move tracking when we find a valid direction
@@ -850,6 +895,16 @@ export abstract class GameObject {
         }
         // Start running in that direction
         this.move(movableDirection);
+    }
+
+    /** Stops pathing and returns to Idle (blocked destination / wall slide without progress). */
+    protected clearMovementDestinationIdle(): void {
+        this.destinationX = -1;
+        this.destinationY = -1;
+        this.isDirectMovementMode = false;
+        this.moving = false;
+        this.moveReady = true;
+        this.switchState(GameObjectState.Idle);
     }
 
     /**
@@ -1081,24 +1136,24 @@ export abstract class GameObject {
     }
 
     /**
-     * Creates a floating damage indicator above the GameObject.
-     * Subclasses can call this from acceptDamage with a custom originY for positioning.
+     * Creates / merges a floating damage (or heal) indicator above the GameObject.
+     * Rapid consecutive hits stack Olympia-style (`-45-45-45!`).
      *
-     * @param damage - The damage amount (displayed as negative, e.g. 30 → -30)
+     * @param damage - Absolute amount (sign comes from kind)
      * @param originY - Y position in pixels where the text originates (travels upward from here)
+     * @param options - Palette / crit; default kind is `taken` (red)
      */
-    protected createDamageFloatingText(damage: number, originY: number): void {
-        new FloatingText(this.scene, {
-            text: String(-damage),
+    protected createDamageFloatingText(
+        damage: number,
+        originY: number,
+        options?: { kind?: 'dealt' | 'taken' | 'heal'; critical?: boolean },
+    ): void {
+        this.damageChainText.push(this.scene, {
             x: this.getAnimatedPixelX(),
             y: originY,
-            fontSize: 16,
-            color: '#ff0000',
-            bold: true,
-            horizontalOffset: -2,
-            upwardTravelPxPerSec: 30,
-            totalDurationMs: 2000,
-            fadeDurationMs: 1000,
+            amount: damage,
+            kind: options?.kind ?? 'taken',
+            critical: options?.critical,
         });
     }
 
@@ -1123,6 +1178,8 @@ export abstract class GameObject {
     public destroy(): void {
         // Free the current tile before destroying
         this.markCurrentTileFree();
+
+        this.damageChainText.destroy();
         
         // Destroy shadow manager if it exists
         if (this.shadowManager) {

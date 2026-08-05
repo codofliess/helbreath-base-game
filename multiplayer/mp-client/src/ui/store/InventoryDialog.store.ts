@@ -11,6 +11,7 @@ import {
 } from '../../constants/EventNames';
 import { ItemTypes, type Effect, type InventoryItem, type EquipmentSlot } from '../../constants/Items';
 import type { Gender } from '../../Types';
+import { refreshCarryWeightUi } from '../../utils/CarryWeight';
 
 export type BagDialogTab = 'bag' | 'itemDrops';
 
@@ -47,13 +48,25 @@ export const setEquippedItem = (slot: EquipmentSlot, equipped: InventoryItem | u
             [slot]: equipped,
         },
     }));
+    refreshCarryWeightUi();
 };
 
 export const addItemToBag = (item: InventoryItem) => {
-    inventoryDialogStore.setState((state) => ({
-        ...state,
-        baggedItems: [...state.baggedItems, item],
-    }));
+    inventoryDialogStore.setState((state) => {
+        // Upsert by uid — prevents ghost duplicates when server re-sends the same instance
+        // (stack update, equip rollback, attribute patch) without a prior remove.
+        const idx = state.baggedItems.findIndex((b) => b.itemUid === item.itemUid);
+        if (idx >= 0) {
+            const next = state.baggedItems.slice();
+            next[idx] = item;
+            return { ...state, baggedItems: next };
+        }
+        return {
+            ...state,
+            baggedItems: [...state.baggedItems, item],
+        };
+    });
+    refreshCarryWeightUi();
 };
 
 export const removeItemFromBag = (itemUid: string) => {
@@ -61,6 +74,7 @@ export const removeItemFromBag = (itemUid: string) => {
         ...state,
         baggedItems: state.baggedItems.filter((b) => b.itemUid !== itemUid),
     }));
+    refreshCarryWeightUi();
 };
 
 // Listen to equip item events from InventoryManager
@@ -74,6 +88,11 @@ EventBus.on(
         bagY?: number;
         effectOverrides?: Effect[];
         quantity?: number;
+        itemAttribute?: number;
+        itemColor?: number;
+        curLifeSpan?: number;
+        maxLifeSpan?: number;
+        bindState?: number;
     }) => {
         const item = payload.itemId !== undefined
             ? {
@@ -83,6 +102,11 @@ EventBus.on(
                 bagY: payload.bagY,
                 ...(payload.effectOverrides?.length && { effectOverrides: payload.effectOverrides }),
                 ...(payload.quantity !== undefined && { quantity: payload.quantity }),
+                ...(payload.itemAttribute !== undefined && { itemAttribute: payload.itemAttribute }),
+                ...(payload.itemColor !== undefined && { itemColor: payload.itemColor }),
+                ...(payload.curLifeSpan !== undefined && { curLifeSpan: payload.curLifeSpan }),
+                ...(payload.maxLifeSpan !== undefined && { maxLifeSpan: payload.maxLifeSpan }),
+                ...(payload.bindState !== undefined && { bindState: payload.bindState }),
             }
             : undefined;
         setEquippedItem(payload.itemType as EquipmentSlot, item);
@@ -122,6 +146,7 @@ EventBus.on(ITEM_QUANTITY_UPDATED, (payload: { itemUid: string; quantity: number
             b.itemUid === payload.itemUid ? { ...b, quantity: payload.quantity } : b,
         ),
     }));
+    refreshCarryWeightUi();
 });
 
 // Listen to game stats to receive player gender for inventory sprite selection

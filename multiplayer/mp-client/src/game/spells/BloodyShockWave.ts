@@ -27,9 +27,8 @@ function getRandomOffset(): number {
 }
 
 /**
- * Bloody Shock Wave spell. Creates an invisible projectile that travels from the
- * caster position (y - 40 pixels) towards the target cell, emitting Bloody Shock
- * Wave Node effects at fixed intervals along its path.
+ * Bloody Shock Wave: ground wave from the caster's **feet** toward the target cell.
+ * (Previously used originY-40 which spawned the VFX behind/through the caster.)
  */
 export class BloodyShockWave {
     private scene: Scene;
@@ -56,13 +55,19 @@ export class BloodyShockWave {
         this.scene = scene;
         this.config = config;
 
-        this.originPixelX = originPixelX;
-        this.originPixelY = originPixelY - 40;
-
         const destCellX = convertPixelPosToWorldPos(targetPixelX);
         const destCellY = convertPixelPosToWorldPos(targetPixelY);
         this.destPixelX = convertWorldPosToPixelPos(destCellX) + TILE_SIZE / 2;
         this.destPixelY = convertWorldPosToPixelPos(destCellY) + TILE_SIZE / 2;
+
+        // Feet = cell-center origin from CastManager; nudge slightly toward target so the
+        // first node is in front of the body, not behind the caster.
+        const dx = this.destPixelX - originPixelX;
+        const dy = this.destPixelY - originPixelY;
+        const len = Math.hypot(dx, dy) || 1;
+        const FOOT_FORWARD_PX = 14;
+        this.originPixelX = originPixelX + (dx / len) * FOOT_FORWARD_PX;
+        this.originPixelY = originPixelY + (dy / len) * FOOT_FORWARD_PX;
 
         this.travelTimeMs = config.duration;
 

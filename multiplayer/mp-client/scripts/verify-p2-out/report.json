@@ -1,0 +1,91 @@
+{
+  "ok": false,
+  "inWorld": true,
+  "screenshots": [
+    "01-f5.png",
+    "02-f6-bag.png",
+    "03-death-restart.png"
+  ],
+  "checks": [
+    {
+      "id": "f5-open",
+      "ok": false,
+      "detail": "character dialog not visible"
+    },
+    {
+      "id": "f5-text-Talents",
+      "ok": false,
+      "detail": "missing \"Talents\""
+    },
+    {
+      "id": "f5-text-Majestics",
+      "ok": false,
+      "detail": "missing \"Majestics\""
+    },
+    {
+      "id": "f5-text-Hunger",
+      "ok": false,
+      "detail": "missing \"Hunger\""
+    },
+    {
+      "id": "f5-text-Contribution",
+      "ok": false,
+      "detail": "missing \"Contribution\""
+    },
+    {
+      "id": "f5-text-Title",
+      "ok": false,
+      "detail": "missing \"Title\""
+    },
+    {
+      "id": "f6-open",
+      "ok": false,
+      "detail": "inventory dialog not visible"
+    },
+    {
+      "id": "f6-bag-footer-weight",
+      "ok": false,
+      "detail": "missing .bag-footer-weight"
+    },
+    {
+      "id": "f6-bag-footer-gold",
+      "ok": false,
+      "detail": "missing .bag-footer-gold"
+    },
+    {
+      "id": "f6-sort-button",
+      "ok": false,
+      "detail": "missing Sort button"
+    },
+    {
+      "id": "f6-drops-paren",
+      "ok": false,
+      "detail": "missing Drops ("
+    },
+    {
+      "id": "death-open",
+      "ok": false,
+      "detail": "death overlay not visible"
+    },
+    {
+      "id": "death-restart-btn",
+      "ok": false,
+      "detail": "missing .death-restart-btn"
+    }
+  ],
+  "blockers": [
+    "helbreath-game-active missing after city select",
+    "F5: could not open .character-dialog-root",
+    "F5 missing text: Talents",
+    "F5 missing text: Majestics",
+    "F5 missing text: Hunger",
+    "F5 missing text: Contribution",
+    "F5 missing text: Title",
+    "F6: could not open [data-dialog-id=\"inventory-dialog\"]",
+    "F6 missing: bag-footer-weight",
+    "F6 missing: bag-footer-gold",
+    "F6 missing: Sort button",
+    "F6 missing: Drops (",
+    "Death UI missing .death-restart-btn with Restart!"
+  ]
+}

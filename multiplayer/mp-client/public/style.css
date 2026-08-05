@@ -14,9 +14,34 @@
     --rpg-shadow: rgba(26, 15, 10, 0.8);
     --rpg-highlight: rgba(212, 175, 55, 0.3);
     --custom-cursor: auto;
+
+    /*
+     * Olympia in-game UI = classic GDI PutString face (MS Sans / Tahoma), not Georgia.
+     * Hub marketing keeps Cinzel/Spectral under .login-hub.
+     */
+    --olympia-ui-font: Tahoma, 'MS Sans Serif', 'Segoe UI', sans-serif;
+    --olympia-ui-font-size: 14px;
+    --olympia-ui-line-height: 18px;
+    --olympia-ink: #2d1919;
+    --olympia-ink-name: #2d1414;
+    --olympia-selectchar-ink: #330033;
 }
 
 body.dialog-transparent .draggable-dialog {
+    opacity: 0.55;
+}
+
+/* F5 sub-panels must stay opaque/legible even with Dialog Transparent toggle */
+body.dialog-transparent .draggable-dialog[data-dialog-id="character-dialog"]:has(.character-subpanel) {
+    opacity: 1;
+}
+
+/* Olympia F11: guide map becomes lightly translucent so the world shows through */
+body.dialog-transparent .corner-minimap-hud {
+    opacity: 0.42;
+}
+
+body.dialog-transparent .corner-minimap-hud.is-dragging {
     opacity: 0.55;
 }
 
@@ -29,7 +54,7 @@ body {
     background-position: center;
     background-repeat: no-repeat;
     background-attachment: fixed;
-    font-family: 'Georgia', 'Times New Roman', serif;
+    font-family: var(--olympia-ui-font);
     position: relative;
     cursor: var(--custom-cursor);
 }
@@ -102,32 +127,269 @@ body::before {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    border: 3px solid var(--rpg-gold);
-    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+    /* Soft frame — avoid “golden card on black sea” */
+    border: 1px solid rgba(139, 105, 20, 0.55);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.65);
 }
 
-#game-container.fullscreen {
+/*
+ * Helbreath - Chain Lords char UI (SELECTCHAR / CREATE) — full-bleed hub language.
+ * JS toggles body.login-charui-active (see loginDeskPresentation.ts).
+ */
+body.login-charui-active {
+    background: #0a0602 !important;
+    background-image: none !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+}
+
+body.login-charui-active::before {
+    display: none !important;
+}
+
+body.login-charui-active #app,
+body.login-charui-active #game-wrapper,
+body.login-charui-active #game-container {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #0a0602 !important;
+}
+
+body.login-charui-active #game-container canvas.login-charui-canvas,
+#game-container canvas.login-charui-canvas {
+    border: none !important;
+    box-shadow: none !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    z-index: 1 !important;
+    display: block !important;
+    /*
+     * Character List / Create scale classic sprs 4–8×. Nearest-neighbor (pixelated)
+     * looks brick-like in Chrome; Comet often smooths more by default.
+     * Smooth only here — GameWorld keeps pixelArt via its own canvas class.
+     */
+    image-rendering: auto !important;
+    image-rendering: smooth !important;
+}
+
+/* Create Character — DOM name field (above Phaser canvas; reliable focus/typing). */
+input.createchar-name-input {
     position: fixed;
+    z-index: 40;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 4px 10px;
+    border: 1px solid rgba(224, 180, 90, 0.55);
+    border-radius: 2px;
+    background: rgba(12, 8, 4, 0.92);
+    color: #f0e0c0;
+    font-family: Spectral, Georgia, serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    outline: none;
+    caret-color: #e0b45a;
+    box-shadow: 0 0 0 1px rgba(10, 6, 2, 0.8) inset;
+}
+input.createchar-name-input::placeholder {
+    color: rgba(203, 184, 146, 0.45);
+    font-weight: 400;
+}
+input.createchar-name-input:focus {
+    border-color: rgba(224, 180, 90, 0.95);
+    box-shadow:
+        0 0 0 1px rgba(224, 180, 90, 0.35),
+        0 0 12px rgba(224, 180, 90, 0.18);
+}
+
+/*
+ * SELECTCHAR letterbox — native CSS cm (user ruler contract):
+ *   from left/right edges of the browser page → 3.5cm black
+ *   from top/bottom edges                    → 2.0cm black
+ * #game-container is the letterboxed box; canvas fills it 100%.
+ * JS only toggles body.login-selectchar-active + strips Phaser inline styles.
+ */
+body.login-selectchar-active {
+    background: #000000 !important;
+    background-image: none !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+}
+
+body.login-selectchar-active::before {
+    display: none !important;
+}
+
+body.login-selectchar-active #app {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #000000 !important;
+}
+
+body.login-selectchar-active #game-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: #000000 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* The letterboxed stage: exact cm insets from page edges. */
+body.login-selectchar-active #game-container {
+    position: fixed !important;
+    left: 3.5cm !important;
+    right: 3.5cm !important;
+    top: 2cm !important;
+    bottom: 2cm !important;
+    width: auto !important;
+    height: auto !important;
+    background: #000000 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Canvas fills the letterbox box — no free left/top math. */
+body.login-selectchar-active #game-container canvas.login-selectchar-canvas,
+#game-container canvas.login-selectchar-canvas {
+    border: none !important;
+    box-shadow: none !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    z-index: 1 !important;
+    display: block !important;
+}
+
+/*
+ * In-game: 1024×576 FOV buffer + Scale.ENVELOP (cover monitor edge-to-edge).
+ * Parent is fixed full viewport; canvas may overflow one axis (cropped by overflow:hidden).
+ */
+body.game-world-active {
+    background: #000000;
+    background-image: none;
+    overflow: hidden;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+}
+
+body.game-world-active::before {
+    display: none;
+}
+
+body.game-world-active #app {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #000000 !important;
+}
+
+body.game-world-active #game-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #000000 !important;
+    overflow: hidden !important;
+}
+
+body.game-world-active #game-container {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
+    background: #000000 !important;
+}
+
+body.game-world-active #game-container canvas,
+body.game-world-active #game-container canvas.game-world-canvas {
+    /* ENVELOP covers parent — no gold frame, no black letterbox chrome. */
+    border: none !important;
+    box-shadow: none !important;
+    display: block !important;
+    margin: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+}
+
+/*
+ * Fullscreen: same classic FOV (1024×576) as windowed — Phaser ENVELOP scales the
+ * buffer to cover the parent. Never 1:1 resize to monitor (that expands vision / PvP).
+ * Dock stays over --hb-canvas-* rect.
+ */
+#game-container.fullscreen {
+    position: absolute;
     inset: 0;
     background: #000000;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
 }
 
 #game-container canvas.fullscreen {
-    display: block;
+    display: block !important;
     margin: 0 !important;
-    left: 50% !important;
-    top: 50% !important;
-    border: none;
-    box-shadow: none;
+    border: none !important;
+    box-shadow: none !important;
+    /* Let Phaser ENVELOP set size/position — do not force full-monitor 1:1 buffer */
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
 }
 
-#game-container canvas.fullscreen {
-    display: block;
+/* Fullscreen target is #app (canvas + dock). Keep layout filling the monitor. */
+#app:fullscreen,
+#app:-webkit-full-screen {
+    width: 100vw !important;
+    height: 100vh !important;
     margin: 0 !important;
-    left: 50% !important;
-    top: 50% !important;
+    padding: 0 !important;
+    background: #000 !important;
+    overflow: hidden !important;
 }
 
 .spritePosition {
@@ -144,7 +406,7 @@ body::before {
     border: 2px solid var(--rpg-leather);
     border-radius: 4px;
     transition: all 0.2s;
-    font-family: 'Georgia', serif;
+    font-family: var(--olympia-ui-font);
     font-weight: bold;
     text-shadow: 1px 1px 2px var(--rpg-shadow);
     box-shadow: 
@@ -189,14 +451,42 @@ body::before {
     min-width: 200px;
     user-select: none;
     pointer-events: auto;
+    /* Default for non-Olympia dialogs; Olympia F5/F6 override to fixed !important in rpg-ui.css */
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
+/*
+ * Olympia bag/character/etc. must stay position:fixed so left/top from React state move the window.
+ * Without !important, this file's position:relative wins in some engines when combined with
+ * portal + flex ancestors and free drag appears "stuck".
+ */
+.draggable-dialog.headless-draggable-dialog:has(.olympia-dialog-root) {
+    position: fixed !important;
+    overflow: visible !important;
+}
+
 .draggable-dialog[data-dialog-id="main-dialog"] {
     min-width: 270px;
+}
+
+.controls-dialog-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+}
+
+.controls-dialog-collapsed {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 120px;
+}
+
+.draggable-dialog[data-dialog-id="main-dialog"]:has(.controls-dialog-collapsed) {
+    min-width: 140px;
 }
 
 .draggable-dialog[data-dialog-id="camera-map-dialog"] {

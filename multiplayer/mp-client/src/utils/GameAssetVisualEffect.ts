@@ -117,6 +117,11 @@ export class GameAssetVisualEffect {
         if (this.saturateOverlay) {
             this.saturateOverlay.setAlpha(this.saturateOverlayAlpha * alpha);
         }
+        // Glare must follow body alpha or invi players still glow (Insk report).
+        if (this.glareOverlay) {
+            this.glareOverlay.setAlpha(0.4 * alpha);
+            this.glareOverlay.setVisible(alpha > 0.01 && this.sprite.visible);
+        }
     }
 
     public setVisible(visible: boolean): void {

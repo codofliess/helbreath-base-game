@@ -2,7 +2,7 @@ import type { Scene } from 'phaser';
 import { GameAsset } from './GameAsset';
 import { convertWorldPosToPixelPos } from '../../utils/CoordinateUtils';
 import { getItemById, getItemSheetIndex, getDroppedItemSpriteIndex, getTintInventoryEffectColorWithOverrides, type Effect } from '../../constants/Items';
-import { buildItemHoverInfo } from '../../constants/OlympiaItemName';
+import { buildItemHoverInfo, olympiaItemColorToSpriteTint } from '../../constants/OlympiaItemName';
 import { GROUND_ITEM_DISPLAY_CONFIG } from '../../constants/GroundItemDisplay';
 import { Gender } from '../../Types';
 import type { InventoryItemHoverInfo } from '../../ui/store/InventoryItemHoverOverlay.store';
@@ -47,12 +47,18 @@ export class GroundItem extends GameAsset {
         const effectiveGender = itemDef.gender ?? playerGender;
         const sheetIndex = getItemSheetIndex(itemDef, effectiveGender);
         const spriteIndex = getDroppedItemSpriteIndex(itemDef, effectiveGender);
-        const resolvedTint = tint ?? getTintInventoryEffectColorWithOverrides(itemDef, effectOverrides);
+        // Olympia m_cItemColor (poison=4 green on weapon) wins over static catalog tints.
+        const resolvedTint =
+            tint ??
+            olympiaItemColorToSpriteTint(itemColor) ??
+            getTintInventoryEffectColorWithOverrides(itemDef, effectOverrides);
 
         if (sheetIndex === undefined || spriteIndex === undefined) {
             throw new Error(`GroundItem: no ground sprite for item ${itemId}`);
         }
 
+        // Draw at cell center with origin 0.5 + no pivot — origin(0,0)+pivot shifted icons
+        // off the tile so clicks felt "desfazados" (and spell aim uses the same world coords).
         const pixelX = convertWorldPosToPixelPos(worldX) + TILE_SIZE / 2;
         const pixelY = convertWorldPosToPixelPos(worldY) + TILE_SIZE / 2;
 
@@ -63,6 +69,9 @@ export class GroundItem extends GameAsset {
             spriteName: displayConfig.spritePrefix,
             spriteSheetIndex: sheetIndex,
             frameIndex: spriteIndex,
+            skipPivot: true,
+            originX: 0.5,
+            originY: 0.5,
             ...(resolvedTint !== undefined && { tint: resolvedTint }),
         });
 

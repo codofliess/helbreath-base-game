@@ -26,11 +26,29 @@ export class SoundManager {
     private oneShotSounds: Map<number, Phaser.Sound.NoAudioSound | Phaser.Sound.HTML5AudioSound | Phaser.Sound.WebAudioSound> = new Map();
     private soundVolume = 100; // Default volume (0-100)
     private nextSoundId = 0; // Incrementing counter for unique sound IDs
+    /** SysMenu Sound On/Off — when false, all SFX are stopped and new plays are skipped. */
+    private soundEnabled = true;
 
     constructor(scene: Scene) {
         this.scene = scene;
     }
 
+    /**
+     * SysMenu Sound toggle. Off stops all active SFX; On allows new plays again.
+     */
+    public setSoundEnabled(enabled: boolean): void {
+        this.soundEnabled = enabled;
+        if (!enabled) {
+            this.stopAllSounds();
+            console.log('[SoundManager] Sound disabled');
+        } else {
+            console.log('[SoundManager] Sound enabled');
+        }
+    }
+
+    public isSoundEnabled(): boolean {
+        return this.soundEnabled;
+    }
 
     /**
      * Plays the specified sound file in a loop.
@@ -43,7 +61,7 @@ export class SoundManager {
      * @throws Error if sound file is not found in cache
      */
     public playInLoop(fileName: string, animationDurationMs?: number, spatialConfig?: SpatialConfig): number {
-        if (!isWindowFocused()) {
+        if (!this.soundEnabled || !isWindowFocused()) {
             return SOUND_PLAY_SKIPPED_ID;
         }
 
@@ -221,7 +239,7 @@ export class SoundManager {
      * @throws Error if sound file is not found in cache
      */
     public playOnce(fileName: string, animationDurationMs?: number, spatialConfig?: SpatialConfig, onComplete?: (soundId: number) => void): number {
-        if (!isWindowFocused()) {
+        if (!this.soundEnabled || !isWindowFocused()) {
             return SOUND_PLAY_SKIPPED_ID;
         }
 

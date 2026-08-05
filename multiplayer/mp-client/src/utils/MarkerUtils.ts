@@ -1,5 +1,6 @@
 import type { Scene } from 'phaser';
-import { FloatingText } from '../game/effects/FloatingText';
+import { FloatingText, formatOlympiaDamageChain } from '../game/effects/FloatingText';
+import { OLYMPIA_FLOATING_TEXT_COLORS } from '../constants/OlympiaTypography';
 
 /**
  * Pixel anchor for floating physical damage numbers (e.g. server monster hits).
@@ -10,23 +11,28 @@ export type PhysicalDamageMarkerPosition = {
 };
 
 /**
- * Spawns a floating red damage number at the given screen position.
+ * Spawns an Olympia-style floating damage number (`-45` / `-45!`) at the given screen position.
  */
 export function createPhysicalDamageMarker(
     scene: Scene,
     position: PhysicalDamageMarkerPosition,
     damageDealt: number,
+    critical = false,
 ): void {
+    const amount = Math.abs(Math.round(damageDealt));
+    if (amount <= 0) {
+        return;
+    }
     new FloatingText(scene, {
-        text: String(-damageDealt),
+        text: formatOlympiaDamageChain([amount], 'dealt', critical),
         x: position.x,
         y: position.y,
-        fontSize: 17,
-        color: '#d93030',
+        fontSize: 16,
+        color: OLYMPIA_FLOATING_TEXT_COLORS.damageDealt,
         bold: true,
-        horizontalOffset: 4,
-        upwardTravelPxPerSec: 32,
-        totalDurationMs: 2100,
-        fadeDurationMs: 1000,
+        horizontalOffset: -2,
+        upwardTravelPxPerSec: 28,
+        totalDurationMs: 2200,
+        fadeDurationMs: 1100,
     });
 }

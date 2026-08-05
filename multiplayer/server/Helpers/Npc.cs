@@ -111,6 +111,9 @@ public static class Npc {
         ArgumentNullException.ThrowIfNull(worldId);
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(request);
+        if (AdminSecurity.RejectIfNotGm(player, "SummonNpc")) {
+            return;
+        }
 
         if (player.IsDead) {
             return;
@@ -152,6 +155,9 @@ public static class Npc {
     /// <summary>Removes every NPC instance on the map (debug / admin).</summary>
     public static void HandleKillAllNpcsRequest(GameWorldRef wr, GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
+        if (AdminSecurity.RejectIfNotGm(player, "KillAllNpcs")) {
+            return;
+        }
 
         if (player.IsDead) {
             return;

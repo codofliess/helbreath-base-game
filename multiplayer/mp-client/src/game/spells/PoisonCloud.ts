@@ -4,18 +4,20 @@ import { TILE_SIZE } from '../assets/HBMap';
 import { PoisonCloudInstance } from './PoisonCloudInstance';
 import type { Effect } from '../effects/Effect';
 
-/** Radius in cells from center (1 = 3x3 area) */
-const FIELD_RADIUS = 1;
-
 export type PoisonCloudConfig = {
     /** Duration in milliseconds each poison cloud instance lasts (default: 30000) */
     duration?: number;
+    /**
+     * Radius in cells from center (Olympia Magic.cfg m_sValue12).
+     * Poison Cloud = 1 (3×3), Cloud Kill = 2 (5×5).
+     */
+    radius?: number;
     /** Called when each effect is created. Returns onDestroy to remove from effects array. */
     onEffectCreated?: (effect: Effect) => () => void;
 };
 
 /**
- * Poison Cloud spell. Creates a 3x3 field of poison cloud tiles centered on the target.
+ * Poison Cloud / Cloud Kill ground field. One large cloud VFX per cell (Olympia PCLOUD).
  */
 export class PoisonCloud {
     private instances: PoisonCloudInstance[] = [];
@@ -29,9 +31,10 @@ export class PoisonCloud {
         const targetWorldX = convertPixelPosToWorldPos(targetPixelX);
         const targetWorldY = convertPixelPosToWorldPos(targetPixelY);
         const duration = config.duration ?? 30000;
+        const fieldRadius = Math.max(0, config.radius ?? 1);
 
-        for (let dy = -FIELD_RADIUS; dy <= FIELD_RADIUS; dy++) {
-            for (let dx = -FIELD_RADIUS; dx <= FIELD_RADIUS; dx++) {
+        for (let dy = -fieldRadius; dy <= fieldRadius; dy++) {
+            for (let dx = -fieldRadius; dx <= fieldRadius; dx++) {
                 const wx = targetWorldX + dx;
                 const wy = targetWorldY + dy;
                 const pixelX = convertWorldPosToPixelPos(wx) + TILE_SIZE / 2;

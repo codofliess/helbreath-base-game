@@ -4,33 +4,79 @@ import { Direction, getDistance, getDirectionOffset, getNextDirection, convertPi
 import type { HBMap } from '../assets/HBMap';
 import type { Monster } from './Monster';
 import { ShadowManager } from '../../utils/ShadowManager';
-import { DEFAULT_PLAYER_ATTACK_RANGE, HIGH_DEPTH, PLAYER_HEALTH_BAR_HEIGHT, PLAYER_HEALTH_BAR_WIDTH } from '../../Config';
+import {
+    DEFAULT_PLAYER_ATTACK_RANGE,
+    FLOATING_TEXT_DEPTH,
+    HIGH_DEPTH,
+    PLAYER_HEALTH_BAR_HEIGHT,
+    PLAYER_HEALTH_BAR_WIDTH,
+} from '../../Config';
+import {
+    OLYMPIA_CHAT_COLORS,
+    OLYMPIA_FLOATING_TEXT_COLORS,
+    OLYMPIA_PHASER_FONT,
+    olympiaPhaserOutlinedTextStyle,
+} from '../../constants/OlympiaTypography';
 import { TILE_SIZE } from '../assets/HBMap';
 import { CriticalStrikeProjectile } from '../effects/CriticalStrikeProjectile';
 import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords } from '../../utils/EffectUtils';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
-import { EFFECT_RESURRECTION, EFFECT_CASTING_CIRCLE, EFFECT_SPARKLE, EFFECT_FOOTSTEPS_DRY, EFFECT_WET_SPLASH } from '../../constants/Effects';
+import {
+    EFFECT_RESURRECTION,
+    EFFECT_CASTING_CIRCLE,
+    EFFECT_SPARKLE,
+    EFFECT_FOOTSTEPS_DRY,
+    EFFECT_WET_SPLASH,
+    EFFECT_BERSERK,
+    EFFECT_DEFENSE_SHIELD_BUFF,
+    EFFECT_PROTECTION_FROM_ARROWS_BUFF,
+    EFFECT_PROTECTION_RING,
+    EFFECT_ABSOLUTE_MAGIC_PROTECTION_BUFF,
+    EFFECT_UNKNOWN_SMALL_RECOVERY_1,
+    EFFECT_UNKNOWN_SMALL_RECOVERY_2,
+} from '../../constants/Effects';
 import { getEffectByKey } from '../../constants/Effects';
+import { Effect as VisualEffect } from '../effects/Effect';
 import { SoundManager } from '../../utils/SoundManager';
 import { mapDialogStore } from '../../ui/store/MapDialog.store';
 import { playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { PLAYER_RUNNING, PLAYER_WALKING, PLAYER_MELEE_ATTACK, PLAYER_TAKE_UNARMED_DAMAGE, PLAYER_CAST, SPELL_CAST_FAILED, MALE_CRITICAL_ATTACK, FEMALE_CRITICAL_ATTACK, MALE_DEATH, FEMALE_DEATH, MALE_RESET_POSITION, FEMALE_RESET_POSITION } from '../../constants/SoundFileNames';
 import { EventBus } from '../EventBus';
-import { PLAYER_POSITION_CHANGED, TILE_OCCUPANCY_REAPPLY_REQUESTED, OUT_UI_PLAYER_DIED, OUT_UI_CAST_STARTED, OUT_UI_CAST_READY, OUT_UI_CAST_REMOVED, PLAYER_CAST_ANIMATION_STARTED, PLAYER_CONFIRM_SPELL_TARGET, EQUIP_ITEM, IN_UI_CHANGE_GENDER, IN_UI_CHANGE_SKIN_COLOR, IN_UI_CHANGE_UNDERWEAR_COLOR, IN_UI_CHANGE_HAIR_STYLE } from '../../constants/EventNames';
+import { PLAYER_POSITION_CHANGED, TILE_OCCUPANCY_REAPPLY_REQUESTED, OUT_UI_PLAYER_DIED, OUT_UI_CAST_STARTED, OUT_UI_CAST_READY, OUT_UI_CAST_REMOVED, PLAYER_CAST_ANIMATION_STARTED, PLAYER_CONFIRM_SPELL_TARGET, EQUIP_ITEM, IN_UI_CHANGE_GENDER, IN_UI_CHANGE_SKIN_COLOR, IN_UI_CHANGE_UNDERWEAR_COLOR, IN_UI_CHANGE_HAIR_STYLE, SYSTEM_LOG_APPEND } from '../../constants/EventNames';
 import { AttackType, Gender, MonsterAttackType, SkinColor, TemporaryEffectType } from '../../Types';
 import { calculateAnimationDuration, calculateFrameRateFromDuration } from '../../utils/AnimationUtils';
-import { FloatingText } from '../effects/FloatingText';
+import { FloatingText, formatOlympiaSpellAnnounce } from '../effects/FloatingText';
 import { ItemTypes, ItemEffect, WeaponType, RING_SLOT_LEFT, RING_SLOT_RIGHT, getItemById, hasEquippedItemEffect, type Effect, type EquipmentSlot, type InventoryItem, type Item } from '../../constants/Items';
 import { getInventoryManager, getNetworkManager, setPlayerPosition } from '../../utils/RegistryUtils';
 import { getSpellById } from '../../constants/Spells';
 import { DEFAULT_GEAR, GearConfig, PlayerAppearanceManager, type PlayerAppearanceAnimationConfig, PlayerState } from '../../utils/PlayerAppearanceManager';
 import { PlayerMovementManager, type PendingSyncCommand } from '../../utils/PlayerMovementManager';
 import { PlayerRangedCombatManager } from '../../utils/PlayerRangedCombatManager';
-import type { GameWorld as GameWorldScene } from '../scenes/GameWorld';
+
+/** Olympia chat bubble above head (~10 s). */
+const CHAT_OVERHEAD_DURATION_MS = 10_000;
+const CHAT_OVERHEAD_FADE_MS = 1_500;
+const CHAT_OVERHEAD_MAX_CHARS = 56;
 
 type CombatTarget = Monster | Player;
+
+/**
+ * Olympia-style continuous status FX under the feet while a buff is active.
+ * Keys map TemporaryEffectType → Effects.ts sprite (effect9 sheet for most protects/DS).
+ */
+const STATUS_FOOT_EFFECT_BY_TYPE: Partial<Record<TemporaryEffectType, string>> = {
+    [TemporaryEffectType.Berserk]: EFFECT_BERSERK,
+    [TemporaryEffectType.DefenseShield]: EFFECT_DEFENSE_SHIELD_BUFF,
+    [TemporaryEffectType.GreatDefenseShield]: EFFECT_DEFENSE_SHIELD_BUFF,
+    [TemporaryEffectType.ProtectFromArrow]: EFFECT_PROTECTION_FROM_ARROWS_BUFF,
+    [TemporaryEffectType.ProtectFromMagic]: EFFECT_PROTECTION_RING,
+    [TemporaryEffectType.AbsoluteMagicProtect]: EFFECT_ABSOLUTE_MAGIC_PROTECTION_BUFF,
+    [TemporaryEffectType.Haste]: EFFECT_UNKNOWN_SMALL_RECOVERY_1,
+    // Exp Tablet: visible underfoot ring (Olympia-style status FX while +200% EXP is active).
+    [TemporaryEffectType.ExpBoost]: EFFECT_UNKNOWN_SMALL_RECOVERY_2,
+};
 
 function isMonsterCombatTarget(target: CombatTarget): target is Monster {
     return 'getMonsterId' in target && typeof target.getMonsterId === 'function';
@@ -132,7 +178,13 @@ export class Player extends GameObject {
     private playerId: string | undefined = undefined;
     /** Remote: server `PlayerEnteredRange.character_name` for UI hover. */
     private characterName = '';
+    /** Citizenship for Olympia DrawObjectName hover: aresden | elvine | traveler. */
+    private citizenshipSide = 'traveler';
     private activeSpellName: string | undefined = undefined;
+
+    /** Olympia `name: text` overhead while chatting (Parity P1.3). */
+    private chatOverheadText: Phaser.GameObjects.Text | undefined = undefined;
+    private chatOverheadExpiresAtMs = 0;
 
     /** When true, player is dashing: moving with attack animation instead of run animation */
     private dashMode: boolean = false;
@@ -170,11 +222,17 @@ export class Player extends GameObject {
     /** Health bar graphics - 30px wide, 2 cells above player when alive */
     private healthBarGraphics: Phaser.GameObjects.Graphics;
 
+    /** World-space skull above opposing-city enemies (Olympia FOE/PK cue; no PK proto field yet). */
+    private enemySkullMarker: Phaser.GameObjects.Text | undefined;
+
     /** Accumulator for STAR_TWINKLE spawn interval (ms). Spawns sparkles above player when equipped. */
     private starTwinkleAccumulatorMs: number = 0;
 
     /** Per-player equipped items used for passive/effect checks so remote players do not read the local inventory manager. */
     private equippedItemsForEffects: Partial<Record<EquipmentSlot, InventoryItem>> = {};
+
+    /** Looping Olympia status FX under feet (Defense Shield, PFA, AMP, Berserk, …). */
+    private readonly statusFootEffects = new Map<number, VisualEffect>();
 
     /** Start offset for the current course-correction step. */
     private correctionStartOffsetX: number | undefined = undefined;
@@ -216,7 +274,9 @@ export class Player extends GameObject {
         gear: GearConfig = DEFAULT_GEAR,
         movementSpeedMs: number,
         isLocalPlayer: boolean = true,
-        initialVisibleEquippedItems: Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>> = {},
+        initialVisibleEquippedItems: Partial<
+            Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemColor?: number }>
+        > = {},
         remoteAppearance?: { gender: Gender; skinColor: SkinColor; underwearColorIndex: number; hairStyleIndex: number },
     ) {
         // Local: Player dialog store (server sync via OUT_UI). Remote: server snapshot.
@@ -361,25 +421,25 @@ export class Player extends GameObject {
                     this.syncTrackedEquippedItem(slot, item.itemId, item.itemUid, item.effectOverrides);
                 }
             }
-            this.onEquipItem(ItemTypes.WEAPON, equipped[ItemTypes.WEAPON]?.itemId, equipped[ItemTypes.WEAPON]?.effectOverrides);
-            this.onEquipItem(ItemTypes.SHIELD, equipped[ItemTypes.SHIELD]?.itemId, equipped[ItemTypes.SHIELD]?.effectOverrides);
-            this.onEquipItem(ItemTypes.ARMOR, equipped[ItemTypes.ARMOR]?.itemId, equipped[ItemTypes.ARMOR]?.effectOverrides);
-            this.onEquipItem(ItemTypes.HAUBERK, equipped[ItemTypes.HAUBERK]?.itemId, equipped[ItemTypes.HAUBERK]?.effectOverrides);
-            this.onEquipItem(ItemTypes.LEGGINGS, equipped[ItemTypes.LEGGINGS]?.itemId, equipped[ItemTypes.LEGGINGS]?.effectOverrides);
-            this.onEquipItem(ItemTypes.BOOTS, equipped[ItemTypes.BOOTS]?.itemId, equipped[ItemTypes.BOOTS]?.effectOverrides);
-            this.onEquipItem(ItemTypes.HELMET, equipped[ItemTypes.HELMET]?.itemId, equipped[ItemTypes.HELMET]?.effectOverrides);
-            this.onEquipItem(ItemTypes.CAPE, equipped[ItemTypes.CAPE]?.itemId, equipped[ItemTypes.CAPE]?.effectOverrides);
-            this.onEquipItem(ItemTypes.ACCESSORY, equipped[ItemTypes.ACCESSORY]?.itemId, equipped[ItemTypes.ACCESSORY]?.effectOverrides);
+            this.onEquipItem(ItemTypes.WEAPON, equipped[ItemTypes.WEAPON]?.itemId, equipped[ItemTypes.WEAPON]?.effectOverrides, equipped[ItemTypes.WEAPON]?.itemColor);
+            this.onEquipItem(ItemTypes.SHIELD, equipped[ItemTypes.SHIELD]?.itemId, equipped[ItemTypes.SHIELD]?.effectOverrides, equipped[ItemTypes.SHIELD]?.itemColor);
+            this.onEquipItem(ItemTypes.ARMOR, equipped[ItemTypes.ARMOR]?.itemId, equipped[ItemTypes.ARMOR]?.effectOverrides, equipped[ItemTypes.ARMOR]?.itemColor);
+            this.onEquipItem(ItemTypes.HAUBERK, equipped[ItemTypes.HAUBERK]?.itemId, equipped[ItemTypes.HAUBERK]?.effectOverrides, equipped[ItemTypes.HAUBERK]?.itemColor);
+            this.onEquipItem(ItemTypes.LEGGINGS, equipped[ItemTypes.LEGGINGS]?.itemId, equipped[ItemTypes.LEGGINGS]?.effectOverrides, equipped[ItemTypes.LEGGINGS]?.itemColor);
+            this.onEquipItem(ItemTypes.BOOTS, equipped[ItemTypes.BOOTS]?.itemId, equipped[ItemTypes.BOOTS]?.effectOverrides, equipped[ItemTypes.BOOTS]?.itemColor);
+            this.onEquipItem(ItemTypes.HELMET, equipped[ItemTypes.HELMET]?.itemId, equipped[ItemTypes.HELMET]?.effectOverrides, equipped[ItemTypes.HELMET]?.itemColor);
+            this.onEquipItem(ItemTypes.CAPE, equipped[ItemTypes.CAPE]?.itemId, equipped[ItemTypes.CAPE]?.effectOverrides, equipped[ItemTypes.CAPE]?.itemColor);
+            this.onEquipItem(ItemTypes.ACCESSORY, equipped[ItemTypes.ACCESSORY]?.itemId, equipped[ItemTypes.ACCESSORY]?.effectOverrides, equipped[ItemTypes.ACCESSORY]?.itemColor);
         } else {
-            this.onEquipItem(ItemTypes.WEAPON, initialVisibleEquippedItems[ItemTypes.WEAPON]?.itemId, initialVisibleEquippedItems[ItemTypes.WEAPON]?.effectOverrides);
-            this.onEquipItem(ItemTypes.SHIELD, initialVisibleEquippedItems[ItemTypes.SHIELD]?.itemId, initialVisibleEquippedItems[ItemTypes.SHIELD]?.effectOverrides);
-            this.onEquipItem(ItemTypes.ARMOR, initialVisibleEquippedItems[ItemTypes.ARMOR]?.itemId, initialVisibleEquippedItems[ItemTypes.ARMOR]?.effectOverrides);
-            this.onEquipItem(ItemTypes.HAUBERK, initialVisibleEquippedItems[ItemTypes.HAUBERK]?.itemId, initialVisibleEquippedItems[ItemTypes.HAUBERK]?.effectOverrides);
-            this.onEquipItem(ItemTypes.LEGGINGS, initialVisibleEquippedItems[ItemTypes.LEGGINGS]?.itemId, initialVisibleEquippedItems[ItemTypes.LEGGINGS]?.effectOverrides);
-            this.onEquipItem(ItemTypes.BOOTS, initialVisibleEquippedItems[ItemTypes.BOOTS]?.itemId, initialVisibleEquippedItems[ItemTypes.BOOTS]?.effectOverrides);
-            this.onEquipItem(ItemTypes.HELMET, initialVisibleEquippedItems[ItemTypes.HELMET]?.itemId, initialVisibleEquippedItems[ItemTypes.HELMET]?.effectOverrides);
-            this.onEquipItem(ItemTypes.CAPE, initialVisibleEquippedItems[ItemTypes.CAPE]?.itemId, initialVisibleEquippedItems[ItemTypes.CAPE]?.effectOverrides);
-            this.onEquipItem(ItemTypes.ACCESSORY, initialVisibleEquippedItems[ItemTypes.ACCESSORY]?.itemId, initialVisibleEquippedItems[ItemTypes.ACCESSORY]?.effectOverrides);
+            this.onEquipItem(ItemTypes.WEAPON, initialVisibleEquippedItems[ItemTypes.WEAPON]?.itemId, initialVisibleEquippedItems[ItemTypes.WEAPON]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.WEAPON]?.itemColor);
+            this.onEquipItem(ItemTypes.SHIELD, initialVisibleEquippedItems[ItemTypes.SHIELD]?.itemId, initialVisibleEquippedItems[ItemTypes.SHIELD]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.SHIELD]?.itemColor);
+            this.onEquipItem(ItemTypes.ARMOR, initialVisibleEquippedItems[ItemTypes.ARMOR]?.itemId, initialVisibleEquippedItems[ItemTypes.ARMOR]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.ARMOR]?.itemColor);
+            this.onEquipItem(ItemTypes.HAUBERK, initialVisibleEquippedItems[ItemTypes.HAUBERK]?.itemId, initialVisibleEquippedItems[ItemTypes.HAUBERK]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.HAUBERK]?.itemColor);
+            this.onEquipItem(ItemTypes.LEGGINGS, initialVisibleEquippedItems[ItemTypes.LEGGINGS]?.itemId, initialVisibleEquippedItems[ItemTypes.LEGGINGS]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.LEGGINGS]?.itemColor);
+            this.onEquipItem(ItemTypes.BOOTS, initialVisibleEquippedItems[ItemTypes.BOOTS]?.itemId, initialVisibleEquippedItems[ItemTypes.BOOTS]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.BOOTS]?.itemColor);
+            this.onEquipItem(ItemTypes.HELMET, initialVisibleEquippedItems[ItemTypes.HELMET]?.itemId, initialVisibleEquippedItems[ItemTypes.HELMET]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.HELMET]?.itemColor);
+            this.onEquipItem(ItemTypes.CAPE, initialVisibleEquippedItems[ItemTypes.CAPE]?.itemId, initialVisibleEquippedItems[ItemTypes.CAPE]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.CAPE]?.itemColor);
+            this.onEquipItem(ItemTypes.ACCESSORY, initialVisibleEquippedItems[ItemTypes.ACCESSORY]?.itemId, initialVisibleEquippedItems[ItemTypes.ACCESSORY]?.effectOverrides, initialVisibleEquippedItems[ItemTypes.ACCESSORY]?.itemColor);
             for (const [slot, item] of Object.entries(initialVisibleEquippedItems)) {
                 if (item && this.isEquipmentSlotKey(slot)) {
                     this.syncTrackedEquippedItem(slot, item.itemId, '', item.effectOverrides);
@@ -388,13 +448,23 @@ export class Player extends GameObject {
         }
     }
 
-    private onEquipItem(itemType: ItemTypes, itemId: number | undefined, effectOverrides?: Effect[]): void {
-        this.appearanceManager.handleEquip(itemType, itemId, effectOverrides);
+    private onEquipItem(
+        itemType: ItemTypes,
+        itemId: number | undefined,
+        effectOverrides?: Effect[],
+        itemColor?: number,
+    ): void {
+        this.appearanceManager.handleEquip(itemType, itemId, effectOverrides, itemColor);
         this.switchPlayerState(this.currentState, true);
         this.updatePixelPosition();
     }
 
-    public setRemoteVisibleEquippedItem(itemType: ItemTypes, itemId: number | undefined, effectOverrides?: Effect[]): void {
+    public setRemoteVisibleEquippedItem(
+        itemType: ItemTypes,
+        itemId: number | undefined,
+        effectOverrides?: Effect[],
+        itemColor?: number,
+    ): void {
         if (this.isLocalPlayer) {
             return;
         }
@@ -403,7 +473,7 @@ export class Player extends GameObject {
         }
 
         this.syncTrackedEquippedItem(itemType, itemId, this.equippedItemsForEffects[itemType]?.itemUid ?? '', effectOverrides);
-        this.onEquipItem(itemType, itemId, effectOverrides);
+        this.onEquipItem(itemType, itemId, effectOverrides, itemColor);
     }
 
     private isEquipmentSlotKey(value: string): value is EquipmentSlot {
@@ -445,15 +515,21 @@ export class Player extends GameObject {
         this.switchPlayerState(this.currentState, true);
     }
 
-    private getEquippedItemsForRemoteAppearance(): Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>> {
-        const out: Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>> = {};
+    private getEquippedItemsForRemoteAppearance(): Partial<
+        Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemColor?: number }>
+    > {
+        const out: Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemColor?: number }>> = {};
         for (const slot of Object.values(ItemTypes)) {
             if (!this.isEquipmentSlotKey(slot)) {
                 continue;
             }
             const item = this.equippedItemsForEffects[slot];
             if (item) {
-                out[slot] = { itemId: item.itemId, effectOverrides: item.effectOverrides };
+                out[slot] = {
+                    itemId: item.itemId,
+                    effectOverrides: item.effectOverrides,
+                    itemColor: item.itemColor,
+                };
             }
         }
         return out;
@@ -485,7 +561,8 @@ export class Player extends GameObject {
     }
 
     protected override updateDepth(): void {
-        this.appearanceManager.updateDepth(this.worldY, this.direction, this.currentState);
+        // Visual Y (worldY + offsetY/TILE) so feet aren't buried mid-step when walking north.
+        this.appearanceManager.updateDepth(this.getVisualWorldY(), this.direction, this.currentState);
     }
 
     protected override updatePixelPosition(): void {
@@ -496,6 +573,8 @@ export class Player extends GameObject {
         this.appearanceManager.updateAssetPositions(finalPixelX, finalPixelY, ghostConfig);
         this.updateShadowPosition();
         this.updateShadowDepth();
+        this.updateChatOverheadPosition();
+        this.updateStatusFootEffectPositions();
     }
 
     /**
@@ -1114,7 +1193,14 @@ export class Player extends GameObject {
             this.correctionStartOffsetX = undefined;
             this.correctionStartOffsetY = undefined;
             this.correctionDurationMs = undefined;
+            // Critical: without this, moveReady stays false forever and all future walks hang.
+            this.moving = false;
+            this.moveReady = true;
+            this.destinationX = -1;
+            this.destinationY = -1;
+            this.dashMode = false;
             this.map.setTileOccupied(fromCellX, fromCellY, true);
+            this.switchToIdle();
             this.updatePixelPosition();
             this.emitTileOccupancyReapplyRequested();
             return;
@@ -1126,8 +1212,10 @@ export class Player extends GameObject {
         const nextCenterX = worldCellCenterPixelX(nextCellX);
         const nextCenterY = worldCellCenterPixelY(nextCellY);
 
+        // Occupy the cell we are stepping into (next), not the final dest — marking dest early
+        // leaves the intermediate cell free and the far cell permanently blocked for pathfinding.
         this.map.setTileOccupied(this.worldX, this.worldY, false);
-        this.map.setTileOccupied(destX, destY, true);
+        this.map.setTileOccupied(nextCellX, nextCellY, true);
 
         this.worldX = nextCellX;
         this.worldY = nextCellY;
@@ -1284,9 +1372,13 @@ export class Player extends GameObject {
     }
 
     /**
-     * Returns true when the player is paralyzed (movement blocked by a packet timer).
+     * Returns true when the player is paralyzed (anti-cheat packet timer or spell HOLDOBJECT temporary effect).
+     * Movement commands are blocked until the effect ends.
      */
     public isParalyzed(): boolean {
+        if (this.hasTemporaryEffect(TemporaryEffectType.Paralyze)) {
+            return true;
+        }
         if (this.paralysisUntil === undefined) {
             return false;
         }
@@ -1301,11 +1393,40 @@ export class Player extends GameObject {
     }
 
     /**
+     * Hard-stop pathing so cast never “finishes the walk” to the aim cell.
+     * Snaps mid-tile offset to the current grid cell (Olympia: cast freezes feet).
+     */
+    public hardStopForCast(): void {
+        this.cancelMovement();
+        this.attackTarget = undefined;
+        this.queuedDashModeForNextMove = undefined;
+        this.dashMode = false;
+        if (this.moving || this.offsetX !== 0 || this.offsetY !== 0) {
+            this.moving = false;
+            this.offsetX = 0;
+            this.offsetY = 0;
+            this.moveReady = true;
+            this.movementElapsedTime = 0;
+            this.destinationX = -1;
+            this.destinationY = -1;
+            this.updatePixelPosition();
+        }
+        if (this.isLocalPlayer) {
+            this.movement.pendingSyncCommands = this.movement.pendingSyncCommands.filter(
+                (c) => c.type !== 'idleDirection' && c.type !== 'movementStep',
+            );
+        }
+    }
+
+    /**
      * Called when cast is commanded from UI (Olympia magic book).
-     * When moving, queues the cast until the player reaches the next cell.
+     * Always stops movement immediately and starts cast (no finish-the-walk).
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
         if (this.dead || this.hasPendingSpell()) {
+            return;
+        }
+        if (this.hasTemporaryEffect(TemporaryEffectType.Inhibition)) {
             return;
         }
         const spellConfig = getSpellById(spellId);
@@ -1313,16 +1434,12 @@ export class Player extends GameObject {
             return;
         }
         this.activeSpellName = spellConfig.name;
-        if (useCastAnimation && this.moving) {
-            this.queuedCastSpellId = spellId;
-            this.queuedCastUseAnimation = useCastAnimation;
-            this.cancelMovement();
-            return;
-        }
+        // Drop any queued walk-to-cast; cast now.
+        this.queuedCastSpellId = undefined;
+        this.hardStopForCast();
         this.pendingSpellId = spellId;
         this.pendingUseCastAnimation = useCastAnimation;
         if (useCastAnimation) {
-            this.cancelMovement();
             this.switchPlayerState(PlayerState.Cast, true);
             this.emitCastStarted(spellId);
         } else {
@@ -1372,6 +1489,8 @@ export class Player extends GameObject {
         if (this.pendingUseCastAnimation && this.currentState !== PlayerState.CastReady) {
             return false;
         }
+        // Confirming aim must never path-run to the click cell.
+        this.hardStopForCast();
         const spellId = this.pendingSpellId;
         this.pendingSpellId = undefined;
         this.pendingUseCastAnimation = false;
@@ -1422,7 +1541,7 @@ export class Player extends GameObject {
             x: this.getAnimatedPixelX(),
             y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
             fontSize: 16,
-            color: '#df5d2c',
+            color: OLYMPIA_FLOATING_TEXT_COLORS.castFailed,
             bold: true,
             horizontalOffset: -2,
             upwardTravelPxPerSec: 30,
@@ -1467,14 +1586,20 @@ export class Player extends GameObject {
     }
 
     /**
-     * Cancels pending or queued spell without emitting. Called on shutdown.
+     * Cancels pending or queued spell without notifying the server.
+     * Used on shutdown and when the server already confirmed cancel (self).
      */
     public cancelPendingCast(): void {
-        if (!this.hasPendingSpell()) {
+        if (!this.hasPendingSpell() &&
+            this.currentState !== PlayerState.Cast &&
+            this.currentState !== PlayerState.CastReady) {
             return;
         }
         this.clearSpellState();
-        if (this.currentState === PlayerState.CastReady) {
+        if (this.currentState === PlayerState.Cast || this.currentState === PlayerState.CastReady) {
+            if (this.currentState === PlayerState.Cast) {
+                this.soundTracker.stopSound(PlayerState.Cast);
+            }
             this.switchToIdle();
         }
         EventBus.emit(OUT_UI_CAST_REMOVED);
@@ -1509,24 +1634,31 @@ export class Player extends GameObject {
      * Self: floating damage text only (HP comes from world-state and `hp_updated`). Others: subtract HP, death, and floating text.
      */
     public override acceptDamage(damage: number): void {
+        const originY = this.getAnimatedPixelY() - 3 * TILE_SIZE + 10;
         if (this.isLocalPlayer) {
-            this.createDamageFloatingText(damage, this.getAnimatedPixelY() - 3 * TILE_SIZE + 10);
+            this.createDamageFloatingText(damage, originY, { kind: 'taken' });
             return;
         }
         this.hp -= damage;
         if (this.hp < 1) {
             this.announceDeath();
         }
-        this.createDamageFloatingText(damage, this.getAnimatedPixelY() - 3 * TILE_SIZE + 10);
+        this.createDamageFloatingText(damage, originY, { kind: 'dealt' });
     }
 
     /**
      * Self HP from InitialGameWorldState or `hp_updated`.
+     * Green Olympia heal floats when HP rises after the character is already alive in-world.
      */
     public setHp(hp: number, maxHp: number): void {
+        const previousHp = this.hp;
         this.hp = hp;
         this.maxHp = maxHp;
         if (this.isLocalPlayer) {
+            if (previousHp > 0 && hp > previousHp) {
+                const originY = this.getAnimatedPixelY() - 3 * TILE_SIZE + 10;
+                this.createDamageFloatingText(hp - previousHp, originY, { kind: 'heal' });
+            }
             this.updateHealthBar();
         }
     }
@@ -1646,14 +1778,14 @@ export class Player extends GameObject {
 
     /**
      * Death: frees tile, enters Die state, and opens the death dialog for self only.
+     * @param killerName Optional PvP killer display name from the server attribution window.
      */
-    public applyDeath(): void {
-        if (this.dead) {
-            return;
+    public applyDeath(killerName?: string): void {
+        if (!this.dead) {
+            this.enterDeathState();
         }
-        this.enterDeathState();
         if (this.isLocalPlayer) {
-            EventBus.emit(OUT_UI_PLAYER_DIED);
+            EventBus.emit(OUT_UI_PLAYER_DIED, { killerName: killerName?.trim() || undefined });
         }
     }
 
@@ -1712,13 +1844,28 @@ export class Player extends GameObject {
         return this.appearanceManager.getGender();
     }
 
+    /** Live map layers for F5 paper-doll (exact same sprites as world). */
+    public getVisibleSpritesForPaperDoll(): Array<{ sprite: import('phaser').GameObjects.Sprite; spriteName: string }> {
+        return this.appearanceManager.getVisibleSpritesForCapture();
+    }
+
+    public getHairStyleIndex(): number {
+        return this.appearanceManager.getHairStyleIndex();
+    }
+
+    public getUnderwearColorIndex(): number {
+        return this.appearanceManager.getUnderwearColorIndex();
+    }
+
+    public getHumanSpriteName(): string {
+        return this.appearanceManager.getHumanSpriteName();
+    }
+
     /**
      * Resurrection: restores position, HP, shadow, idle state, and resurrection VFX.
+     * Always applies even if the local dead flag was desynced (stuck corpse bug).
      */
     public applyResurrect(x: number, y: number, hp: number, maxHp: number): void {
-        if (!this.dead) {
-            return;
-        }
         this.dead = false;
         this.setHp(hp, maxHp);
         this.worldX = x;
@@ -1814,13 +1961,19 @@ export class Player extends GameObject {
     public setAttackSpeed(sliderValue: number): void {
         const clampedValue = Phaser.Math.Clamp(sliderValue, 1, 100);
         this.attackSpeed = 5 + (clampedValue / 100) * (30 - 5);
+        // Derive swing ms from FPS so hold-gate and packet lock stay in sync.
+        this.attackSwingDurationMs = Math.max(
+            200,
+            Math.round((this.RUNNING_FRAME_COUNT / Math.max(1, this.attackSpeed)) * 1000),
+        );
     }
 
     /**
      * Sets melee animation rate from the full-swing duration in ms (matches `InitialGameWorldState.attack_speed_ms`).
      */
     public setAttackSpeedFromDurationMs(durationMs: number): void {
-        const ms = Phaser.Math.Clamp(durationMs, 1, 60_000);
+        const ms = Phaser.Math.Clamp(durationMs, 200, 2000);
+        this.attackSwingDurationMs = ms;
         this.attackSpeed = calculateFrameRateFromDuration(this.RUNNING_FRAME_COUNT, ms);
     }
 
@@ -1954,6 +2107,72 @@ export class Player extends GameObject {
         this.applyInvisibilityBuffIfPresent();
         this.appearanceManager.setChilledEffect(this.hasTemporaryEffect(TemporaryEffectType.Chill));
         this.appearanceManager.setBerserkEffect(this.hasTemporaryEffect(TemporaryEffectType.Berserk));
+        if (this.isLocalPlayer && this.hasTemporaryEffect(TemporaryEffectType.Paralyze)) {
+            this.cancelMovement();
+        }
+        this.syncStatusFootEffects();
+    }
+
+    /**
+     * Olympia: active buffs show a looping status shadow/ring at the character's feet
+     * (Defense Shield, PFA, PFM, AMP, Berserk, Haste).
+     */
+    private syncStatusFootEffects(): void {
+        // Remote invisibility: no status silhouette under a hidden body.
+        if (!this.isLocalPlayer && this.hasInvisibilityBuff()) {
+            this.destroyStatusFootEffects();
+            return;
+        }
+        const wanted = new Set<number>();
+        for (const [typeKey, effectKey] of Object.entries(STATUS_FOOT_EFFECT_BY_TYPE)) {
+            const effectType = Number(typeKey);
+            if (!this.hasTemporaryEffect(effectType)) {
+                continue;
+            }
+            wanted.add(effectType);
+            if (this.statusFootEffects.has(effectType)) {
+                continue;
+            }
+            const fx = drawEffectAtPixelCoords(
+                this.scene,
+                this.getAnimatedPixelX(),
+                this.getAnimatedPixelY(),
+                effectKey,
+                {
+                    infiniteLoop: true,
+                    // Under body layers, above carpets/map objects (ENTITY 50, STATUS_FOOT 40).
+                    depthOffset: 40,
+                    playerWorldY: this.worldY,
+                },
+            );
+            if (fx) {
+                this.statusFootEffects.set(effectType, fx);
+            }
+        }
+        for (const [effectType, fx] of [...this.statusFootEffects.entries()]) {
+            if (!wanted.has(effectType)) {
+                fx.destroy();
+                this.statusFootEffects.delete(effectType);
+            }
+        }
+    }
+
+    private updateStatusFootEffectPositions(): void {
+        if (this.statusFootEffects.size === 0) {
+            return;
+        }
+        const px = this.getAnimatedPixelX();
+        const py = this.getAnimatedPixelY();
+        for (const fx of this.statusFootEffects.values()) {
+            fx.setPosition(px, py);
+        }
+    }
+
+    private destroyStatusFootEffects(): void {
+        for (const fx of this.statusFootEffects.values()) {
+            fx.destroy();
+        }
+        this.statusFootEffects.clear();
     }
 
     private applyInvisibilityBuffIfPresent(): void {
@@ -1964,6 +2183,11 @@ export class Player extends GameObject {
         } else {
             this.appearanceManager.setInvisibilityLocalHalfOpacity(false);
             this.appearanceManager.setInvisibilityRemoteHidden(inv);
+            // Fully hide FOE markers / chat bubbles on remote invi (sprites alone left silhouettes).
+            if (inv) {
+                this.clearEnemySkullMarker();
+                this.clearChatOverhead();
+            }
         }
         if (this.shadowManager) {
             if (!this.isLocalPlayer && inv) {
@@ -1983,6 +2207,53 @@ export class Player extends GameObject {
     }
 
     /**
+     * Shows Olympia-style chat overhead above this player (`Name: message`, ~10 s).
+     * Replaces any prior overhead from the same speaker. Color follows chat channel.
+     */
+    public showChatOverhead(message: string, color: string = OLYMPIA_CHAT_COLORS.normal): void {
+        const trimmed = message.trim();
+        if (!trimmed) {
+            return;
+        }
+        const name = this.characterName.trim() || '???';
+        const body =
+            trimmed.length > CHAT_OVERHEAD_MAX_CHARS
+                ? `${trimmed.slice(0, CHAT_OVERHEAD_MAX_CHARS - 1)}…`
+                : trimmed;
+        const label = `${name}: ${body}`;
+
+        this.clearChatOverhead();
+        this.chatOverheadText = this.scene.add.text(
+            this.getAnimatedPixelX(),
+            this.getAnimatedPixelY() - 3 * TILE_SIZE,
+            label,
+            olympiaPhaserOutlinedTextStyle(color, {
+                fontSize: '13px',
+                fontStyle: 'bold',
+                wordWrap: { width: 220 },
+                align: 'center',
+            }),
+        );
+        this.chatOverheadText.setOrigin(0.5, 1);
+        this.chatOverheadText.setDepth(FLOATING_TEXT_DEPTH);
+        this.chatOverheadExpiresAtMs = this.scene.time.now + CHAT_OVERHEAD_DURATION_MS;
+    }
+
+    /** Sets citizenship side used by player hover affiliation / FOE coloring. */
+    public setCitizenshipSide(side: string): void {
+        const normalized = side.trim().toLowerCase();
+        if (normalized === 'aresden' || normalized === 'elvine') {
+            this.citizenshipSide = normalized;
+            return;
+        }
+        this.citizenshipSide = 'traveler';
+    }
+
+    public getCitizenshipSide(): string {
+        return this.citizenshipSide;
+    }
+
+    /**
      * Gets the current attack target (monster or player to pathfind towards when out of range).
      */
     public getAttackTarget(): CombatTarget | undefined {
@@ -1994,6 +2265,44 @@ export class Player extends GameObject {
      */
     public clearAttackTarget(): void {
         this.attackTarget = undefined;
+    }
+
+    /**
+     * Standstill attack (Olympia right-click): cancel pathfinding and strike only if already in range.
+     * Does not store an out-of-range chase target.
+     */
+    public attackStandstill(target: CombatTarget): void {
+        if (this.dead ||
+            target.isDead() ||
+            this.isAttacking() ||
+            this.isInBowStance() ||
+            this.isCastReady() ||
+            this.currentState === PlayerState.TakeDamage ||
+            this.currentState === PlayerState.TakeDamageOnMove ||
+            this.currentState === PlayerState.TakeDamageWithKnockback ||
+            this.isStunlocked()) {
+            return;
+        }
+
+        this.cancelMovement();
+        this.attackTarget = undefined;
+
+        const distance = getDistance(this.worldX, this.worldY, target.getWorldX(), target.getWorldY());
+        if (distance > this.attackRange) {
+            const face = getNextDirection(this.worldX, this.worldY, target.getWorldX(), target.getWorldY());
+            if (face !== Direction.None && face !== this.direction) {
+                this.direction = face;
+                this.updateDepth();
+                this.switchToIdle();
+            }
+            return;
+        }
+
+        if (this.attackMode) {
+            this.startAttack(target);
+        } else {
+            this.startBowStance(target);
+        }
     }
 
     /**
@@ -2036,12 +2345,52 @@ export class Player extends GameObject {
     }
 
     /**
+     * Authoritative swing length (ms). Matches server AttackSpeedMs when applied via
+     * {@link setAttackSpeedFromDurationMs}; derived from Phaser frame rate otherwise.
+     */
+    private attackSwingDurationMs = 600;
+
+    /** Local hard lock: no second attack packet until this timestamp (performance.now). */
+    private localAttackLockUntilMs = 0;
+
+    /**
+     * Full melee/bow swing duration in ms — used by input hold auto-repeat and packet gate.
+     */
+    public getAttackSwingDurationMs(): number {
+        return Math.max(200, this.attackSwingDurationMs);
+    }
+
+    private canStartLocalAttackNow(): boolean {
+        if (!this.isLocalPlayer) {
+            return true;
+        }
+        return performance.now() >= this.localAttackLockUntilMs;
+    }
+
+    private armLocalAttackLock(): void {
+        if (!this.isLocalPlayer) {
+            return;
+        }
+        // Full weapon swing interval — matches server AttackSpeedMs / TryBeginAttackRequest.
+        this.localAttackLockUntilMs = performance.now() + this.getAttackSwingDurationMs();
+    }
+
+    /**
      * Starts the melee attack animation facing the monster.
      */
     private startAttack(target: CombatTarget): void {
         if (this.dead) {
             return;
         }
+        // Already swinging: never stack a second packet/anim.
+        if (this.isAttacking()) {
+            return;
+        }
+        // Even hold cadence: one packet per full weapon swing duration.
+        if (!this.canStartLocalAttackNow()) {
+            return;
+        }
+
         this.cancelMovement();
         this.attackTarget = target;
 
@@ -2062,6 +2411,8 @@ export class Player extends GameObject {
         const weaponDef = this.getTrackedWeaponDef();
         const attackState = weaponDef?.weaponType === WeaponType.BOW ? PlayerState.BowAttack : PlayerState.MeleeAttack;
         this.switchPlayerState(attackState, true);
+        // Arm lock only after we actually enter attack (so rejected paths don't burn cadence).
+        this.armLocalAttackLock();
         if (this.isLocalPlayer && !this.dead) {
             const ranged = weaponDef?.weaponType === WeaponType.BOW;
             if (isMonsterCombatTarget(target)) {
@@ -2112,8 +2463,9 @@ export class Player extends GameObject {
      * Plays the pickup animation once at idle speed, then returns to idle.
      * Repeated clicks on the same cell will trigger PickUp again (looping).
      * Armaments are hidden during PickUp (no animations for them) and restored when returning to idle.
+     * @param maxItems Ground-stack items to request (1 normal; up to 9 when Ctrl is held).
      */
-    public requestPickUp(): void {
+    public requestPickUp(maxItems: number = 1): void {
         if (this.dead ||
             this.isAttacking() ||
             this.isInBowStance() ||
@@ -2128,8 +2480,9 @@ export class Player extends GameObject {
         }
         this.cancelMovement();
         if (this.isLocalPlayer) {
+            const clampedMaxItems = Math.max(1, Math.min(9, Math.floor(maxItems)));
             getNetworkManager(this.scene.game)?.sendPlayerPickupRequested(this.direction);
-            getNetworkManager(this.scene.game)?.sendPlayerItemPickupRequested();
+            getNetworkManager(this.scene.game)?.sendPlayerItemPickupRequested(clampedMaxItems);
         }
         this.switchPlayerState(PlayerState.PickUp, true);
     }
@@ -2392,12 +2745,21 @@ export class Player extends GameObject {
         if (weaponDef?.weaponType === WeaponType.BOW) {
             return false;
         }
+        // Do not arm dashMode if move will be rejected (paralysis / stunlock).
+        if (this.isLocalPlayer && (this.isParalyzed() || this.isStunlocked())) {
+            return false;
+        }
         const distance = getDistance(this.worldX, this.worldY, this.attackTarget.getWorldX(), this.attackTarget.getWorldY());
         if (distance !== this.attackRange + 1) {
             return false;
         }
         this.dashMode = true;
         this.move(direction);
+        // move() may abort without starting a step — clear dash so processMovement does not wipe destination.
+        if (!this.moving) {
+            this.dashMode = false;
+            return false;
+        }
         return true;
     }
 
@@ -2455,7 +2817,69 @@ export class Player extends GameObject {
     }
 
     /**
-     * Overrides setDestination to reject when attacking.
+     * Ends melee/bow swing so the player can walk away (flee after slime packs).
+     * Does not clear paralysis / cast-ready / take-damage locks.
+     */
+    private interruptAttackForMovement(): void {
+        if (!this.isAttacking() && !this.isInBowStance()) {
+            return;
+        }
+        this.attackTarget = undefined;
+        this.dashMode = false;
+        this.cancelPendingBowArrowSpawn();
+        this.switchToIdle();
+    }
+
+    /** Accumulators for stuck-movement recovery (local only). */
+    private stuckMoveReadyMs = 0;
+    private stuckAttackAnimMs = 0;
+
+    /**
+     * Unsticks local movement when combat leaves flags inconsistent:
+     * - moveReady false while not interpolating a step
+     * - attack/bow anim state that never finishes (can kill but not walk)
+     * - dashMode latched without moving
+     */
+    private recoverLocalMovementLocks(delta: number): void {
+        if (this.dashMode && !this.moving) {
+            this.dashMode = false;
+        }
+
+        if (!this.moving && !this.moveReady) {
+            this.stuckMoveReadyMs += delta;
+            if (this.stuckMoveReadyMs > 250) {
+                this.moveReady = true;
+                this.stuckMoveReadyMs = 0;
+            }
+        } else {
+            this.stuckMoveReadyMs = 0;
+        }
+
+        // Only force-end hung attack anims. Normal completion is handled in update() via
+        // isPrimaryAssetAnimationPlaying — early force-idle caused double swings (next hold frame).
+        if (this.isAttacking() || this.isInBowStance()) {
+            this.stuckAttackAnimMs += delta;
+            if (this.stuckAttackAnimMs > 2200) {
+                this.attackTarget = undefined;
+                this.dashMode = false;
+                this.cancelPendingBowArrowSpawn();
+                this.switchToIdle();
+                this.moveReady = true;
+                this.stuckAttackAnimMs = 0;
+            }
+        } else {
+            this.stuckAttackAnimMs = 0;
+        }
+
+        // Expired anti-cheat paralysis should never leave residual walk block.
+        if (this.paralysisUntil !== undefined && Date.now() >= this.paralysisUntil) {
+            this.paralysisUntil = undefined;
+        }
+    }
+
+    /**
+     * Overrides setDestination: attack animations no longer hard-block walking.
+     * Click-to-move interrupts the swing (Olympia-style flee).
      */
     public override setDestination(
         destinationX: number,
@@ -2468,8 +2892,6 @@ export class Player extends GameObject {
     ): void {
         if (this.isParalyzed() ||
             this.dead ||
-            this.isAttacking() ||
-            this.isInBowStance() ||
             this.isCasting() ||
             this.isCastReady() ||
             this.currentState === PlayerState.PickUp ||
@@ -2478,15 +2900,20 @@ export class Player extends GameObject {
             this.isStunlocked()) {
             return;
         }
+        // Allow click-to-move to break out of a stuck/held attack loop.
+        if (this.isAttacking() || this.isInBowStance()) {
+            this.interruptAttackForMovement();
+        }
+        this.attackTarget = undefined;
         super.setDestination(destinationX, destinationY, useDirectMovement, cameraCenterPixelX, cameraCenterPixelY, cursorPixelX, cursorPixelY);
     }
 
     /**
-     * Overrides cancelMovement to reject when attacking.
+     * Cancels path; attack swings are interrupted so cancel is never a no-op while MeleeAttack.
      */
     public override cancelMovement(): void {
         if (this.isAttacking() || this.isInBowStance()) {
-            return;
+            this.interruptAttackForMovement();
         }
         super.cancelMovement();
         if (this.isLocalPlayer) {
@@ -2498,8 +2925,11 @@ export class Player extends GameObject {
      * Overrides update to handle attack and take damage animation completion.
      */
     public override update(delta: number): void {
+        this.tickChatOverhead();
         if (this.dead) {
             this.healthBarGraphics.setVisible(false);
+            this.clearEnemySkullMarker();
+            this.destroyStatusFootEffects();
             const accessoryAssetIndex = this.appearanceManager.getAccessoryAssetIndex();
             if (accessoryAssetIndex >= 0 &&
                 this.appearanceManager.hasAccessory() &&
@@ -2510,7 +2940,14 @@ export class Player extends GameObject {
             return;
         }
         this.updateHealthBar();
+        this.updateEnemySkullMarkerPosition();
         this.updateStarTwinkle(delta);
+
+        // Recovery: never leave local player unable to walk while still able to fight.
+        if (this.isLocalPlayer) {
+            this.recoverLocalMovementLocks(delta);
+        }
+
         if ((this.currentState === PlayerState.MeleeAttack || this.currentState === PlayerState.BowAttack) && !this.dashMode) {
             if (!this.isPrimaryAssetAnimationPlaying()) {
                 this.attackTarget = undefined;
@@ -2731,7 +3168,8 @@ export class Player extends GameObject {
      * Uses wet splash when raining, otherwise dry footsteps.
      */
     protected override onCellReached(): void {
-        if (!this.dead && this.currentState === PlayerState.Run) {
+        // Invisible players leave no run trail (Insk: still visible via footsteps).
+        if (!this.dead && this.currentState === PlayerState.Run && !this.hasInvisibilityBuff()) {
             const weather = mapDialogStore.state.weather;
             const isRaining = weather === 'rain-light' || weather === 'rain-medium' || weather === 'rain-heavy';
             const effectKey = isRaining ? EFFECT_WET_SPLASH : EFFECT_FOOTSTEPS_DRY;
@@ -2868,6 +3306,50 @@ export class Player extends GameObject {
     }
 
     /**
+     * Shows or hides the FOE enemy skull above this remote player.
+     * Local player never shows a skull on self.
+     */
+    public syncEnemySkullMarker(show: boolean): void {
+        if (this.isLocalPlayer || this.dead || !show) {
+            this.clearEnemySkullMarker();
+            return;
+        }
+        if (!this.enemySkullMarker) {
+            this.enemySkullMarker = this.scene.add
+                .text(0, 0, '☠', {
+                    fontFamily: OLYMPIA_PHASER_FONT,
+                    fontSize: '14px',
+                    color: '#dc2828',
+                    stroke: '#000000',
+                    strokeThickness: 3,
+                })
+                .setOrigin(0.5, 1)
+                .setDepth(HIGH_DEPTH);
+        }
+        this.enemySkullMarker.setVisible(true);
+        this.updateEnemySkullMarkerPosition();
+    }
+
+    /** Removes the world-space enemy skull if present. */
+    public clearEnemySkullMarker(): void {
+        if (this.enemySkullMarker) {
+            this.enemySkullMarker.destroy();
+            this.enemySkullMarker = undefined;
+        }
+    }
+
+    private updateEnemySkullMarkerPosition(): void {
+        if (!this.enemySkullMarker) {
+            return;
+        }
+        this.enemySkullMarker.setPosition(
+            this.getAnimatedPixelX(),
+            this.getAnimatedPixelY() - 2 * TILE_SIZE - 4,
+        );
+        this.enemySkullMarker.setDepth(HIGH_DEPTH);
+    }
+
+    /**
      * Renders the health bar 2 cells above the player.
      * Only shown for the local (self) player; remote players do not display a health bar.
      */
@@ -2951,26 +3433,64 @@ export class Player extends GameObject {
     }
 
     /**
-     * Creates a floating text with the spell name above the player in green color.
-     * Positioned 3 cells above the player, similar to damage text.
+     * Creates a floating Olympia-style spell announce above the caster (`Mass-Fire-Strike!`).
+     * Color follows spell role: offensive red, protect pink, buff/heal green, utility cyan.
+     * Local casts also append the announce to the SystemLog (P1.2).
      */
     private createSpellNameFloatingText(): void {
         if (!this.activeSpellName) {
             return;
         }
 
+        const announce = formatOlympiaSpellAnnounce(this.activeSpellName);
+        const color = this.resolveSpellAnnounceColor(this.activeSpellName, this.pendingSpellId);
+
         new FloatingText(this.scene, {
-            text: this.activeSpellName,
+            text: announce,
             x: this.getAnimatedPixelX(),
             y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
             fontSize: 16,
-            color: '#00ff00',
+            color,
             bold: true,
             horizontalOffset: -2,
-            upwardTravelPxPerSec: 30,
-            totalDurationMs: 2000,
+            upwardTravelPxPerSec: 26,
+            totalDurationMs: 2200,
             fadeDurationMs: 1000,
         });
+
+        if (this.isLocalPlayer) {
+            EventBus.emit(SYSTEM_LOG_APPEND, { message: announce, kind: 'event' });
+        }
+    }
+
+    /** Maps spell category / name heuristics to Olympia announce palette. */
+    private resolveSpellAnnounceColor(spellName: string, spellId?: number): string {
+        const config = spellId !== undefined ? getSpellById(spellId) : undefined;
+        const category = config?.category;
+        const lower = spellName.toLowerCase();
+        if (
+            lower.includes('protect') ||
+            lower.includes('shield') ||
+            lower.includes('absolute')
+        ) {
+            return OLYMPIA_FLOATING_TEXT_COLORS.spellProtect;
+        }
+        if (
+            category === 'buff' ||
+            category === 'heal' ||
+            lower.includes('meditation') ||
+            lower.includes('berserk') ||
+            lower.includes('haste')
+        ) {
+            return OLYMPIA_FLOATING_TEXT_COLORS.spellBuff;
+        }
+        if (category === 'utility') {
+            return OLYMPIA_FLOATING_TEXT_COLORS.spellUtility;
+        }
+        if (category === 'offensive' || category === 'field' || category === 'summon') {
+            return OLYMPIA_FLOATING_TEXT_COLORS.spellOffensive;
+        }
+        return OLYMPIA_FLOATING_TEXT_COLORS.spellBuff;
     }
 
     private emitCastStarted(spellId: number): void {
@@ -3005,11 +3525,50 @@ export class Player extends GameObject {
         if (this.hairStyleChangeHandler) {
             EventBus.off(IN_UI_CHANGE_HAIR_STYLE, this.hairStyleChangeHandler);
         }
+        this.clearChatOverhead();
         this.soundTracker.stopAllSounds();
         this.cancelPendingBowArrowSpawn();
         this.destroyCastingCircleEffect();
+        this.destroyStatusFootEffects();
+        this.clearEnemySkullMarker();
         this.healthBarGraphics.destroy();
         this.movement.pendingSyncCommands = [];
         super.destroy();
+    }
+
+    private updateChatOverheadPosition(): void {
+        if (!this.chatOverheadText) {
+            return;
+        }
+        this.chatOverheadText.setPosition(
+            this.getAnimatedPixelX(),
+            this.getAnimatedPixelY() - 3 * TILE_SIZE,
+        );
+    }
+
+    private tickChatOverhead(): void {
+        if (!this.chatOverheadText) {
+            return;
+        }
+        const now = this.scene.time.now;
+        const remaining = this.chatOverheadExpiresAtMs - now;
+        if (remaining <= 0) {
+            this.clearChatOverhead();
+            return;
+        }
+        if (remaining < CHAT_OVERHEAD_FADE_MS) {
+            this.chatOverheadText.setAlpha(Math.max(0, remaining / CHAT_OVERHEAD_FADE_MS));
+        } else {
+            this.chatOverheadText.setAlpha(1);
+        }
+        this.updateChatOverheadPosition();
+    }
+
+    private clearChatOverhead(): void {
+        if (this.chatOverheadText) {
+            this.chatOverheadText.destroy();
+            this.chatOverheadText = undefined;
+        }
+        this.chatOverheadExpiresAtMs = 0;
     }
 }

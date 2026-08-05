@@ -1,0 +1,33 @@
+{
+  "maxLevel": 150,
+  "maxRebirth": 10,
+  "monsterExpFactor": 65.0,
+  "rebirthExpMultiplierStep": 0,
+  "rebirthLuPoints": 6,
+  "rebirthExpObtainRate": 0.8,
+  "fullExpObtainFromLevel": 140,
+  "rebirthResetLevel": 79,
+
+  "milestones": [
+    {
+      "id": "frost-50000",
+      "kind": 0,
+      "monsterId": 20,
+      "required": 50000,
+      "rewardItemIds": [861, 845]
+    },
+    {
+      "id": "unicorn-5000",
+      "kind": 0,
+      "monsterId": 59,
+      "required": 5000,
+      "rewardItemIds": [849, 850, 851, 863]
+    },
+    {
+      "id": "max-rebirth",
+      "kind": 1,
+      "required": 20,
+      "rewardItemIds": [861, 845, 846]
+    }
+  ]
+}

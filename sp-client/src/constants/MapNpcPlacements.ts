@@ -27,12 +27,13 @@ export interface MapNpcPlacement {
 
 /**
  * All NPC placements keyed by normalized map id.
- * Positions from Helbreath Olympia persons.json + city guard patrol points.
+ * Positions from Helbreath Olympia persons.json. City outdoor guards live in server dwellAreas (TP plaza).
  */
 export const MAP_NPC_PLACEMENTS: Record<string, MapNpcPlacement[]> = {
     // --- Interior buildings ---
-    gshop_1: [{ sprite: 'shopkpr', displayName: 'Shop Keeper', x: 48, y: 35, direction: 4, role: 'shop' }],
-    gshop_2: [{ sprite: 'shopkpr', displayName: 'Shop Keeper', x: 48, y: 35, direction: 4, role: 'shop' }],
+    // Classic Helbreath waypoint / chimney-counter stand (gshop_1.txt waypoint 59,42)
+    gshop_1: [{ sprite: 'shopkpr', displayName: 'Shop Keeper', x: 59, y: 42, direction: 4, role: 'shop' }],
+    gshop_2: [{ sprite: 'shopkpr', displayName: 'Shop Keeper', x: 59, y: 42, direction: 4, role: 'shop' }],
     bsmith_1: [{ sprite: 'tom', displayName: 'Tom', x: 48, y: 33, direction: 7 }],
     bsmith_2: [{ sprite: 'tom', displayName: 'Tom', x: 48, y: 33, direction: 7 }],
     gldhall_1: [{ sprite: 'howard', displayName: 'Howard', x: 48, y: 38, direction: 4 }],
@@ -121,31 +122,10 @@ export const MAP_NPC_PLACEMENTS: Record<string, MapNpcPlacement[]> = {
         greeting: 'Misiones de Tower of Hell — Demons, Gargoyles y Dark Elves.',
     }],
 
-    // --- City guards (Aresden) ---
-    aresden: [
-        { sprite: 'guard', displayName: 'Guard', x: 140, y: 124, direction: 4, role: 'city-guard',
-          greeting: 'Mantené la paz, soldado.' },
-        { sprite: 'guard', displayName: 'Guard', x: 113, y: 95, direction: 2, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 95, y: 159, direction: 6, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 223, y: 133, direction: 0, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 57, y: 116, direction: 2, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 186, y: 91, direction: 4, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 137, y: 127, direction: 6, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 169, y: 195, direction: 0, role: 'city-guard' },
-    ],
-
-    // --- City guards (Elvine) ---
-    elvine: [
-        { sprite: 'guard', displayName: 'Guard', x: 140, y: 124, direction: 4, role: 'city-guard',
-          greeting: 'Mantené la paz, soldado.' },
-        { sprite: 'guard', displayName: 'Guard', x: 113, y: 95, direction: 2, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 95, y: 159, direction: 6, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 223, y: 133, direction: 0, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 57, y: 116, direction: 2, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 186, y: 91, direction: 4, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 137, y: 127, direction: 6, role: 'city-guard' },
-        { sprite: 'guard', displayName: 'Guard', x: 258, y: 80, direction: 4, role: 'city-guard' },
-    ],
+    // City outdoor guards are server dwell monsters (random-walk near city-hall TP plaza).
+    // Do not place stationary city-guard NPCs here — fixed cells on building tiles show as balconies/roofs.
+    aresden: [],
+    elvine: [],
 };
 
 /**

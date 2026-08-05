@@ -1,0 +1,273 @@
+{
+  "generated": "2026-07-25T21:26:49.077Z",
+  "counts": {
+    "clientItems": 568,
+    "cfgItems": 568,
+    "sprFiles": 359,
+    "missingEquippedSpriteFields": 188,
+    "equippedSpriteMissingFile": 0,
+    "cfgIdsNotInClient": 0,
+    "clientIdsNotInCfg": 0,
+    "serverItems": 579,
+    "monsters": 70,
+    "lootRows": 1584,
+    "spells": 51,
+    "clientDialogs": 37
+  },
+  "gaps": [
+    {
+      "area": "Appearance equipped sprites",
+      "severity": "P1",
+      "detail": "188 missing equippedSprite fields on body/weapon/shield; 0 sprite basenames referenced but .spr file missing",
+      "samples": [
+        {
+          "id": 2,
+          "name": "Dagger(S.C)",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 2,
+          "name": "Dagger(S.C)",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 3,
+          "name": "Dagger(Swd.breaker)",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 3,
+          "name": "Dagger(Swd.breaker)",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 4,
+          "name": "Dagger+1",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 4,
+          "name": "Dagger+1",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 6,
+          "name": "Kight Dagger",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 6,
+          "name": "Kight Dagger",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 7,
+          "name": "Dirk",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 7,
+          "name": "Dirk",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 9,
+          "name": "Short Sword+1",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 9,
+          "name": "Short Sword+1",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 11,
+          "name": "Short Sword(S.C)",
+          "type": "weapon",
+          "side": "male"
+        },
+        {
+          "id": 11,
+          "name": "Short Sword(S.C)",
+          "type": "weapon",
+          "side": "female"
+        },
+        {
+          "id": 12,
+          "name": "Main Gauche",
+          "type": "weapon",
+          "side": "male"
+        }
+      ]
+    },
+    {
+      "area": "Item catalog id parity",
+      "severity": "OK",
+      "detail": "0 Olympia cfg ids missing from client catalog; 0 client ids not in cfg",
+      "samples": []
+    },
+    {
+      "area": "Server Items.json fields",
+      "severity": "P2",
+      "detail": "server items=579; missing price=376; missing maxLifeSpan=25; body gear missing olympiaEffectType=6"
+    },
+    {
+      "area": "Monster loot table integrity",
+      "severity": "P2",
+      "detail": "monsters=70; noLoot=29; lootRows=1584; unknownItemIdsInLoot=0",
+      "samples": []
+    },
+    {
+      "area": "Spells catalog size",
+      "severity": "P1",
+      "detail": "Spells.json count=51. Sample: Energy Bolt, Fire Ball, Fire Strike, Chill Wind, Poison Cloud, Triple Energy Bolt, Lightning Bolt, Spike Field, Fire Field, Ice Storm, Ice Strike, Energy Strike"
+    },
+    {
+      "area": "Explicit TODOs / stubs in code",
+      "severity": "P2",
+      "detail": "80 sample hits (capped)",
+      "samples": [
+        "multiplayer\\server\\Helpers\\AntiBotTools.cs:112: /// limits would refuse the join; also logs guild-priority / new-player segment stubs near capacity.",
+        "multiplayer\\server\\Helpers\\AntiBotTools.cs:134: $\"(queue/overflow/delayed claim stub; traveler={travelerMode}).\");",
+        "multiplayer\\server\\Helpers\\AntiBotTools.cs:197: /// <summary>Logs high-stakes stream/identity stub when a player enters a tournament arena and the flag is ON.</summary>",
+        "multiplayer\\server\\Helpers\\AntiBotTools.cs:205: $\"[AntiBotTools] Would require stream/identity stub before prize for '{player.CharacterName}' \" +",
+        "multiplayer\\server\\Helpers\\AuctionBoard.cs:12: /// Gold settlement is server-authoritative bag gold (item 90) — on-chain $HELL not wired (C6 preference).",
+        "multiplayer\\server\\Helpers\\AuctionBoard.cs:87: SendActionResult(player, ok: false, \"Guild required for 'only own guild' (Fase H stub — set guild id first).\");",
+        "multiplayer\\server\\Helpers\\AuctionBoard.cs:618: error = \"Guild required to buy this listing (Fase H stub).\";",
+        "multiplayer\\server\\Helpers\\AuctionBoardStore.cs:22: \"MVP: settles bag gold (item 90). On-chain $HELL / non-custodial wallet settle = not wired (C6 preference).\";",
+        "multiplayer\\server\\Helpers\\BeginnerPath.cs:296: if (string.Equals(kind, \"stub\", StringComparison.OrdinalIgnoreCase)) {",
+        "multiplayer\\server\\Helpers\\BeginnerPath.cs:297: throw new InvalidOperationException($\"BeginnerPath quest '{quest.Id}' is marked live but objectiveKind is stub.\");",
+        "multiplayer\\server\\Helpers\\BeginnerPath.cs:385: state.NextStubTitle = quest.Title ?? quest.Id;",
+        "multiplayer\\server\\Helpers\\CityNpcServices.cs:10: /// (guild interest flag, citizenship brief, heal/bless/donate, crusade stub).",
+        "multiplayer\\server\\Helpers\\CityNpcServices.cs:358: \" Live: citizenship info. Limited: rename, contribution, tax offices (classic stubs not wired).\";",
+        "multiplayer\\server\\Helpers\\EnemyKillAwards.cs:8: /// Rank/ladder lookup is stubbed until the city killer board exists.",
+        "multiplayer\\server\\Helpers\\Inventory.cs:94: var stoneStub = false;",
+        "multiplayer\\server\\Helpers\\Inventory.cs:104: stoneStub = true;",
+        "multiplayer\\server\\Helpers\\Inventory.cs:141: if (stoneStub) {",
+        "multiplayer\\server\\Helpers\\MonsterLoot.cs:15: /// <see cref=\"TryGetKillerHelbreathRating\"/> — today always unset (see stub).",
+        "multiplayer\\server\\Helpers\\PvpAcademy.cs:307: \"Challenge desk (GM). Pick Easy→Elite. Hero-set duelists TBD — Guards scaffold for now. \" +",
+        "multiplayer\\server\\Helpers\\TimedChallenge.cs:25: /// <summary>PvP Academy Challenge Easy (scaffold: Guard waves + tier label; hero NPC AI TBD).</summary>",
+        "multiplayer\\server\\Helpers\\TimedChallenge.cs:52: /// <summary>Stone of Integrity (violet zem) — safe upgrade consumable stub.</summary>",
+        "multiplayer\\server\\Helpers\\TimedChallenge.cs:769: /// <summary>Consume Stone of Integrity: stub safe-upgrade path (logs + consumes; full upgrade system TBD).</summary>",
+        "multiplayer\\server\\Helpers\\TimedChallenge.cs:777: $\"[TimedChallenge] Stone of Integrity consumed by '{player.CharacterName}' — safe upgrade stub (no burn/downgrade when u",
+        "multiplayer\\server\\Helpers\\TimedChallenge.cs:782: Message = \"Stone of Integrity used: safe upgrade attempt recorded (upgrade system stub — no burn/downgrade).\",",
+        "multiplayer\\mp-client\\src\\constants\\OlympiaSkills.ts:5: /** Mastery 0–100; server sync will overwrite stubs. */",
+        "multiplayer\\mp-client\\src\\constants\\ShopCatalog.ts:14: * - Perry (8): Command Hall → crusade brief stub ✅",
+        "multiplayer\\mp-client\\src\\game\\systems\\EkScreenshotCapture.ts:3: * download locally as {victim}_{nnn}.jpg, and best-effort POST to the middleware gallery stub.",
+        "multiplayer\\mp-client\\src\\game\\systems\\EkScreenshotCapture.ts:125: async function uploadStub(blob: Blob, fileName: string, meta: EkScreenshotMeta): Promise<void> {",
+        "multiplayer\\mp-client\\src\\game\\systems\\EkScreenshotCapture.ts:145: console.warn('[EkScreenshotCapture] upload stub HTTP', res.status);",
+        "multiplayer\\mp-client\\src\\game\\systems\\EkScreenshotCapture.ts:149: console.warn('[EkScreenshotCapture] upload stub failed', err);",
+        "multiplayer\\mp-client\\src\\game\\systems\\EkScreenshotCapture.ts:217: await uploadStub(blob, fileName, meta);",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:391: /** Mock vs real: MVP settles gold in bag (item 90); on-chain $HELL wallet not wired. */",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:1200: /** Passport / score gate on Helvet / airdrop claim (middleware stub). */",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:1208: /** Require stream / identity stubs before prize (flag + UI note only). */",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:1284: /** Next stub quest title when live path is exhausted (empty if none). */",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:1285: nextStubTitle: string;",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:14838: nextStubTitle: \"\",",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:14878: if (message.nextStubTitle !== \"\") {",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:14879: writer.uint32(98).string(message.nextStubTitle);",
+        "multiplayer\\mp-client\\src\\proto\\generated\\network.ts:14987: message.nextStubTitle = reader.string();"
+      ]
+    },
+    {
+      "area": "MASTERPLAN open checkboxes",
+      "severity": "P2",
+      "detail": "open=[ ] 49, done=[x] 204"
+    },
+    {
+      "area": "Client dialog surface",
+      "severity": "P3",
+      "detail": "dialogs=37: AntiBotToolsDialog, AuctionBoardDialog, BlacksmithDialog, CameraDialog, CashShopDialog, CastDialog, CharacterDialog, ChatDialog, CitySelectDialog, ConnectDialog, ConnectingDialog, ControlsDialog, DeathDialog, DraggableDialog, EffectDialog, GuildWarehouseDialog, HeadlessDraggableDialog, InventoryDialog, ItemDialog, MagicShopDialog, MapDialog, MinimapDialog, MobKillsDialog, MonsterDialog, NPCDialog, NpcTalkDialog, PerformanceDialog, PlayerDialog, ServerDialog, ServerMessageDialog, ShopDialog, SkillDialog, SoundDialog, SysMenuDialog, TournamentDialog, TrainingDialog, WarehouseDialog"
+    },
+    {
+      "area": "Fishing/Mining/Gathering",
+      "severity": "P1",
+      "detail": "Skills.cs bytes=3545; Gathering.cs bytes=11138; look for half-implementations in code review",
+      "samples": [
+        "Skills mentions fishing",
+        "Gathering mentions mining",
+        "has 100 skill references"
+      ]
+    },
+    {
+      "area": "Blacksmith / stones / shop",
+      "severity": "P2",
+      "detail": "ItemStoneUpgrade present=true; Shop present=true; recycle stub? true"
+    },
+    {
+      "area": "HELL mining / claim",
+      "severity": "P2",
+      "detail": "HellMiningStore present; claim gated by HELL_MINT env typically; testing week rules active until Jul 31 default"
+    },
+    {
+      "area": "NFT / cNFT mint",
+      "severity": "P2",
+      "detail": "NftDropLedger present=true; client mint UI often disabled post-test"
+    },
+    {
+      "area": "Combat PA / shield rules",
+      "severity": "P2",
+      "detail": "Combat.cs size=42198; search defense-shield / PA in recent work — verify shield PA still disabled if intended"
+    },
+    {
+      "area": "Default clothing ghost layers",
+      "severity": "P1",
+      "detail": "PlayerAppearanceManager still falls back to first catalog armor/hauberk/leggings/boots/helm when unequipped — can draw ghost gear"
+    },
+    {
+      "area": "Weapons without equippedSprite",
+      "severity": "P1",
+      "detail": "93 weapons lack both equipped sprites (share msw? or invisible)",
+      "samples": [
+        "2 Dagger(S.C)",
+        "3 Dagger(Swd.breaker)",
+        "4 Dagger+1",
+        "6 Kight Dagger",
+        "7 Dirk",
+        "9 Short Sword+1",
+        "11 Short Sword(S.C)",
+        "12 Main Gauche",
+        "13 Main Gauche+1",
+        "14 Main Gauche(S.C)",
+        "15 Gradius",
+        "16 Gradius+1",
+        "18 Long Sword+1",
+        "19 Long Sword+2",
+        "20 Excaliber",
+        "22 Long Sword(S.C)",
+        "24 Sabre+1",
+        "26 Scimitar+1",
+        "27 Scimitar+2",
+        "29 Falchion+1",
+        "30 Falchion+2",
+        "31 Esterk",
+        "32 Esterk+1",
+        "33 Esterk+2",
+        "35 Rapier+1"
+      ]
+    },
+    {
+      "area": "Shields sheet index",
+      "severity": "P3",
+      "detail": "0 shields missing startSpriteSheetIndex",
+      "samples": []
+    },
+    {
+      "area": "F5 paperdoll",
+      "severity": "P3",
+      "detail": "Composite paperdoll recently added; polish vs Olympia (animation, colors, scale) still TBD"
+    }
+  ]
+}

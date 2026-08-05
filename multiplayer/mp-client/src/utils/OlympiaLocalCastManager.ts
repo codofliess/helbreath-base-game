@@ -6,6 +6,7 @@ import type { Effect } from '../game/effects/Effect';
 import type { SoundManager } from './SoundManager';
 import type { CameraManager } from './CameraManager';
 import type { PlayerConfirmSpellTargetEvent } from '../Types';
+import { isSpellLearned } from '../ui/store/MagicShopDialog.store';
 import {
     IN_UI_CAST_EFFECT,
     IN_UI_KILL_ALL_EFFECTS,
@@ -28,6 +29,7 @@ import { MeteorStrike } from '../game/spells/MeteorStrike';
 import { EarthwormStrike } from '../game/spells/EarthwormStrike';
 import { ArmorBreak } from '../game/spells/ArmorBreak';
 import { FireWall } from '../game/spells/FireWall';
+import { FireField } from '../game/spells/FireField';
 import { PoisonCloud } from '../game/spells/PoisonCloud';
 import { IceStorm } from '../game/spells/IceStorm';
 import { IceStrike } from '../game/spells/IceStrike';
@@ -53,6 +55,7 @@ import {
     SPELL_CHILL_WIND_ID,
     SPELL_MASS_CHILL_WIND_ID,
     SPELL_POISON_CLOUD_ID,
+    SPELL_CLOUD_KILL_ID,
     SPELL_SPIKE_FIELD_ID,
     SPELL_ICE_STORM_ID,
     SPELL_ICE_STRIKE_ID,
@@ -230,6 +233,9 @@ export class OlympiaLocalCastManager {
     }
 
     private executeSpell(data: PlayerConfirmSpellTargetEvent): void {
+        if (!isSpellLearned(data.spellId)) {
+            return;
+        }
         if (isServerAuthoritativeOlympiaSpell(data.spellId)) {
             return;
         }
@@ -371,19 +377,11 @@ export class OlympiaLocalCastManager {
                 );
                 break;
             case SPELL_FIRE_FIELD_ID:
-                new FireWall(
-                    this.scene,
-                    data.originPixelX,
-                    data.originPixelY,
-                    data.targetPixelX,
-                    data.targetPixelY,
-                    {
-                        soundManager: this.soundManager,
-                        playerWorldX: playerPos?.x,
-                        playerWorldY: playerPos?.y,
-                        onEffectCreated,
-                    }
-                );
+                // Olympia field-type: 3×3 (radius 1), not wall — square fire on ground.
+                new FireField(this.scene, data.targetPixelX, data.targetPixelY, {
+                    radius: 1,
+                    onEffectCreated,
+                });
                 break;
             case SPELL_ENERGY_STRIKE_ID:
                 new EnergyStrike(
@@ -522,6 +520,14 @@ export class OlympiaLocalCastManager {
             case SPELL_POISON_CLOUD_ID:
                 new PoisonCloud(this.scene, data.targetPixelX, data.targetPixelY, {
                     duration: 30000,
+                    radius: 1, // Olympia 3×3
+                    onEffectCreated,
+                });
+                break;
+            case SPELL_CLOUD_KILL_ID:
+                new PoisonCloud(this.scene, data.targetPixelX, data.targetPixelY, {
+                    duration: 30000,
+                    radius: 2, // Olympia Cloud-Kill value12=2 → 5×5
                     onEffectCreated,
                 });
                 break;

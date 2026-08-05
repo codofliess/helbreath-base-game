@@ -18,6 +18,32 @@ public static class Casting {
     /// <summary>Client <c>EFFECT_BERSERK</c> key for <see cref="CastEffect"/>.</summary>
     private const string BerserkCastEffectKey = "berserk";
 
+    /// <summary>Client <c>EFFECT_PARALYZE</c> key for <see cref="CastEffect"/>.</summary>
+    private const string ParalyzeCastEffectKey = "paralyze";
+
+    /// <summary>Client <c>EFFECT_HOLD_TWIST</c> key for Hold Person <see cref="CastEffect"/>.</summary>
+    private const string HoldPersonCastEffectKey = "hold-twist";
+
+    /// <summary>Client heal / shield / status cast-effect keys.</summary>
+    private const string HealCastEffectKey = "heal";
+    private const string DefenseShieldCastEffectKey = "defense-shield";
+    private const string ProtectFromArrowCastEffectKey = "protection-from-arrows-buff";
+    private const string ProtectFromMagicCastEffectKey = "protection-ring";
+    private const string AbsoluteMagicProtectCastEffectKey = "absolute-magic-protection";
+    private const string PoisonCastEffectKey = "poison-debuff";
+    private const string ConfuseCastEffectKey = "unknown-debuff-1";
+    private const string ConfusionCastEffectKey = "snooze";
+    private const string IllusionCastEffectKey = "blue-apparition";
+    private const string CancellationCastEffectKey = "cancellation";
+    private const string InhibitionCastEffectKey = "inhibition-casting-1";
+    private const string SummonCastEffectKey = "blue-apparition";
+
+    /// <summary>Server catalog id for Hold Person (shorter HOLDOBJECT; same <see cref="TemporaryEffectType.Paralyze"/>).</summary>
+    private const int HoldPersonSpellId = 28;
+
+    /// <summary>Client <c>EFFECT_SNOOZE</c> key for Possession pickup VFX.</summary>
+    private const string PossessionCastEffectKey = "snooze";
+
     /// <summary>Authoritative spell-start selection: remembers the requested spell id and fans out cast-start visuals to nearby players.</summary>
     public static void HandleSpellCastStartRequest(
         GameWorldRef wr,
@@ -31,7 +57,50 @@ public static class Casting {
         if (player.IsDead) {
             return;
         }
+        if (player.HasTemporaryEffect(TemporaryEffectType.Inhibition)) {
+            return;
+        }
+        // Learned tower spell OR equipped MS22 charge wand for that spell.
+        // Arena: Inhib/Cancel/Sleep require kit credit charges.
+        if (!ChargeWand.AllowsSpellCast(player, request.SpellId)) {
+            if (player.InTournamentArena && GameWorldPlayer.IsArenaCreditGatedSpell(request.SpellId)) {
+                NetworkManager.SendToPlayer(
+                    player,
+                    NetworkManager.CreateSendMessage(
+                        "That spell is locked in Arena — buy uses with kit credits (Create/Edit Fighter catalog)."));
+            }
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            return;
+        }
         if (!spellsById.TryGetValue(request.SpellId, out var spell)) {
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            return;
+        }
+
+        // INT gate — hard fail 100% when effective INT (base + Angelic INT if equipped) is short.
+        if (spell.RequiredInt is int needInt) {
+            var haveInt = PlayerDerivedStats.EffectiveInt(player);
+            if (haveInt < needInt) {
+                PlayerDerivedStats.GetAngelicBonuses(player, out _, out _, out var angelInt, out _);
+                NetworkManager.SendToPlayer(
+                    player,
+                    NetworkManager.CreateSendMessage(
+                        $"{spell.Name}: need INT {needInt} (you have {haveInt}" +
+                        (angelInt > 0 ? $", incl. Angel INT +{angelInt}" : ", equip Angelic Pandent(INT) if needed") +
+                        "). Cast failed."));
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+                return;
+            }
+        }
+        // Keep cast speed honest vs Magic 100% / Mag ≥ 50 rule.
+        PlayerDerivedStats.ApplyAuthoritativeCastSpeed(player);
+
+        // Weapon class + shield auto-unequip (Devlin Superior/Exceptional exception).
+        if (!EquipCombatRules.PrepareForSpellCast(wr, player, out var equipErr)) {
+            if (!string.IsNullOrEmpty(equipErr)) {
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSendMessage(equipErr));
+            }
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
             return;
         }
 
@@ -39,6 +108,7 @@ public static class Casting {
             Spawn.DisableSpawnProtectionAndNotify(wr, player);
         }
 
+        AntiBotTools.NoteGameplayActivity(player);
         TemporaryEffects.BreakInvisibilityIfPresent(wr, player);
 
         player.SetRequestedSpellId(request.SpellId);
@@ -59,6 +129,8 @@ public static class Casting {
 
         player.ClearRequestedSpell();
         var cancelledMessage = NetworkManager.CreateSpellCastCancelled(player.PlayerId);
+        // Caster must receive cancel too — otherwise client cast bar can stick after right-click/ESC.
+        NetworkManager.SendToPlayer(player, cancelledMessage);
         foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
             NetworkManager.SendToPlayer(nearbyPlayer, cancelledMessage);
         }
@@ -78,6 +150,11 @@ public static class Casting {
         if (player.IsDead) {
             return;
         }
+        if (player.HasTemporaryEffect(TemporaryEffectType.Inhibition)) {
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            player.ClearRequestedSpell();
+            return;
+        }
 
         if (!player.RequestedSpellId.HasValue) {
             Console.WriteLine(
@@ -90,13 +167,44 @@ public static class Casting {
             return;
         }
 
+        if (spell.RequiredInt is int needIntResolve) {
+            var haveInt = PlayerDerivedStats.EffectiveInt(player);
+            if (haveInt < needIntResolve) {
+                NetworkManager.SendToPlayer(
+                    player,
+                    NetworkManager.CreateSendMessage(
+                        $"{spell.Name}: need INT {needIntResolve} (you have {haveInt}). Cast failed 100%."));
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+                player.ClearRequestedSpell();
+                return;
+            }
+        }
+
+        // Re-check weapon class + auto-unequip non-Devlin shield at resolve (client could re-equip mid-cast).
+        if (!EquipCombatRules.PrepareForSpellCast(wr, player, out var resolveEquipErr)) {
+            if (!string.IsNullOrEmpty(resolveEquipErr)) {
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSendMessage(resolveEquipErr));
+            }
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            player.ClearRequestedSpell();
+            return;
+        }
+
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        AntiBotTools.NoteGameplayActivity(player);
         if (player.IsSpellCastTimingViolation(nowMs, out var minIntervalMs, out var actualElapsedSinceStartMs)) {
             var actualPart = actualElapsedSinceStartMs is double elapsed
                 ? $"actualElapsedMs={elapsed:0.##}"
                 : "actualElapsedMs=n/a (no cast start)";
             Console.WriteLine(
                 $"[GameWorld:{worldIdForLogging}] Spell cast too quick: player {player.PlayerId} ({actualPart}, minIntervalMs={minIntervalMs:0.##}, pingVariance={player.PingVariance:0.##}, cappedPingVarianceMs={player.GetCappedPingVariance():0.##}, castSpeedMs={player.CastSpeedMs}).");
+            var elapsedForTelemetry = actualElapsedSinceStartMs is double e ? (long)e : -1;
+            AntiBotTools.NoteTournamentCast(
+                player,
+                worldIdForLogging,
+                wr.World.IsTournamentArena,
+                elapsedForTelemetry,
+                player.CastSpeedMs);
             NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
             player.ClearRequestedSpell();
             return;
@@ -107,7 +215,19 @@ public static class Casting {
         TryApplySpellAimAssist(wr, player, spell, request, ref targetX, ref targetY);
 
         var settings = wr.Settings;
-        if (Math.Abs(targetX - player.PosX) > settings.Radius.CameraRadiusX || Math.Abs(targetY - player.PosY) > settings.Radius.CameraRadiusY) {
+        // Utility/self spells (Recall, buffs, food, possession) must not fail the camera-range gate —
+        // after a world transfer the client often still clicks stale pixels.
+        var isSelfOrUtility =
+            spell.Recall == true ||
+            spell.PickupGroundItem == true ||
+            spell.CreateFood == true ||
+            spell.SummonCreature == true ||
+            (!spell.DamageType.HasValue &&
+             Math.Abs(targetX - player.PosX) <= 1 &&
+             Math.Abs(targetY - player.PosY) <= 1);
+        if (!isSelfOrUtility &&
+            (Math.Abs(targetX - player.PosX) > settings.Radius.CameraRadiusX ||
+             Math.Abs(targetY - player.PosY) > settings.Radius.CameraRadiusY)) {
             Console.WriteLine(
                 $"[GameWorld:{worldIdForLogging}] Spell cast target out of camera range: player {player.PlayerId} target=({targetX},{targetY}) pos=({player.PosX},{player.PosY}) cameraRadius=({settings.Radius.CameraRadiusX},{settings.Radius.CameraRadiusY}).");
             NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
@@ -115,10 +235,118 @@ public static class Casting {
             return;
         }
 
+        // CreateFood / Summon: snap to caster (utility).
+        // Recall: ONLY when aimed on self (≤1 cell) — never auto-recall from clicking anywhere.
+        if (spell.CreateFood == true || spell.SummonCreature == true) {
+            targetX = player.PosX;
+            targetY = player.PosY;
+        }
+        if (spell.Recall == true) {
+            if (Math.Abs(targetX - player.PosX) > 1 || Math.Abs(targetY - player.PosY) > 1) {
+                NetworkManager.SendToPlayer(
+                    player,
+                    NetworkManager.CreateSendMessage("Cast Recall on yourself (click your character)."));
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+                player.ClearRequestedSpell();
+                return;
+            }
+            targetX = player.PosX;
+            targetY = player.PosY;
+        }
+
+        // Olympia cast probability (Magic skill × circle table + INT/level). Fail = fizzle, no MP spent later path.
+        if (!MagicCastSuccess.RollCastSuccess(player, spell.Id, wr.World.CurrentWeather)) {
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            // Small magic skill drip even on fail (practice), like combat soft grind.
+            if (Random.Shared.Next(1, 101) <= 5) {
+                Skills.GrantSkillXp(player, Skills.Magic, 1);
+                Skills.SendSkillsState(player);
+            }
+            player.ClearRequestedSpell();
+            return;
+        }
+
+        // MP cost with Mana Save (necklace MS, etc.). Cap save 80%. Fail if insufficient MP.
+        var manaCost = PlayerDerivedStats.ComputeSpellManaCost(player, spell.Id);
+        if (!player.TrySpendMp(manaCost)) {
+            NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            player.ClearRequestedSpell();
+            return;
+        }
+        Progression.SendProgressionUpdated(player, leveledUp: false);
+
+        // Successful cast: soft train Magic skill (cap Mag*2 like Olympia).
+        if (Random.Shared.Next(1, 101) <= 12) {
+            var magCap = Math.Min(Skills.MaxLevel, Math.Max(20, PlayerDerivedStats.EffectiveMag(player) * 2));
+            var cur = player.GetSkillLevel(Skills.Magic);
+            if (cur < magCap) {
+                Skills.GrantSkillXp(player, Skills.Magic, 1);
+                Skills.SendSkillsState(player);
+            }
+        }
+
         player.ClearRequestedSpell();
         TemporaryEffects.BreakInvisibilityIfPresent(wr, player);
 
+        // Arena credit spells: burn one kit use after successful cast.
+        if (player.InTournamentArena && GameWorldPlayer.IsArenaCreditGatedSpell(spell.Id)) {
+            if (player.TryConsumeArenaPerUseSpellCharge(spell.Id)) {
+                var left = player.GetArenaPerUseSpellCharges(spell.Id);
+                NetworkManager.SendToPlayer(
+                    player,
+                    NetworkManager.CreateSendMessage(
+                        left > 0
+                            ? $"[Arena] {spell.Name}: {left} use(s) left this entry."
+                            : $"[Arena] {spell.Name}: no uses left (buy more with kit credits)."));
+            }
+        }
+
+        // MS22 charge wands: burn one charge after a successful cast of Inhib/Cancel/MIM (world only).
+        if (!player.InTournamentArena) {
+            ChargeWand.TryConsumeChargeAfterCast(player, spell.Id);
+        }
+
+        // Self-paralyze / Hold Person: any other successful magic frees the caster
+        // (Olympia: FW/FF on self or casting while locked ends HOLDOBJECT on self).
+        if (spell.Id != 27 && spell.Id != HoldPersonSpellId &&
+            player.HasTemporaryEffect(TemporaryEffectType.Paralyze)) {
+            player.RemoveTemporaryEffect(wr, TemporaryEffectType.Paralyze, broadcastExpired: true);
+        }
+
+        if (spell.PickupGroundItem == true) {
+            ResolvePossessionPickup(wr, player, targetX, targetY, spell);
+            return;
+        }
+
+        if (spell.Recall == true) {
+            // Self-only utility: land on guarded farm/city teleporter pad (never wild).
+            var castFx = NetworkManager.CreateCastDirectionalAoeSpell(
+                player.PlayerId,
+                spell.Id,
+                player.PosX,
+                player.PosY,
+                player.PosX,
+                player.PosY);
+            NetworkManager.SendToPlayer(player, castFx);
+            foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
+                NetworkManager.SendToPlayer(nearbyPlayer, castFx);
+            }
+
+            if (!Recall.TryExecute(wr, player, out _)) {
+                NetworkManager.SendToPlayer(player, NetworkManager.CreateSpellCastFailed());
+            }
+            return;
+        }
+
         if (!spell.DamageType.HasValue) {
+            // Body click on tall mobs/players maps to a cell north of feet — snap before VFX + apply.
+            if (spell.ClearTemporaryEffects == true) {
+                // Cancellation: self / friends / enemies / monsters; prefer entity under cursor, else loose self pad.
+                TemporaryEffects.TrySnapCancellationOrSelfTarget(wr, player, ref targetX, ref targetY);
+            } else {
+                TemporaryEffects.TrySnapBuffTargetToEntityBody(wr, ref targetX, ref targetY);
+            }
+
             var buffCastMessage = NetworkManager.CreateCastDirectionalAoeSpell(
                 player.PlayerId,
                 spell.Id,
@@ -131,26 +359,22 @@ public static class Casting {
                 NetworkManager.SendToPlayer(nearbyPlayer, buffCastMessage);
             }
 
-            if (spell.TemporaryEffects is not null) {
-                foreach (var row in spell.TemporaryEffects) {
-                    string? effectKey = row.Type switch {
-                        (int)TemporaryEffectType.Invisibility => InvisibilityCastEffectKey,
-                        (int)TemporaryEffectType.Berserk => BerserkCastEffectKey,
-                        _ => null,
-                    };
-                    if (effectKey is null) {
-                        continue;
-                    }
-
-                    var castEffectMessage = NetworkManager.CreateCastEffect(wr.WorldId, effectKey, targetX, targetY);
-                    NetworkManager.SendToPlayer(player, castEffectMessage);
-                    foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
-                        NetworkManager.SendToPlayer(nearbyPlayer, castEffectMessage);
-                    }
-                }
+            // Entity-targeted buffs/cancels: only draw cast VFX when someone is under the cell.
+            // Prevents PFM/DS protection-ring looping forever on empty grid clicks.
+            var needsEntity =
+                spell.ClearTemporaryEffects == true ||
+                spell.CurePoison == true ||
+                spell.HealDiceCount is not null ||
+                spell.TemporaryEffects is { Length: > 0 };
+            var showCastFx =
+                !needsEntity ||
+                spell.CreateFood == true ||
+                spell.SummonCreature == true ||
+                TemporaryEffects.HasEntityAtCellOrBody(wr, targetX, targetY);
+            if (showCastFx) {
+                FanOutBuffCastEffects(wr, player, spell, targetX, targetY);
             }
-
-            TemporaryEffects.ResolveBuffSpellAtCell(wr, player, spell, targetX, targetY);
+            TemporaryEffects.ResolveUtilityOrBuffSpellAtCell(wr, player, spell, targetX, targetY);
             return;
         }
 
@@ -213,7 +437,11 @@ public static class Casting {
                         NetworkManager.SendToPlayer(nearbyPlayer, castDirectionalAoeSpellMessage);
                     }
 
-                    if (TryCollectConeSpellDamageTargets(wr, player, targetX, targetY, spell, out var coneCasterId, out var coneTargetPlayerIds, out var coneTargetMonsterIds)) {
+                    // Olympia ICE_LINEAR (Blizzard): path multi-hit when maxHitsPerTarget is set; else unique cone cells.
+                    var coneCollected = spell.MaxHitsPerTarget is > 0
+                        ? TryCollectOlympiaLinearMultiHitTargets(wr, player.PlayerId, player.PosX, player.PosY, targetX, targetY, spell, excludeCasterPlayerId: player.PlayerId, out var coneCasterId, out var coneTargetPlayerIds, out var coneTargetMonsterIds)
+                        : TryCollectConeSpellDamageTargets(wr, player, targetX, targetY, spell, out coneCasterId, out coneTargetPlayerIds, out coneTargetMonsterIds);
+                    if (coneCollected) {
                         wr.Scheduler.SetTimeout(settings.Timings.BlizzardSpellDamageDelayMs, () => DeliverDeferredSpellDamage(wr, coneCasterId, coneTargetPlayerIds, coneTargetMonsterIds, ResolveSpellAttackType(spell), spell.Id));
                     }
 
@@ -232,8 +460,10 @@ public static class Casting {
                         NetworkManager.SendToPlayer(nearbyPlayer, linearCastMessage);
                     }
 
-                    if (TryCollectLinearAoeSpellDamageTargets(wr, player, targetX, targetY, spell, out var linearCasterId, out var linearTargetPlayerIds, out var linearTargetMonsterIds) &&
-                        spell.Duration is int linearDurationMs) {
+                    var linearCollected = spell.MaxHitsPerTarget is > 0
+                        ? TryCollectOlympiaLinearMultiHitTargets(wr, player.PlayerId, player.PosX, player.PosY, targetX, targetY, spell, excludeCasterPlayerId: player.PlayerId, out var linearCasterId, out var linearTargetPlayerIds, out var linearTargetMonsterIds)
+                        : TryCollectLinearAoeSpellDamageTargets(wr, player, targetX, targetY, spell, out linearCasterId, out linearTargetPlayerIds, out linearTargetMonsterIds);
+                    if (linearCollected && spell.Duration is int linearDurationMs) {
                         var delayMs = linearDurationMs / 2;
                         wr.Scheduler.SetTimeout(delayMs, () => DeliverDeferredSpellDamage(wr, linearCasterId, linearTargetPlayerIds, linearTargetMonsterIds, ResolveSpellAttackType(spell), spell.Id));
                     }
@@ -259,6 +489,193 @@ public static class Casting {
             case (int)DamageType.GroundEffect:
                 ApplyGroundEffectSpell(wr, player, targetX, targetY, spell);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Olympia <c>ICE_LINEAR</c> / <c>DAMAGE_LINEAR</c> multi-hit collection.
+    /// Samples path points with Bresenham steps i=2..9 (center + 4 orthogonals per sample), stops near aim,
+    /// then adds one end-area hit when <see cref="SpellConfig.AoeRadius"/> is set. Same entity can accrue
+    /// multiple hits; list is expanded with duplicates so deferred delivery re-rolls MR per hit.
+    /// Capped by <see cref="SpellConfig.MaxHitsPerTarget"/>.
+    /// </summary>
+    private static bool TryCollectOlympiaLinearMultiHitTargets(
+        GameWorldRef wr,
+        long casterPlayerIdForOut,
+        int casterX,
+        int casterY,
+        int targetX,
+        int targetY,
+        SpellConfig spell,
+        long? excludeCasterPlayerId,
+        out long casterPlayerId,
+        out List<long> targetPlayerIds,
+        out List<long> targetMonsterIds) {
+        casterPlayerId = casterPlayerIdForOut;
+        targetPlayerIds = new List<long>();
+        targetMonsterIds = new List<long>();
+        if (spell.MaxHitsPerTarget is not int maxHits || maxHits < 1) {
+            return false;
+        }
+
+        var playerHitCounts = new Dictionary<long, int>();
+        var monsterHitCounts = new Dictionary<long, int>();
+
+        void TryAccruePlayer(long playerId) {
+            if (excludeCasterPlayerId is long ex && playerId == ex) {
+                return;
+            }
+            playerHitCounts.TryGetValue(playerId, out var count);
+            if (count >= maxHits) {
+                return;
+            }
+            playerHitCounts[playerId] = count + 1;
+        }
+
+        void TryAccrueMonster(long monsterId) {
+            monsterHitCounts.TryGetValue(monsterId, out var count);
+            if (count >= maxHits) {
+                return;
+            }
+            monsterHitCounts[monsterId] = count + 1;
+        }
+
+        void AccrueEntitiesAtOrthogonalPlus(int cx, int cy, HashSet<long> seenPlayers, HashSet<long> seenMonsters) {
+            AccrueEntitiesAtCell(wr, cx, cy, seenPlayers, seenMonsters, TryAccruePlayer, TryAccrueMonster);
+            AccrueEntitiesAtCell(wr, cx - 1, cy, seenPlayers, seenMonsters, TryAccruePlayer, TryAccrueMonster);
+            AccrueEntitiesAtCell(wr, cx + 1, cy, seenPlayers, seenMonsters, TryAccruePlayer, TryAccrueMonster);
+            AccrueEntitiesAtCell(wr, cx, cy - 1, seenPlayers, seenMonsters, TryAccruePlayer, TryAccrueMonster);
+            AccrueEntitiesAtCell(wr, cx, cy + 1, seenPlayers, seenMonsters, TryAccruePlayer, TryAccrueMonster);
+        }
+
+        // Olympia: for (i = 2; i < 10; i++) GetPoint2(...). Samples must span the FULL ray
+        // (not just the first 8 tiles from caster) — otherwise long-range Blizzard only ever
+        // lands the end-area hit once. Map i=2..9 onto steps along the chebyshev distance.
+        var rayDist = Math.Max(Math.Abs(targetX - casterX), Math.Abs(targetY - casterY));
+        if (rayDist < 1) {
+            rayDist = 1;
+        }
+        for (var i = 2; i < 10; i++) {
+            // steps in 1..rayDist so late samples land near / on the aim cell.
+            var steps = Math.Max(1, (i * rayDist) / 9);
+            GetBresenhamPointAfterSteps(casterX, casterY, targetX, targetY, steps, out var sampleX, out var sampleY);
+            var seenPlayers = new HashSet<long>();
+            var seenMonsters = new HashSet<long>();
+            AccrueEntitiesAtOrthogonalPlus(sampleX, sampleY, seenPlayers, seenMonsters);
+        }
+
+        // End-area rectangle (Magic.cfg range2/3 → aoeRadius on our catalog).
+        if (spell.AoeRadius is int endRadius && endRadius >= 0) {
+            var seenPlayersEnd = new HashSet<long>();
+            var seenMonstersEnd = new HashSet<long>();
+            var minX = targetX - endRadius;
+            var maxX = targetX + endRadius;
+            var minY = targetY - endRadius;
+            var maxY = targetY + endRadius;
+            foreach (var p in wr.PlayerSpatialGrid.GetPlayersInRectangle(minX, minY, maxX, maxY, excludeDisconnected: false)) {
+                if (Location.GetDistance(p.PosX, p.PosY, targetX, targetY) > endRadius) {
+                    continue;
+                }
+                if (!seenPlayersEnd.Add(p.PlayerId)) {
+                    continue;
+                }
+                TryAccruePlayer(p.PlayerId);
+            }
+            foreach (var m in wr.MonsterSpatialGrid.GetMonstersInRectangle(minX, minY, maxX, maxY)) {
+                if (Location.GetDistance(m.PosX, m.PosY, targetX, targetY) > endRadius) {
+                    continue;
+                }
+                if (!seenMonstersEnd.Add(m.MonsterId)) {
+                    continue;
+                }
+                TryAccrueMonster(m.MonsterId);
+            }
+        }
+
+        // Olympia residual spot at exact aim cell (value4-6 dice there; we re-use area dice).
+        // Only targets standing on the aim tile get this extra hit — rewards good aim.
+        {
+            var seenPlayersAim = new HashSet<long>();
+            var seenMonstersAim = new HashSet<long>();
+            AccrueEntitiesAtCell(wr, targetX, targetY, seenPlayersAim, seenMonstersAim, TryAccruePlayer, TryAccrueMonster);
+        }
+
+        foreach (var (id, count) in playerHitCounts) {
+            for (var h = 0; h < count; h++) {
+                targetPlayerIds.Add(id);
+            }
+        }
+        foreach (var (id, count) in monsterHitCounts) {
+            for (var h = 0; h < count; h++) {
+                targetMonsterIds.Add(id);
+            }
+        }
+
+        return targetPlayerIds.Count > 0 || targetMonsterIds.Count > 0;
+    }
+
+    private static void AccrueEntitiesAtCell(
+        GameWorldRef wr,
+        int cellX,
+        int cellY,
+        HashSet<long> seenPlayers,
+        HashSet<long> seenMonsters,
+        Action<long> tryAccruePlayer,
+        Action<long> tryAccrueMonster) {
+        if (cellX < 0 || cellY < 0 ||
+            cellX >= wr.OccupancyTracker.SizeX ||
+            cellY >= wr.OccupancyTracker.SizeY) {
+            return;
+        }
+
+        foreach (var p in wr.PlayerSpatialGrid.GetPlayersInRectangle(cellX, cellY, cellX, cellY, excludeDisconnected: false)) {
+            if (p.PosX != cellX || p.PosY != cellY) {
+                continue;
+            }
+            if (!seenPlayers.Add(p.PlayerId)) {
+                continue;
+            }
+            tryAccruePlayer(p.PlayerId);
+        }
+
+        foreach (var m in wr.MonsterSpatialGrid.GetMonstersInRectangle(cellX, cellY, cellX, cellY)) {
+            if (m.PosX != cellX || m.PosY != cellY) {
+                continue;
+            }
+            if (!seenMonsters.Add(m.MonsterId)) {
+                continue;
+            }
+            tryAccrueMonster(m.MonsterId);
+        }
+    }
+
+    /// <summary>Walks <paramref name="steps"/> Bresenham iterations from start toward end (Olympia GetPoint2-style).</summary>
+    private static void GetBresenhamPointAfterSteps(int x0, int y0, int x1, int y1, int steps, out int x, out int y) {
+        x = x0;
+        y = y0;
+        if (steps <= 0 || (x0 == x1 && y0 == y1)) {
+            return;
+        }
+
+        var dx = Math.Abs(x1 - x0);
+        var dy = Math.Abs(y1 - y0);
+        var sx = x0 < x1 ? 1 : -1;
+        var sy = y0 < y1 ? 1 : -1;
+        var err = dx - dy;
+        for (var s = 0; s < steps; s++) {
+            if (x == x1 && y == y1) {
+                return;
+            }
+
+            var e2 = 2 * err;
+            if (e2 >= -dy) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 <= dx) {
+                err += dx;
+                y += sy;
+            }
         }
     }
 
@@ -321,20 +738,32 @@ public static class Casting {
         }
 
         foreach (var playerId in targetPlayerIds) {
+            if (playerId == casterPlayerId) {
+                continue;
+            }
             if (!wr.World.TryGetConnectedPlayerById(playerId, out var targetPlayer) || targetPlayer.Disconnected || targetPlayer.IsDead || targetPlayer.SpawnProtection) {
                 continue;
             }
+            if (TemporaryEffects.IsMagicBlockedByProtect(targetPlayer, spellId)) {
+                continue;
+            }
 
-            Combat.ApplyPlayerDamageToPlayer(wr, caster, targetPlayer, attackType);
-            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer);
+            Combat.ApplyPlayerSpellDamageToPlayer(wr, caster, targetPlayer, attackType, spell);
+            if (spell.ArmorLifeDecrement is int armorShred && armorShred > 0) {
+                TemporaryEffects.ApplyArmorLifeDecrement(wr, targetPlayer, armorShred);
+            }
+            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer, caster);
         }
 
         foreach (var monsterId in targetMonsterIds) {
             if (!wr.World.TryGetMonsterByMonsterId(monsterId, out var targetMonster) || targetMonster.Dead) {
                 continue;
             }
+            if (TemporaryEffects.IsMagicBlockedByProtect(targetMonster, spellId)) {
+                continue;
+            }
 
-            Combat.ApplyPlayerDamageToMonster(wr, caster, targetMonster, attackType);
+            Combat.ApplyPlayerSpellDamageToMonster(wr, caster, targetMonster, attackType, spell);
             TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetMonster);
         }
     }
@@ -356,17 +785,80 @@ public static class Casting {
                 continue;
             }
 
-            Combat.ApplyPlayerDamageToPlayer(wr, caster, targetPlayer, attackType);
-            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer);
+            if (TemporaryEffects.IsMagicBlockedByProtect(targetPlayer, spell.Id)) {
+                continue;
+            }
+
+            Combat.ApplyPlayerSpellDamageToPlayer(wr, caster, targetPlayer, attackType, spell);
+            if (spell.ArmorLifeDecrement is int armorShred && armorShred > 0) {
+                TemporaryEffects.ApplyArmorLifeDecrement(wr, targetPlayer, armorShred);
+            }
+            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer, caster);
         }
 
         foreach (var targetMonster in wr.MonsterSpatialGrid.GetNearbyMonsters(targetX, targetY)) {
             if (!IsWithinSpellDamageArea(targetMonster.PosX, targetMonster.PosY, targetX, targetY, aoeRadius)) {
                 continue;
             }
+            if (TemporaryEffects.IsMagicBlockedByProtect(targetMonster, spell.Id)) {
+                continue;
+            }
 
-            Combat.ApplyPlayerDamageToMonster(wr, caster, targetMonster, attackType);
+            Combat.ApplyPlayerSpellDamageToMonster(wr, caster, targetMonster, attackType, spell);
             TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetMonster);
+        }
+    }
+
+    /// <summary>Fans out cast-effect VFX keys for buff / utility spells to nearby players.</summary>
+    private static void FanOutBuffCastEffects(
+        GameWorldRef wr,
+        GameWorldPlayer caster,
+        SpellConfig spell,
+        int targetX,
+        int targetY) {
+        string? effectKey = null;
+        if (spell.HealDiceCount is not null) {
+            effectKey = HealCastEffectKey;
+        } else if (spell.CurePoison == true) {
+            effectKey = HealCastEffectKey;
+        } else if (spell.ClearTemporaryEffects == true) {
+            effectKey = CancellationCastEffectKey;
+        } else if (spell.SummonCreature == true) {
+            effectKey = SummonCastEffectKey;
+        } else if (spell.CreateFood == true) {
+            effectKey = null;
+        } else if (spell.TemporaryEffects is { Length: > 0 } rows) {
+            effectKey = rows[0].Type switch {
+                (int)TemporaryEffectType.Invisibility => InvisibilityCastEffectKey,
+                (int)TemporaryEffectType.Berserk => BerserkCastEffectKey,
+                (int)TemporaryEffectType.Paralyze => spell.Id == HoldPersonSpellId
+                    ? HoldPersonCastEffectKey
+                    : ParalyzeCastEffectKey,
+                (int)TemporaryEffectType.Poison => PoisonCastEffectKey,
+                (int)TemporaryEffectType.ConfuseLanguage => ConfuseCastEffectKey,
+                (int)TemporaryEffectType.Confusion => ConfusionCastEffectKey,
+                (int)TemporaryEffectType.Illusion => IllusionCastEffectKey,
+                (int)TemporaryEffectType.IllusionMovement => IllusionCastEffectKey,
+                (int)TemporaryEffectType.Inhibition => InhibitionCastEffectKey,
+                (int)TemporaryEffectType.ProtectFromArrow => ProtectFromArrowCastEffectKey,
+                (int)TemporaryEffectType.ProtectFromMagic => ProtectFromMagicCastEffectKey,
+                (int)TemporaryEffectType.DefenseShield => DefenseShieldCastEffectKey,
+                (int)TemporaryEffectType.GreatDefenseShield => DefenseShieldCastEffectKey,
+                (int)TemporaryEffectType.AbsoluteMagicProtect => AbsoluteMagicProtectCastEffectKey,
+                // Haste reuses a light recovery flash on the target cell (no dedicated sheet yet).
+                (int)TemporaryEffectType.Haste => HealCastEffectKey,
+                _ => null,
+            };
+        }
+
+        if (effectKey is null) {
+            return;
+        }
+
+        var castEffectMessage = NetworkManager.CreateCastEffect(wr.WorldId, effectKey, targetX, targetY);
+        NetworkManager.SendToPlayer(caster, castEffectMessage);
+        foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(caster.PosX, caster.PosY, caster.SessionId)) {
+            NetworkManager.SendToPlayer(nearbyPlayer, castEffectMessage);
         }
     }
 
@@ -444,6 +936,8 @@ public static class Casting {
                     continue;
                 }
 
+                // Snapshot Olympia magic damage at cast (not melee STR / caster.Damage).
+                var groundDamage = PlayerDerivedStats.RollMagicDamage(caster, spell);
                 if (!wr.GroundStateTracker.TryAddEffect(
                         spell.Id,
                         ResolveGroundEffectType(spell),
@@ -453,7 +947,7 @@ public static class Casting {
                         group,
                         tickRateMs,
                         durationMs,
-                        caster.Damage,
+                        groundDamage,
                         resolvedAttackType,
                         out var createdEffect) ||
                     createdEffect is null) {
@@ -473,7 +967,8 @@ public static class Casting {
     private static GroundEffectType ResolveGroundEffectType(SpellConfig spell) {
         return spell.Id switch {
             8 => GroundEffectType.Fire,
-            4 => GroundEffectType.Poison,
+            4 => GroundEffectType.Poison, // Poison Cloud 3×3
+            53 => GroundEffectType.Poison, // Cloud Kill 5×5 (same PCLOUD visual, larger field)
             7 => GroundEffectType.SpikeField,
             9 => GroundEffectType.IceStorm,
             _ => throw new InvalidOperationException($"Unhandled ground-effect spell id {spell.Id} ({spell.Name})."),
@@ -736,8 +1231,16 @@ public static class Casting {
             return;
         }
 
+        // Hostile status-only spells (Paralyze, etc.) — no DamageType.
+        if (!spell.DamageType.HasValue) {
+            if (Config.IsHostileDebuffSpellConfig(spell)) {
+                ApplyMonsterHostileDebuff(wr, caster, spell, targetX, targetY);
+            }
+            return;
+        }
+
         var attackType = ResolveSpellAttackType(spell);
-        switch (spell.DamageType!.Value) {
+        switch (spell.DamageType.Value) {
             case (int)DamageType.RectangleAoe: {
                     var aoeRadius = Math.Max(0, spell.AoeRadius ?? 0);
                     var castAoeSpellMessage = NetworkManager.CreateMonsterCastAoeSpell(
@@ -794,7 +1297,10 @@ public static class Casting {
                         NetworkManager.SendToPlayer(nearbyPlayer, castDirectionalAoeSpellMessage);
                     }
 
-                    if (TryCollectConeSpellDamageTargetsMonster(wr, caster, targetX, targetY, spell, out var coneTargetPlayerIds, out var coneTargetMonsterIds)) {
+                    var coneCollected = spell.MaxHitsPerTarget is > 0
+                        ? TryCollectOlympiaLinearMultiHitTargets(wr, 0, caster.PosX, caster.PosY, targetX, targetY, spell, excludeCasterPlayerId: null, out _, out var coneTargetPlayerIds, out var coneTargetMonsterIds)
+                        : TryCollectConeSpellDamageTargetsMonster(wr, caster, targetX, targetY, spell, out coneTargetPlayerIds, out coneTargetMonsterIds);
+                    if (coneCollected) {
                         wr.Scheduler.SetTimeout(settings.Timings.BlizzardSpellDamageDelayMs, () => DeliverDeferredMonsterSpellDamage(wr, caster.MonsterId, coneTargetPlayerIds, coneTargetMonsterIds, attackType, damage, spell.Id));
                     }
 
@@ -812,8 +1318,10 @@ public static class Casting {
                         NetworkManager.SendToPlayer(nearbyPlayer, linearCastMessage);
                     }
 
-                    if (TryCollectLinearAoeSpellDamageTargetsMonster(wr, caster, targetX, targetY, spell, out var linearTargetPlayerIds, out var linearTargetMonsterIds) &&
-                        spell.Duration is int linearDurationMs) {
+                    var linearCollected = spell.MaxHitsPerTarget is > 0
+                        ? TryCollectOlympiaLinearMultiHitTargets(wr, 0, caster.PosX, caster.PosY, targetX, targetY, spell, excludeCasterPlayerId: null, out _, out var linearTargetPlayerIds, out var linearTargetMonsterIds)
+                        : TryCollectLinearAoeSpellDamageTargetsMonster(wr, caster, targetX, targetY, spell, out linearTargetPlayerIds, out linearTargetMonsterIds);
+                    if (linearCollected && spell.Duration is int linearDurationMs) {
                         var delayMs = linearDurationMs / 2;
                         wr.Scheduler.SetTimeout(delayMs, () => DeliverDeferredMonsterSpellDamage(wr, caster.MonsterId, linearTargetPlayerIds, linearTargetMonsterIds, attackType, damage, spell.Id));
                     }
@@ -856,7 +1364,12 @@ public static class Casting {
             return;
         }
 
+        // Town/farm guards (Friendly) never damage players — even LB AoE splash while fighting mobs.
+        var hitPlayers = caster.Allegiance != MonsterAllegiance.Friendly;
         foreach (var playerId in targetPlayerIds) {
+            if (!hitPlayers) {
+                break;
+            }
             if (!wr.World.TryGetConnectedPlayerById(playerId, out var targetPlayer) || targetPlayer.Disconnected || targetPlayer.IsDead || targetPlayer.SpawnProtection) {
                 continue;
             }
@@ -875,6 +1388,31 @@ public static class Casting {
         }
     }
 
+    /// <summary>Monster Paralyze / hostile debuff: single-cell player target (academy elite / unicorn kit).</summary>
+    private static void ApplyMonsterHostileDebuff(
+        GameWorldRef wr,
+        GameWorldMonster caster,
+        SpellConfig spell,
+        int targetX,
+        int targetY) {
+        var castMsg = NetworkManager.CreateMonsterCastAoeSpell(caster.MonsterId, spell.Id, targetX, targetY);
+        foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(caster.PosX, caster.PosY, null, excludeDisconnected: true)) {
+            NetworkManager.SendToPlayer(nearbyPlayer, castMsg);
+        }
+
+        if (caster.Allegiance == MonsterAllegiance.Friendly) {
+            return;
+        }
+
+        foreach (var targetPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(targetX, targetY, excludeDisconnected: false)) {
+            if (targetPlayer.PosX != targetX || targetPlayer.PosY != targetY || targetPlayer.IsDead) {
+                continue;
+            }
+            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer);
+            return;
+        }
+    }
+
     private static void ApplyRectangleMonsterSpellDamage(
         GameWorldRef wr,
         GameWorldMonster caster,
@@ -884,13 +1422,16 @@ public static class Casting {
         AttackType attackType,
         int damage,
         SpellConfig spell) {
-        foreach (var targetPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(targetX, targetY, excludeDisconnected: false)) {
-            if (!IsWithinSpellDamageArea(targetPlayer.PosX, targetPlayer.PosY, targetX, targetY, aoeRadius)) {
-                continue;
-            }
+        // Friendly sentries (city/farm guards) never damage players (anti-AFK splash from LB).
+        if (caster.Allegiance != MonsterAllegiance.Friendly) {
+            foreach (var targetPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(targetX, targetY, excludeDisconnected: false)) {
+                if (!IsWithinSpellDamageArea(targetPlayer.PosX, targetPlayer.PosY, targetX, targetY, aoeRadius)) {
+                    continue;
+                }
 
-            Combat.ApplyMonsterSpellDamageToPlayer(wr, caster, targetPlayer, damage, attackType);
-            TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer);
+                Combat.ApplyMonsterSpellDamageToPlayer(wr, caster, targetPlayer, damage, attackType);
+                TemporaryEffects.ApplySpellTemporaryEffectsOnHit(wr, spell, targetPlayer);
+            }
         }
 
         foreach (var targetMonster in wr.MonsterSpatialGrid.GetNearbyMonsters(targetX, targetY)) {
@@ -976,5 +1517,33 @@ public static class Casting {
         }
 
         return true;
+    }
+
+    /// <summary>Olympia Possession: remote pickup of the top-most ground item on the target cell.</summary>
+    private static void ResolvePossessionPickup(
+        GameWorldRef wr,
+        GameWorldPlayer player,
+        int targetX,
+        int targetY,
+        SpellConfig spell) {
+        var castMessage = NetworkManager.CreateCastDirectionalAoeSpell(
+            player.PlayerId,
+            spell.Id,
+            player.PosX,
+            player.PosY,
+            targetX,
+            targetY);
+        NetworkManager.SendToPlayer(player, castMessage);
+        foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
+            NetworkManager.SendToPlayer(nearbyPlayer, castMessage);
+        }
+
+        GroundItemPickup.TryPickupTopItemAtCell(wr, player, targetX, targetY);
+
+        var effectMessage = NetworkManager.CreateCastEffect(wr.WorldId, PossessionCastEffectKey, targetX, targetY);
+        NetworkManager.SendToPlayer(player, effectMessage);
+        foreach (var nearbyPlayer in wr.PlayerSpatialGrid.GetNearbyPlayers(player.PosX, player.PosY, player.SessionId)) {
+            NetworkManager.SendToPlayer(nearbyPlayer, effectMessage);
+        }
     }
 }

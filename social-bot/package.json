@@ -1,0 +1,19 @@
+{
+  "name": "chainlord-social-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Discord FAQ/DM bot for Chain Lord — xAI Grok (cheap model)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "setup-server": "node setup-server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  }
+}

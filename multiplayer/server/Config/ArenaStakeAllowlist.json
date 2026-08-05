@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "note": "Only these assets may be used in pact-duel escrow. Ops-controlled — no free-form mints in UI.",
+  "chain": "solana",
+  "status": "coming_soon",
+  "tokens": [
+    {
+      "symbol": "USDT",
+      "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "decimals": 6,
+      "enabled": true
+    },
+    {
+      "symbol": "HELL",
+      "mint": "REPLACE_WITH_HELL_MINT",
+      "decimals": 9,
+      "enabled": false,
+      "note": "Enable when mainnet mint is final"
+    }
+  ],
+  "nftCollections": [],
+  "ui": {
+    "stakeButtonLabel": "Stake (coming soon)",
+    "rejectUnknownMintMessage": "Only whitelisted USDT / HELL / NFT collections can be staked."
+  }
+}

@@ -8,7 +8,11 @@ export class MusicManager {
     private scene: Scene;
     private currentMusic: Phaser.Sound.WebAudioSound | undefined = undefined;
     private currentMusicKey: string | undefined = undefined;
+    /** Last track requested (kept after stop so re-enable can resume). */
+    private lastRequestedFile: string | undefined = undefined;
     private musicVolume = 100; // Default volume (0-100)
+    /** SysMenu Music On/Off — when false, playMusic is a no-op and current BGM stops. */
+    private musicEnabled = true;
 
     constructor(scene: Scene) {
         this.scene = scene;
@@ -24,24 +28,51 @@ export class MusicManager {
     }
 
     /**
+     * SysMenu Music toggle. Off stops BGM immediately.
+     * On only flips the flag — caller (GameWorld) resumes map/selected track when appropriate.
+     */
+    public setMusicEnabled(enabled: boolean): void {
+        this.musicEnabled = enabled;
+        if (!enabled) {
+            this.stopPlaybackOnly();
+            console.log('[MusicManager] Music disabled');
+            return;
+        }
+        console.log('[MusicManager] Music enabled');
+    }
+
+    /** Last track requested via playMusic (survives disable for optional resume). */
+    public getLastRequestedMusic(): string | undefined {
+        return this.lastRequestedFile;
+    }
+
+    public isMusicEnabled(): boolean {
+        return this.musicEnabled;
+    }
+
+    /**
      * Plays the specified music file in a loop.
      * If the same music is already playing, continues playing without restarting.
      * If a different music is playing, stops it and starts the new one.
+     * When music is disabled, remembers the request but does not play.
      * 
      * @param fileName - The name of the .mp3 file (e.g., 'default.mp3')
      */
     public playMusic(fileName: string): void {
+        this.lastRequestedFile = fileName;
+
+        if (!this.musicEnabled) {
+            console.log(`[MusicManager] Music disabled — not playing: ${fileName}`);
+            return;
+        }
+
         // If the same music is already playing, do nothing
         if (this.currentMusicKey === fileName && this.currentMusic && this.currentMusic.isPlaying) {
             return;
         }
 
         // Stop current music if playing
-        if (this.currentMusic && this.currentMusic.isPlaying) {
-            this.currentMusic.stop();
-            this.currentMusic.destroy();
-            this.currentMusic = undefined;
-        }
+        this.stopPlaybackOnly();
 
         // Extract key from filename (remove .mp3 extension)
         const musicKey = fileName.replace('.mp3', '');
@@ -67,9 +98,26 @@ export class MusicManager {
     }
 
     /**
-     * Stops the currently playing music.
+     * Stops the currently playing music and clears the last-requested track
+     * (e.g. logout / explicit silence with no resume intent).
      */
     public stopMusic(): void {
+        this.stopPlaybackOnly();
+        this.lastRequestedFile = undefined;
+        console.log('[MusicManager] Music stopped');
+    }
+
+    /**
+     * Stops current BGM without clearing last requested track
+     * (e.g. "Play map music" Off — map load may resume later).
+     */
+    public silence(): void {
+        this.stopPlaybackOnly();
+        console.log('[MusicManager] Music silenced');
+    }
+
+    /** Stops playback without forgetting lastRequestedFile (for mute / disable). */
+    private stopPlaybackOnly(): void {
         if (this.currentMusic) {
             if (this.currentMusic.isPlaying) {
                 this.currentMusic.stop();
@@ -77,7 +125,6 @@ export class MusicManager {
             this.currentMusic.destroy();
             this.currentMusic = undefined;
             this.currentMusicKey = undefined;
-            console.log('[MusicManager] Music stopped');
         }
     }
 

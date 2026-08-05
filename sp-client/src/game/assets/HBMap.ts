@@ -55,12 +55,11 @@ export class HBMapTile {
 
         // Parse flags from byte 8
         const flags = data[8];
-        this.isMoveAllowed = (flags & 0x80) === 0;    // Bit 7: 1 = blocked, 0 = allowed
+        // Tile sprite 19 = deep water; 18 = coastal shore — not standable (matches server).
+        this.isWater = this.sprite === 19 || this.sprite === 18;
+        this.isMoveAllowed = (flags & 0x80) === 0 && !this.isWater;    // Bit 7: 1 = blocked, 0 = allowed
         this.isTeleport = (flags & 0x40) !== 0;       // Bit 6: 1 = teleport
         this.isFarmingAllowed = (flags & 0x20) !== 0; // Bit 5: 1 = blocked, 0 = allowed
-
-        // Tile sprite 19 indicates water
-        this.isWater = this.sprite === 19;
     }
 }
 
@@ -133,11 +132,14 @@ export class HBMap {
     /** Spatial grid for efficient object queries (collision detection, etc.) */
     private spatialGrid: SpatialGrid = new SpatialGrid(TILE_SIZE);
 
-    /** The tilemap object created by renderMapTiles */
-    private tilemap: Phaser.Tilemaps.Tilemap | undefined = undefined;
+    /**
+     * One Phaser tilemap per map row (Y-sorted). A single layer at a fixed depth draws all ground
+     * (including building roofs) under every entity — players then float over building roofs.
+     */
+    private rowTilemaps: Phaser.Tilemaps.Tilemap[] = [];
 
-    /** The tilemap layer created by renderMapTiles */
-    private tilemapLayer: Phaser.Tilemaps.TilemapLayer | undefined = undefined;
+    /** Row layers aligned with {@link rowTilemaps}; depth = rowY * DEPTH_MULTIPLIER - ground bias. */
+    private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = [];
 
     /** The GameAsset instances created by renderMapObjects */
     private mapObjects: GameAsset[] = [];
@@ -369,6 +371,7 @@ export class HBMap {
 
         // Step 2: Create a compact tileset texture (or reuse if already exists)
         const tilesetKey = `${this.fileName}-tileset`;
+        this.destroyRowTilemaps();
 
         // Check if tileset texture already exists
         if (!scene.textures.exists(tilesetKey)) {
@@ -495,46 +498,53 @@ export class HBMap {
             mapDataArray.push(row);
         }
 
-        // Create a tilemap from 2D array
-        const tilemap = scene.make.tilemap({
-            data: mapDataArray,
-            tileWidth: TILE_SIZE,
-            tileHeight: TILE_SIZE,
-            width: this.sizeX,
-            height: this.sizeY
-        });
+        // One layer per row so ground/building tiles Y-sort with entities (DEPTH_MULTIPLIER).
+        // Bias ground slightly under same-Y entities/map objects.
+        const groundDepthBias = 10;
+        this.rowTilemaps = [];
+        this.tilemapLayers = [];
 
-        // Add the tileset to the tilemap
-        const tileset = tilemap.addTilesetImage(
-            tilesetKey, // tileset name (can be anything, we use the texture key)
-            tilesetKey, // texture key in the cache
-            TILE_SIZE,
-            TILE_SIZE,
-            0, // margin
-            0  // spacing
+        for (let y = 0; y < this.sizeY; y++) {
+            const rowTilemap = scene.make.tilemap({
+                data: [mapDataArray[y]],
+                tileWidth: TILE_SIZE,
+                tileHeight: TILE_SIZE,
+                width: this.sizeX,
+                height: 1,
+            });
+
+            const tileset = rowTilemap.addTilesetImage(
+                tilesetKey,
+                tilesetKey,
+                TILE_SIZE,
+                TILE_SIZE,
+                0,
+                0,
+            );
+            if (!tileset) {
+                rowTilemap.destroy();
+                this.destroyRowTilemaps();
+                throw new Error(`Failed to add tileset for map row ${y}`);
+            }
+
+            const layer = rowTilemap.createLayer(0, tileset, 0, y * TILE_SIZE);
+            if (!layer) {
+                rowTilemap.destroy();
+                this.destroyRowTilemaps();
+                throw new Error(`Failed to create tilemap layer for map row ${y}`);
+            }
+
+            layer.setDepth(y * DEPTH_MULTIPLIER - groundDepthBias);
+            this.rowTilemaps.push(rowTilemap);
+            this.tilemapLayers.push(layer);
+        }
+
+        console.log(
+            `Map tiles painted: ${this.sizeX}x${this.sizeY} tiles using ${uniqueTileCount} unique tiles (${this.tilemapLayers.length} Y-sorted rows)`,
         );
 
-        if (!tileset) {
-            throw new Error('Failed to add tileset to tilemap');
-        }
-
-        // Create a layer using the tileset
-        const layer = tilemap.createLayer(0, tileset, 0, 0);
-
-        if (!layer) {
-            throw new Error('Failed to create tilemap layer');
-        }
-
-        // Set depth to lowest level to ensure tiles render behind all game objects
-        layer.setDepth(-1000);
-
-        // Store references for later destruction
-        this.tilemap = tilemap;
-        this.tilemapLayer = layer;
-
-        console.log(`Map tiles painted: ${this.sizeX}x${this.sizeY} tiles using ${uniqueTileCount} unique tiles`);
-
-        return tilemap;
+        // Callers historically expected a tilemap; return the first row map as a handle.
+        return this.rowTilemaps[0]!;
     }
 
     /**
@@ -657,12 +667,31 @@ export class HBMap {
     }
 
     /**
-     * Returns the tilemap layer for rendering.
-     * 
-     * @returns The Phaser TilemapLayer instance, or undefined if not yet rendered
+     * Returns the first row tilemap layer (legacy accessor). Prefer Y-sorted {@link tilemapLayers}.
      */
     public getTilemapLayer(): Phaser.Tilemaps.TilemapLayer | undefined {
-        return this.tilemapLayer;
+        return this.tilemapLayers[0];
+    }
+
+    /** Destroys all per-row tilemaps/layers created by {@link renderMapTiles}. */
+    private destroyRowTilemaps(): void {
+        for (const layer of this.tilemapLayers) {
+            try {
+                layer.destroy();
+            } catch {
+                /* already destroyed */
+            }
+        }
+        this.tilemapLayers = [];
+
+        for (const rowTilemap of this.rowTilemaps) {
+            try {
+                rowTilemap.destroy();
+            } catch {
+                /* already destroyed */
+            }
+        }
+        this.rowTilemaps = [];
     }
 
     /**
@@ -1174,31 +1203,13 @@ export class HBMap {
     }
 
     /**
-     * Destroys the tilemap and layer created by renderMapTiles, and removes the tileset texture
+     * Destroys the per-row tilemaps created by renderMapTiles, and removes the tileset texture
      * from the Phaser texture cache to prevent memory leaks when switching maps.
      *
      * @param scene - The Phaser scene (needed to access texture cache for cleanup)
      */
     public destroyMapTiles(scene: Phaser.Scene): void {
-        if (this.tilemapLayer) {
-            try {
-                this.tilemapLayer.destroy();
-            } catch (error) {
-                // Ignore errors if layer is already destroyed
-                console.warn('Error destroying tilemap layer (may already be destroyed):', error);
-            }
-            this.tilemapLayer = undefined;
-        }
-
-        if (this.tilemap) {
-            try {
-                this.tilemap.destroy();
-            } catch (error) {
-                // Ignore errors if tilemap is already destroyed
-                console.warn('Error destroying tilemap (may already be destroyed):', error);
-            }
-            this.tilemap = undefined;
-        }
+        this.destroyRowTilemaps();
 
         // Remove tileset texture from cache to prevent memory leak when switching maps
         const tilesetKey = `${this.fileName}-tileset`;

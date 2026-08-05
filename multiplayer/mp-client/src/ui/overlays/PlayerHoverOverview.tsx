@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@tanstack/react-store';
 import { playerHoverOverlayStore } from '../store/PlayerHoverOverlay.store';
-import { MONSTER_OVERLAY_TRANSPARENCY } from '../../Config';
+import { OLYMPIA_UI_FONT } from '../../constants/OlympiaTypography';
 import '../rpg-ui.css';
 
 /**
- * Floating label for a player under the cursor (local or remote): character name and optional spawn protection.
+ * Olympia {@code DrawObjectName} hover (Client.cpp ~29216):
+ * - Anchor = character feet (sX, sY) — not far below the body
+ * - Line 0 @ sY:     white name (+ ", Party Member" / " Berserk" / " Frozen")
+ * - Line 1 @ sY+14:  gray guild "(Name Guildmaster|Guildsman)" if any
+ * - Line 2 @ sY+14(+14): FOE-colored affiliation (Traveller / Aresden Civilian / … / Criminal)
+ * PutString2 is left-aligned from sX (feet X ≈ body center). No panel, no skull row.
  */
 export function PlayerHoverOverview() {
     const playerInfo = useStore(playerHoverOverlayStore, (state) => state.playerInfo);
@@ -31,61 +36,45 @@ export function PlayerHoverOverview() {
         return null;
     }
 
+    const { r, g, b } = playerInfo.affiliationColor;
+    /** Classic PutString2 face ~12px; next line at +14. */
+    const lineStyle: CSSProperties = {
+        fontFamily: OLYMPIA_UI_FONT,
+        fontSize: '12px',
+        fontWeight: 'bold',
+        textShadow: '1px 1px 0 #000, 0 1px 0 #000, 1px 0 0 #000',
+        whiteSpace: 'nowrap',
+        lineHeight: '14px',
+        height: '14px',
+        pointerEvents: 'none',
+        display: 'block',
+    };
+
     const dialog = (
         <div
+            className="player-hover-object-name"
             style={{
                 position: 'fixed',
                 left: `${playerInfo.overlayScreenX}px`,
                 top: `${playerInfo.overlayScreenY}px`,
-                transform: 'translateX(-50%)',
+                // Classic PutString2 starts at sX (feet X); slight left bias so text sits under body.
+                transform: 'translateX(-40%)',
                 pointerEvents: 'none',
                 zIndex: 20002,
                 width: 'fit-content',
-                minWidth: '120px',
-                opacity: MONSTER_OVERLAY_TRANSPARENCY,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 0,
+                margin: 0,
+                padding: 0,
             }}
         >
-            <div
-                style={{
-                    background: 'linear-gradient(135deg, rgba(26, 15, 10, 0.98) 0%, rgba(45, 24, 16, 0.98) 100%)',
-                    border: '2px solid var(--rpg-leather)',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(212, 175, 55, 0.15)',
-                    padding: '8px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
-                    gap: '4px',
-                }}
-            >
-                <span
-                    style={{
-                        color: 'var(--rpg-parchment)',
-                        fontSize: '13px',
-                        fontWeight: 'bold',
-                        fontFamily: 'Georgia, serif',
-                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8)',
-                        whiteSpace: 'nowrap',
-                        textAlign: 'left',
-                    }}
-                >
-                    {playerInfo.characterName}
-                </span>
-                {playerInfo.spawnProtection ? (
-                    <span
-                        style={{
-                            color: '#6bff8a',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            fontFamily: 'Georgia, serif',
-                            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9)',
-                            textAlign: 'left',
-                        }}
-                    >
-                        Spawn protection
-                    </span>
-                ) : null}
-            </div>
+            <span style={{ ...lineStyle, color: 'rgb(255, 255, 255)' }}>{playerInfo.displayName}</span>
+            {playerInfo.guildLine ? (
+                <span style={{ ...lineStyle, color: 'rgb(180, 180, 180)' }}>{playerInfo.guildLine}</span>
+            ) : null}
+            <span style={{ ...lineStyle, color: `rgb(${r}, ${g}, ${b})` }}>{playerInfo.affiliation}</span>
         </div>
     );
 

@@ -141,6 +141,6 @@ export function resolveTeleportDestination(
 }
 `;
 
-const content = header + generated.replace('// AUTO-GENERATED ZONES\n', '') + footer;
+const content = header + generated.replace(/^\/\/ AUTO-GENERATED ZONES[^\n]*\n(?:\/\/[^\n]*\n)*/, '') + footer;
 fs.writeFileSync('src/constants/MapTeleportLocs.ts', content, 'utf8');
 console.log('Wrote src/constants/MapTeleportLocs.ts');

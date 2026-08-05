@@ -158,7 +158,7 @@ export function MapDialog({
             
             <RpgCheckbox
                 id="display-grid"
-                label="Display grid"
+                label="Show Grid (Ctrl+G)"
                 checked={displayGrid}
                 onCheckedChange={setDisplayGrid}
             />

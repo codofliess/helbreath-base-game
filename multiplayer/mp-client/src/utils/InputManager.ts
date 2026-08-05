@@ -1,6 +1,7 @@
 import type { Scene } from 'phaser';
 import { EventBus } from '../game/EventBus';
 import { convertPixelPosToWorldPos } from './CoordinateUtils';
+import { pointerWorldPixel } from './PointerUtils';
 import { MOVEMENT_COMMAND_THROTTLE_MS } from '../Config';
 import { OUT_UI_MOUSE_POSITION_UPDATE } from '../constants/EventNames';
 
@@ -33,6 +34,10 @@ export class InputManager {
 
     private leftMouseDown = false;
     private rightMouseDown = false;
+    /** scene.time.now when LMB went down (for hold-vs-click attack cadence). */
+    private leftMouseDownAtMs = 0;
+    /** scene.time.now when RMB went down. */
+    private rightMouseDownAtMs = 0;
     private lastMovementCommandTime = 0;
 
     private boundPointerMove: (pointer: Phaser.Input.Pointer) => void;
@@ -89,6 +94,22 @@ export class InputManager {
         return this.rightMouseDown;
     }
 
+    /** How long LMB has been held (ms), or 0 if not down. */
+    public getLeftMouseHeldMs(): number {
+        if (!this.leftMouseDown) {
+            return 0;
+        }
+        return Math.max(0, this.scene.time.now - this.leftMouseDownAtMs);
+    }
+
+    /** How long RMB has been held (ms), or 0 if not down. */
+    public getRightMouseHeldMs(): number {
+        if (!this.rightMouseDown) {
+            return 0;
+        }
+        return Math.max(0, this.scene.time.now - this.rightMouseDownAtMs);
+    }
+
     public getActivePointer(): Phaser.Input.Pointer | undefined {
         return this.scene.input.activePointer ?? undefined;
     }
@@ -115,8 +136,10 @@ export class InputManager {
         }
 
         try {
-            const worldPixelX = pointer.worldX;
-            const worldPixelY = pointer.worldY;
+            // Same world-pixel source as clicks/loot/spells (camera matrix + zoom).
+            // Raw pointer.worldX can desync under Scale.ENVELOP and make the green grid
+            // hover cell disagree with the cell that pickup / cast actually use.
+            const { x: worldPixelX, y: worldPixelY } = pointerWorldPixel(pointer, this.scene.cameras.main);
             const worldX = convertPixelPosToWorldPos(worldPixelX);
             const worldY = convertPixelPosToWorldPos(worldPixelY);
 
@@ -145,9 +168,11 @@ export class InputManager {
         try {
             if (pointer.leftButtonDown()) {
                 this.leftMouseDown = true;
+                this.leftMouseDownAtMs = this.scene.time.now;
                 this.resetMovementThrottle();
             } else if (pointer.rightButtonDown()) {
                 this.rightMouseDown = true;
+                this.rightMouseDownAtMs = this.scene.time.now;
             }
 
             this.onPointerDown?.(pointer);

@@ -8,6 +8,7 @@ import { ENERGY_STRIKE_SOUND } from '../../constants/SoundFileNames';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import type { SoundManager } from '../../utils/SoundManager';
 import type { CameraManager } from '../../utils/CameraManager';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 
 export type EnergyStrikeProjectileConfig = {
     /** Projectile speed in pixels per second */
@@ -67,6 +68,10 @@ export class EnergyStrikeProjectile {
             spriteSheetIndex: 0,
             frameIndex: 0,
         });
+        // Keep projectile above terrain (same bias as cast explosions).
+        this.asset.setDepth(
+            convertPixelPosToWorldPos(originPixelY) * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS,
+        );
 
         this.playLaunchSound();
 
@@ -104,6 +109,9 @@ export class EnergyStrikeProjectile {
         const currentY = this.originY + (this.destPixelY - this.originY) * progress;
 
         this.asset.setPosition(currentX, currentY);
+        this.asset.setDepth(
+            convertPixelPosToWorldPos(currentY) * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS,
+        );
     }
 
     private onReachDestination(): void {

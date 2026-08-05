@@ -92,16 +92,38 @@ public sealed class GroundEffectState {
 
 /// <summary>One dropped inventory item stack entry on the map; only the newest entry on a cell is visible to clients.</summary>
 public sealed class GroundItemState {
+    /// <summary>Ground loot lifetime (monster drop or player drop) — 15 minutes.</summary>
+    public const long DefaultLifetimeMs = 15 * 60 * 1000;
+
     public int ItemId { get; }
     public long ItemUid { get; }
     public int Quantity { get; }
     public ItemEffectConfig[]? EffectOverrides { get; }
     public uint ItemAttribute { get; }
     public int ItemColor { get; }
+    public int CurLifeSpan { get; }
+    public int MaxLifeSpan { get; }
+    public int BindState { get; }
+    public string BoundGuildId { get; }
     public int PosX { get; }
     public int PosY { get; }
+    /// <summary>UTC ms when this stack was dropped (for 15-minute despawn).</summary>
+    public long DroppedAtMs { get; }
 
-    public GroundItemState(int itemId, long itemUid, int quantity, ItemEffectConfig[]? effectOverrides, int posX, int posY, uint itemAttribute = 0, int itemColor = 0) {
+    public GroundItemState(
+        int itemId,
+        long itemUid,
+        int quantity,
+        ItemEffectConfig[]? effectOverrides,
+        int posX,
+        int posY,
+        uint itemAttribute = 0,
+        int itemColor = 0,
+        int curLifeSpan = 0,
+        int maxLifeSpan = 0,
+        int bindState = 0,
+        string boundGuildId = "",
+        long droppedAtMs = 0) {
         if (quantity <= 0) {
             throw new ArgumentOutOfRangeException(nameof(quantity), "Ground item quantity must be positive.");
         }
@@ -112,14 +134,37 @@ public sealed class GroundItemState {
         EffectOverrides = CloneEffectOverrides(effectOverrides);
         ItemAttribute = itemAttribute;
         ItemColor = itemColor;
+        CurLifeSpan = curLifeSpan;
+        MaxLifeSpan = maxLifeSpan;
+        BindState = bindState;
+        BoundGuildId = boundGuildId ?? "";
         PosX = posX;
         PosY = posY;
+        DroppedAtMs = droppedAtMs > 0
+            ? droppedAtMs
+            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     public static GroundItemState FromInventoryItem(InventoryItemState item, int posX, int posY) {
         ArgumentNullException.ThrowIfNull(item);
-        return new GroundItemState(item.ItemId, item.ItemUid, item.Quantity, item.EffectOverrides, posX, posY, item.ItemAttribute, item.ItemColor);
+        return new GroundItemState(
+            item.ItemId,
+            item.ItemUid,
+            item.Quantity,
+            item.EffectOverrides,
+            posX,
+            posY,
+            item.ItemAttribute,
+            item.ItemColor,
+            item.CurLifeSpan,
+            item.MaxLifeSpan,
+            item.BindState,
+            item.BoundGuildId,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
+
+    public bool IsExpired(long nowMs) =>
+        nowMs - DroppedAtMs >= DefaultLifetimeMs;
 
     private static ItemEffectConfig[]? CloneEffectOverrides(ItemEffectConfig[]? effectOverrides) {
         if (effectOverrides is null || effectOverrides.Length == 0) {
@@ -495,6 +540,67 @@ public sealed class GroundStateTracker {
         }
 
         return stack.TryPeekNewest(out item);
+    }
+
+    /// <summary>
+    /// Removes ground loot older than <see cref="GroundItemState.DefaultLifetimeMs"/> (15 minutes).
+    /// Each entry is (previousTop, newTop) for visibility broadcast.
+    /// </summary>
+    public List<(GroundItemState? PreviousTop, GroundItemState? NewTop)> PurgeExpiredDroppedItems(long nowMs) {
+        var changes = new List<(GroundItemState? PreviousTop, GroundItemState? NewTop)>();
+        for (var index = 0; index < droppedItemsByCell.Length; index++) {
+            var stack = droppedItemsByCell[index];
+            if (stack is null || stack.Count == 0) {
+                continue;
+            }
+
+            var hadTop = stack.TryPeekNewest(out var oldTop);
+            var kept = stack.ToArray(); // chronological oldest→newest
+            var anyExpired = false;
+            foreach (var it in kept) {
+                if (it.IsExpired(nowMs)) {
+                    anyExpired = true;
+                    break;
+                }
+            }
+            if (!anyExpired) {
+                continue;
+            }
+
+            // Rebuild stack without expired rows (preserve order of survivors).
+            droppedItemsByCell[index] = null;
+            if (hadTop) {
+                activeTopGroundItemsById.Remove(oldTop!.ItemUid);
+            }
+
+            RingBuffer<GroundItemState>? newStack = null;
+            foreach (var it in kept) {
+                if (it.IsExpired(nowMs)) {
+                    continue;
+                }
+                newStack ??= new RingBuffer<GroundItemState>(maxDroppedItemsInStack);
+                newStack.Add(it, out _);
+            }
+
+            if (newStack is null || newStack.Count == 0) {
+                if (hadTop) {
+                    changes.Add((oldTop, null));
+                }
+                CleanupCellIfEmpty(index);
+                continue;
+            }
+
+            droppedItemsByCell[index] = newStack;
+            if (newStack.TryPeekNewest(out var newTop)) {
+                activeTopGroundItemsById[newTop.ItemUid] = newTop;
+                EnsureCellTracked(index, newTop.PosX, newTop.PosY);
+                if (hadTop && oldTop!.ItemUid != newTop.ItemUid) {
+                    changes.Add((oldTop, newTop));
+                }
+            }
+        }
+
+        return changes;
     }
 
     private void ScheduleNextTick(GroundEffectState effect) {

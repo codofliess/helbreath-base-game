@@ -1,4 +1,5 @@
-import { HeadlessDraggableDialog } from './HeadlessDraggableDialog';
+import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
+import { CONNECT_DIALOG_BG } from '../../constants/SpriteKeys';
 
 interface ConnectingDialogProps {
     position: { x: number; y: number };
@@ -12,26 +13,21 @@ export function ConnectingDialog({
     onBringToFront,
 }: ConnectingDialogProps) {
     return (
-        <HeadlessDraggableDialog
-            position={position}
+        <OlympiaDialogShell
             id="connecting-dialog"
+            position={position}
             zIndex={zIndex}
             onBringToFront={onBringToFront}
             onContextMenu={(e) => e.preventDefault()}
             disableDrag
+            width={280}
+            minHeight={120}
+            bgSpriteKey={CONNECT_DIALOG_BG}
+            rootClassName="connect-dialog-root connecting-dialog-root"
         >
-            <div style={{
-                color: 'var(--rpg-parchment)',
-                fontFamily: 'Georgia, serif',
-                fontSize: '16px',
-                lineHeight: '1.6',
-                textAlign: 'center',
-                padding: '16px',
-            }}>
-                <p style={{ margin: 0 }}>
-                    Connecting to server...
-                </p>
+            <div className="connecting-dialog-body">
+                <p className="connecting-dialog-text">Connecting to server...</p>
             </div>
-        </HeadlessDraggableDialog>
+        </OlympiaDialogShell>
     );
 }

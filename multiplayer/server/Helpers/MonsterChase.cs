@@ -10,6 +10,10 @@ namespace Server.Helpers;
 /// Aggro checks when a player or monster cell changes: resolves player or monster combat targets from allegiance rules while keeping
 /// existing valid targets when they still match the highest-priority available target class for that monster.
 /// </summary>
+/// <remarks>
+/// Olympia pit feel: each NPC only acquires within its own <c>chaseDistance</c> of its body (not a global pit bubble).
+/// Leaving slowly peels aggro from far NPCs first. Damage-aggro uses a longer leash (see GameWorldMonster).
+/// </remarks>
 public static class MonsterChase {
     /// <summary>After a player moved: for each monster they see, let hostile monsters prefer nearby players over monster targets.</summary>
     public static void EvaluateChaseForPlayer(GameWorldRef wr, GameWorldPlayer player) {
@@ -34,6 +38,14 @@ public static class MonsterChase {
 
             if (!CanAutoTargetPlayers(monster)) {
                 continue;
+            }
+
+            // Drop proximity target if player walked out of this NPC's acquire radius (layered de-aggro).
+            if (monster.TargetKind == GameWorldMonster.CombatTargetKind.Player &&
+                monster.TargetedPlayerId == player.PlayerId &&
+                !monster.IsOngoingChaseTargetStillValid(player)) {
+                monster.StopChasingPlayerIfTarget(player.PlayerId);
+                // fall through — may re-acquire if still in range (e.g. damage path re-applied elsewhere)
             }
 
             if (monster.TargetKind == GameWorldMonster.CombatTargetKind.Player &&
@@ -106,6 +118,10 @@ public static class MonsterChase {
     }
 
     private static bool CanAutoTargetMonsters(GameWorldMonster monster) {
+        // Gold goblin = collector only — never auto-aggro hostiles.
+        if (monster.SummonCollectorOnly) {
+            return false;
+        }
         return monster.Allegiance == MonsterAllegiance.Hostile || monster.Allegiance == MonsterAllegiance.Friendly;
     }
 
@@ -115,6 +131,11 @@ public static class MonsterChase {
         var bestDist = int.MaxValue;
         foreach (var playerId in monster.PlayersInRange) {
             if (!wr.World.TryGetConnectedPlayerById(playerId, out var player)) {
+                continue;
+            }
+
+            if (monster.Allegiance == MonsterAllegiance.Hostile &&
+                Recall.IsInGuardedTeleportSafeZone(wr.WorldId, player.PosX, player.PosY)) {
                 continue;
             }
 
@@ -145,6 +166,12 @@ public static class MonsterChase {
             return false;
         }
 
+        // Guarded farm/city TP pads: hostiles do not chase AFKs (guards/summons still fight).
+        if (monster.Allegiance == MonsterAllegiance.Hostile &&
+            Recall.IsInGuardedTeleportSafeZone(wr.WorldId, resolved.PosX, resolved.PosY)) {
+            return false;
+        }
+
         player = resolved;
         return true;
     }
@@ -160,6 +187,11 @@ public static class MonsterChase {
         }
 
         if (resolved.HasTemporaryEffect(TemporaryEffectType.Invisibility)) {
+            return false;
+        }
+
+        if (monster.Allegiance == MonsterAllegiance.Hostile &&
+            Recall.IsInGuardedTeleportSafeZone(wr.WorldId, resolved.PosX, resolved.PosY)) {
             return false;
         }
 
@@ -262,7 +294,7 @@ public static class MonsterChase {
     }
 
     private static bool IsPlayerCandidateInChaseRange(GameWorldMonster monster, GameWorldPlayer player) {
-        if (player.IsDead || player.SpawnProtection) {
+        if (player.IsDead || player.SpawnProtection || player.Disconnected) {
             return false;
         }
 
@@ -272,6 +304,11 @@ public static class MonsterChase {
 
     private static bool CanMonsterAutoTargetMonster(GameWorldMonster source, GameWorldMonster candidate) {
         if (candidate.Dead || source.MonsterId == candidate.MonsterId) {
+            return false;
+        }
+
+        // Gold goblins / protected summons: hostiles never aggro them (players only).
+        if (candidate.ImmuneToMonsterDamage && source.Allegiance != MonsterAllegiance.Friendly) {
             return false;
         }
 

@@ -4,9 +4,22 @@
 
 /**
  * Whether to generate the minimap when loading a map.
- * Set to false to skip minimap generation for faster map loading.
+ * Prefer PRE_GENERATED assets; on-demand WebGL snapshot can hang → black "Loading map...".
+ * Keep true for maps that only have ON_DEMAND_GENERATED (timeout in MapManager still applies).
  */
 export const GENERATE_MINIMAP = true;
+
+/**
+ * Player body horizontal scale vs height (height stays 1).
+ * Olympia classic FOV looks noticeably wider; ~12% stretch matches that “wide” feel without
+ * looking cartoonish. Tune after live playtest (1.0 = off, 1.08–1.15 = good range).
+ */
+export const PLAYER_BODY_SCALE_X = 1.12;
+
+/**
+ * World entities (monsters / NPCs) horizontal scale — same Olympia-wide treatment as players.
+ */
+export const WORLD_ENTITY_SCALE_X = 1.1;
 
 /**
  * When true, during minimap capture the scene (map tiles + objects)
@@ -143,7 +156,10 @@ export const LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND = true;
 export const PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE = 'player-item-appearance-pending';
 
 /**
- * Monster sprite used while a concrete monster's on-demand assets are still loading.
+ * Monster sprite shell used while a concrete monster's on-demand assets are still loading.
+ * Kept for structural spawn (states/shadow layout) only — the body is fully hidden until
+ * the real `.spr` registers (see Monster.assetsPendingLoad) so players never see the
+ * purple `ghk` ninja stand-in on every late-loading mob.
  */
 export const MONSTER_PLACEHOLDER_SPRITE = 'ghk';
 
@@ -200,9 +216,11 @@ export const MONSTER_OVERLAY_TRANSPARENCY = 0.9;
 export const MONSTER_HOVER_OVERLAY_ANCHOR_OFFSET_Y = 30;
 
 /**
- * Vertical offset in pixels below player center for remote-player hover overlay anchor.
+ * Olympia `DrawObjectName(sX, sY)` draws at the character feet pivot (same as draw pos).
+ * Extra Y after feet is 0 — name line starts at feet; guild/affiliation use +14 / +28 in the overlay.
+ * (Previously +30 from cell center, which floated the block far below the feet.)
  */
-export const PLAYER_HOVER_OVERLAY_ANCHOR_OFFSET_Y = 30;
+export const PLAYER_HOVER_OVERLAY_ANCHOR_OFFSET_Y = 0;
 
 /**
  * Interval in milliseconds for game stats and monster hover updates.
@@ -214,6 +232,30 @@ export const GAME_STATS_UPDATE_INTERVAL_MS = 10;
  * All depth offsets used with this system should be scaled by 10 (e.g. -1 → -10, +5 → +50).
  */
 export const DEPTH_MULTIPLIER = 100;
+
+/**
+ * Entities (players/mobs) sit above same-row map objects (carpets, pads, furniture).
+ * Map objects use y * DEPTH_MULTIPLIER; next row is +100, so keep bias &lt; 100.
+ * 50 = classic “+5” scaled; high enough that flat pads no longer cover feet.
+ */
+/**
+ * Was 50 → 70; 85 keeps tall mob feet above same-row pads/decals during animation frames
+ * without overtaking the next map row (+100). Paired with visual-Y depth in GameObject.
+ */
+export const ENTITY_DEPTH_BIAS = 85;
+
+/**
+ * Spell / cast VFX depth over worldY * DEPTH_MULTIPLIER.
+ * Was 70 (under next ground rows) → tall explosions looked “cut off” mid-sprite.
+ * Use multi-row lift so Bloody Shock / Energy Strike / explosions always paint above terrain.
+ * Y-sort vs far southern entities is less critical than not clipping VFX.
+ */
+export const MAGIC_VFX_DEPTH_BIAS = 900;
+
+/**
+ * Status rings / buff shadows under the body but above map objects/carpets.
+ */
+export const STATUS_FOOT_DEPTH_BIAS = 40;
 
 /**
  * Depth for effects that should render above everything else (e.g. projectiles, critical strike).

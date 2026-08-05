@@ -1,0 +1,17 @@
+{
+  "loadout": {
+    "note": "Equal-footing fallback when Arena kit missing/invalid. Prefer cast-safe weapon (Magic Wand) so mages are not stuck with Long Sword (blocks cast). Path=mage peeks still use Cap/Robe via ArenaLoadout.BuildFallbackEquippedIds.",
+    "equipped": [
+      { "any": 259 },
+      { "male": 411, "female": 412 },
+      { "male": 403, "female": 404 },
+      { "male": 419, "female": 420 },
+      { "male": 423, "female": 424 },
+      { "any": 451 }
+    ],
+    "bagItems": [
+      { "itemId": 92, "quantity": 50 },
+      { "itemId": 94, "quantity": 50 }
+    ]
+  }
+}

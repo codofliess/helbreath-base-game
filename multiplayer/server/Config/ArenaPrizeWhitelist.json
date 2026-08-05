@@ -1,0 +1,69 @@
+{
+  "_comment": "Arena prize bag allowlist — only these assets may enter a duel bolsa. No BTC/ETH.",
+  "assets": [
+    {
+      "assetId": "HELL",
+      "kind": "spl",
+      "chain": "solana",
+      "mintOrProgramId": "",
+      "originLabel": "HELL",
+      "decimals": 0,
+      "minPledge": 1,
+      "maxPledge": 100000000,
+      "enabled": true
+    },
+    {
+      "assetId": "USDC",
+      "kind": "spl",
+      "chain": "solana",
+      "mintOrProgramId": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "originLabel": "USDC",
+      "decimals": 6,
+      "minPledge": 1,
+      "maxPledge": 1000000000000,
+      "enabled": true
+    },
+    {
+      "assetId": "USDT",
+      "kind": "spl",
+      "chain": "solana",
+      "mintOrProgramId": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "originLabel": "USDT",
+      "decimals": 6,
+      "minPledge": 1,
+      "maxPledge": 1000000000000,
+      "enabled": true
+    },
+    {
+      "assetId": "SOL",
+      "kind": "native_sol",
+      "chain": "solana",
+      "mintOrProgramId": "",
+      "originLabel": "SOL",
+      "decimals": 9,
+      "minPledge": 1,
+      "maxPledge": 1000000000000,
+      "enabled": true
+    },
+    {
+      "assetId": "CNFT_DROP",
+      "kind": "cnft",
+      "chain": "solana",
+      "mintOrProgramId": "",
+      "originLabel": "Chain Lords cNFT drop",
+      "decimals": 0,
+      "minPledge": 1,
+      "maxPledge": 1,
+      "enabled": true
+    }
+  ],
+  "houseSponsor": {
+    "enabled": false,
+    "assetId": "HELL",
+    "amountPerDuel": 10000,
+    "maxTotalBudget": 0,
+    "note": "When enabled, house adds this amount into every locked prize bag (revisable)."
+  },
+  "dcGraceMinutes": 120,
+  "maxBagEdits": 5
+}

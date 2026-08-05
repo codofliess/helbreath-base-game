@@ -10,6 +10,8 @@ export interface GameWorld {
 
 interface ControlsDialogState {
     isOpen: boolean;
+    /** When true, only the title bar / expand chip is shown (GM left rail collapses). */
+    isCollapsed: boolean;
     selectedMap: string;
     gameWorlds: GameWorld[];
     isFullscreen: boolean;
@@ -19,6 +21,7 @@ interface ControlsDialogState {
 
 const initialState: ControlsDialogState = {
     isOpen: false,
+    isCollapsed: false,
     selectedMap: '',
     gameWorlds: [],
     isFullscreen: false,
@@ -52,6 +55,14 @@ export const setGameWorlds = (gameWorlds: GameWorld[]) => {
 
 export const setIsFullscreen = (isFullscreen: boolean) => {
     controlsDialogStore.setState((state) => ({ ...state, isFullscreen }));
+};
+
+export const setControlsDialogCollapsed = (isCollapsed: boolean) => {
+    controlsDialogStore.setState((state) => ({ ...state, isCollapsed }));
+};
+
+export const toggleControlsDialogCollapsed = () => {
+    controlsDialogStore.setState((state) => ({ ...state, isCollapsed: !state.isCollapsed }));
 };
 
 export const setLogoutSecondsRemaining = (seconds: number | undefined) => {

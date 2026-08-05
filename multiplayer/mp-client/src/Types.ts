@@ -49,14 +49,24 @@ export interface MonsterHoverInfo {
     hp: number;
     maxHp: number;
     allegiance: MonsterAllegiance;
+    /** True when spawn berserk visual or server Berserk buff is active — Olympia `(Berserked)` suffix. */
+    berserked: boolean;
     overlayScreenX: number;
     overlayScreenY: number;
 }
 
-/** Remote player under cursor: character name and optional spawn-protection line. */
+/** Remote/local player under cursor — Olympia DrawObjectName lines (no brown panel). */
 export interface PlayerHoverInfo {
-    characterName: string;
-    spawnProtection: boolean;
+    /** Line 1: name + optional ", Party Member" / " Berserk" / " Frozen" */
+    displayName: string;
+    /** Line 2 optional: "(GuildName Guildmaster)" / "(GuildName Guildsman)" */
+    guildLine?: string;
+    /** Line 3: Traveller / Aresden Civilian / … — FOE-colored */
+    affiliation: string;
+    /** RGB for affiliation line: enemy red, neutral blue, ally green */
+    affiliationColor: { r: number; g: number; b: number };
+    /** True when FOE &lt; 0 (opposing city) — show skull marker like Olympia PK/enemy cue. */
+    showEnemySkull: boolean;
     overlayScreenX: number;
     overlayScreenY: number;
 }
@@ -143,6 +153,26 @@ export enum TemporaryEffectType {
     Invisibility = 0,
     Chill = 1,
     Berserk = 2,
+    /** Olympia HOLDOBJECT (Hold Person / Paralyze): blocks movement. */
+    Paralyze = 3,
+    /** Olympia MAGICTYPE_POISON status DoT. */
+    Poison = 4,
+    ConfuseLanguage = 5,
+    Confusion = 6,
+    Illusion = 7,
+    IllusionMovement = 8,
+    Inhibition = 9,
+    ProtectFromArrow = 10,
+    ProtectFromMagic = 11,
+    DefenseShield = 12,
+    GreatDefenseShield = 13,
+    AbsoluteMagicProtect = 14,
+    /** Run-speed buff (Haste). Only same-city allies; never self. */
+    Haste = 15,
+    /** Sleep (server proto 16). */
+    Sleep = 16,
+    /** Cash-shop Exp Tablet underfoot aura (+200% EXP). */
+    ExpBoost = 17,
 }
 
 export interface SpellTimedEffectSpec {
@@ -266,6 +296,10 @@ export interface InitialGameWorldStateEventData {
     movementSpeedMs: number;
     runMode: boolean;
     attackMode: boolean;
+    /** Safe Attack (dock cycle / Character panel; Home is green pots). */
+    safeAttackMode?: boolean;
+    /** Local citizenship: aresden | elvine | traveler. */
+    citizenshipSide?: string;
     attackType?: number;
     allowDashAttack?: boolean;
     /** Server-defined teleport sources; overlay cells via `getTeleportSourceCellsFromLocSets`. */
@@ -328,6 +362,8 @@ export interface NetworkPlayer {
     characterName: string;
     /** Active temporary effect types (proto `TemporaryEffectType` values). */
     activeTemporaryEffects: number[];
+    /** Citizenship for hover FOE: aresden | elvine | traveler. */
+    citizenshipSide: string;
 }
 
 export interface InventorySnapshotEventData {
@@ -494,6 +530,22 @@ export interface PlayerDiedEventData {
     playerId: string;
     x: number;
     y: number;
+    /** Present when another player landed the killing blow within the attribution window. */
+    killerPlayerId?: string;
+    killerName?: string;
+}
+
+/** Self-only: open-world PvP Enemy Kill awarded (screenshot + F5 EK counter). */
+export interface EnemyKillAwardedEventData {
+    victimPlayerId: string;
+    victimName: string;
+    victimLevel: number;
+    killerLevel: number;
+    victimCityKillerRank?: number;
+    rarity: 'unspecified' | 'common' | 'rare' | 'legendary';
+    mapName: string;
+    /** Lifetime EK count after this kill (PvpAcademy). */
+    killerEkCount?: number;
 }
 
 export interface PlayerResurrectedEventData {

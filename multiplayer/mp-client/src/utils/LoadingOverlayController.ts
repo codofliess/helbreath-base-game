@@ -76,7 +76,7 @@ export class LoadingOverlayController {
             this.scene.scale.height / 2,
             'Loading map...',
             {
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'Tahoma, MS Sans Serif, Segoe UI, sans-serif',
                 fontSize: '20px',
                 color: '#f4e4c1',
                 fontStyle: 'bold',

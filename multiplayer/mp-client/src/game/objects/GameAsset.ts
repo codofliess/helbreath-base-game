@@ -137,7 +137,7 @@ export class GameAsset {
         let textureKey: string;
         let animationKey: string;
 
-        const usePendingItemPlaceholder = config.pendingLazyPlayerItemAppearance === true;
+        let usePendingItemPlaceholder = config.pendingLazyPlayerItemAppearance === true;
 
         if (config.mapObject) {
             // Map objects: Phaser texture key is the basename (e.g. `map-tile-123`), not `sprite-*`.
@@ -152,9 +152,21 @@ export class GameAsset {
             animationKey = textureKey;
         }
 
-        // Check if texture exists
+        // Check if texture exists — equipment packs may lag; prefer lazy placeholder over hard throw.
         if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
-            throw new Error(`Texture "${textureKey}" does not exist`);
+            const looksLikePlayerEquipLayer =
+                !config.mapObject &&
+                typeof config.spriteName === 'string' &&
+                !/^(wm|ww|ym|yw|bm|bw|mhr|whr|mpt|wpt)$/i.test(config.spriteName);
+            if (looksLikePlayerEquipLayer && scene.textures.exists(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE)) {
+                // Degrade to invisible pending layer instead of aborting map setup.
+                usePendingItemPlaceholder = true;
+                textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
+                animationKey = textureKey;
+                this.pendingLazyPlayerItemAppearance = true;
+            } else {
+                throw new Error(`Texture "${textureKey}" does not exist`);
+            }
         }
 
         // Check if frame index exists in texture (if frameIndex is specified)
@@ -180,8 +192,9 @@ export class GameAsset {
         // Store callback from config (not invoked during construction to avoid parent accessing this before super() returns)
         this.onAnimationFrameChangeCallback = config.onAnimationFrameChange;
 
-        // Retrieve pivot data from global registry
-        if (!usePendingItemPlaceholder) {
+        // Retrieve pivot data from global registry (ground loot skips pivots so icon centers on the cell).
+        const skipPivot = config.skipPivot === true;
+        if (!usePendingItemPlaceholder && !skipPivot) {
             const pivotData = getPivotData(scene, textureKey, config.spriteName, config.mapObject ?? false);
 
             if (config.mapObject) {
@@ -209,12 +222,22 @@ export class GameAsset {
             this.sprite = scene.add.sprite(config.x, config.y, textureKey);
         }
 
-        this.sprite.setOrigin(0, 0); // Set anchor point to top-left
+        // Characters use top-left + pivot; ground items use center origin so click/hitbox match the icon.
+        const originX = config.originX ?? 0;
+        const originY = config.originY ?? 0;
+        this.sprite.setOrigin(originX, originY);
+        if (config.scaleX !== undefined || config.scaleY !== undefined) {
+            this.sprite.setScale(config.scaleX ?? 1, config.scaleY ?? 1);
+        }
+        // NOTE: Do NOT call setSkipCull here — that API exists only on TilemapLayer, not Sprite.
+        // Calling it threw TypeError on every GameAsset (player/monsters) and aborted setupMap
+        // ("Map setup failed after load") after tiles already painted. Limb clip mid-walk is
+        // mitigated by last-good pivot retention in applyPivotOffset instead.
 
         // Must exist before applyPivotOffset (syncs overlay positions when pivots move the sprite).
         this.visualEffects = new GameAssetVisualEffect(this.scene, this.sprite, () => this.fixedFrameIndex);
 
-        if (config.frameIndex !== undefined) {
+        if (config.frameIndex !== undefined && !skipPivot) {
             this.applyPivotOffset(config.frameIndex);
         }
 
@@ -548,19 +571,42 @@ export class GameAsset {
      * 
      * @param frameIndex - The index of the frame to get pivot data for
      */
+    /** Last good pivot — missing frame metadata must not snap sprite to 0,0 offset (looks like a cut/flicker). */
+    private lastPivotX = 0;
+    private lastPivotY = 0;
+
     private applyPivotOffset(frameIndex: number): void {
         if (!this.spriteSheetPivots) {
+            this.sprite.setPosition(this.baseX + this.lastPivotX, this.baseY + this.lastPivotY);
+            this.visualEffects.syncOverlayPositionsToSprite();
+            this.updateShadowPosition();
             return;
         }
 
         // Look up pivot data by frame index
         const pivotData = this.spriteSheetPivots[frameIndex];
-        if (!pivotData) {
-            return;
+        let pivotX: number;
+        let pivotY: number;
+        if (!pivotData || pivotData.width === 0 || pivotData.height === 0) {
+            // Missing pivots used to snap to (0,0) → feet buried under southern tiles (cut legs).
+            // Prefer last good pivot; else bottom-center of the current frame (Olympia-style feet).
+            if (this.lastPivotX !== 0 || this.lastPivotY !== 0) {
+                pivotX = this.lastPivotX;
+                pivotY = this.lastPivotY;
+            } else {
+                const fw = this.sprite.frame?.width ?? 0;
+                const fh = this.sprite.frame?.height ?? 0;
+                pivotX = fw > 0 ? Math.floor(fw / 2) : 0;
+                pivotY = fh > 0 ? fh : 0;
+                this.lastPivotX = pivotX;
+                this.lastPivotY = pivotY;
+            }
+        } else {
+            pivotX = pivotData.pivotX;
+            pivotY = pivotData.pivotY;
+            this.lastPivotX = pivotX;
+            this.lastPivotY = pivotY;
         }
-
-        const pivotX = (pivotData.width !== 0 && pivotData.height !== 0) ? pivotData.pivotX : 0;
-        const pivotY = (pivotData.width !== 0 && pivotData.height !== 0) ? pivotData.pivotY : 0;
 
         // Apply pivot offset: add pivot to base position
         this.sprite.setPosition(this.baseX + pivotX, this.baseY + pivotY);
@@ -903,6 +949,7 @@ export class GameAsset {
             if (match) {
                 const spriteName = match[1];
                 const spriteSheetIndex = parseInt(match[2], 10);
+                this.spriteSheetIndex = spriteSheetIndex;
 
                 // Update pivot data for the new spritesheet
                 const pivotData = getPivotData(this.scene, '', spriteName, false);
@@ -1096,7 +1143,8 @@ export class GameAsset {
      * @param offsetY - Y offset in pixels (positive = ghost below main sprite)
      */
     public updateGhostSprite(visible: boolean, offsetX: number, offsetY: number): void {
-        if (!visible) {
+        // Dash ghost must not reveal invisible players (main sprite alpha 0).
+        if (!visible || this.sprite.alpha < 0.05) {
             if (this.ghostSprite) {
                 this.ghostSprite.setVisible(false);
             }
@@ -1116,7 +1164,7 @@ export class GameAsset {
             const safeFrame = texture.has(frameName) ? frameName : '0';
             this.ghostSprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, textureKey, safeFrame);
             this.ghostSprite.setOrigin(0, 0);
-            this.ghostSprite.setAlpha(0.4);
+            this.ghostSprite.setAlpha(0.4 * this.sprite.alpha);
             this.ghostSprite.setTint(0x666666);
             this.ghostSprite.setDepth(this.sprite.depth - 1);
             this.ghostSprite.setVisible(true);
@@ -1125,7 +1173,8 @@ export class GameAsset {
         }
         this.ghostSprite.setPosition(this.sprite.x + offsetX, this.sprite.y + offsetY);
         this.ghostSprite.setDepth(this.sprite.depth - 1);
-        this.ghostSprite.setVisible(this.sprite.visible);
+        this.ghostSprite.setAlpha(0.4 * this.sprite.alpha);
+        this.ghostSprite.setVisible(this.sprite.visible && this.sprite.alpha >= 0.05);
         this.syncGhostFrame();
     }
 
@@ -1329,9 +1378,11 @@ export class GameAsset {
 
     /**
      * Swaps placeholder texture after `loadPlayerItemAppearanceOnDemand` registers the real sheet.
+     * Always clears the pending flag so {@link playAnimationWithDirection} can bind the correct sheet
+     * even when the unequipped placeholder still held a stale `spriteSheetIndex` (e.g. shield offset > 0).
      */
     public promotePendingPlayerItemAppearance(): void {
-        if (!this.pendingLazyPlayerItemAppearance || this.spriteSheetIndex === undefined) {
+        if (!this.pendingLazyPlayerItemAppearance) {
             return;
         }
 
@@ -1342,13 +1393,13 @@ export class GameAsset {
             return;
         }
 
-        const textureKey = `sprite-${this.spriteName}-${this.spriteSheetIndex}`;
-        if (!this.scene.textures.exists(textureKey)) {
-            console.error(`[GameAsset] Missing texture after lazy item load: ${textureKey}`);
+        const textureKey = this.resolveLoadedPlayerItemTextureKey();
+        this.pendingLazyPlayerItemAppearance = false;
+
+        if (!textureKey || this.spriteSheetIndex === undefined) {
+            // Sheets are registered; state refresh will play the correct animation key next.
             return;
         }
-
-        this.pendingLazyPlayerItemAppearance = false;
 
         const pivotData = getPivotData(this.scene, textureKey, this.spriteName, false);
         if (pivotData && pivotData.spriteSheetPivots[this.spriteSheetIndex] !== undefined) {
@@ -1361,6 +1412,32 @@ export class GameAsset {
         this.sprite.setTexture(textureKey, startFrame);
         this.applyPivotOffset(startFrame);
         this.visualEffects.syncOverlayFramesAfterAnimationPlay();
+    }
+
+    /**
+     * Picks a registered `sprite-{name}-{index}` texture for promotion. Prefers the current sheet index
+     * (set on equip); otherwise scans for any loaded sheet so a stale placeholder index of 0 cannot block shields.
+     */
+    private resolveLoadedPlayerItemTextureKey(): string | undefined {
+        if (this.spriteSheetIndex !== undefined) {
+            const preferred = `sprite-${this.spriteName}-${this.spriteSheetIndex}`;
+            if (this.scene.textures.exists(preferred)) {
+                return preferred;
+            }
+        }
+        for (let sheetIndex = 0; sheetIndex < 256; sheetIndex++) {
+            const candidate = `sprite-${this.spriteName}-${sheetIndex}`;
+            if (this.scene.textures.exists(candidate)) {
+                this.spriteSheetIndex = sheetIndex;
+                return candidate;
+            }
+        }
+        return undefined;
+    }
+
+    /** Updates the sheet index used by lazy promotion before the next state animation runs. */
+    public setSpriteSheetIndex(spriteSheetIndex: number): void {
+        this.spriteSheetIndex = spriteSheetIndex;
     }
 
     /**
@@ -1384,6 +1461,23 @@ export class GameAsset {
         this.sprite.setTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 0);
         this.spriteSheetPivots = undefined;
         this.sprite.setVisible(false);
+    }
+
+    /**
+     * Clears a real weapon/shield/accessory sheet and returns to the invisible unequipped placeholder.
+     * Needed when the catalog texture is already cached — {@link retargetPlayerItemAppearanceToPending} would keep it.
+     */
+    public resetToUnequippedArmamentPlaceholder(placeholderSpriteName: string): void {
+        this.spriteName = placeholderSpriteName;
+        this.pendingLazyPlayerItemAppearance = true;
+        if (this.sprite.anims.isPlaying) {
+            this.sprite.anims.stop();
+        }
+        this.sprite.setTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 0);
+        this.spriteSheetPivots = undefined;
+        this.sprite.setVisible(false);
+        this.visualEffects.setItemEffects(undefined);
+        this.visualEffects.setVisible(false);
     }
     
     /**
@@ -1453,4 +1547,19 @@ export type GameAssetConfig = {
     effects?: Effect[];
     /** When true, use invisible placeholder until equipped item `.spr` is lazy-loaded. */
     pendingLazyPlayerItemAppearance?: boolean;
+    /**
+     * Skip Helbreath pivot offsets (ground loot icons must sit centered on the cell so
+     * pointer hitboxes match what the eye sees).
+     */
+    skipPivot?: boolean;
+    /** Sprite origin X (default 0 = top-left; ground items use 0.5). */
+    originX?: number;
+    /** Sprite origin Y (default 0 = top-left; ground items use 0.5). */
+    originY?: number;
+    /**
+     * Optional non-uniform scale (e.g. player body slightly wider for Olympia FOV feel).
+     * Applied after origin; pivots still use unscaled frame metrics.
+     */
+    scaleX?: number;
+    scaleY?: number;
 };

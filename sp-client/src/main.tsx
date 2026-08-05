@@ -22,14 +22,16 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
         return;
     }
 
-    if (e.key.startsWith('F') && e.key.length <= 3) {
-        // F11: block browser fullscreen/minimize, let Phaser handle the key
+    if (/^F([1-9]|1[0-2])$/.test(e.key)) {
+        // Always swallow the browser/OS default (F5 refresh, F11 fullscreen,
+        // F1 help, F12 devtools) while the game page is on screen.
+        e.preventDefault();
+
+        // F11: reserved for in-game use
         if (e.key === 'F11') {
-            e.preventDefault();
             return;
         }
 
-        e.preventDefault();
         e.stopImmediatePropagation();
 
         switch (e.key) {

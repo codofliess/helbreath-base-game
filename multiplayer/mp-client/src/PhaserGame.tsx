@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import StartGame from './game/main';
 import { EventBus } from './game/EventBus';
@@ -228,6 +228,12 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     {
         const onCurrentSceneReady = (scene_instance: Phaser.Scene) =>
         {
+            if (scene_instance.scene.key === 'GameWorld') {
+                document.body.classList.add('helbreath-game-active');
+            } else if (scene_instance.scene.key === 'LoginScreen') {
+                document.body.classList.remove('helbreath-game-active');
+            }
+
             if (currentActiveScene && typeof currentActiveScene === 'function')
             {
 
@@ -247,6 +253,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
         EventBus.on(CURRENT_SCENE_READY, onCurrentSceneReady);
         return () =>
         {
+            document.body.classList.remove('helbreath-game-active');
             EventBus.off(CURRENT_SCENE_READY, onCurrentSceneReady);
         }
     }, [currentActiveScene, ref]);
@@ -255,14 +262,18 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
         <div id="game-wrapper">
             <div id="game-container"></div>
             <ToastContainer
-                position="bottom-right"
+                /* Olympia: stack rises from bottom; never pass transition={undefined} (React #130). */
+                position="bottom-center"
                 autoClose={3000}
                 hideProgressBar
                 newestOnTop
                 closeOnClick
-                pauseOnHover
+                pauseOnHover={false}
+                pauseOnFocusLoss={false}
                 draggable={false}
-                className="rpg-toast-container"
+                limit={5}
+                transition={Slide}
+                className="rpg-toast-container rpg-toast-container--olympia"
                 toastClassName={(context) => `rpg-toast rpg-toast--${context?.type ?? 'default'}`}
                 progressClassName="rpg-toast-progress"
             />

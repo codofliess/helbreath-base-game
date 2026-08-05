@@ -1,0 +1,432 @@
+{
+
+  "quests": [
+
+    {
+
+      "id": "bp_enroll",
+
+      "tier": "A",
+
+      "status": "live",
+
+      "levelGuideMin": 1,
+
+      "levelGuideMax": 1,
+
+      "title": "Beginner enrollment",
+
+      "hint": "Talk to Enzu on the farm and accept beginner training. You can abandon anytime with no penalty.",
+
+      "objectiveKind": "enroll",
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_slime_5",
+
+      "tier": "A",
+
+      "status": "live",
+
+      "levelGuideMin": 1,
+
+      "levelGuideMax": 5,
+
+      "title": "Slime hunt",
+
+      "hint": "South of the farm: kill 5 Slimes, then check Quest (F5).",
+
+      "objectiveKind": "kill",
+
+      "monsterId": 1,
+
+      "required": 5
+
+    },
+
+    {
+
+      "id": "bp_dummy_3",
+
+      "tier": "A",
+
+      "status": "live",
+
+      "levelGuideMin": 5,
+
+      "levelGuideMax": 8,
+
+      "title": "Dummy barracks",
+
+      "hint": "Find the Dummy Barracks on the farm. Practice hits on 3 Training Dummies (they do not chase). Tips: Shift+F10 → Farm Barracks.",
+
+      "objectiveKind": "kill",
+
+      "monsterId": 42,
+
+      "required": 3
+
+    },
+
+    {
+
+      "id": "bp_visit_city",
+
+      "tier": "A",
+
+      "status": "live",
+
+      "levelGuideMin": 8,
+
+      "levelGuideMax": 10,
+
+      "title": "Visit your city",
+
+      "hint": "Use the farm portal into Aresden or Elvine and explore the city once.",
+
+      "objectiveKind": "visit_world",
+
+      "worldIds": ["aresden", "elvine"],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_merc_war_1",
+
+      "tier": "B",
+
+      "status": "live",
+
+      "levelGuideMin": 11,
+
+      "levelGuideMax": 14,
+
+      "title": "Mercenary warrior",
+
+      "hint": "Merc Barracks: kill 1 Mercenary Warrior. They chase like players — kite and don't tank free hits. Tips: Shift+F10 → Farm Barracks.",
+
+      "objectiveKind": "kill",
+
+      "monsterId": 62,
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_merc_mage_1",
+
+      "tier": "B",
+
+      "status": "live",
+
+      "levelGuideMin": 14,
+
+      "levelGuideMax": 17,
+
+      "title": "Mercenary mage",
+
+      "hint": "Kill 1 Mercenary Mage. They cast Chill Wind + Energy Bolt — Chill them first, then commit. Full protocol tips: Shift+F10 → Farm Barracks.",
+
+      "objectiveKind": "kill",
+
+      "monsterId": 63,
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_cc_protocol",
+
+      "tier": "B",
+
+      "status": "live",
+
+      "levelGuideMin": 17,
+
+      "levelGuideMax": 20,
+
+      "title": "Attack protocol",
+
+      "hint": "Talk to the Merc Captain (or Training → Farm Barracks) and learn the attack protocol: Chill Wind → Paralyze → PFA/DS to deny PFM (when you have those spells).",
+
+      "objectiveKind": "talk_npc",
+
+      "catalogNpcId": 13,
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_huntzone_intro",
+
+      "tier": "C",
+
+      "status": "live",
+
+      "levelGuideMin": 21,
+
+      "levelGuideMax": 25,
+
+      "title": "Huntzone intro",
+
+      "hint": "Reach a Hunt Zone (huntzone1–4) from the city dungeon or city gates. Explore the route once — mid farm comes next.",
+
+      "objectiveKind": "visit_world",
+
+      "worldIds": ["huntzone1", "huntzone2", "huntzone3", "huntzone4"],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_party_hint",
+
+      "tier": "C",
+
+      "status": "live",
+
+      "levelGuideMin": 25,
+
+      "levelGuideMax": 30,
+
+      "title": "Party awareness",
+
+      "hint": "Open F5 → Party and Create a party (or Join with a friend's code). Group hunting splits pressure on mid routes.",
+
+      "objectiveKind": "create_or_join_party",
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_potions",
+
+      "tier": "C",
+
+      "status": "live",
+
+      "levelGuideMin": 30,
+
+      "levelGuideMax": 35,
+
+      "title": "Shop potions",
+
+      "hint": "Enter the city shop (areshop / elvshop) and buy any potion from the Shop Keeper (Red/Blue/Green).",
+
+      "objectiveKind": "buy_item",
+
+      "itemIds": [91, 92, 93, 94, 95, 96],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_mid_farm",
+
+      "tier": "C",
+
+      "status": "live",
+
+      "levelGuideMin": 35,
+
+      "levelGuideMax": 40,
+
+      "title": "Mid farm",
+
+      "hint": "Kill 5 Clay Golems (city outskirts / mid routes). Stock potions first if needed.",
+
+      "objectiveKind": "kill",
+
+      "monsterId": 12,
+
+      "required": 5
+
+    },
+
+    {
+
+      "id": "bp_dungeon_gate",
+
+      "tier": "D",
+
+      "status": "live",
+
+      "levelGuideMin": 41,
+
+      "levelGuideMax": 45,
+
+      "title": "Dungeon gate",
+
+      "hint": "Enter your city dungeon once (Aresden Dungeon / Elvine Dungeon). Huntzones link through these floors.",
+
+      "objectiveKind": "visit_world",
+
+      "worldIds": ["aresdend1", "elvined1"],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_lize_drill",
+
+      "tier": "D",
+
+      "status": "live",
+
+      "levelGuideMin": 45,
+
+      "levelGuideMax": 50,
+
+      "title": "Lize drill",
+
+      "hint": "Enter the Training Arena world (training). Read Arena tips (Shift+F10): freeze → Lize → kite. Farm Barracks tips stay on the farm.",
+
+      "objectiveKind": "visit_world",
+
+      "worldIds": ["training"],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_ek_awareness",
+
+      "tier": "D",
+
+      "status": "live",
+
+      "levelGuideMin": 50,
+
+      "levelGuideMax": 55,
+
+      "title": "EK awareness",
+
+      "hint": "Enemy Kills (±10): only count if the victim is within 10 levels below you (or higher). EK ledger is not live yet — kill 10 monsters as a farm milestone while you learn the rule. See docs/EK-LEDGER.md.",
+
+      "objectiveKind": "mob_kills",
+
+      "required": 10
+
+    },
+
+    {
+
+      "id": "bp_guild_hint",
+
+      "tier": "D",
+
+      "status": "live",
+
+      "levelGuideMin": 55,
+
+      "levelGuideMax": 60,
+
+      "title": "Guild hint",
+
+      "hint": "Talk to Howard at the Guild Hall and Register guild interest. Full guild create/join comes later (Fase H).",
+
+      "objectiveKind": "talk_npc",
+
+      "catalogNpcId": 2,
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_middleland",
+
+      "tier": "E",
+
+      "status": "live",
+
+      "levelGuideMin": 61,
+
+      "levelGuideMax": 70,
+
+      "title": "Middleland",
+
+      "hint": "Visit Middleland or Promiseland once. Bring potions; open-world PvP risk is real.",
+
+      "objectiveKind": "visit_world",
+
+      "worldIds": ["middleland", "promiseland"],
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_training_preset",
+
+      "tier": "E",
+
+      "status": "live",
+
+      "levelGuideMin": 70,
+
+      "levelGuideMax": 75,
+
+      "title": "Training preset",
+
+      "hint": "Enter world training, open Training (Shift+F10) → Arena, and Apply any chase preset. Server must spawn at least one dummy.",
+
+      "objectiveKind": "apply_training_preset",
+
+      "required": 1
+
+    },
+
+    {
+
+      "id": "bp_path_complete",
+
+      "tier": "E",
+
+      "status": "live",
+
+      "levelGuideMin": 75,
+
+      "levelGuideMax": 80,
+
+      "title": "Path complete",
+
+      "hint": "Return to Enzu on the farm and talk to close the 1→80 beginner path. Abandon was always free — training stays optional.",
+
+      "objectiveKind": "talk_npc",
+
+      "catalogNpcId": 11,
+
+      "required": 1
+
+    }
+
+  ]
+
+}
+

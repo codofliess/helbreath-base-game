@@ -1,7 +1,7 @@
 import type { Scene } from 'phaser';
 import { LightningBlast } from './LightningBlast';
 import { LIGHTNING_SOUND } from '../../constants/SoundFileNames';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { TILE_SIZE } from '../assets/HBMap';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
@@ -86,7 +86,7 @@ export class LightningBolt {
 
         this.graphics = scene.add.graphics();
         const targetWorldY = convertPixelPosToWorldPos(targetPixelY);
-        this.graphics.setDepth(targetWorldY * DEPTH_MULTIPLIER + 50);
+        this.graphics.setDepth(targetWorldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
         this.playThunderSound();
         this.spawnImpactEffect();

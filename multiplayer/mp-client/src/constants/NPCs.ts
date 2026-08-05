@@ -13,6 +13,14 @@ export const NPC_SPRITE_NAMES: readonly string[] = [
     'perry',
     'devlin',
     'guard',
+    // Beginner path / farm barracks (reuse guard sheet; names from npc_directory)
+    'guard', // 11 Enzu
+    'guard', // 12 Drillmaster
+    'guard', // 13 Merc Captain
+    'gail', // 14 Cashier
+    'guard', // 15 Drill Instructor
+    'guard', // 16 Arena Master
+    'gail', // 17 Garden Warden (top-left garden quests)
 ];
 
 /**

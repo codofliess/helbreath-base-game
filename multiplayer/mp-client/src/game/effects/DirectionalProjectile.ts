@@ -1,5 +1,5 @@
 import type { Scene } from 'phaser';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { AnimationType, GameAsset } from '../objects/GameAsset';
 import { convertPixelPosToWorldPos, convertWorldPosToPixelPos, getDirectionFromScreenSector, Direction } from '../../utils/CoordinateUtils';
 import { TILE_SIZE } from '../assets/HBMap';
@@ -22,7 +22,8 @@ export type DirectionalProjectileConfig = {
 const DEFAULT_ORIGIN_OFFSET_Y = 40;
 const DEFAULT_FRAMES_PER_DIRECTION = 4;
 const DEFAULT_FRAME_RATE = 20;
-const PROJECTILE_DEPTH_OFFSET = 50;
+/** Same lift as cast VFX so magic projectiles are not clipped by ground rows. */
+const PROJECTILE_DEPTH_OFFSET = MAGIC_VFX_DEPTH_BIAS;
 
 /**
  * Base class for directional projectile spells.

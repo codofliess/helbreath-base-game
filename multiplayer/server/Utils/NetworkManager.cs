@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Mmorpg.Network;
 using Server;
+using Server.Helpers;
 using Server.World;
 using Server.World.Game;
 
@@ -48,6 +49,214 @@ public static class NetworkManager {
         };
     }
 
+    /// <summary>Incremental exp/level/rebirth update for the local player.</summary>
+    public static ServerMessage CreateProgressionUpdated(
+        long exp,
+        int level,
+        int rebirth,
+        long expForNextLevel,
+        long expForCurrentLevel,
+        bool leveledUp,
+        int luPoints,
+        int hp,
+        int maxHp,
+        int mp,
+        int maxMp,
+        int sp,
+        int maxSp,
+        int majesticPoints = 0,
+        bool levelBlocked = false,
+        int hunger = 100,
+        int superAttackLeft = 0,
+        int maxSuperAttack = 1,
+        bool superAttackArmed = false) {
+        return new ServerMessage {
+            ProgressionUpdated = new ProgressionUpdated {
+                Exp = exp,
+                Level = level,
+                Rebirth = rebirth,
+                ExpForNextLevel = expForNextLevel,
+                ExpForCurrentLevel = expForCurrentLevel,
+                LeveledUp = leveledUp,
+                LuPoints = luPoints,
+                Hp = hp,
+                MaxHp = maxHp,
+                Mp = mp,
+                MaxMp = maxMp,
+                Sp = sp,
+                MaxSp = maxSp,
+                MajesticPoints = majesticPoints,
+                LevelBlocked = levelBlocked,
+                Hunger = hunger,
+                SuperAttackLeft = superAttackLeft,
+                MaxSuperAttack = maxSuperAttack,
+                SuperAttackArmed = superAttackArmed,
+            },
+        };
+    }
+
+    /// <summary>Result of F5 Level Set attribute allocation.</summary>
+    public static ServerMessage CreateLevelUpSettingsApplied(
+        bool success,
+        string? error,
+        int level,
+        int str,
+        int vit,
+        int dex,
+        int intel,
+        int mag,
+        int chr,
+        int luPoints,
+        int hp,
+        int maxHp,
+        int mp,
+        int maxMp,
+        int sp,
+        int maxSp) {
+        var applied = new LevelUpSettingsApplied {
+            Success = success,
+            Level = level,
+            Str = str,
+            Vit = vit,
+            Dex = dex,
+            Intel = intel,
+            Mag = mag,
+            Chr = chr,
+            LuPoints = luPoints,
+            Hp = hp,
+            MaxHp = maxHp,
+            Mp = mp,
+            MaxMp = maxMp,
+            Sp = sp,
+            MaxSp = maxSp,
+        };
+        if (error is not null) {
+            applied.Error = error;
+        }
+        return new ServerMessage {
+            LevelUpSettingsApplied = applied,
+        };
+    }
+
+    /// <summary>Incremental kill-counter update after one credited monster death (includes specialty snapshot).</summary>
+    public static ServerMessage CreateMonsterKillsUpdated(
+        int monsterId,
+        string monsterName,
+        long kills,
+        long totalKills,
+        int specialtyLevel = 0,
+        int effectiveLevel = 0,
+        long nextKills = 0,
+        int stakeBonusLevels = 0,
+        string bonusSummary = "") {
+        return new ServerMessage {
+            MonsterKillsUpdated = new MonsterKillsUpdated {
+                MonsterId = monsterId,
+                MonsterName = monsterName,
+                Kills = kills,
+                TotalKills = totalKills,
+                SpecialtyLevel = specialtyLevel,
+                EffectiveLevel = effectiveLevel,
+                NextKills = nextKills,
+                StakeBonusLevels = stakeBonusLevels,
+                BonusSummary = bonusSummary ?? "",
+            },
+        };
+    }
+
+    public static ServerMessage CreateKillMilestoneClaimResult(string milestoneId, bool success, int? grantedItemId, string? error) {
+        var result = new KillMilestoneClaimResult {
+            MilestoneId = milestoneId,
+            Success = success,
+        };
+        if (grantedItemId.HasValue) {
+            result.GrantedItemId = grantedItemId.Value;
+        }
+        if (error is not null) {
+            result.Error = error;
+        }
+        return new ServerMessage {
+            KillMilestoneClaimResult = result,
+        };
+    }
+
+    /// <summary>Full beginner-path snapshot for the Quest panel.</summary>
+    public static ServerMessage CreateBeginnerPathState(BeginnerPathState state) {
+        ArgumentNullException.ThrowIfNull(state);
+        return new ServerMessage {
+            BeginnerPathState = state,
+        };
+    }
+
+    /// <summary>Full progression snapshot sent on join: exp/level/rebirth, kill counters, and milestone rows with progress.</summary>
+    public static ServerMessage CreateProgressionState(
+        GameWorldRef wr,
+        GameWorldPlayer player,
+        ProgressionConfig config,
+        IEnumerable<KillMilestoneConfig> milestones) {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(milestones);
+
+        var state = new ProgressionState {
+            Exp = player.Exp,
+            Level = player.Level,
+            Rebirth = player.Rebirth,
+            ExpForNextLevel = Helpers.Progression.GetExpForLevel(player.Level + 1, player.Rebirth),
+            ExpForCurrentLevel = Helpers.Progression.GetExpForLevel(player.Level, player.Rebirth),
+            MaxLevel = config.MaxLevel,
+            MaxRebirth = config.MaxRebirth,
+            LuPoints = Helpers.Progression.GetLuPoints(player),
+            Mp = player.Mp,
+            MaxMp = player.MaxMp,
+            Sp = player.Sp,
+            MaxSp = player.MaxSp,
+            MajesticPoints = player.MajesticPoints,
+            LevelBlocked = player.LevelBlocked,
+            // UI stake line: mining pending and/or explicit StakedHell (max).
+            StakedHell = Helpers.MobSpecialty.ResolveStakeAmount(player),
+            Hunger = player.HungerStatus,
+            EnemyKills = Helpers.PvpAcademy.GetEkCount(player),
+            SuperAttackLeft = player.SuperAttackLeft,
+            MaxSuperAttack = player.MaxSuperAttack,
+            SuperAttackArmed = player.SuperAttackArmed,
+        };
+
+        foreach (var (monsterId, kills) in player.MonsterKills) {
+            var snap = Helpers.MobSpecialty.Compute(player, monsterId);
+            state.MonsterKills.Add(new MonsterKillEntry {
+                MonsterId = monsterId,
+                MonsterName = wr.MonstersById.TryGetValue(monsterId, out var monsterConfig) ? monsterConfig.Name : $"Monster #{monsterId}",
+                Kills = kills,
+                SpecialtyLevel = snap.SpecialtyLevel,
+                EffectiveLevel = snap.EffectiveLevel,
+                NextKills = snap.NextKills,
+                StakeBonusLevels = snap.StakeBonusLevels,
+                BonusSummary = snap.BonusSummary,
+            });
+        }
+
+        foreach (var milestone in milestones) {
+            var entry = new KillMilestoneEntry {
+                MilestoneId = milestone.Id,
+                Kind = milestone.Kind,
+                Required = milestone.Required,
+                Progress = Helpers.Progression.GetMilestoneProgress(player, milestone),
+                Claimed = player.HasClaimedMilestone(milestone.Id),
+            };
+            if (milestone.MonsterId is int monsterId2) {
+                entry.MonsterId = monsterId2;
+                entry.MonsterName = wr.MonstersById.TryGetValue(monsterId2, out var mc) ? mc.Name : $"Monster #{monsterId2}";
+            }
+            entry.RewardItemIds.AddRange(milestone.RewardItemIds);
+            state.Milestones.Add(entry);
+        }
+
+        return new ServerMessage {
+            ProgressionState = state,
+        };
+    }
+
     /// <summary>Spells, item directory, and session-scoped player tunables; spells omitted on some world transfers, item directory always populated.</summary>
     public static ServerMessage CreateInitialState(
         IEnumerable<SpellConfig> spells,
@@ -76,7 +285,20 @@ public static class NetworkManager {
         PlayerSkinColor skinColor,
         int hairStyleIndex,
         int underwearColorIndex,
-        IEnumerable<NpcConfig> npcDirectory) {
+        IEnumerable<NpcConfig> npcDirectory,
+        int str,
+        int vit,
+        int dex,
+        int intel,
+        int mag,
+        int chr,
+        int luPoints,
+        int mp,
+        int maxMp,
+        int sp,
+        int maxSp,
+        bool safeAttackMode = false,
+        string citizenshipSide = "") {
         ArgumentNullException.ThrowIfNull(spells);
         ArgumentNullException.ThrowIfNull(itemsDirectory);
         ArgumentNullException.ThrowIfNull(bagItems);
@@ -106,6 +328,19 @@ public static class NetworkManager {
             SkinColor = skinColor,
             HairStyleIndex = hairStyleIndex,
             UnderwearColorIndex = underwearColorIndex,
+            Str = str,
+            Vit = vit,
+            Dex = dex,
+            Intel = intel,
+            Mag = mag,
+            Chr = chr,
+            LuPoints = luPoints,
+            Mp = mp,
+            MaxMp = maxMp,
+            Sp = sp,
+            MaxSp = maxSp,
+            SafeAttackMode = safeAttackMode,
+            CitizenshipSide = string.IsNullOrWhiteSpace(citizenshipSide) ? "traveler" : citizenshipSide.Trim().ToLowerInvariant(),
         };
         foreach (var spell in spells) {
             var entry = new SpellEntry {
@@ -308,6 +543,7 @@ public static class NetworkManager {
         snapshot.CharacterName = p.CharacterName;
         snapshot.AttackSpeedMs = p.AttackSpeedMs;
         snapshot.CastSpeedMs = p.CastSpeedMs;
+        snapshot.CitizenshipSide = string.IsNullOrWhiteSpace(p.CitizenshipSide) ? "traveler" : p.CitizenshipSide.Trim().ToLowerInvariant();
         p.FillActiveTemporaryEffects(snapshot);
         return snapshot;
     }
@@ -408,6 +644,28 @@ public static class NetworkManager {
         if (item.ItemColor != 0) {
             entry.ItemColor = item.ItemColor;
         }
+        if (item.MaxLifeSpan > 1) {
+            entry.CurLifeSpan = item.CurLifeSpan;
+            entry.MaxLifeSpan = item.MaxLifeSpan;
+        }
+        if (item.BindState != 0) {
+            entry.BindState = item.BindState;
+        }
+        if (!string.IsNullOrEmpty(item.BoundGuildId)) {
+            entry.BoundGuildId = item.BoundGuildId;
+        }
+        if (item.CicLevel > 0) {
+            entry.CicLevel = item.CicLevel;
+        }
+        if (item.CicStatKind > 0) {
+            entry.CicStatKind = item.CicStatKind;
+        }
+        if (item.CicStatValue > 0) {
+            entry.CicStatValue = item.CicStatValue;
+        }
+        if (item.SiphonLevel > 0) {
+            entry.SiphonLevel = item.SiphonLevel;
+        }
         return entry;
     }
 
@@ -434,6 +692,10 @@ public static class NetworkManager {
         }
         if (item.ItemColor != 0) {
             entry.ItemColor = item.ItemColor;
+        }
+        if (item.MaxLifeSpan > 1) {
+            entry.CurLifeSpan = item.CurLifeSpan;
+            entry.MaxLifeSpan = item.MaxLifeSpan;
         }
         return entry;
     }
@@ -1117,14 +1379,45 @@ public static class NetworkManager {
         };
     }
 
-    public static ServerMessage CreatePlayerDied(long playerId, int x, int y) {
-        return new ServerMessage {
-            PlayerDied = new PlayerDied {
-                PlayerId = playerId,
-                X = x,
-                Y = y,
-            },
+    public static ServerMessage CreatePlayerDied(long playerId, int x, int y, long? killerPlayerId = null, string? killerName = null) {
+        var died = new PlayerDied {
+            PlayerId = playerId,
+            X = x,
+            Y = y,
         };
+        if (killerPlayerId.HasValue) {
+            died.KillerPlayerId = killerPlayerId.Value;
+        }
+        if (!string.IsNullOrEmpty(killerName)) {
+            died.KillerName = killerName;
+        }
+        return new ServerMessage { PlayerDied = died };
+    }
+
+
+    /// <summary>Self-only to the killer: open-world eligible Enemy Kill (triggers client auto-screenshot).</summary>
+    public static ServerMessage CreateEnemyKillAwarded(
+        long victimPlayerId,
+        string victimName,
+        int victimLevel,
+        int killerLevel,
+        int? victimCityKillerRank,
+        EkScreenshotRarity rarity,
+        string mapName,
+        int killerEkCount = 0) {
+        var awarded = new EnemyKillAwarded {
+            VictimPlayerId = victimPlayerId,
+            VictimName = victimName ?? string.Empty,
+            VictimLevel = victimLevel,
+            KillerLevel = killerLevel,
+            Rarity = rarity,
+            MapName = mapName ?? string.Empty,
+            KillerEkCount = killerEkCount,
+        };
+        if (victimCityKillerRank.HasValue) {
+            awarded.VictimCityKillerRank = victimCityKillerRank.Value;
+        }
+        return new ServerMessage { EnemyKillAwarded = awarded };
     }
 
     public static ServerMessage CreatePlayerResurrected(long playerId, int x, int y, int hp, int maxHp) {
@@ -1195,6 +1488,14 @@ public static class NetworkManager {
             PlayerAttackModeChanged = new PlayerAttackModeChanged {
                 PlayerId = playerId,
                 AttackMode = attackMode,
+            },
+        };
+    }
+
+    public static ServerMessage CreatePlayerSafeAttackModeChanged(bool safeAttackMode) {
+        return new ServerMessage {
+            PlayerSafeAttackModeChanged = new PlayerSafeAttackModeChanged {
+                SafeAttackMode = safeAttackMode,
             },
         };
     }
@@ -1333,6 +1634,140 @@ public static class NetworkManager {
         };
     }
 
+    public static ServerMessage CreateBuyShopItemResult(bool ok, string message) {
+        return new ServerMessage {
+            BuyShopItemResult = new BuyShopItemResult {
+                Ok = ok,
+                Message = message ?? string.Empty,
+            },
+        };
+    }
+
+    public static ServerMessage CreateSellBagItemResult(
+            bool ok,
+            string message,
+            int? goldGained = null,
+            long? itemUid = null) {
+        var result = new SellBagItemResult {
+            Ok = ok,
+            Message = message ?? string.Empty,
+        };
+        if (goldGained.HasValue) {
+            result.GoldGained = goldGained.Value;
+        }
+        if (itemUid.HasValue) {
+            result.ItemUid = itemUid.Value;
+        }
+        return new ServerMessage { SellBagItemResult = result };
+    }
+
+    public static ServerMessage CreateRepairItemResult(
+            bool ok,
+            string message,
+            long? itemUid = null,
+            int? curLifeSpan = null,
+            int? maxLifeSpan = null,
+            int? pricePaid = null) {
+        var result = new RepairItemResult {
+            Ok = ok,
+            Message = message ?? string.Empty,
+        };
+        if (itemUid.HasValue) {
+            result.ItemUid = itemUid.Value;
+        }
+        if (curLifeSpan.HasValue) {
+            result.CurLifeSpan = curLifeSpan.Value;
+        }
+        if (maxLifeSpan.HasValue) {
+            result.MaxLifeSpan = maxLifeSpan.Value;
+        }
+        if (pricePaid.HasValue) {
+            result.PricePaid = pricePaid.Value;
+        }
+        return new ServerMessage { RepairItemResult = result };
+    }
+
+    public static ServerMessage CreateItemLifeSpanUpdated(long itemUid, int curLifeSpan, int maxLifeSpan) {
+        return new ServerMessage {
+            ItemLifeSpanUpdated = new ItemLifeSpanUpdated {
+                ItemUid = itemUid,
+                CurLifeSpan = curLifeSpan,
+                MaxLifeSpan = maxLifeSpan,
+            },
+        };
+    }
+
+    /// <summary>Training Arena ApplyPreset result for the requesting player.</summary>
+    public static ServerMessage CreateTrainingPresetApplied(bool ok, string message, string presetId, int spawnedCount) {
+        return new ServerMessage {
+            TrainingPresetApplied = new TrainingPresetApplied {
+                Ok = ok,
+                Message = message ?? string.Empty,
+                PresetId = presetId ?? string.Empty,
+                SpawnedCount = spawnedCount,
+            },
+        };
+    }
+
+    /// <summary>Minimal party membership snapshot for the player (and members on change).</summary>
+    public static ServerMessage CreatePartyState(PartyState state) {
+        ArgumentNullException.ThrowIfNull(state);
+        return new ServerMessage { PartyState = state };
+    }
+
+    public static ServerMessage CreateWarehouseState(GameWorldPlayer player, int maxSlots, string message) {
+        ArgumentNullException.ThrowIfNull(player);
+        var state = new WarehouseState {
+            MaxSlots = maxSlots,
+            Message = message ?? string.Empty,
+        };
+        foreach (var item in player.WarehouseItems) {
+            state.Items.Add(ToInventoryItemEntry(item));
+        }
+        return new ServerMessage { WarehouseState = state };
+    }
+
+    public static ServerMessage CreateWarehouseMutationResult(bool ok, string message) {
+        return new ServerMessage {
+            WarehouseMutationResult = new WarehouseMutationResult {
+                Ok = ok,
+                Message = message ?? string.Empty,
+            },
+        };
+    }
+
+    /// <summary>Howard / Kennedy / Gail / Perry desk reply with role-specific snapshot fields.</summary>
+    public static ServerMessage CreateCityNpcServiceResult(
+            bool ok,
+            string message,
+            string role,
+            string npcName,
+            bool guildInterestRegistered,
+            string cityServicesSummary,
+            string citizenshipSide,
+            int hp,
+            int maxHp,
+            int goldSpent,
+            string crusadeStatus,
+            bool blessed) {
+        return new ServerMessage {
+            CityNpcServiceResult = new CityNpcServiceResult {
+                Ok = ok,
+                Message = message ?? string.Empty,
+                Role = role ?? string.Empty,
+                NpcName = npcName ?? string.Empty,
+                GuildInterestRegistered = guildInterestRegistered,
+                CityServicesSummary = cityServicesSummary ?? string.Empty,
+                CitizenshipSide = citizenshipSide ?? string.Empty,
+                Hp = hp,
+                MaxHp = maxHp,
+                GoldSpent = goldSpent,
+                CrusadeStatus = crusadeStatus ?? string.Empty,
+                Blessed = blessed,
+            },
+        };
+    }
+
     public static ServerMessage CreateSendMessage(string message) {
         return new ServerMessage {
             SendMessage = new SendMessage {
@@ -1341,13 +1776,28 @@ public static class NetworkManager {
         };
     }
 
-    public static ServerMessage CreateChatMessageReceived(string senderCharacterName, long timestampMs, string message) {
+    public static ServerMessage CreateChatMessageReceived(
+        string senderCharacterName,
+        long timestampMs,
+        string message,
+        string? sourceLanguageTag = null,
+        ChatChannel channel = ChatChannel.Global,
+        string? whisperTargetCharacterName = null) {
+        var payload = new ChatMessageReceived {
+            SenderCharacterName = senderCharacterName,
+            TimestampMs = timestampMs,
+            Message = message,
+            Channel = channel,
+        };
+        if (!string.IsNullOrWhiteSpace(sourceLanguageTag)) {
+            payload.SourceLanguageTag = sourceLanguageTag.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(whisperTargetCharacterName)) {
+            payload.WhisperTargetCharacterName = whisperTargetCharacterName.Trim();
+        }
+
         return new ServerMessage {
-            ChatMessageReceived = new ChatMessageReceived {
-                SenderCharacterName = senderCharacterName,
-                TimestampMs = timestampMs,
-                Message = message,
-            },
+            ChatMessageReceived = payload,
         };
     }
 
@@ -1357,6 +1807,86 @@ public static class NetworkManager {
                 DurationSeconds = durationSeconds,
             },
         };
+    }
+
+    public static ServerMessage CreateAuctionBoardSnapshot(
+        IReadOnlyList<AuctionListingRecord> listings,
+        string message,
+        int myDebtGold,
+        long myDebtDueMs,
+        bool myTradeBlocked,
+        string settlementNote) {
+        var snapshot = new AuctionBoardSnapshot {
+            Message = message ?? string.Empty,
+            MyDebtGold = myDebtGold,
+            MyDebtDueMs = myDebtDueMs,
+            MyTradeBlocked = myTradeBlocked,
+            SettlementNote = settlementNote ?? string.Empty,
+        };
+        foreach (var listing in listings) {
+            snapshot.Listings.Add(ToProtoListing(listing));
+        }
+        return new ServerMessage { AuctionBoardSnapshot = snapshot };
+    }
+
+    public static ServerMessage CreateAuctionBoardActionResult(
+        bool ok,
+        string message,
+        AuctionListingRecord? listing,
+        int myDebtGold,
+        long myDebtDueMs,
+        bool myTradeBlocked) {
+        var result = new AuctionBoardActionResult {
+            Ok = ok,
+            Message = message ?? string.Empty,
+            MyDebtGold = myDebtGold,
+            MyDebtDueMs = myDebtDueMs,
+            MyTradeBlocked = myTradeBlocked,
+        };
+        if (listing is not null) {
+            result.Listing = ToProtoListing(listing);
+        }
+        return new ServerMessage { AuctionBoardActionResult = result };
+    }
+
+    static AuctionListing ToProtoListing(AuctionListingRecord listing) {
+        var proto = new AuctionListing {
+            ListingId = listing.ListingId ?? string.Empty,
+            SellerWallet = listing.SellerWallet ?? string.Empty,
+            SellerName = listing.SellerName ?? string.Empty,
+            SellerCity = listing.SellerCity ?? string.Empty,
+            SellerGuildId = listing.SellerGuildId ?? string.Empty,
+            Mode = listing.Mode == AuctionListingModeKind.Time
+                ? AuctionListingMode.Time
+                : AuctionListingMode.Limit,
+            ItemId = listing.ItemId,
+            ItemUid = listing.ItemUid,
+            Quantity = listing.Quantity,
+            ItemAttribute = listing.ItemAttribute,
+            ItemColor = listing.ItemColor,
+            CurLifeSpan = listing.CurLifeSpan,
+            MaxLifeSpan = listing.MaxLifeSpan,
+            ListPriceGold = listing.ListPriceGold,
+            MinBidGold = listing.MinBidGold,
+            CurrentBidGold = listing.CurrentBidGold,
+            CurrentBidderName = listing.CurrentBidderName ?? string.Empty,
+            CreatedAtMs = listing.CreatedAtMs,
+            ExpiresAtMs = listing.ExpiresAtMs,
+            Status = listing.Status ?? string.Empty,
+            ItemName = listing.ItemName ?? string.Empty,
+            Access = new AuctionAccessRules {
+                OnlyOwnCity = listing.OnlyOwnCity,
+                OnlyOwnGuild = listing.OnlyOwnGuild,
+                RequireFullLevelAndRep100 = listing.RequireFullLevelAndRep100,
+            },
+        };
+        if (listing.BlockedGuildIds is not null) {
+            proto.Access.BlockedGuildIds.AddRange(listing.BlockedGuildIds);
+        }
+        if (listing.BlockedPlayerNames is not null) {
+            proto.Access.BlockedPlayerNames.AddRange(listing.BlockedPlayerNames);
+        }
+        return proto;
     }
 
     public static ServerMessage CreateSpawnProtectionEnabled(long playerId) {

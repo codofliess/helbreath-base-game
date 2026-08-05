@@ -1,50 +1,48 @@
-import { HeadlessDraggableDialog } from './HeadlessDraggableDialog';
-import { RpgButton } from '../components/RpgButton';
+import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_REQUEST_SERVER_RESURRECT } from '../../constants/EventNames';
-import { setDeathDialogOpen } from '../store/DeathDialog.store';
+import { deathDialogStore, setDeathDialogOpen } from '../store/DeathDialog.store';
 
 interface DeathDialogProps {
-    position: { x: number; y: number };
+    /** Ignored — Olympia death UI is fixed bottom-right, not a centered modal. */
+    position?: { x: number; y: number };
     zIndex?: number;
     onBringToFront?: () => void;
 }
 
-export function DeathDialog({
-    position,
-    zIndex,
-    onBringToFront,
-}: DeathDialogProps) {
-    const handleResurrect = () => {
+/**
+ * Olympia-style death chrome: floating golden Restart! (bottom-right).
+ * System log already carries "You have died!…" — this is only the revive affordance.
+ */
+export function DeathDialog({ zIndex = 10013, onBringToFront }: DeathDialogProps) {
+    const killerName = useStore(deathDialogStore, (s) => s.killerName);
+
+    const handleRestart = () => {
+        // Keep dialog open until server confirms PlayerResurrected (or world transfer join).
+        // Closing early left players stuck dead if revive failed or packet was missed.
         EventBus.emit(IN_UI_REQUEST_SERVER_RESURRECT);
-        setDeathDialogOpen(false);
     };
 
     return (
-        <HeadlessDraggableDialog
-            position={position}
-            id="death-dialog"
-            zIndex={zIndex}
-            onBringToFront={onBringToFront}
-            onContextMenu={(e) => e.preventDefault()}
+        <div
+            className="death-restart-overlay"
+            data-dialog-id="death-dialog"
+            style={{ zIndex }}
+            onPointerDown={() => onBringToFront?.()}
         >
-            <div style={{
-                color: 'var(--rpg-parchment)',
-                fontFamily: 'Georgia, serif',
-                fontSize: '16px',
-                lineHeight: '1.6',
-                textAlign: 'center',
-                padding: '16px',
-            }}>
-                <p style={{ margin: '0 0 16px 0' }}>
-                    Oh blimey, you died!
+            {killerName ? (
+                <p className="death-restart-killer">
+                    Killed by <strong>{killerName}</strong>
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <RpgButton onClick={handleResurrect}>
-                        Resurrect
-                    </RpgButton>
-                </div>
-            </div>
-        </HeadlessDraggableDialog>
+            ) : null}
+            <button
+                type="button"
+                className="death-restart-btn"
+                title="Restart!"
+                onClick={handleRestart}
+            >
+                Restart!
+            </button>
+        </div>
     );
 }

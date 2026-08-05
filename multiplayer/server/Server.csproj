@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.34.0" />
+    <PackageReference Include="Npgsql" Version="9.0.3" />
     <PackageReference Include="Grpc.Tools" Version="2.78.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -16,6 +17,21 @@
 
   <ItemGroup>
     <Protobuf Include="../proto/**/*.proto" ProtoRoot="../proto" GrpcServices="None" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Persistence\schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Config\ArenaPrizeWhitelist.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Never ship player data / nested publish trees into the build output. -->
+  <ItemGroup>
+    <Content Remove="Chars/**" />
+    <Content Remove="**/publish*/**" />
+    <Content Remove="_build_check_out/**" />
+    <None Remove="Chars/**" />
+    <None Remove="**/publish*/**" />
+    <None Remove="_build_check_out/**" />
   </ItemGroup>
 
 </Project>

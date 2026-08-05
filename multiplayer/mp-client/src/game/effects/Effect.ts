@@ -5,7 +5,7 @@ import type { SoundManager } from '../../utils/SoundManager';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../utils/EffectUtils';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { createLightRadiusOverlay } from '../../utils/SpriteUtils';
 
 const DEFAULT_FRAME_RATE = 10;
@@ -49,11 +49,14 @@ export class Effect {
     private fadeOutUnsubscribe?: () => void;
     private readonly offsetX: number;
     private readonly offsetY: number;
+    private destroyed = false;
+    private safetyTimer?: Phaser.Time.TimerEvent;
 
     constructor(scene: Scene, createConfig: EffectCreateConfig) {
         const { config, pixelX, pixelY, soundManager, playerWorldX, playerWorldY, infiniteLoop, onDestroy, frameRate: providedFrameRate, startAnimationFrame: providedStartFrame, depthOffset: providedDepthOffset, usePlayerDepthForDepth } = createConfig;
         this.onDestroyCallback = onDestroy;
-        this.depthOffset = providedDepthOffset ?? config.depthOffset ?? 80;
+        // Prefer explicit overrides; default combat VFX above entities + map objects (not under carpets).
+        this.depthOffset = providedDepthOffset ?? config.depthOffset ?? MAGIC_VFX_DEPTH_BIAS;
         this.offsetX = config.offsetX ?? 0;
         this.offsetY = config.offsetY ?? 0;
 
@@ -92,12 +95,14 @@ export class Effect {
             : startFrame;
 
         // Create GameAsset with first frame (static) to avoid auto-play
+        const scale = config.scale ?? 1;
         this.asset = new GameAsset(scene, {
             x: drawX,
             y: drawY,
             spriteName: config.sprite,
             spriteSheetIndex: config.spriteSheetIndex,
             frameIndex: initialTextureFrame,
+            ...(scale !== 1 ? { scaleX: scale, scaleY: scale } : {}),
         });
 
         // Use world Y position for depth (same as Player, Monster, map objects)
@@ -122,18 +127,29 @@ export class Effect {
         // Phaser's startFrame is the index within the animation's frames array (0-based), NOT the texture frame index
         const animationFrameIndex = initialTextureFrame - startFrame;
         this.asset.sprite.anims.stop();
+        let playOk = false;
         try {
             this.asset.sprite.play({
                 key: effectAnimKey,
                 startFrame: animationFrameIndex,
             });
+            playOk = true;
         } catch (err) {
             console.warn('[Effect] Failed to play animation, keeping static frame:', { effectAnimKey, config: config.key, err });
         }
 
         // Destroy when animation completes (only for non-looping effects)
         if (!infiniteLoop) {
-            this.asset.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+            if (playOk) {
+                this.asset.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                    this.destroy();
+                });
+            }
+            // Safety: one-shot cast VFX (e.g. PFM on empty cell) must never stick forever if COMPLETE never fires.
+            const frameCount = Math.max(1, endFrame - startFrame + 1);
+            const durationMs = Math.ceil((frameCount / Math.max(1, frameRate)) * 1000) + 400;
+            this.safetyTimer = scene.time.delayedCall(durationMs, () => {
+                this.safetyTimer = undefined;
                 this.destroy();
             });
         }
@@ -184,11 +200,19 @@ export class Effect {
         this.asset.setDepth(worldY * DEPTH_MULTIPLIER + this.depthOffset);
         if (this.overlaySprite) {
             this.overlaySprite.setPosition(drawX, drawY);
-            this.overlaySprite.setDepth(worldY * DEPTH_MULTIPLIER - 50);
+            this.overlaySprite.setDepth(worldY * DEPTH_MULTIPLIER + this.depthOffset - 50);
         }
     }
 
     public destroy(): void {
+        if (this.destroyed) {
+            return;
+        }
+        this.destroyed = true;
+        if (this.safetyTimer) {
+            this.safetyTimer.remove(false);
+            this.safetyTimer = undefined;
+        }
         this.fadeOutUnsubscribe?.();
         this.fadeOutUnsubscribe = undefined;
         this.onDestroyCallback?.();

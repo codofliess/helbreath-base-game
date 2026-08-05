@@ -1,0 +1,440 @@
+{
+  "worldsUpdated": [
+    {
+      "worldId": "aresden",
+      "mapBase": "aresden",
+      "source": "spot-mob-generator",
+      "pitCount": 13,
+      "totalMobs": 170,
+      "slimePits": 3,
+      "slimeCount": 60
+    },
+    {
+      "worldId": "elvine",
+      "mapBase": "elvine",
+      "source": "spot-mob-generator",
+      "pitCount": 13,
+      "totalMobs": 170,
+      "slimePits": 3,
+      "slimeCount": 60
+    },
+    {
+      "worldId": "arefarm",
+      "mapBase": "arefarm",
+      "source": "spot-mob-generator",
+      "pitCount": 11,
+      "totalMobs": 150,
+      "slimePits": 3,
+      "slimeCount": 45
+    },
+    {
+      "worldId": "elvfarm",
+      "mapBase": "elvfarm",
+      "source": "spot-mob-generator",
+      "pitCount": 10,
+      "totalMobs": 195,
+      "slimePits": 2,
+      "slimeCount": 60
+    },
+    {
+      "worldId": "promiseland",
+      "mapBase": "2ndmiddle",
+      "source": "spot-mob-generator",
+      "pitCount": 11,
+      "totalMobs": 185,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "middleland",
+      "mapBase": "middleland",
+      "source": "spot-mob-generator",
+      "pitCount": 27,
+      "totalMobs": 430,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "icebound",
+      "mapBase": "icebound",
+      "source": "spot-mob-generator",
+      "pitCount": 13,
+      "totalMobs": 168,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "aresdend1",
+      "mapBase": "aresdend1",
+      "source": "random-mob-generator",
+      "randomLevel": 4,
+      "pitCount": 6,
+      "totalMobs": 150,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "elvined1",
+      "mapBase": "elvined1",
+      "source": "random-mob-generator",
+      "randomLevel": 4,
+      "pitCount": 6,
+      "totalMobs": 150,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "huntzone1",
+      "mapBase": "huntzone1",
+      "source": "random-mob-generator",
+      "randomLevel": 16,
+      "pitCount": 8,
+      "totalMobs": 320,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "huntzone2",
+      "mapBase": "huntzone2",
+      "source": "random-mob-generator",
+      "randomLevel": 16,
+      "pitCount": 8,
+      "totalMobs": 320,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "huntzone3",
+      "mapBase": "huntzone3",
+      "source": "random-mob-generator",
+      "randomLevel": 6,
+      "pitCount": 14,
+      "totalMobs": 273,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "huntzone4",
+      "mapBase": "huntzone4",
+      "source": "random-mob-generator",
+      "randomLevel": 6,
+      "pitCount": 14,
+      "totalMobs": 273,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "middled1x",
+      "mapBase": "middled1x",
+      "source": "random-mob-generator",
+      "randomLevel": 5,
+      "pitCount": 9,
+      "totalMobs": 120,
+      "slimePits": 0,
+      "slimeCount": 0
+    },
+    {
+      "worldId": "toh1",
+      "mapBase": "toh1",
+      "source": "random-mob-generator",
+      "randomLevel": 13,
+      "pitCount": 6,
+      "totalMobs": 645,
+      "slimePits": 0,
+      "slimeCount": 0
+    }
+  ],
+  "worldsSkippedNoSpots": [],
+  "randomMapsPorted": [
+    {
+      "worldId": "aresdend1",
+      "mapBase": "aresdend1",
+      "randomLevel": 4,
+      "maximumObject": 180,
+      "targetSlots": 150,
+      "pitCount": 6,
+      "totalMobs": 150,
+      "area": {
+        "x1": 17,
+        "y1": 85,
+        "x2": 220,
+        "y2": 224
+      }
+    },
+    {
+      "worldId": "elvined1",
+      "mapBase": "elvined1",
+      "randomLevel": 4,
+      "maximumObject": 180,
+      "targetSlots": 150,
+      "pitCount": 6,
+      "totalMobs": 150,
+      "area": {
+        "x1": 17,
+        "y1": 85,
+        "x2": 220,
+        "y2": 224
+      }
+    },
+    {
+      "worldId": "huntzone1",
+      "mapBase": "huntzone1",
+      "randomLevel": 16,
+      "maximumObject": 350,
+      "targetSlots": 320,
+      "pitCount": 8,
+      "totalMobs": 320,
+      "area": {
+        "x1": 35,
+        "y1": 56,
+        "x2": 218,
+        "y2": 211
+      }
+    },
+    {
+      "worldId": "huntzone2",
+      "mapBase": "huntzone2",
+      "randomLevel": 16,
+      "maximumObject": 350,
+      "targetSlots": 320,
+      "pitCount": 8,
+      "totalMobs": 320,
+      "area": {
+        "x1": 35,
+        "y1": 56,
+        "x2": 218,
+        "y2": 211
+      }
+    },
+    {
+      "worldId": "huntzone3",
+      "mapBase": "huntzone3",
+      "randomLevel": 6,
+      "maximumObject": 350,
+      "targetSlots": 320,
+      "pitCount": 14,
+      "totalMobs": 273,
+      "area": {
+        "x1": 35,
+        "y1": 56,
+        "x2": 218,
+        "y2": 211
+      }
+    },
+    {
+      "worldId": "huntzone4",
+      "mapBase": "huntzone4",
+      "randomLevel": 6,
+      "maximumObject": 350,
+      "targetSlots": 320,
+      "pitCount": 14,
+      "totalMobs": 273,
+      "area": {
+        "x1": 35,
+        "y1": 56,
+        "x2": 218,
+        "y2": 211
+      }
+    },
+    {
+      "worldId": "middled1x",
+      "mapBase": "middled1x",
+      "randomLevel": 5,
+      "maximumObject": 150,
+      "targetSlots": 120,
+      "pitCount": 9,
+      "totalMobs": 120,
+      "area": {
+        "x1": 17,
+        "y1": 85,
+        "x2": 220,
+        "y2": 224
+      }
+    },
+    {
+      "worldId": "toh1",
+      "mapBase": "toh1",
+      "randomLevel": 13,
+      "maximumObject": 675,
+      "targetSlots": 645,
+      "pitCount": 6,
+      "totalMobs": 645,
+      "area": {
+        "x1": 20,
+        "y1": 29,
+        "x2": 235,
+        "y2": 239
+      }
+    }
+  ],
+  "randomMapsBlocked": [],
+  "spotSkips": [
+    {
+      "worldId": "aresden",
+      "reason": "town-npc",
+      "x1": 142,
+      "y1": 127,
+      "x2": 166,
+      "y2": 144,
+      "mobType": 67,
+      "count": 1
+    },
+    {
+      "worldId": "aresden",
+      "reason": "town-npc",
+      "x1": 116,
+      "y1": 166,
+      "x2": 137,
+      "y2": 177,
+      "mobType": 68,
+      "count": 1
+    },
+    {
+      "worldId": "aresden",
+      "reason": "town-npc",
+      "x1": 96,
+      "y1": 181,
+      "x2": 117,
+      "y2": 193,
+      "mobType": 69,
+      "count": 1
+    },
+    {
+      "worldId": "aresden",
+      "reason": "town-npc",
+      "x1": 150,
+      "y1": 195,
+      "x2": 172,
+      "y2": 206,
+      "mobType": 67,
+      "count": 1
+    },
+    {
+      "worldId": "elvine",
+      "reason": "town-npc",
+      "x1": 142,
+      "y1": 131,
+      "x2": 175,
+      "y2": 149,
+      "mobType": 67,
+      "count": 1
+    },
+    {
+      "worldId": "elvine",
+      "reason": "town-npc",
+      "x1": 216,
+      "y1": 148,
+      "x2": 240,
+      "y2": 163,
+      "mobType": 68,
+      "count": 1
+    },
+    {
+      "worldId": "elvine",
+      "reason": "town-npc",
+      "x1": 192,
+      "y1": 121,
+      "x2": 213,
+      "y2": 133,
+      "mobType": 69,
+      "count": 1
+    },
+    {
+      "worldId": "elvine",
+      "reason": "town-npc",
+      "x1": 222,
+      "y1": 105,
+      "x2": 244,
+      "y2": 117,
+      "mobType": 67,
+      "count": 1
+    },
+    {
+      "worldId": "huntzone3",
+      "source": "random",
+      "reason": "unmapped-random-result",
+      "resultId": 6,
+      "count": 47
+    },
+    {
+      "worldId": "huntzone4",
+      "source": "random",
+      "reason": "unmapped-random-result",
+      "resultId": 6,
+      "count": 47
+    }
+  ],
+  "monstersPatched": 48,
+  "monsterGaps": [
+    {
+      "id": 4,
+      "name": "Armored Battle Steed",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 8,
+      "name": "Battle Golem",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 16,
+      "name": "Elf Master",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 17,
+      "name": "Dark Shadow Knight",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 19,
+      "name": "Detector",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 22,
+      "name": "God's Hand Knight",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 23,
+      "name": "God's Hand Knight on Armored Battle Steed",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 29,
+      "name": "Arrow Guard Tower",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 30,
+      "name": "Cannon Guard Tower",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 35,
+      "name": "Light War Beetle",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 45,
+      "name": "Ugly Wyvern",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 52,
+      "name": "Sorceress",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 56,
+      "name": "Temple Knight",
+      "gap": "no-npc-cfg-name-map"
+    },
+    {
+      "id": 57,
+      "name": "Ancient Temple Knight",
+      "gap": "no-npc-cfg-name-map"
+    }
+  ]
+}

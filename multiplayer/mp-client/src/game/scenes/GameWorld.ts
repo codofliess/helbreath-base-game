@@ -6,17 +6,20 @@ import { Player } from '../objects/Player';
 import { Monster } from '../objects/Monster';
 import { ArrowProjectile, isProjectileTarget } from '../effects/ArrowProjectile';
 import { NPC } from '../objects/NPC';
-import { HBMap } from '../assets/HBMap';
+import { HBMap, TILE_SIZE } from '../assets/HBMap';
 import { FireInstance } from '../spells/FireInstance';
 import { PoisonCloudInstance } from '../spells/PoisonCloudInstance';
 import { SpikeFieldInstance } from '../spells/SpikeFieldInstance';
 import { createSpikeField } from '../spells/SpikeField';
 import { IceStorm } from '../spells/IceStorm';
 import { EventBus } from '../EventBus';
-import { canvasToScreenPosition, convertWorldPosToPixelPos, convertPixelPosToWorldPos, getNextDirection, Direction, findMovableLocation, getDistance, isCellMovable, toDirection, worldCellCenterPixelX, worldCellCenterPixelY } from '../../utils/CoordinateUtils';
+import { canvasToScreenPosition, convertWorldPosToPixelPos, convertPixelPosToWorldPos, getNextDirection, Direction, findApproachCellNearTarget, findMovableLocation, getDistance, isCellMovable, toDirection, worldCellCenterPixelX, worldCellCenterPixelY } from '../../utils/CoordinateUtils';
+import { resolveSafePlayerSpawn } from '../../../../../sp-client/src/utils/CoordinateUtils';
+import { normalizeMapId } from '../../../../../sp-client/src/constants/MapTeleportLocs';
 import {
     DEPTH_MULTIPLIER,
     GAME_STATS_UPDATE_INTERVAL_MS,
+    HIGH_DEPTH,
     LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND,
     MONSTER_HOVER_OVERLAY_ANCHOR_OFFSET_Y,
     MONSTER_PLACEHOLDER_SPRITE,
@@ -28,6 +31,7 @@ import {
     getMusicManager,
     getGameStateManager,
     getNetworkManager,
+    getInventoryManager,
     getAndRemoveInitialGameWorldState,
     setDebugModeEnabled,
     setGroundItemDisplaySize,
@@ -39,14 +43,21 @@ import {
 } from '../../utils/RegistryUtils';
 import type { InitialGameWorldState } from '../../utils/RegistryUtils';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
+import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
-import { normalizeMapId } from '../../../../../sp-client/src/constants/MapTeleportLocs';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { SoundManager } from '../../utils/SoundManager';
 import { getMonsterData } from '../../constants/Monsters';
+
 import { getSpriteForCatalogNpcId } from '../../constants/NPCs';
+import { extractMonsterMinimapThumbDataUrl } from '../../utils/SpriteUtils';
+import {
+    capturePaperDollBodyLayers,
+    capturePaperDollFromLivePlayer,
+    invalidatePaperDollCache,
+} from '../../utils/paperDollCapture';
 import {
     CURRENT_SCENE_READY,
     INITIAL_GAME_WORLD_STATE_RECEIVED,
@@ -87,11 +98,14 @@ import {
     TEMPORARY_EFFECT_APPLIED_FOR_MONSTER_RECEIVED,
     TEMPORARY_EFFECT_EXPIRED_FOR_MONSTER_RECEIVED,
     CAST_EFFECT_RECEIVED,
+    TOAST_REQUESTED,
     REMOTE_PLAYER_ITEM_EQUIPPED_RECEIVED,
     REMOTE_PLAYER_ITEM_UNEQUIPPED_RECEIVED,
     SPELL_CAST_STARTED_RECEIVED,
     SPELL_CAST_CANCELLED_RECEIVED,
     SPELL_CAST_FAILED_RECEIVED,
+    IN_UI_FORCE_CANCEL_CAST,
+    IN_UI_SET_SUPER_ATTACK_ARMED,
     CAST_AOE_SPELL_RECEIVED,
     CAST_DIRECTIONAL_AOE_SPELL_RECEIVED,
     MONSTER_CAST_AOE_SPELL_RECEIVED,
@@ -104,7 +118,29 @@ import {
     SOCKET_DISCONNECTED,
     IN_UI_PLAYER_RESURRECT,
     IN_UI_REQUEST_SERVER_RESURRECT,
+    IN_UI_CLAIM_KILL_MILESTONE,
+    IN_UI_BEGINNER_PATH_ENROLL,
+    IN_UI_BEGINNER_PATH_ABANDON,
+    IN_UI_BEGINNER_PATH_TALK,
+    IN_UI_BEGINNER_PATH_UI_ACTION,
+    IN_UI_CREATE_PARTY,
+    IN_UI_JOIN_PARTY,
+    IN_UI_LEAVE_PARTY,
+    IN_UI_REQUEST_REBIRTH,
+    IN_UI_REQUEST_REBIRTH_ROLLBACK,
+    IN_UI_SET_LEVEL_BLOCK,
+    IN_UI_MAJESTIC_UPGRADE,
+    IN_UI_STONE_ITEM_UPGRADE,
+    IN_UI_ITEM_DISENCHANT,
+    IN_UI_ITEM_ENCHANT,
+    IN_UI_ENCHANT_MATERIAL_UPGRADE,
+    IN_UI_GET_ENCHANT_MATERIALS,
+    IN_UI_CIC_ITEM_MERGE,
+    IN_UI_SIPHON_GEM_UPGRADE,
+    IN_UI_MAJESTIC_STAT_RESPEC,
+    IN_UI_LEVEL_UP_SETTINGS,
     PLAYER_DIED_RECEIVED,
+    ENEMY_KILL_AWARDED_RECEIVED,
     PLAYER_RESURRECTED_RECEIVED,
     IN_UI_CAST_SPELL,
     IN_UI_CHANGE_MOVEMENT_SPEED,
@@ -116,13 +152,21 @@ import {
     IN_UI_CHANGE_ALLOW_DASH_ATTACK,
     IN_UI_CHANGE_CAST_SPEED,
     IN_UI_CHANGE_ATTACK_MODE,
+    IN_UI_CHANGE_SAFE_ATTACK_MODE,
     IN_UI_CHANGE_RUN_MODE,
     IN_UI_CHANGE_GENDER,
     IN_UI_CHANGE_SKIN_COLOR,
     IN_UI_CHANGE_UNDERWEAR_COLOR,
     IN_UI_CHANGE_HAIR_STYLE,
+    IN_UI_PAPERDOLL_CAPTURE,
     IN_UI_CHANGE_MUSIC_VOLUME,
     IN_UI_CHANGE_SOUND_VOLUME,
+    IN_UI_CHANGE_MUSIC_ENABLED,
+    IN_UI_CHANGE_SOUND_ENABLED,
+    IN_UI_MUTE_ALL_SOUNDS,
+    IN_UI_UNMUTE_ALL_SOUNDS,
+    IN_UI_CHANGE_DETAIL_LEVEL,
+    IN_UI_GAME_VIEWPORT_RESIZED,
     IN_UI_CHANGE_MAP,
     IN_UI_TOGGLE_RENDER_MAP_TILES,
     IN_UI_TOGGLE_RENDER_MAP_OBJECTS,
@@ -135,6 +179,7 @@ import {
     IN_UI_TOGGLE_GRID_DISPLAY,
     IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED,
     IN_UI_CHANGE_WEATHER,
+    IN_UI_RAIN_SOUNDS_CHANGED,
     IN_UI_PLAY_MUSIC,
     IN_UI_CHANGE_PLAY_MAP_MUSIC,
     IN_UI_SUMMON_MONSTER,
@@ -152,16 +197,33 @@ import {
     OUT_UI_HOVER_ATTACKABLE_TARGET,
     OUT_UI_HOVER_GROUND_ITEM,
     OUT_UI_HOVER_GROUND_ITEM_INFO,
-    ITEM_DROPPED_TO_GROUND,
+
     OUT_UI_HOVER_MONSTER,
     OUT_UI_HOVER_NPC,
+    OUT_UI_OPEN_SHOP,
+    OUT_UI_OPEN_MAGIC_SHOP,
+    OUT_UI_OPEN_CASH_SHOP,
+    OUT_UI_OPEN_BLACKSMITH,
+    OUT_UI_OPEN_WAREHOUSE,
+    OUT_UI_OPEN_NPC_TALK,
     OUT_UI_HOVER_PLAYER,
     OUT_UI_SET_SELECTED_MUSIC,
     OUT_UI_SET_SELECTED_MAP,
     OUT_MAP_LOADED,
+    OUT_SPRITE_FRAME_EXTRACTED,
     OUT_WEATHER_SYNCED,
+    CHAT_MESSAGE_RECEIVED,
+    IN_UI_TAKE_SCREENSHOT,
     type PlayerItemAppearancePrefetchEventData,
 } from '../../constants/EventNames';
+import { getOlympiaGameHour, getOlympiaNightStrength } from '../../utils/olympiaFormat';
+import {
+    chatChannelFromProto,
+    chatChannelOverheadColor,
+} from '../../constants/ChatChannels';
+import { soundDialogStore } from '../../ui/store/SoundDialog.store';
+import { sysMenuDialogStore } from '../../ui/store/SysMenuDialog.store';
+import { captureManualScreenshot } from '../systems/EkScreenshotCapture';
 import {
     AttackType,
     CastAoeSpellEventData,
@@ -196,6 +258,7 @@ import {
     PlayerConnectionStateChangedEventData,
     PlayerConfirmSpellTargetEvent,
     PlayerDiedEventData,
+    EnemyKillAwardedEventData,
     PlayerHoverInfo,
     PlayerIdleDirectionChangedEventData,
     PlayerLeftEventData,
@@ -219,13 +282,30 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
+import {
+    confuseApplyToastMessage,
+    confuseExpireToastMessage,
+    illusionSpoofName,
+} from '../../utils/confuseFeedback';
 import { getOlympiaServerSpellId, isServerAuthoritativeOlympiaSpell } from '../../constants/OlympiaServerSpellMap';
 import { WeatherManager } from '../../utils/WeatherManager';
 import { setDeathDialogOpen } from '../../ui/store/DeathDialog.store';
+import { scheduleEkScreenshot } from '../systems/EkScreenshotCapture';
 import { mapDialogStore, syncWeather, type WeatherMode } from '../../ui/store/MapDialog.store';
 import { serverDialogStore } from '../../ui/store/ServerDialog.store';
 import { performLogoutCleanup } from '../../utils/LogoutUtils';
 import { LoadingOverlayController } from '../../utils/LoadingOverlayController';
+import {
+    applyGameWorldCanvasPresentation,
+    clearGameWorldCanvasPresentation,
+} from '../ui/gameWorldCanvasPresentation';
+import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentation';
+import { FloatingText } from '../effects/FloatingText';
+import { getNpcInteractionRole } from '../../constants/ShopCatalog';
+import { FARM_BARRACKS_PRESETS } from '../../constants/TrainingPresets';
+import { setTrainingDialogOpen, setTrainingPresetId } from '../../ui/store/TrainingDialog.store';
+import { setCharacterDialogOpen, setCharacterSubPanel, setCharacterStats } from '../../ui/store/CharacterDialog.store';
+import { buildPlayerHoverDisplay, resolvePlayerHoverFoe } from '../../utils/playerHoverName';
 import {
     getGroundItemUnderPointer,
     getMonsterUnderWorldPixel,
@@ -233,6 +313,7 @@ import {
     getNpcUnderWorldPixelForHover,
     getOtherPlayerUnderWorldPixel,
     getPlayerUnderWorldPixelForHover,
+    pointerWorldPixel,
 } from '../../utils/PointerUtils';
 import { getTeleportSourceCellsFromLocSets } from '../../utils/NetworkManager';
 import { runSafeSync, subscribeSafe } from '../../utils/SafeEntry';
@@ -263,6 +344,13 @@ export class GameWorld extends Scene {
     private monsters: Monster[] = [];
     /** List of NPC instances - cleaned up in shutdown() */
     private npcs: NPC[] = [];
+    /** NPC the player is walking toward to talk to (cleared on interact / cancel). */
+    private pendingNpcInteraction: NPC | undefined = undefined;
+    /**
+     * Ground-item cell the player is walking to; on arrival (same cell) fires pickup.
+     * Fixes “stand exactly on the icon then click again” friction for non-gold loot.
+     */
+    private pendingGroundPickup: { worldX: number; worldY: number; maxItems: number } | undefined = undefined;
     /** Camera manager - handles follow, zoom, bounds, and UI-driven movement */
     private cameraManager: CameraManager | undefined = undefined;
     /** Reused for camera follow to avoid per-frame `{ x, y }` allocations */
@@ -295,6 +383,13 @@ export class GameWorld extends Scene {
     private groundEffectsById = new Map<string, FireInstance | PoisonCloudInstance | SpikeFieldInstance | IceStorm>();
     /** Weather manager - rain particles and sound */
     private weatherManager: WeatherManager | undefined = undefined;
+    /** Client-only ambient rain/snow cycle when the map default is dry (stopped by server/GM weather). */
+    private ambientWeatherTimer: Phaser.Time.TimerEvent | undefined = undefined;
+    private ambientWeatherPhase = 0;
+    private ambientWeatherActive = false;
+    /** Soft night tint over the camera (Parity P1.5 day/night cue). */
+    private dayNightOverlay: Phaser.GameObjects.Rectangle | undefined = undefined;
+    private lastDayNightHour = -1;
     /** When true, next left click sends cell coords to server as "make occupied" */
     private awaitingMakeServerCellOccupiedClick = false;
     /** When true, next left click sends cell coords to server as a player teleport request */
@@ -313,6 +408,11 @@ export class GameWorld extends Scene {
     private pendingPredictedWorldTransfer = false;
     /** Active listener for map-dialog requested world changes; waits for authoritative server state before restarting. */
     private pendingRequestedWorldChangeListener: ((data: InitialGameWorldStateEventData) => void) | undefined = undefined;
+    /**
+     * Clears stuck warp flags if the server never answers a validated world-change
+     * (silent reject leaves doors dead until scene restart).
+     */
+    private worldTransferWatchdog: Phaser.Time.TimerEvent | undefined = undefined;
     /** While true, ignore left-click movement until the current confirm click has been released. */
     private suppressLeftMouseMovementUntilRelease = false;
     /** Spawn protection enabled for self before player was created (apply when player is created) */
@@ -352,6 +452,7 @@ export class GameWorld extends Scene {
     public init(data?: GameWorldInitData) {
         runSafeSync('GameWorld:init', () => {
             this.clearPendingRequestedWorldChangeListener();
+            this.clearWorldTransferWatchdog();
             // Prefer registry over Phaser init data: `scene.restart({ initialGameWorldState })` can leave stale
             // `data` on the Scene when returning via `scene.start('GameWorld')` without args (e.g. after logout),
             // which would ignore fresh `setInitialGameWorldState` from LoginScreen.
@@ -368,6 +469,10 @@ export class GameWorld extends Scene {
             }
 
             setSoundManager(this.game, this.soundManager);
+            // Apply SysMenu / Sound dialog prefs before any map BGM / SFX can start
+            this.playMapMusic = soundDialogStore.state.playMapMusic;
+            this.soundManager.setSoundEnabled(sysMenuDialogStore.state.soundEnabled);
+            getMusicManager(this).setMusicEnabled(sysMenuDialogStore.state.musicEnabled);
             // Reset initialization state
             this.initializationStarted = false;
             this.loadingMap = true;
@@ -375,14 +480,17 @@ export class GameWorld extends Scene {
             this.loadingOverlayController = new LoadingOverlayController(this);
 
             this.weatherManager = new WeatherManager(this, this.soundManager);
+            this.weatherManager.setDetailLevel(sysMenuDialogStore.state.detailLevel);
             const snapshotWeather = this.initialGameWorldState?.weather;
             const weather = snapshotWeather ?? mapDialogStore.state.weather;
             this.weatherManager.setWeather(weather);
             if (snapshotWeather !== undefined) {
                 syncWeather(snapshotWeather);
             }
+            this.maybeStartAmbientWeather(weather);
             this.setupMapManager();
             this.setupCameraManager();
+            this.setupViewportResizeListener();
             this.setupControlDialogEventListeners();
             this.setupSoundDialogEventListeners();
             this.setupMapDialogEventListeners();
@@ -393,6 +501,8 @@ export class GameWorld extends Scene {
             this.setupSpellRequestListener();
             this.setupPlayerEventListeners();
             this.setupMonsterEventListeners();
+            this.setupChatOverheadListener();
+            this.setupScreenshotListener();
             this.setupInputManager();
             this.setupCameraStatsUpdateInterval();
             EventBus.on(PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED, this.playerItemAppearancePrefetchHandler);
@@ -405,6 +515,9 @@ export class GameWorld extends Scene {
 
     public create() {
         runSafeSync('GameWorld:create', () => {
+            this.clearResidualLoginDeskChrome();
+            document.body.classList.add('game-world-active');
+            applyGameWorldCanvasPresentation(this);
             this.cameras.main.setBackgroundColor('#000');
             if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
                 const pending = takePendingPlayerItemAppearancePrefetch(this.game);
@@ -414,6 +527,27 @@ export class GameWorld extends Scene {
             }
             EventBus.emit(CURRENT_SCENE_READY, this);
         });
+    }
+
+    /**
+     * Clears leftover SELECTCHAR canvas CSS / ownership, then prepares for in-game
+     * viewport presentation (Scale.FIT + fixed 1024×576 FOV — pillarbox, not more map).
+     */
+    private clearResidualLoginDeskChrome(): void {
+        forceClearLoginDeskCanvasPresentation(this);
+        document.body.classList.remove('login-selectchar-active');
+        const canvas = this.game.canvas;
+        if (canvas) {
+            canvas.classList.remove('login-selectchar-canvas');
+            canvas.style.removeProperty('transform');
+            canvas.style.removeProperty('position');
+            canvas.style.removeProperty('left');
+            canvas.style.removeProperty('top');
+            canvas.style.removeProperty('width');
+            canvas.style.removeProperty('height');
+            canvas.style.removeProperty('margin');
+            canvas.style.removeProperty('transform-origin');
+        }
     }
 
     private setupMapManager(): void {
@@ -462,6 +596,29 @@ export class GameWorld extends Scene {
         });
         this.cameraManager.setupEventListeners();
         this.mapManager?.setCameraManager(this.cameraManager);
+    }
+
+    /**
+     * Expanded fullscreen grows the Phaser FOV — re-center on player and resize overlays
+     * so the dock stays correct and we don't leave the camera scrolled wrong.
+     */
+    private setupViewportResizeListener(): void {
+        subscribeSafe('GameWorld', IN_UI_GAME_VIEWPORT_RESIZED, () => {
+            if (!this.player || this.loadingMap) {
+                return;
+            }
+            this.cameraManager?.centerOn(
+                this.player.getAnimatedPixelX(),
+                this.player.getAnimatedPixelY(),
+            );
+            // Force day/night rect to new camera size next update.
+            if (this.dayNightOverlay) {
+                const cam = this.cameras?.main;
+                if (cam) {
+                    this.dayNightOverlay.setSize(cam.width, cam.height);
+                }
+            }
+        });
     }
 
     private setupControlDialogEventListeners(): void {
@@ -549,6 +706,12 @@ export class GameWorld extends Scene {
             }
         });
 
+        subscribeSafe('GameWorld', IN_UI_CHANGE_SAFE_ATTACK_MODE, (enabled: boolean) => {
+            if (serverDialogStore.state.syncWithServer) {
+                getNetworkManager(this.game)?.requestPlayerSafeAttackModeChange(enabled);
+            }
+        });
+
         subscribeSafe('GameWorld', IN_UI_CHANGE_RUN_MODE, (enabled: boolean) => {
             if (this.player) {
                 const cur = this.player.getMovementSpeedMs();
@@ -564,6 +727,38 @@ export class GameWorld extends Scene {
         EventBus.on(IN_UI_CHANGE_SKIN_COLOR, this.syncPlayerAppearanceHandler);
         EventBus.on(IN_UI_CHANGE_UNDERWEAR_COLOR, this.syncPlayerAppearanceHandler);
         EventBus.on(IN_UI_CHANGE_HAIR_STYLE, this.syncPlayerAppearanceHandler);
+
+        subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
+            try {
+                // Always recapture on F5 — stale cache was the #1 "wrong mannequin" cause.
+                invalidatePaperDollCache();
+                const inv = getInventoryManager(this.game);
+                const gender = this.player?.getGender?.() ?? playerDialogStore.state.gender;
+                const skin = playerDialogStore.state.skinColor;
+                const hair =
+                    this.player?.getHairStyleIndex?.() ?? playerDialogStore.state.hairStyleIndex;
+                const uw =
+                    this.player?.getUnderwearColorIndex?.() ??
+                    playerDialogStore.state.underwearColorIndex;
+                const equipped = inv?.equippedItems ?? {};
+
+                // 1) Prefer live map pixels first (even 1 layer = body) — most reliable for F5.
+                const liveLayers = this.player?.getVisibleSpritesForPaperDoll?.() ?? [];
+                if (this.player && liveLayers.length >= 1) {
+                    capturePaperDollFromLivePlayer(this, this.player, true);
+                }
+
+                // 2) Idle-south rebuild (fills gear when packs finish loading; upgrades nude→geared).
+                capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
+
+                // 3) Live again if multi-layer (gear) so F5 matches the world character.
+                if (this.player && liveLayers.length >= 2) {
+                    capturePaperDollFromLivePlayer(this, this.player, true);
+                }
+            } catch (err) {
+                console.warn('[GameWorld] paper-doll capture failed', err);
+            }
+        });
 
         // Listen for map change events from React
         subscribeSafe('GameWorld', IN_UI_CHANGE_MAP, (worldId: string) => {
@@ -584,14 +779,125 @@ export class GameWorld extends Scene {
         subscribeSafe('GameWorld', IN_UI_REQUEST_SERVER_RESURRECT, () => {
             getNetworkManager(this.game)?.requestPlayerResurrectedRequest();
         });
+        subscribeSafe('GameWorld', IN_UI_CLAIM_KILL_MILESTONE, (data: { milestoneId: string; chosenItemId: number }) => {
+            getNetworkManager(this.game)?.requestClaimKillMilestone(data.milestoneId, data.chosenItemId);
+        });
+        subscribeSafe('GameWorld', IN_UI_BEGINNER_PATH_ENROLL, () => {
+            getNetworkManager(this.game)?.requestBeginnerPathEnroll();
+        });
+        subscribeSafe('GameWorld', IN_UI_BEGINNER_PATH_ABANDON, () => {
+            getNetworkManager(this.game)?.requestBeginnerPathAbandon();
+        });
+        subscribeSafe('GameWorld', IN_UI_BEGINNER_PATH_TALK, (data: { catalogNpcId: number }) => {
+            getNetworkManager(this.game)?.requestBeginnerPathTalk(data.catalogNpcId);
+        });
+        subscribeSafe('GameWorld', IN_UI_BEGINNER_PATH_UI_ACTION, (data: { actionId: string }) => {
+            getNetworkManager(this.game)?.requestBeginnerPathUiAction(data.actionId);
+        });
+        subscribeSafe('GameWorld', IN_UI_CREATE_PARTY, () => {
+            getNetworkManager(this.game)?.requestCreateParty();
+        });
+        subscribeSafe('GameWorld', IN_UI_JOIN_PARTY, (data: { partyCode: string }) => {
+            getNetworkManager(this.game)?.requestJoinParty(data.partyCode);
+        });
+        subscribeSafe('GameWorld', IN_UI_LEAVE_PARTY, () => {
+            getNetworkManager(this.game)?.requestLeaveParty();
+        });
+        subscribeSafe('GameWorld', IN_UI_REQUEST_REBIRTH, () => {
+            getNetworkManager(this.game)?.requestRebirth();
+        });
+        subscribeSafe('GameWorld', IN_UI_REQUEST_REBIRTH_ROLLBACK, () => {
+            getNetworkManager(this.game)?.requestRebirthRollback();
+        });
+        subscribeSafe('GameWorld', IN_UI_SET_LEVEL_BLOCK, (data: { blocked: boolean }) => {
+            getNetworkManager(this.game)?.requestSetLevelBlock(data.blocked === true);
+        });
+        subscribeSafe('GameWorld', IN_UI_MAJESTIC_UPGRADE, (data: { itemUid: string }) => {
+            getNetworkManager(this.game)?.requestMajesticUpgrade(data.itemUid);
+        });
+        subscribeSafe(
+            'GameWorld',
+            IN_UI_STONE_ITEM_UPGRADE,
+            (data: { itemUid: string; useIntegrityStone?: boolean }) => {
+                getNetworkManager(this.game)?.requestStoneItemUpgrade(
+                    data.itemUid,
+                    data.useIntegrityStone === true,
+                );
+            },
+        );
+        subscribeSafe('GameWorld', IN_UI_ITEM_DISENCHANT, (data: { itemUid: string }) => {
+            getNetworkManager(this.game)?.requestItemDisenchant(data.itemUid);
+        });
+        subscribeSafe('GameWorld', IN_UI_ITEM_ENCHANT, (data: { itemUid: string; kind: number }) => {
+            getNetworkManager(this.game)?.requestItemEnchant(data.itemUid, data.kind ?? 0);
+        });
+        subscribeSafe(
+            'GameWorld',
+            IN_UI_ENCHANT_MATERIAL_UPGRADE,
+            (data: { kind: number; type: number; level: number; mode: number }) => {
+                getNetworkManager(this.game)?.requestEnchantMaterialUpgrade(
+                    data.kind,
+                    data.type,
+                    data.level,
+                    data.mode,
+                );
+            },
+        );
+        subscribeSafe('GameWorld', IN_UI_GET_ENCHANT_MATERIALS, () => {
+            getNetworkManager(this.game)?.requestEnchantMaterialsState();
+        });
+        subscribeSafe(
+            'GameWorld',
+            IN_UI_CIC_ITEM_MERGE,
+            (data: { itemUidA: string; itemUidB: string }) => {
+                getNetworkManager(this.game)?.requestCicItemMerge(data.itemUidA, data.itemUidB);
+            },
+        );
+        subscribeSafe('GameWorld', IN_UI_SIPHON_GEM_UPGRADE, (data: { itemUid: string }) => {
+            getNetworkManager(this.game)?.requestSiphonGemUpgrade(data.itemUid);
+        });
+        subscribeSafe(
+            'GameWorld',
+            IN_UI_MAJESTIC_STAT_RESPEC,
+            (data: { statA: number; statB: number; statC: number }) => {
+                getNetworkManager(this.game)?.requestMajesticStatRespec(data.statA, data.statB, data.statC);
+            },
+        );
+        subscribeSafe(
+            'GameWorld',
+            IN_UI_LEVEL_UP_SETTINGS,
+            (data: { str: number; vit: number; dex: number; intel: number; mag: number; chr: number }) => {
+                getNetworkManager(this.game)?.requestLevelUpSettings(data);
+            },
+        );
         subscribeSafe('GameWorld', PLAYER_DIED_RECEIVED, (data: PlayerDiedEventData) => {
             const p = this.playersById.get(data.playerId);
-            p?.applyDeath();
+            let killerName = data.killerName?.trim() || undefined;
+            if (!killerName && data.killerPlayerId) {
+                const killer = this.playersById.get(data.killerPlayerId);
+                const resolved = killer?.getCharacterName()?.trim();
+                if (resolved) {
+                    killerName = resolved;
+                }
+            }
+            p?.applyDeath(killerName);
+        });
+        subscribeSafe('GameWorld', ENEMY_KILL_AWARDED_RECEIVED, (data: EnemyKillAwardedEventData) => {
+            const killerName = this.player?.getCharacterName()?.trim();
+            scheduleEkScreenshot(this.game, {
+                victimName: data.victimName,
+                victimPlayerId: data.victimPlayerId,
+                mapName: data.mapName,
+                killerName,
+                victimCityKillerRank: data.victimCityKillerRank,
+                rarity: data.rarity,
+            });
         });
         subscribeSafe('GameWorld', PLAYER_RESURRECTED_RECEIVED, (data: PlayerResurrectedEventData) => {
-            const p = this.playersById.get(data.playerId);
+            const p = this.playersById.get(data.playerId) ?? (data.playerId === this.selfPlayerId ? this.player : undefined);
             p?.applyResurrect(data.x, data.y, data.hp, data.maxHp);
             if (data.playerId === this.selfPlayerId) {
+                setDeathDialogOpen(false);
                 EventBus.emit(IN_UI_PLAYER_RESURRECT);
             }
         });
@@ -625,6 +931,66 @@ export class GameWorld extends Scene {
         // Listen for play map music setting changes from React
         subscribeSafe('GameWorld', IN_UI_CHANGE_PLAY_MAP_MUSIC, (enabled: boolean) => {
             this.playMapMusic = enabled;
+            if (!enabled) {
+                getMusicManager(this).silence();
+            } else if (sysMenuDialogStore.state.musicEnabled) {
+                this.mapManager?.playInitialMusic();
+            }
+        });
+
+        // SysMenu Music On/Off
+        subscribeSafe('GameWorld', IN_UI_CHANGE_MUSIC_ENABLED, (enabled: boolean) => {
+            const mm = getMusicManager(this);
+            if (!enabled) {
+                mm.setMusicEnabled(false);
+                return;
+            }
+            mm.setMusicEnabled(true);
+            this.restorePhaserSoundMasterIfMuted();
+            // Resume BGM: prefer map track when play-map-music is on, else last manual selection
+            if (this.playMapMusic) {
+                this.mapManager?.playInitialMusic();
+            } else {
+                const last = mm.getLastRequestedMusic();
+                if (last) {
+                    mm.playMusic(last);
+                }
+            }
+        });
+
+        // SysMenu Sound On/Off
+        subscribeSafe('GameWorld', IN_UI_CHANGE_SOUND_ENABLED, (enabled: boolean) => {
+            if (!this.soundManager) {
+                return;
+            }
+            this.soundManager.setSoundEnabled(enabled);
+            if (enabled) {
+                this.restorePhaserSoundMasterIfMuted();
+                // stopAllSounds may have killed rain loop — re-apply rain SFX preference
+                this.weatherManager?.setRainSoundsEnabled(sysMenuDialogStore.state.rainSoundsEnabled);
+            } else {
+                // Drop stale rain sound id so re-enable can start a fresh loop
+                this.weatherManager?.setRainSoundsEnabled(false);
+            }
+        });
+
+        // Sound dialog: temporary mute while dragging volume slider
+        subscribeSafe('GameWorld', IN_UI_MUTE_ALL_SOUNDS, () => {
+            this.soundManager?.stopAllSounds();
+        });
+        subscribeSafe('GameWorld', IN_UI_UNMUTE_ALL_SOUNDS, () => {
+            // Volume already applied on commit; nothing else required for one-shots.
+            this.restorePhaserSoundMasterIfMuted();
+        });
+
+        // SysMenu Detail Level → weather density + hide trees on Low (Boris: Low/Med/High no ocultaba árboles)
+        subscribeSafe('GameWorld', IN_UI_CHANGE_DETAIL_LEVEL, (level: 0 | 1 | 2) => {
+            this.weatherManager?.setDetailLevel(level);
+            try {
+                this.getCurrentMap()?.applyDetailLevel(level);
+            } catch {
+                // Map may not be loaded yet.
+            }
         });
 
         // Listen for music volume changes from React
@@ -757,14 +1123,52 @@ export class GameWorld extends Scene {
             const spellEntry = nm?.getSpellById(serverSpellId);
             let aimAssistPlayerId: bigint | undefined;
             let aimAssistMonsterId: bigint | undefined;
+            let targetWorldX = convertPixelPosToWorldPos(data.targetPixelX);
+            let targetWorldY = convertPixelPosToWorldPos(data.targetPixelY);
             if (spellEntry?.aimAssist) {
                 const ids = this.getSpellAimAssistTargetIds(serverSpellId, data.targetPixelX, data.targetPixelY);
                 aimAssistPlayerId = ids.playerId;
                 aimAssistMonsterId = ids.monsterId;
+                // Snap cast cell to entity feet when body was clicked (chest/head → north cell otherwise).
+                if (aimAssistPlayerId !== undefined) {
+                    const pid = aimAssistPlayerId.toString();
+                    const aimed =
+                        (this.player && this.player.getPlayerId() === pid ? this.player : undefined) ??
+                        this.playersById.get(pid);
+                    if (aimed && !aimed.isDead()) {
+                        targetWorldX = aimed.getWorldX();
+                        targetWorldY = aimed.getWorldY();
+                    }
+                } else if (aimAssistMonsterId !== undefined) {
+                    const mid = aimAssistMonsterId.toString();
+                    const mon = this.monsters.find((m) => m.getMonsterId() === mid);
+                    if (mon && !mon.isDead()) {
+                        targetWorldX = mon.getWorldX();
+                        targetWorldY = mon.getWorldY();
+                    }
+                } else if (
+                    // Utility/buff/cancel on empty pad next to self: still self-target so
+                    // Cancellation / PFM VFX land on the caster's feet (not a far grid cell).
+                    spellEntry.damageType === undefined &&
+                    this.player &&
+                    !this.player.isDead()
+                ) {
+                    const selfId = this.player.getPlayerId();
+                    const sx = this.player.getWorldX();
+                    const sy = this.player.getWorldY();
+                    if (
+                        selfId &&
+                        Math.max(Math.abs(targetWorldX - sx), Math.abs(targetWorldY - sy)) <= 1
+                    ) {
+                        aimAssistPlayerId = BigInt(selfId);
+                        targetWorldX = sx;
+                        targetWorldY = sy;
+                    }
+                }
             }
             nm?.sendSpellCastRequest(
-                convertPixelPosToWorldPos(data.targetPixelX),
-                convertPixelPosToWorldPos(data.targetPixelY),
+                targetWorldX,
+                targetWorldY,
                 aimAssistPlayerId,
                 aimAssistMonsterId,
             );
@@ -776,6 +1180,8 @@ export class GameWorld extends Scene {
         subscribeSafe('GameWorld', PLAYER_POSITION_CHANGED, (data: { x: number; y: number }) => {
             this.updateMonsterSpatialAudio(data.x, data.y);
             this.tryPlayerWarp(data.x, data.y);
+            this.tryCompletePendingNpcInteraction();
+            this.tryCompletePendingGroundPickup();
         });
         subscribeSafe('GameWorld', TILE_OCCUPANCY_REAPPLY_REQUESTED, () => {
             this.reapplyTileOccupancyOnMap();
@@ -861,6 +1267,18 @@ export class GameWorld extends Scene {
         subscribeSafe('GameWorld', SPELL_CAST_FAILED_RECEIVED, () => {
             this.player?.onSpellCastRejected();
         });
+        // ESC (and other UI): cancel cast bar + notify server.
+        subscribeSafe('GameWorld', IN_UI_FORCE_CANCEL_CAST, () => {
+            if (!this.player) {
+                return;
+            }
+            this.player.onRightClick();
+        });
+        // Super Attack arm/disarm (right-click / Shift+click Attack Mode button).
+        subscribeSafe('GameWorld', IN_UI_SET_SUPER_ATTACK_ARMED, (data: { armed?: boolean } | boolean) => {
+            const armed = typeof data === 'boolean' ? data : Boolean(data?.armed);
+            getNetworkManager(this.game)?.sendSetSuperAttackArmed(armed);
+        });
         subscribeSafe('GameWorld', CAST_AOE_SPELL_RECEIVED, (data: CastAoeSpellEventData) => {
             this.handleCastAoeSpell(data);
         });
@@ -901,8 +1319,17 @@ export class GameWorld extends Scene {
             this.pendingCourseCorrections.push({ curX: data.curX, curY: data.curY, destX: data.destX, destY: data.destY });
         });
         subscribeSafe('GameWorld', PLAYER_PARALYZED_RECEIVED, (data: { durationSeconds: number }) => {
-            this.player?.setParalysisUntil(Date.now() + data.durationSeconds * 1000);
+            const seconds = Math.max(0, data.durationSeconds ?? 0);
+            this.player?.setParalysisUntil(Date.now() + seconds * 1000);
             this.player?.cancelMovement();
+            // Visible feedback — "can attack but not walk" is usually this anti-cheat freeze.
+            if (seconds > 0) {
+                EventBus.emit(TOAST_REQUESTED, {
+                    message: `Movement locked ${seconds}s (speed check). Attacks OK — wait or keep fighting.`,
+                    severity: 'warning',
+                    autoClose: Math.min(4000, seconds * 1000),
+                });
+            }
         });
         subscribeSafe('GameWorld', PLAYER_SPAWN_PROTECTION_ENABLED_RECEIVED, (data: { playerId: string }) => {
             this.handleSpawnProtectionEnabled(data);
@@ -1022,13 +1449,17 @@ export class GameWorld extends Scene {
             setDebugModeEnabled(this, enabled);
         });
 
-        // Listen for grid display toggle events from React
+        // Listen for grid display toggle events from React (SysMenu Ctrl+G / Map dialog)
         subscribeSafe('GameWorld', IN_UI_TOGGLE_GRID_DISPLAY, (enabled: boolean) => {
-            const currentMap = this.getCurrentMap();
-            if (enabled) {
-                currentMap.enableGridDisplay(this);
-            } else {
-                currentMap.disableGridDisplay();
+            try {
+                const currentMap = this.getCurrentMap();
+                if (enabled) {
+                    currentMap.enableGridDisplay(this);
+                } else {
+                    currentMap.disableGridDisplay();
+                }
+            } catch (err) {
+                console.warn('[GameWorld] Show Grid toggle failed:', err);
             }
         });
 
@@ -1039,13 +1470,63 @@ export class GameWorld extends Scene {
 
         // Listen for weather change events from React (local preview + server request)
         subscribeSafe('GameWorld', IN_UI_CHANGE_WEATHER, (weather: WeatherMode) => {
+            this.stopAmbientWeather();
             this.weatherManager?.setWeather(weather);
             getNetworkManager(this.game)?.sendWeatherChangeRequest(weather);
         });
         subscribeSafe('GameWorld', OUT_WEATHER_SYNCED, (weather: WeatherMode) => {
+            this.stopAmbientWeather();
             this.weatherManager?.setWeather(weather);
             syncWeather(weather);
         });
+        subscribeSafe('GameWorld', IN_UI_RAIN_SOUNDS_CHANGED, (enabled: boolean) => {
+            this.weatherManager?.setRainSoundsEnabled(enabled);
+        });
+    }
+
+    /**
+     * When the authoritative map weather is dry, slowly cycle light rain/snow locally
+     * so traveler sessions see Olympia-like climate without requiring the GM Map dialog.
+     * First precipitation after ~25s; then ~3 min cadence. Server/GM weather stops the cycle.
+     */
+    private maybeStartAmbientWeather(initial: WeatherMode): void {
+        this.stopAmbientWeather();
+        if (initial !== 'dry') {
+            return;
+        }
+
+        this.ambientWeatherActive = true;
+        this.ambientWeatherPhase = 0;
+        // Short first delay so dry maps show climate without waiting a full ambient period.
+        this.ambientWeatherTimer = this.time.delayedCall(25_000, () => {
+            if (!this.ambientWeatherActive) {
+                return;
+            }
+            this.tickAmbientWeather();
+            this.ambientWeatherTimer = this.time.addEvent({
+                delay: 180_000,
+                loop: true,
+                callback: () => this.tickAmbientWeather(),
+            });
+        });
+    }
+
+    private tickAmbientWeather(): void {
+        if (!this.ambientWeatherActive || !this.weatherManager) {
+            return;
+        }
+
+        const cycle: WeatherMode[] = ['rain-light', 'dry', 'rain-medium', 'dry', 'snow-light', 'dry'];
+        const next = cycle[this.ambientWeatherPhase % cycle.length];
+        this.ambientWeatherPhase += 1;
+        this.weatherManager.setWeather(next);
+        syncWeather(next);
+    }
+
+    private stopAmbientWeather(): void {
+        this.ambientWeatherActive = false;
+        this.ambientWeatherTimer?.remove(false);
+        this.ambientWeatherTimer = undefined;
     }
 
     private setupServerDialogEventListeners(): void {
@@ -1089,6 +1570,19 @@ export class GameWorld extends Scene {
                     if (this.castManager?.getPendingEffectKey() || this.player.hasPendingSpell()) {
                         return;
                     }
+                    // LMB down: one attack intent (hold re-swings via handleLeftMouseButton after anim ends).
+                    // Do NOT also attack on pointerup — that caused double swings / speed anti-cheat.
+                    // Prefer NPC talk on click (Magic Tower / shops) before combat targeting.
+                    if (this.cameras?.main) {
+                        const cam = this.cameras.main;
+                        const wx = pointerWorldPixel(pointer, cam).x;
+                        const wy = pointerWorldPixel(pointer, cam).y;
+                        const npcUnder = getNpcUnderWorldPixelForHover(this.npcs, wx, wy);
+                        if (npcUnder && !npcUnder.isDead()) {
+                            this.tryInteractWithNpc(npcUnder);
+                            return;
+                        }
+                    }
                     const attackTarget = this.getAttackableTargetUnderPointer(pointer);
                     if (attackTarget) {
                         this.player.attack(attackTarget);
@@ -1102,7 +1596,15 @@ export class GameWorld extends Scene {
                         this.player.onRightClick();
                         return;
                     }
-                    this.player.cancelMovement();
+                    this.pendingNpcInteraction = undefined;
+                    this.pendingGroundPickup = undefined;
+                    const rmbTarget = this.getAttackableTargetUnderPointer(pointer);
+                    if (rmbTarget) {
+                        // Olympia RMB: standstill attack — never pathfind toward the target.
+                        this.player.attackStandstill(rmbTarget);
+                    } else {
+                        this.player.cancelMovement();
+                    }
                 }
             },
             onPointerUp: (pointer) => {
@@ -1110,8 +1612,8 @@ export class GameWorld extends Scene {
                     this.awaitingMakeServerCellOccupiedClick = false;
                     const camera = this.cameras?.main;
                     if (camera) {
-                        const worldPixelX = pointer.x + camera.scrollX;
-                        const worldPixelY = pointer.y + camera.scrollY;
+                        const worldPixelX = pointerWorldPixel(pointer, camera).x;
+                        const worldPixelY = pointerWorldPixel(pointer, camera).y;
                         const destX = convertPixelPosToWorldPos(worldPixelX);
                         const destY = convertPixelPosToWorldPos(worldPixelY);
                         getNetworkManager(this.game)?.sendMakeCellOccupiedRequest(destX, destY);
@@ -1122,8 +1624,8 @@ export class GameWorld extends Scene {
                     this.awaitingPlayerTeleportClick = false;
                     const camera = this.cameras?.main;
                     if (camera) {
-                        const worldPixelX = pointer.x + camera.scrollX;
-                        const worldPixelY = pointer.y + camera.scrollY;
+                        const worldPixelX = pointerWorldPixel(pointer, camera).x;
+                        const worldPixelY = pointerWorldPixel(pointer, camera).y;
                         const destX = convertPixelPosToWorldPos(worldPixelX);
                         const destY = convertPixelPosToWorldPos(worldPixelY);
                         getNetworkManager(this.game)?.sendPlayerTeleportRequested(destX, destY);
@@ -1146,23 +1648,63 @@ export class GameWorld extends Scene {
                 }
                 const attackTarget = this.getAttackableTargetUnderPointer(pointer);
                 if (attackTarget) {
-                    this.player.attack(attackTarget);
+                    // Attack already started on pointerdown / hold — never re-attack on release
+                    // (double packet = two hits + erratic movement anti-cheat).
                     if (!this.player.isParalyzed() &&
+                        !this.player.isAttacking() &&
+                        !this.player.isInBowStance() &&
                         getDistance(
                             this.player.getWorldX(),
                             this.player.getWorldY(),
                             attackTarget.getWorldX(),
                             attackTarget.getWorldY()
                         ) > this.player.getAttackRange()) {
-                        this.player.setDestination(attackTarget.getWorldX(), attackTarget.getWorldY(), false);
+                        // Path to a free adjacent approach cell — never onto the occupied mob tile.
+                        const approach = findApproachCellNearTarget(
+                            this.getCurrentMap(),
+                            this.player.getWorldX(),
+                            this.player.getWorldY(),
+                            attackTarget.getWorldX(),
+                            attackTarget.getWorldY(),
+                            this.player.getAttackRange(),
+                        );
+                        if (approach) {
+                            this.player.setDestination(approach.x, approach.y, false);
+                        }
                     }
                     return;
                 }
                 const camera = this.cameras.main;
-                const worldPixelX = pointer.x + camera.scrollX;
-                const worldPixelY = pointer.y + camera.scrollY;
-                let destX = convertPixelPosToWorldPos(worldPixelX);
-                let destY = convertPixelPosToWorldPos(worldPixelY);
+                const worldPixelX = pointerWorldPixel(pointer, camera).x;
+                const worldPixelY = pointerWorldPixel(pointer, camera).y;
+                const npcUnderPointer = getNpcUnderWorldPixelForHover(this.npcs, worldPixelX, worldPixelY);
+                if (npcUnderPointer && !npcUnderPointer.isDead()) {
+                    this.pendingGroundPickup = undefined;
+                    this.tryInteractWithNpc(npcUnderPointer);
+                    return;
+                }
+                this.pendingNpcInteraction = undefined;
+
+                const ctrlHeld = Boolean(
+                    pointer.event && 'ctrlKey' in pointer.event && (pointer.event as MouseEvent).ctrlKey,
+                );
+                const maxPickupItems = ctrlHeld ? 9 : 1;
+
+                // Prefer ground-item cell (authoritative) over raw pixel→tile when the cursor
+                // is over loot — sprites/hover can straddle cell edges and feel “uncalibrated”.
+                const groundUnder = getGroundItemUnderPointer(this.groundItems, pointer, camera);
+                let destX: number;
+                let destY: number;
+                let walkForPickup = false;
+                if (groundUnder) {
+                    destX = groundUnder.worldX;
+                    destY = groundUnder.worldY;
+                    walkForPickup = true;
+                } else {
+                    destX = convertPixelPosToWorldPos(worldPixelX);
+                    destY = convertPixelPosToWorldPos(worldPixelY);
+                }
+
                 const distanceToDest = getDistance(
                     this.player.getWorldX(),
                     this.player.getWorldY(),
@@ -1170,24 +1712,63 @@ export class GameWorld extends Scene {
                     destY
                 );
                 if (distanceToDest === 0) {
-                    // Click on own cell: switch to PickUp mode (play pickup animation)
-                    this.player.requestPickUp();
+                    // Same cell: pickup (manual stack for non-gold; gold also auto-steps on move).
+                    this.pendingGroundPickup = undefined;
+                    this.player.requestPickUp(maxPickupItems);
+                    return;
+                }
+                if (walkForPickup) {
+                    this.pendingGroundPickup = { worldX: destX, worldY: destY, maxItems: maxPickupItems };
+                } else {
+                    this.pendingGroundPickup = undefined;
+                }
+
+                const map = this.getCurrentMap();
+                // Olympia: clicking a wall / non-walkable tile must NOT re-target a spiral
+                // "nearest free cell" (that made the char sprint around buildings forever).
+                // Adjacent blocked: cancel and face the wall. Far blocked: walk toward the
+                // clicked cell and stop when the next step cannot progress (GameObject).
+                if (!isCellMovable(map, destX, destY)) {
+                    if (this.player.isParalyzed()) {
+                        return;
+                    }
+                    this.player.clearAttackTarget();
+                    // Still allow pending pickup if item sits on a tile we can stand on later —
+                    // blocked destination cancels walk-for-pickup.
+                    this.pendingGroundPickup = undefined;
+                    if (distanceToDest < 2) {
+                        this.player.cancelMovement();
+                        const face = getNextDirection(
+                            this.player.getWorldX(),
+                            this.player.getWorldY(),
+                            destX,
+                            destY,
+                        );
+                        if (face !== Direction.None) {
+                            this.player.turnTowardsDirection(face);
+                        }
+                        return;
+                    }
+                    // Keep blocked cell as soft goal — processMovement stops without progress.
+                    this.player.setDestination(destX, destY, false);
                     return;
                 }
                 if (distanceToDest < 2) {
-                    // If player is moving towards adjacent cell, stop the movement, instead of trying to find pathfinded route
-                    this.player.cancelMovement();
+                    // Only stop if already mid-step toward that adjacent cell.
+                    // Idle players must still be allowed a one-cell step (common after melee).
+                    if (this.player.isMoving() && !walkForPickup) {
+                        this.player.cancelMovement();
+                        return;
+                    }
+                    if (!this.player.isParalyzed()) {
+                        // Direct step for adjacent cell — do not swallow the click.
+                        this.player.clearAttackTarget();
+                        this.player.setDestination(destX, destY, true);
+                    }
                     return;
                 }
-                const map = this.getCurrentMap();
-                if (!isCellMovable(map, destX, destY)) {
-                    const movableLocation = findMovableLocation(map, destX, destY);
-                    if (movableLocation) {
-                        destX = movableLocation.x;
-                        destY = movableLocation.y;
-                    }
-                }
                 if (!this.player.isParalyzed()) {
+                    this.player.clearAttackTarget();
                     this.player.setDestination(destX, destY, false);
                 }
             }
@@ -1238,6 +1819,10 @@ export class GameWorld extends Scene {
                     playerWorldX = this.player.getWorldX();
                     playerWorldY = this.player.getWorldY();
                     playerGender = this.player.getGender();
+                    setCharacterStats({
+                        isPoisoned: this.player.hasTemporaryEffect(TemporaryEffectType.Poison),
+                    });
+                    this.syncEnemySkullMarkers();
                 }
 
                 EventBus.emit(OUT_UI_GAME_STATS_UPDATE, {
@@ -1262,8 +1847,8 @@ export class GameWorld extends Scene {
                     pointer && this.cameras?.main
                         ? getMonsterUnderWorldPixelForHoverUi(
                             this.monsters,
-                            pointer.x + this.cameras.main.scrollX,
-                            pointer.y + this.cameras.main.scrollY,
+                            pointerWorldPixel(pointer, this.cameras.main).x,
+                            pointerWorldPixel(pointer, this.cameras.main).y,
                         )
                         : undefined;
                 const liveMonsterForHover = hoveredMonster && !hoveredMonster.isDead() ? hoveredMonster : undefined;
@@ -1271,8 +1856,8 @@ export class GameWorld extends Scene {
                     pointer && this.cameras?.main
                         ? getNpcUnderWorldPixelForHover(
                             this.npcs,
-                            pointer.x + this.cameras.main.scrollX,
-                            pointer.y + this.cameras.main.scrollY,
+                            pointerWorldPixel(pointer, this.cameras.main).x,
+                            pointerWorldPixel(pointer, this.cameras.main).y,
                         )
                         : undefined;
                 const liveNpcForHover = hoveredNpcForHover && !hoveredNpcForHover.isDead() ? hoveredNpcForHover : undefined;
@@ -1280,8 +1865,8 @@ export class GameWorld extends Scene {
                     pointer && this.cameras?.main
                         ? getPlayerUnderWorldPixelForHover(
                             this.playersById,
-                            pointer.x + this.cameras.main.scrollX,
-                            pointer.y + this.cameras.main.scrollY,
+                            pointerWorldPixel(pointer, this.cameras.main).x,
+                            pointerWorldPixel(pointer, this.cameras.main).y,
                         )
                         : undefined;
                 const hoveredGroundItem =
@@ -1356,30 +1941,19 @@ export class GameWorld extends Scene {
                         }
                         case 'monster': {
                             showMonsterHover = true;
-                            const anchorX = top.monster.getAnimatedPixelX();
-                            const anchorY = top.monster.getAnimatedPixelY() + MONSTER_HOVER_OVERLAY_ANCHOR_OFFSET_Y;
-                            const camera = this.cameras.main;
-                            const canvasX = anchorX - camera.scrollX;
-                            const canvasY = anchorY - camera.scrollY;
-                            const { screenX: overlayScreenX, screenY: overlayScreenY } = canvasToScreenPosition(
-                                canvasX,
-                                canvasY,
-                                this.game,
-                            );
-                            monsterHoverInfo = {
-                                name: top.monster.getDisplayName(),
-                                hp: top.monster.getHp(),
-                                maxHp: top.monster.getMaxHp(),
-                                allegiance: top.monster.getAllegiance(),
-                                overlayScreenX,
-                                overlayScreenY,
-                            };
+                            monsterHoverInfo = this.buildMonsterTargetHoverInfo(top.monster);
                             break;
                         }
                         case 'player': {
                             showPlayerHover = true;
+                            // Olympia DrawObjectName(sX, sY): sX/sY = character draw pos (feet pivot).
+                            // Prefer body sprite bottom (visual feet); fall back to cell-center base.
+                            const bodyBounds = top.player.getBounds();
                             const anchorX = top.player.getAnimatedPixelX();
-                            const anchorY = top.player.getAnimatedPixelY() + PLAYER_HOVER_OVERLAY_ANCHOR_OFFSET_Y;
+                            const feetY = bodyBounds
+                                ? bodyBounds.y + bodyBounds.height
+                                : top.player.getAnimatedPixelY();
+                            const anchorY = feetY + PLAYER_HOVER_OVERLAY_ANCHOR_OFFSET_Y;
                             const camera = this.cameras.main;
                             const canvasX = anchorX - camera.scrollX;
                             const canvasY = anchorY - camera.scrollY;
@@ -1388,14 +1962,39 @@ export class GameWorld extends Scene {
                                 canvasY,
                                 this.game,
                             );
+                            const hoverDisplay = buildPlayerHoverDisplay(top.player, this.player);
+                            const confusedName = this.resolveConfusedPlayerNameDisplay(
+                                top.player.getCharacterName(),
+                                top.player.getPlayerId() ?? top.player.getCharacterName(),
+                            );
+                            // Illusion: classic replaces the base name with "?????" (suffixes stay via buildPlayerHoverDisplay).
+                            if (confusedName !== top.player.getCharacterName()) {
+                                const suffix = hoverDisplay.displayName.slice(top.player.getCharacterName().length);
+                                hoverDisplay.displayName = `${confusedName}${suffix}`;
+                            }
                             playerHoverInfo = {
-                                characterName: top.player.getCharacterName(),
-                                spawnProtection: top.player.hasSpawnProtection(),
+                                displayName: hoverDisplay.displayName,
+                                guildLine: hoverDisplay.guildLine,
+                                affiliation: hoverDisplay.affiliation,
+                                affiliationColor: hoverDisplay.affiliationColor,
+                                // Classic: FOE enemy = red affiliation only (no skull row above feet).
+                                showEnemySkull: false,
                                 overlayScreenX,
                                 overlayScreenY,
                             };
                             break;
                         }
+                    }
+                } else {
+                    // Keep Olympia target HP bar while attacking even if the cursor left the mob.
+                    const attackTarget = this.player?.getAttackTarget();
+                    if (
+                        attackTarget &&
+                        !attackTarget.isDead() &&
+                        attackTarget instanceof Monster
+                    ) {
+                        showMonsterHover = true;
+                        monsterHoverInfo = this.buildMonsterTargetHoverInfo(attackTarget);
                     }
                 }
 
@@ -1417,31 +2016,93 @@ export class GameWorld extends Scene {
 
         if (this.initialGameWorldState) {
             if (this.initialGameWorldState.playerX === -1 || this.initialGameWorldState.playerY === -1) {
-                playerWorldX = Math.floor(map.sizeX / 2);
-                playerWorldY = Math.floor(map.sizeY / 2);
-                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Map change, using center position:`, { playerWorldX, playerWorldY });
+                // Traveler default map: inland hub, never raw map-center (coastal shore south of ~y104).
+                const pendingMapId = normalizeMapId(this.initialGameWorldState.mapName ?? map.fileName);
+                if (this.gameWorldId === 'traveler' || pendingMapId === 'default') {
+                    playerWorldX = 90;
+                    playerWorldY = 80;
+                    console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Map change, using traveler hub:`, {
+                        playerWorldX,
+                        playerWorldY,
+                    });
+                } else {
+                    playerWorldX = Math.floor(map.sizeX / 2);
+                    playerWorldY = Math.floor(map.sizeY / 2);
+                    console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Map change, using center position:`, {
+                        playerWorldX,
+                        playerWorldY,
+                    });
+                }
             } else {
                 playerWorldX = this.initialGameWorldState.playerX;
                 playerWorldY = this.initialGameWorldState.playerY;
                 console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Using server-provided coordinates:`, { playerWorldX, playerWorldY });
             }
         } else {
-            playerWorldX = Math.floor(map.sizeX / 2);
-            playerWorldY = Math.floor(map.sizeY / 2);
-            console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] No initial state, using center position:`, { playerWorldX, playerWorldY });
+            const pendingMapId = normalizeMapId(map.fileName);
+            if (this.gameWorldId === 'traveler' || pendingMapId === 'default') {
+                playerWorldX = 90;
+                playerWorldY = 80;
+                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] No initial state, using traveler hub:`, {
+                    playerWorldX,
+                    playerWorldY,
+                });
+            } else {
+                playerWorldX = Math.floor(map.sizeX / 2);
+                playerWorldY = Math.floor(map.sizeY / 2);
+                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] No initial state, using center position:`, {
+                    playerWorldX,
+                    playerWorldY,
+                });
+            }
         }
 
-        // Check if the calculated position is movable, if not find nearest movable location
+        // Check if the calculated position is movable dry land; if not find nearest movable location
+        const mapId = this.initialGameWorldState?.mapName ?? map.fileName;
+        const normalizedMapId = normalizeMapId(mapId);
+        const isTravelerMap = this.gameWorldId === 'traveler' || normalizedMapId === 'default';
+
+        // Traveler: hard-force inland hub whenever the tile is wet/blocked — never spiral toward shore.
+        if (isTravelerMap) {
+            const tile = map.getTile(playerWorldX, playerWorldY);
+            if (!tile || !tile.isMoveAllowed || tile.isWater) {
+                playerWorldX = 90;
+                playerWorldY = 80;
+                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Traveler wet/blocked spawn — forcing hub:`, {
+                    playerWorldX,
+                    playerWorldY,
+                });
+            }
+        }
+
         const initialTile = map.getTile(playerWorldX, playerWorldY);
-        if (!initialTile || !initialTile.isMoveAllowed) {
-            console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Initial position is not movable, searching for movable location...`);
-            const movableLocation = findMovableLocation(map, playerWorldX, playerWorldY);
-            if (movableLocation) {
-                playerWorldX = movableLocation.x;
-                playerWorldY = movableLocation.y;
-                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Found movable location:`, { playerWorldX, playerWorldY });
+        if (!initialTile || !initialTile.isMoveAllowed || initialTile.isWater) {
+            if (isTravelerMap) {
+                playerWorldX = 90;
+                playerWorldY = 80;
             } else {
-                console.warn(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] No movable location found near initial position, using original coordinates`);
+                console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Initial position is not movable/dry, searching for movable location...`);
+                const movableLocation = findMovableLocation(map, playerWorldX, playerWorldY);
+                if (movableLocation) {
+                    playerWorldX = movableLocation.x;
+                    playerWorldY = movableLocation.y;
+                    console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Found movable location:`, { playerWorldX, playerWorldY });
+                } else {
+                    console.warn(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] No movable location found near initial position, using original coordinates`);
+                }
+            }
+        }
+
+        // Avoid landing on or adjacent to warp tiles (prevents enter/exit loops).
+        // Traveler: if safe-spawn still wet, snap hub again (never accept shore).
+        const safeSpawn = resolveSafePlayerSpawn(map, normalizedMapId, playerWorldX, playerWorldY);
+        playerWorldX = safeSpawn.x;
+        playerWorldY = safeSpawn.y;
+        if (isTravelerMap) {
+            const afterSafe = map.getTile(playerWorldX, playerWorldY);
+            if (!afterSafe || !afterSafe.isMoveAllowed || afterSafe.isWater) {
+                playerWorldX = 90;
+                playerWorldY = 80;
             }
         }
 
@@ -1461,17 +2122,36 @@ export class GameWorld extends Scene {
                 ? this.initialGameWorldState.movementSpeedMs
                 : playerDialogStore.state.movementSpeed;
 
-        // Create player at server-provided or fallback center position
-        this.player = new Player(
-            this,
-            playerWorldX,
-            playerWorldY,
-            initialPlayerDirection,
-            this.soundManager,
-            map,
-            this.createDefaultPlayerGear(),
-            initialMovementSpeedMs,
-        );
+        // Create player at server-provided or fallback center position.
+        // Never let equip-layer texture errors black-screen the world.
+        try {
+            this.player = new Player(
+                this,
+                playerWorldX,
+                playerWorldY,
+                initialPlayerDirection,
+                this.soundManager,
+                map,
+                this.createDefaultPlayerGear(),
+                initialMovementSpeedMs,
+            );
+        } catch (error) {
+            console.error('[GameWorld] Player create failed (retry naked body):', error);
+            this.player = new Player(
+                this,
+                playerWorldX,
+                playerWorldY,
+                initialPlayerDirection,
+                this.soundManager,
+                map,
+                {
+                    human: 'wm',
+                    underwearColorIndex: 0,
+                    hairStyleIndex: 0,
+                },
+                initialMovementSpeedMs,
+            );
+        }
         if (this.selfPlayerId) {
             this.player.setPlayerId(this.selfPlayerId);
             this.playersById.set(this.selfPlayerId, this.player);
@@ -1525,6 +2205,13 @@ export class GameWorld extends Scene {
             ? this.initialGameWorldState.attackMode
             : playerDialogStore.state.attackMode;
         this.player.setAttackMode(attackMode);
+        const citizenshipSide = this.initialGameWorldState?.citizenshipSide
+            ?? (characterDialogStore.state.stats.faction === 'Aresden'
+                ? 'aresden'
+                : characterDialogStore.state.stats.faction === 'Elvine'
+                  ? 'elvine'
+                  : 'traveler');
+        this.player.setCitizenshipSide(citizenshipSide);
 
         const pickupMs = this.initialGameWorldState?.playerPickupAnimationTimeMs;
         if (pickupMs !== undefined && pickupMs > 0) {
@@ -1542,11 +2229,10 @@ export class GameWorld extends Scene {
             this.player.setSpawnProtectionEffect(true);
         }
 
-        // Apply saved music volume from GameStateManager
+        // Apply saved music/sound volume from GameStateManager
         const savedMusicVolume = gameStateManager.getMusicVolume();
         getMusicManager(this).setMusicVolume(savedMusicVolume);
 
-        // Apply saved sound volume from GameStateManager
         const savedSoundVolume = gameStateManager.getSoundVolume();
         this.soundManager.setSoundVolume(savedSoundVolume);
 
@@ -1604,11 +2290,41 @@ export class GameWorld extends Scene {
         }
 
         const map = this.pendingLoadedMap;
+        const expectedMapId = normalizeMapId(this.initialGameWorldState?.mapName ?? this.mapManager?.getCurrentMapName() ?? '');
+        const loadedMapId = normalizeMapId(map.fileName.replace(/^map-/, ''));
+        if (expectedMapId && loadedMapId && expectedMapId !== loadedMapId) {
+            console.warn(
+                `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Discarding stale map '${loadedMapId}' (expected '${expectedMapId}') — reloading`,
+            );
+            this.pendingLoadedMap = undefined;
+            this.loadingMap = true;
+            void this.runDeferredMapLoad();
+            return;
+        }
+
         this.pendingLoadedMap = undefined;
-        this.setupMap(map);
-        EventBus.emit(OUT_MAP_LOADED);
-        if (this.gameWorldId) {
-            EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
+        try {
+            this.setupMap(map);
+            EventBus.emit(OUT_MAP_LOADED);
+            if (this.gameWorldId) {
+                EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
+            }
+        } catch (error) {
+            // Log full stack — "Map setup failed" without cause hid real bugs (player gear, camera, etc.).
+            console.error('[GameWorld] setupMap failed:', error);
+            if (error instanceof Error && error.stack) {
+                console.error('[GameWorld] setupMap stack:', error.stack);
+            }
+            // Keep map painted if tiles already exist; still clear overlay so player is not stuck on black loading.
+            this.loadingMap = false;
+            try {
+                this.cameraManager?.setZoom(1);
+            } catch {
+                /* ignore */
+            }
+            this.forceClearLoadingOverlay(
+                `Map setup failed: ${error instanceof Error ? error.message : String(error)}. Try F5 / hard refresh.`,
+            );
         }
     }
 
@@ -1628,7 +2344,13 @@ export class GameWorld extends Scene {
         const gameStateManager = getGameStateManager(this.game);
         const savedCameraZoom = gameStateManager.getCameraZoom();
         // Convert percentage to zoom value (e.g., 100% = 1.0, 50% = 0.5, 200% = 2.0)
-        const cameraZoom = savedCameraZoom / 100;
+        // Guard NaN/0/out-of-range — bad localStorage zoom used to abort setupMap and stick players.
+        let cameraZoom = typeof savedCameraZoom === 'number' && Number.isFinite(savedCameraZoom)
+            ? savedCameraZoom / 100
+            : 1;
+        if (!Number.isFinite(cameraZoom) || cameraZoom < 0.2 || cameraZoom > 2.5) {
+            cameraZoom = 1;
+        }
         this.cameraManager?.setZoom(cameraZoom);
         console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Applied saved camera zoom after minimap snapshot:`, savedCameraZoom, '% =', cameraZoom);
 
@@ -1639,11 +2361,35 @@ export class GameWorld extends Scene {
         // Map has been fully loaded
         this.loadingMap = false;
         MapWarpSystem.getInstance().beginPostLoadGrace();
+        // Never leave warp/water debug overlays on after map load (yellow/blue boxes hide the world).
+        map.disableTeleportCellsHighlight();
+        map.disableServerTeleportCellsHighlight();
+        map.disableWaterCellsHighlight();
         this.syncMonstersFromNetworkState();
         this.syncNpcsFromNetworkState();
         this.syncGroundStatesFromNetworkState();
         this.syncOtherPlayersFromNetworkState();
         this.tryPushWorldTeleportCellsToCurrentMap();
+        // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
+        // froze the browser (felt like "everything broke"). Pit markers still show as
+        // letter labels; thumbs only when a live monster of that type enters view.
+    }
+
+    /**
+     * Extract south-idle frame for minimap when a live monster is already loaded.
+     * Never loads packs just for the guide map.
+     */
+    private emitMonsterMinimapThumb(sprite: string): boolean {
+        try {
+            const dataUrl = extractMonsterMinimapThumbDataUrl(this, sprite);
+            if (dataUrl) {
+                EventBus.emit(OUT_SPRITE_FRAME_EXTRACTED, `minimap-mob-${sprite}`, dataUrl);
+                return true;
+            }
+        } catch {
+            /* ignore — pit fallback letters are fine */
+        }
+        return false;
     }
 
     private setTeleportLocs(teleportLocs: TeleportLocSet[] | undefined): void {
@@ -1705,20 +2451,59 @@ export class GameWorld extends Scene {
     }
 
     private tryConsumePendingTransferredWorldState(): boolean {
-        const pendingInitialGameWorldState = getNetworkManager(this.game)?.getAndClearPendingInitialGameWorldState();
+        const nm = getNetworkManager(this.game);
+        // Peek without clearing until we decide — NetworkManager only has getAndClear.
+        const pendingInitialGameWorldState = nm?.getAndClearPendingInitialGameWorldState();
         if (!pendingInitialGameWorldState) {
             return false;
+        }
+
+        // Map/world changes must full-restart. Applying city spawn coords (e.g. Aresden 149,127)
+        // onto the still-loaded traveler `default` map places the player in water (sprite 19).
+        // Also force restart when world id changed even if mapName string matches (barracks floors).
+        const nextState = toRegistryInitialGameWorldState(pendingInitialGameWorldState);
+        const currentMapId = normalizeMapId(this.initialGameWorldState?.mapName ?? '');
+        const nextMapId = normalizeMapId(nextState.mapName);
+        const worldChanged =
+            !!pendingInitialGameWorldState.gameWorldId &&
+            pendingInitialGameWorldState.gameWorldId !== this.gameWorldId;
+        const mapChanged =
+            nextMapId !== '' && currentMapId !== '' && nextMapId !== currentMapId;
+
+        if (worldChanged || mapChanged) {
+            this.restartOntoTransferredWorld(nextState, worldChanged ? 'world-id-change' : 'map-name-change');
+            return true;
         }
 
         this.applyTransferredWorldState(pendingInitialGameWorldState);
         return true;
     }
 
+    /**
+     * Tears down in-flight map load and restarts GameWorld onto the server's new world/map.
+     * Avoids painting traveler `default` tiles at city plaza coordinates.
+     */
+    private restartOntoTransferredWorld(initialGameWorldState: InitialGameWorldState, reason: string): void {
+        console.log(
+            `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Restarting onto '${initialGameWorldState.gameWorldId}' (${initialGameWorldState.mapName}) [${reason}]`,
+        );
+        this.clearWorldTransferWatchdog();
+        this.clearPendingRequestedWorldChangeListener();
+        this.awaitingTransferredWorldState = false;
+        this.pendingPredictedWorldTransfer = false;
+        this.pendingLoadedMap = undefined;
+        getGameStateManager(this.game).saveGameState();
+        setInitialGameWorldState(this.game, initialGameWorldState);
+        this.scene.restart({ initialGameWorldState });
+    }
+
     private applyTransferredWorldState(data: InitialGameWorldStateEventData): void {
+        this.clearWorldTransferWatchdog();
         this.awaitingTransferredWorldState = false;
         this.pendingPredictedWorldTransfer = false;
         this.initialGameWorldState = toRegistryInitialGameWorldState(data);
         setInitialGameWorldState(this.game, this.initialGameWorldState);
+        this.mapManager?.setInitialMapName(this.initialGameWorldState.mapName);
         this.mapManager?.setInitialMusicFile(data.musicFile);
         if (this.playMapMusic && data.musicFile) {
             this.mapManager?.playInitialMusic();
@@ -1726,8 +2511,18 @@ export class GameWorld extends Scene {
         this.gameWorldId = data.gameWorldId;
         this.setTeleportLocs(data.teleportLocs);
         if (data.weather !== undefined) {
+            this.stopAmbientWeather();
             this.weatherManager?.setWeather(data.weather);
             syncWeather(data.weather);
+            this.maybeStartAmbientWeather(data.weather);
+        }
+        // NetworkManager already cleared in-view caches on IGWS and emits leave events;
+        // rebuild remotes/ground/NPC/monsters from whatever has been re-filled so far.
+        if (!this.loadingMap && this.mapManager) {
+            this.syncMonstersFromNetworkState();
+            this.syncNpcsFromNetworkState();
+            this.syncGroundStatesFromNetworkState();
+            this.syncOtherPlayersFromNetworkState();
         }
     }
 
@@ -1745,9 +2540,11 @@ export class GameWorld extends Scene {
             return;
         }
 
+        this.pendingNpcInteraction = undefined;
         this.pendingPredictedWorldTransfer = true;
         this.awaitingTransferredWorldState = true;
         MapWarpSystem.getInstance().markWarpTriggered();
+        this.armWorldTransferWatchdog(worldId);
 
         this.clearPendingRequestedWorldChangeListener();
         this.pendingRequestedWorldChangeListener = (data: InitialGameWorldStateEventData) => {
@@ -1756,22 +2553,56 @@ export class GameWorld extends Scene {
                     return;
                 }
 
-                this.clearPendingRequestedWorldChangeListener();
-                const initialGameWorldState = toRegistryInitialGameWorldState(data);
-                getGameStateManager(this.game).saveGameState();
-                setInitialGameWorldState(this.game, initialGameWorldState);
-                this.scene.restart({ initialGameWorldState });
+                // Consume pending so update()/tryFinalize cannot paint the old .amd at new coords.
+                getNetworkManager(this.game)?.clearPendingInitialGameWorldState();
+                this.restartOntoTransferredWorld(toRegistryInitialGameWorldState(data), 'warp-transfer');
             } catch (error) {
                 console.error('[GameWorld:beginWorldTransfer]', error);
-                this.pendingPredictedWorldTransfer = false;
-                this.awaitingTransferredWorldState = false;
+                this.clearPendingWorldTransfer('beginWorldTransfer listener error');
             }
         };
         EventBus.on(INITIAL_GAME_WORLD_STATE_RECEIVED, this.pendingRequestedWorldChangeListener);
         networkManager.requestWorldChange(worldId, false, true);
     }
 
+    /** Arms a short watchdog so a silent server reject cannot permanently disable building doors. */
+    private armWorldTransferWatchdog(worldId: string): void {
+        this.clearWorldTransferWatchdog();
+        this.worldTransferWatchdog = this.time.delayedCall(5000, () => {
+            this.worldTransferWatchdog = undefined;
+            if (!this.awaitingTransferredWorldState && !this.pendingPredictedWorldTransfer) {
+                return;
+            }
+            console.warn(
+                `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] World transfer to '${worldId}' timed out; clearing pending warp state so doors can retry.`,
+            );
+            this.clearPendingWorldTransfer('watchdog timeout');
+        });
+    }
+
+    private clearWorldTransferWatchdog(): void {
+        if (!this.worldTransferWatchdog) {
+            return;
+        }
+        this.worldTransferWatchdog.remove(false);
+        this.worldTransferWatchdog = undefined;
+    }
+
+    private clearPendingWorldTransfer(_reason: string): void {
+        this.clearWorldTransferWatchdog();
+        this.clearPendingRequestedWorldChangeListener();
+        this.pendingPredictedWorldTransfer = false;
+        this.awaitingTransferredWorldState = false;
+    }
+
     private beginRequestedWorldChange(worldId: string, validateTeleport = false): void {
+        if (!worldId || worldId === this.gameWorldId) {
+            return;
+        }
+        if (this.pendingPredictedWorldTransfer || this.awaitingTransferredWorldState) {
+            return;
+        }
+
         const networkManager = getNetworkManager(this.game);
         if (!networkManager) {
             console.warn(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Cannot request world change: network manager not found`);
@@ -1779,19 +2610,20 @@ export class GameWorld extends Scene {
         }
 
         this.clearPendingRequestedWorldChangeListener();
+        this.pendingPredictedWorldTransfer = true;
+        this.awaitingTransferredWorldState = true;
+        this.armWorldTransferWatchdog(worldId);
         this.pendingRequestedWorldChangeListener = (data: InitialGameWorldStateEventData) => {
             try {
                 if (data.gameWorldId !== worldId) {
                     return;
                 }
 
-                this.clearPendingRequestedWorldChangeListener();
-                const initialGameWorldState = toRegistryInitialGameWorldState(data);
-                getGameStateManager(this.game).saveGameState();
-                setInitialGameWorldState(this.game, initialGameWorldState);
-                this.scene.restart({ initialGameWorldState });
+                getNetworkManager(this.game)?.clearPendingInitialGameWorldState();
+                this.restartOntoTransferredWorld(toRegistryInitialGameWorldState(data), 'requested-world-change');
             } catch (error) {
                 console.error('[GameWorld:pendingRequestedWorldChange]', error);
+                this.clearPendingWorldTransfer('requested-world-change listener error');
             }
         };
         EventBus.on(INITIAL_GAME_WORLD_STATE_RECEIVED, this.pendingRequestedWorldChangeListener);
@@ -1815,7 +2647,10 @@ export class GameWorld extends Scene {
      */
     public update(_time: number, delta: number): void {
         runSafeSync('GameWorld:update', () => {
-            if (this.awaitingTransferredWorldState && this.tryConsumePendingTransferredWorldState()) {
+            // Consume server world transfers always (door warps AND Recall / death / etc.).
+            // Previously only checked when awaitingTransferredWorldState was set by door warps,
+            // so Recall left IGWS pending → black map + coordinate desync.
+            if (this.tryConsumePendingTransferredWorldState()) {
                 if (this.pendingLoadedMap) {
                     this.tryFinalizeMapSetup();
                 }
@@ -1867,6 +2702,7 @@ export class GameWorld extends Scene {
                 const cam = this.cameras.main;
                 this.weatherManager.update(delta, cam.scrollX, cam.scrollY, cam.width, cam.height);
             }
+            this.updateDayNightOverlay();
         });
     }
 
@@ -1878,6 +2714,15 @@ export class GameWorld extends Scene {
     private drawLoadingOverlay(callback: () => void): void {
         this.initializationStarted = true;
         this.loadingOverlayController!.drawAndDeferLoad(callback);
+        // Hard failsafe: never stay black with "Loading map..." forever (minimap/WebGL hang).
+        this.time.delayedCall(20000, () => {
+            if (this.loadingMap) {
+                console.warn('[GameWorld] Loading map timeout (20s) — forcing overlay clear.');
+                this.forceClearLoadingOverlay(
+                    'Map load timed out. If the world is blank, press F5 and re-enter.',
+                );
+            }
+        });
     }
 
     /**
@@ -1888,21 +2733,48 @@ export class GameWorld extends Scene {
             if (shouldLoadMapAssetsOnDemand()) {
                 await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName());
             }
-        } catch (error) {
-            console.error('[GameWorld] Map on-demand load failed:', error);
-            throw error;
-        }
 
-        runSafeSync('GameWorld:deferredMapLoad', () => {
-            this.displayedMap = this.mapManager!.getCurrentMap();
-            this.mapManager!.startMinimapCapture((map) => {
-                runSafeSync('GameWorld:minimapCapture', () => {
-                    map.renderMapObjects(this, true); // Third pass (with trees)
-                    this.pendingLoadedMap = map;
-                    this.tryFinalizeMapSetup();
+            runSafeSync('GameWorld:deferredMapLoad', () => {
+                this.displayedMap = this.mapManager!.getCurrentMap();
+                this.mapManager!.startMinimapCapture((map) => {
+                    runSafeSync('GameWorld:minimapCapture', () => {
+                        try {
+                            map.renderMapObjects(this, true); // Third pass (with trees)
+                            // Apply SysMenu detail (hide trees on Low) after objects exist.
+                            map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
+                            this.pendingLoadedMap = map;
+                            this.tryFinalizeMapSetup();
+                        } catch (error) {
+                            console.error('[GameWorld] Map finalize failed:', error);
+                            this.forceClearLoadingOverlay(
+                                'Map setup failed. Try reconnecting (F5).',
+                            );
+                        }
+                    });
                 });
             });
-        });
+        } catch (error) {
+            console.error('[GameWorld] Map on-demand load failed:', error);
+            this.forceClearLoadingOverlay(
+                'Could not load map assets. Refresh (F5) or re-enter character.',
+            );
+        }
+    }
+
+    /** Never leave players stuck on black "Loading map..." (music + empty scene). */
+    private forceClearLoadingOverlay(message?: string): void {
+        this.loadingMap = false;
+        this.awaitingTransferredWorldState = false;
+        this.pendingPredictedWorldTransfer = false;
+        this.clearWorldTransferWatchdog();
+        this.loadingOverlayController?.destroyImmediate();
+        if (message) {
+            EventBus.emit(TOAST_REQUESTED, {
+                message,
+                severity: 'error',
+                autoClose: 5000,
+            });
+        }
     }
 
     private handleLeftMouseButton(): void {
@@ -1927,21 +2799,26 @@ export class GameWorld extends Scene {
 
             const pointer = inputManager.getActivePointer()!;
 
-            if (this.player.hasPendingSpell()) {
+            // Casting / aiming: hard-stop path and never treat the click as run destination.
+            if (this.player.hasPendingSpell() || this.player.isCastReady()) {
+                this.player.hardStopForCast();
                 const camera = this.cameras.main;
-                const cursorPixelX = pointer.x + camera.scrollX;
-                const cursorPixelY = pointer.y + camera.scrollY;
+                const cursorPixelX = pointerWorldPixel(pointer, camera).x;
+                const cursorPixelY = pointerWorldPixel(pointer, camera).y;
                 if (this.player.onLeftClickAt(cursorPixelX, cursorPixelY)) {
                     this.suppressLeftMouseMovementUntilRelease = true;
                     return;
                 }
+                // Still in cast bar (not CastReady yet) — eat click, don't move.
+                this.suppressLeftMouseMovementUntilRelease = true;
+                return;
             }
 
             // Pending effect summon: create effect at cursor position (overrides movement)
             if (this.castManager?.getPendingEffectKey()) {
                 const camera = this.cameras.main;
-                const worldPixelX = pointer.x + camera.scrollX;
-                const worldPixelY = pointer.y + camera.scrollY;
+                const worldPixelX = pointerWorldPixel(pointer, camera).x;
+                const worldPixelY = pointerWorldPixel(pointer, camera).y;
                 const worldX = convertPixelPosToWorldPos(worldPixelX);
                 const worldY = convertPixelPosToWorldPos(worldPixelY);
                 if (this.castManager.tryPlaceEffect(worldX, worldY)) {
@@ -1956,29 +2833,52 @@ export class GameWorld extends Scene {
                 return;
             }
 
-            // When holding over a combat target: attack when in range.
+            // Hold-to-attack: even cadence at weapon swing speed.
+            // First swing = pointerdown; subsequent swings only when not mid-anim and lock open
+            // (startAttack enforces one packet per AttackSpeedMs — no double-fire).
             if (attackTarget) {
-                this.player.attack(attackTarget);
-                if (this.player.isAttacking() || this.player.isInBowStance()) {
+                if (!this.player.isAttacking() && !this.player.isInBowStance()) {
+                    this.player.attack(attackTarget);
+                }
+                // In range / mid-swing: stay put (no pathfind thrash).
+                if (
+                    this.player.isAttacking() ||
+                    this.player.isInBowStance() ||
+                    getDistance(
+                        this.player.getWorldX(),
+                        this.player.getWorldY(),
+                        attackTarget.getWorldX(),
+                        attackTarget.getWorldY(),
+                    ) <= this.player.getAttackRange()
+                ) {
                     return;
                 }
-                // Out of range: pathfind to the target's position (player will attack when reaching adjacent cell).
-                if (getDistance(
+                // Out of range: path to free approach cell (not the occupied mob tile).
+                const approach = findApproachCellNearTarget(
+                    this.getCurrentMap(),
                     this.player.getWorldX(),
                     this.player.getWorldY(),
                     attackTarget.getWorldX(),
-                    attackTarget.getWorldY()
-                ) > this.player.getAttackRange()) {
-                    this.player.setDestination(attackTarget.getWorldX(), attackTarget.getWorldY(), false);
+                    attackTarget.getWorldY(),
+                    this.player.getAttackRange(),
+                );
+                if (approach) {
+                    this.player.setDestination(approach.x, approach.y, false);
                 }
+                return;
+            }
+
+            // Casting / aiming: never hold-run toward the cursor.
+            if (this.player.hasPendingSpell() || this.player.isCastReady()) {
+                this.player.hardStopForCast();
                 return;
             }
 
             // Not over monster: move towards cursor (throttled)
             if (inputManager.canAcceptMovementCommand()) {
                 const camera = this.cameras.main;
-                const worldPixelX = pointer.x + camera.scrollX;
-                const worldPixelY = pointer.y + camera.scrollY;
+                const worldPixelX = pointerWorldPixel(pointer, camera).x;
+                const worldPixelY = pointerWorldPixel(pointer, camera).y;
                 // Use player's anchor point (where they appear on screen) as center for direction calculation
                 const playerAnchorPixelX = this.player.getAnimatedPixelX();
                 const playerAnchorPixelY = this.player.getAnimatedPixelY();
@@ -1986,6 +2886,12 @@ export class GameWorld extends Scene {
                 const commandedDestX = convertPixelPosToWorldPos(worldPixelX);
                 const commandedDestY = convertPixelPosToWorldPos(worldPixelY);
 
+                this.player.clearAttackTarget();
+                // Olympia hold-run: always steer by cursor sector (direct mode), even when the
+                // cursor cell is a wall / water / other body. Never cancelMovement here — that
+                // froze players mid-PvP whenever the cursor skimmed a non-walkable tile.
+                // Soft destination may be blocked; GameObject.processMovement uses cursor pixels
+                // for direction and side-steps freely in direct mode (no progress-to-goal gate).
                 this.player.setDestination(
                     commandedDestX,
                     commandedDestY,
@@ -2007,9 +2913,17 @@ export class GameWorld extends Scene {
                 return;
             }
             const pointer = inputManager.getActivePointer()!;
+            const attackTarget = this.getAttackableTargetUnderPointer(pointer);
+            if (attackTarget) {
+                // Hold RMB standstill: same even cadence as LMB (gate inside startAttack).
+                if (!this.player.isAttacking() && !this.player.isInBowStance()) {
+                    this.player.attackStandstill(attackTarget);
+                }
+                return;
+            }
             const camera = this.cameras.main;
-            const worldPixelX = pointer.x + camera.scrollX;
-            const worldPixelY = pointer.y + camera.scrollY;
+            const worldPixelX = pointerWorldPixel(pointer, camera).x;
+            const worldPixelY = pointerWorldPixel(pointer, camera).y;
             const direction = getNextDirection(
                 this.player.getWorldX(),
                 this.player.getWorldY(),
@@ -2042,10 +2956,15 @@ export class GameWorld extends Scene {
             return;
         }
         const map = this.getCurrentMap();
+        // Clear first — otherwise departed actors leave permanent client-side walls.
+        map.clearDynamicOccupancy();
         for (const monster of this.monsters) {
             if (!monster.isDead()) {
                 map.setTileOccupied(monster.getWorldX(), monster.getWorldY(), true);
             }
+        }
+        if (this.player && !this.player.isDead()) {
+            map.setTileOccupied(this.player.getWorldX(), this.player.getWorldY(), true);
         }
         for (const p of this.playersById.values()) {
             if (!p.isDead()) {
@@ -2062,8 +2981,8 @@ export class GameWorld extends Scene {
         return getOtherPlayerUnderWorldPixel(
             this.player,
             this.playersById,
-            pointer.x + camera.scrollX,
-            pointer.y + camera.scrollY,
+            pointerWorldPixel(pointer, camera).x,
+            pointerWorldPixel(pointer, camera).y,
         );
     }
 
@@ -2090,11 +3009,12 @@ export class GameWorld extends Scene {
             return undefined;
         }
         const spell = getNetworkManager(this.game)?.getSpellById(spellId);
-        const isBuffSpell = spell?.damageType === undefined && (spell?.temporaryEffects?.length ?? 0) > 0;
+        // Non-damage (heal/buff/utility) may target friendly summons even while invisible.
+        const isFriendlyTargetSpell = spell?.damageType === undefined;
         if (!m.hasInvisibilityBuff()) {
             return m;
         }
-        if (isBuffSpell && m.getAllegiance() === MonsterAllegiance.Friendly) {
+        if (isFriendlyTargetSpell && m.getAllegiance() === MonsterAllegiance.Friendly) {
             return m;
         }
         return undefined;
@@ -2102,8 +3022,10 @@ export class GameWorld extends Scene {
 
     private getPlayerUnderWorldPixelForSpellAimAssist(spellId: number, worldPixelX: number, worldPixelY: number): Player | undefined {
         const spell = getNetworkManager(this.game)?.getSpellById(spellId);
-        const isBuffSpell = spell?.damageType === undefined && (spell?.temporaryEffects?.length ?? 0) > 0;
-        if (isBuffSpell) {
+        // Non-damage = heal / buff / cure / cancel / utility — Olympia body-click includes self.
+        // (Heal has healDice but no temporaryEffects; old check only treated buffs as friendly.)
+        const isFriendlyTargetSpell = spell?.damageType === undefined;
+        if (isFriendlyTargetSpell) {
             const p = getPlayerUnderWorldPixelForHover(this.playersById, worldPixelX, worldPixelY);
             if (!p || p.isDead()) {
                 return undefined;
@@ -2166,7 +3088,7 @@ export class GameWorld extends Scene {
             return undefined;
         }
         const camera = this.cameras.main;
-        return this.getMonsterUnderWorldPixelForCombatTargeting(pointer.x + camera.scrollX, pointer.y + camera.scrollY);
+        return this.getMonsterUnderWorldPixelForCombatTargeting(pointerWorldPixel(pointer, camera).x, pointerWorldPixel(pointer, camera).y);
     }
 
     private getAttackableTargetUnderPointer(pointer: Phaser.Input.Pointer): Monster | Player | undefined {
@@ -2203,8 +3125,248 @@ export class GameWorld extends Scene {
             soundManager: this.soundManager,
             map,
             npcId: entry.npcId,
+            catalogNpcId: entry.catalogNpcId,
         });
         this.npcs.push(npc);
+    }
+
+    private interactWithNpc(npc: NPC): void {
+        if (!this.player || npc.isDead()) {
+            return;
+        }
+
+        const direction = getNextDirection(
+            this.player.getWorldX(),
+            this.player.getWorldY(),
+            npc.getWorldX(),
+            npc.getWorldY(),
+        );
+        if (direction !== Direction.None) {
+            this.player.turnTowardsDirection(direction);
+        }
+
+        const role = getNpcInteractionRole(npc.getCatalogNpcId());
+        let greeting = 'Greetings.';
+        switch (role) {
+            case 'shop':
+                EventBus.emit(OUT_UI_OPEN_SHOP, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                });
+                greeting = 'What can I get you?';
+                break;
+            case 'magic-shop':
+                EventBus.emit(OUT_UI_OPEN_MAGIC_SHOP, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                });
+                greeting = 'Seek knowledge of the arcane.';
+                break;
+            case 'cash-shop':
+                EventBus.emit(OUT_UI_OPEN_CASH_SHOP, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                });
+                greeting = 'USDC/USDT for boosts & seals; $HELL for combos & stones.';
+                break;
+            case 'blacksmith':
+                EventBus.emit(OUT_UI_OPEN_BLACKSMITH, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                });
+                greeting = 'Need a blade? I have weapons for sale.';
+                break;
+            case 'warehouse':
+                EventBus.emit(OUT_UI_OPEN_WAREHOUSE, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                });
+                greeting = 'Your warehouse is ready.';
+                break;
+            case 'guild-hall':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'guild-hall',
+                    title: 'Guild Hall',
+                });
+                greeting = 'Welcome to the Guild Hall.';
+                break;
+            case 'city-hall':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'city-hall',
+                    title: 'City Hall',
+                });
+                greeting = 'City Hall is at your service.';
+                break;
+            case 'cathedral':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'cathedral',
+                    title: 'Cathedral',
+                });
+                greeting = 'May the gods watch over you.';
+                break;
+            case 'academy-learning':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'academy-learning',
+                    title: 'PvP Learning',
+                });
+                greeting = 'Drill Instructor: choose a learning sequence.';
+                break;
+            case 'academy-challenge':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'academy-challenge',
+                    title: 'PvP Challenge',
+                });
+                greeting = 'Arena Master: pick your challenge tier.';
+                break;
+            case 'command-hall':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'command-hall',
+                    title: 'Command Hall',
+                });
+                greeting = 'Report when ready for orders.';
+                break;
+            case 'guard':
+                greeting = 'Move along, citizen. Keep the peace.';
+                break;
+            case 'quest-giver':
+                greeting = 'Beginner training is optional — enroll in Quest (F5). Abandon anytime, no penalty.';
+                EventBus.emit(IN_UI_BEGINNER_PATH_TALK, { catalogNpcId: npc.getCatalogNpcId() });
+                setCharacterDialogOpen(true);
+                setCharacterSubPanel('quest');
+                break;
+            case 'garden-warden':
+                EventBus.emit(OUT_UI_OPEN_NPC_TALK, {
+                    npcId: npc.getNPCId(),
+                    npcName: npc.getDisplayName(),
+                    role: 'garden-warden',
+                    title: 'Garden Quests',
+                });
+                greeting = 'Hunt Unicorns or Trolls for the city.';
+                break;
+            case 'training-dummy':
+                greeting = 'Dummy Barracks — practice hits. Open Training for tip sheets.';
+                setTrainingPresetId(FARM_BARRACKS_PRESETS[0]?.id ?? 'farm_dummy_barracks');
+                setTrainingDialogOpen(true);
+                EventBus.emit(IN_UI_BEGINNER_PATH_TALK, { catalogNpcId: npc.getCatalogNpcId() });
+                break;
+            case 'training-merc':
+                greeting = 'Merc Barracks — Chill Wind → Paralyze → deny PFM. Mercs chase and grant XP.';
+                setTrainingPresetId(
+                    FARM_BARRACKS_PRESETS.find((p) => p.id === 'farm_cc_protocol')?.id ??
+                        FARM_BARRACKS_PRESETS[FARM_BARRACKS_PRESETS.length - 1]?.id ??
+                        'farm_cc_protocol',
+                );
+                setTrainingDialogOpen(true);
+                EventBus.emit(IN_UI_BEGINNER_PATH_TALK, { catalogNpcId: npc.getCatalogNpcId() });
+                break;
+            default:
+                break;
+        }
+
+        new FloatingText(this, {
+            text: `${npc.getDisplayName()}: ${greeting}`,
+            x: npc.getAnimatedPixelX(),
+            y: npc.getAnimatedPixelY() - TILE_SIZE,
+            fontSize: 14,
+            color: '#ffe8a3',
+            totalDurationMs: 3500,
+            fadeDurationMs: 800,
+            upwardTravelPxPerSec: 12,
+        });
+    }
+
+    private tryInteractWithNpc(npc: NPC): boolean {
+        if (!this.player || npc.isDead()) {
+            return false;
+        }
+
+        const distance = getDistance(
+            this.player.getWorldX(),
+            this.player.getWorldY(),
+            npc.getWorldX(),
+            npc.getWorldY(),
+        );
+
+        if (distance <= 2) {
+            this.pendingNpcInteraction = undefined;
+            this.player.cancelMovement();
+            this.interactWithNpc(npc);
+            return true;
+        }
+
+        // Walk to a free adjacent approach cell — never path onto the NPC's occupied stand
+        // (that makes pathfinding circle forever / step door warps = "runaway").
+        const approach = findApproachCellNearTarget(
+            this.getCurrentMap(),
+            this.player.getWorldX(),
+            this.player.getWorldY(),
+            npc.getWorldX(),
+            npc.getWorldY(),
+            2,
+        );
+        if (!approach) {
+            this.pendingNpcInteraction = undefined;
+            return false;
+        }
+
+        this.pendingNpcInteraction = npc;
+        this.player.setDestination(approach.x, approach.y, false);
+        return true;
+    }
+
+    private tryCompletePendingNpcInteraction(): void {
+        const npc = this.pendingNpcInteraction;
+        if (!npc || !this.player || npc.isDead()) {
+            this.pendingNpcInteraction = undefined;
+            return;
+        }
+
+        const distance = getDistance(
+            this.player.getWorldX(),
+            this.player.getWorldY(),
+            npc.getWorldX(),
+            npc.getWorldY(),
+        );
+        // Open as soon as in interact range — do not wait for idle; otherwise pathfinding
+        // keeps chasing and the dialog never opens.
+        if (distance <= 2) {
+            this.pendingNpcInteraction = undefined;
+            this.player.cancelMovement();
+            this.interactWithNpc(npc);
+        }
+    }
+
+    /** After walk-to-loot: pickup when standing on the target cell (and idle enough to anim). */
+    private tryCompletePendingGroundPickup(): void {
+        const pending = this.pendingGroundPickup;
+        if (!pending || !this.player) {
+            return;
+        }
+        if (
+            this.player.getWorldX() !== pending.worldX ||
+            this.player.getWorldY() !== pending.worldY
+        ) {
+            return;
+        }
+        // requestPickUp refuses while mid-step — retry briefly until idle on the cell.
+        if (this.player.isMoving()) {
+            this.time.delayedCall(80, () => this.tryCompletePendingGroundPickup());
+            return;
+        }
+        this.pendingGroundPickup = undefined;
+        this.player.requestPickUp(pending.maxItems);
     }
 
     private handleNpcsLeftRange(npcIds: string[]): void {
@@ -2220,6 +3382,10 @@ export class GameWorld extends Scene {
     }
 
     private handleMonsterEnteredRange(data: MonsterEnteredRangeEventData): void {
+        if (data.sprite) {
+            // If already loaded, publish thumb immediately; else after lazy load.
+            this.emitMonsterMinimapThumb(data.sprite);
+        }
         if (this.monsters.some((m) => m.getMonsterId() === data.monsterId)) {
             return;
         }
@@ -2298,7 +3464,9 @@ export class GameWorld extends Scene {
                 monsterId: data.monsterId,
                 temporalCoefficient: monsterTemplate.temporalCoefficient,
                 shadow: visualTemplate.shadow,
-                opacity: monsterTemplate.opacity,
+                // Hide while lazy-loading so the purple `ghk` ninja placeholder never flashes.
+                opacity: concreteAssetsReady ? monsterTemplate.opacity : 0,
+                assetsPendingLoad: !concreteAssetsReady,
                 height: monsterTemplate.height,
                 dead: data.dead,
                 state: data.state,
@@ -2323,6 +3491,8 @@ export class GameWorld extends Scene {
                             shadow: monsterTemplate.shadow,
                             height: monsterTemplate.height,
                         });
+                        // After real textures exist — feed minimap pit icons (once per sprite type).
+                        this.time.delayedCall(50, () => this.emitMonsterMinimapThumb(data.sprite));
                     })
                     .catch((error) => {
                         console.error(
@@ -2330,6 +3500,8 @@ export class GameWorld extends Scene {
                             error,
                         );
                     });
+            } else {
+                this.time.delayedCall(0, () => this.emitMonsterMinimapThumb(data.sprite));
             }
 
         } catch (error) {
@@ -2357,6 +3529,12 @@ export class GameWorld extends Scene {
         if (data.temporaryEffectType === TemporaryEffectType.Invisibility && this.player?.getAttackTarget() === p) {
             this.player.clearAttackTarget();
         }
+        if (p.isLocalCharacter()) {
+            const toastMessage = confuseApplyToastMessage(data.temporaryEffectType);
+            if (toastMessage) {
+                EventBus.emit(TOAST_REQUESTED, { message: toastMessage, severity: 'warning' });
+            }
+        }
     }
 
     private handleTemporaryEffectExpiredForPlayer(data: TemporaryEffectPlayerEventData): void {
@@ -2373,6 +3551,84 @@ export class GameWorld extends Scene {
             attackSpeedMs: data.attackSpeedMs,
             castSpeedMs: data.castSpeedMs,
         });
+        if (p.isLocalCharacter()) {
+            const toastMessage = confuseExpireToastMessage(data.temporaryEffectType);
+            if (toastMessage) {
+                EventBus.emit(TOAST_REQUESTED, { message: toastMessage, severity: 'info' });
+            }
+        }
+    }
+
+    /**
+     * Builds Olympia target/hover payload for a live monster (name + HP strip + Berserked).
+     */
+    private buildMonsterTargetHoverInfo(monster: Monster): MonsterHoverInfo {
+        const anchorX = monster.getAnimatedPixelX();
+        const anchorY = monster.getAnimatedPixelY() + MONSTER_HOVER_OVERLAY_ANCHOR_OFFSET_Y;
+        const camera = this.cameras.main;
+        const canvasX = anchorX - camera.scrollX;
+        const canvasY = anchorY - camera.scrollY;
+        const { screenX: overlayScreenX, screenY: overlayScreenY } = canvasToScreenPosition(
+            canvasX,
+            canvasY,
+            this.game,
+        );
+        return {
+            name: monster.getDisplayName(),
+            hp: monster.getHp(),
+            maxHp: monster.getMaxHp(),
+            allegiance: this.resolveConfusedAllegianceDisplay(monster.getAllegiance(), monster.getMonsterId()),
+            berserked: monster.isBerserked(),
+            overlayScreenX,
+            overlayScreenY,
+        };
+    }
+
+    /**
+     * Keeps world-space enemy skull markers in sync for opposing-city remote players (FOE &lt; 0).
+     * PK count is not on the wire yet — citizenship FOE is the available enemy cue.
+     */
+    private syncEnemySkullMarkers(): void {
+        if (!this.player) {
+            return;
+        }
+        for (const other of this.playersById.values()) {
+            if (other === this.player) {
+                other.clearEnemySkullMarker();
+                continue;
+            }
+            const foe = resolvePlayerHoverFoe(
+                this.player.getCitizenshipSide(),
+                other.getCitizenshipSide(),
+                false,
+            );
+            other.syncEnemySkullMarker(foe < 0);
+        }
+    }
+
+    /**
+     * Olympia Confusion: spoof allegiance labels on hover so the local player cannot trust friend/foe cues.
+     */
+    private resolveConfusedAllegianceDisplay(real: MonsterAllegiance, seed: string): MonsterAllegiance {
+        if (!this.player?.hasTemporaryEffect(TemporaryEffectType.Confusion)) {
+            return real;
+        }
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+            hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+        }
+        const values = [MonsterAllegiance.Hostile, MonsterAllegiance.Neutral, MonsterAllegiance.Friendly];
+        return values[Math.abs(hash) % values.length]!;
+    }
+
+    /**
+     * Olympia Illusion: spoof remote character names on hover; Confusion alone keeps the real name.
+     */
+    private resolveConfusedPlayerNameDisplay(realName: string, seed: string): string {
+        if (!this.player?.hasTemporaryEffect(TemporaryEffectType.Illusion)) {
+            return realName;
+        }
+        return illusionSpoofName(seed || realName);
     }
 
     private handleTemporaryEffectAppliedForMonster(data: TemporaryEffectMonsterEventData): void {
@@ -2403,10 +3659,15 @@ export class GameWorld extends Scene {
     }
 
     private handleCastEffectAtCell(data: { effectKey: string; x: number; y: number }): void {
-        if (!this.mapManager || this.loadingMap || !this.soundManager) {
+        // Still draw when soundManager is missing; only skip mid-map-load.
+        if (!this.mapManager || this.loadingMap) {
             return;
         }
-        const options: DrawEffectOptions = { soundManager: this.soundManager };
+        const options: DrawEffectOptions = {
+            soundManager: this.soundManager ?? undefined,
+            // Always above map objects / invisible carpets on the same row.
+            depthOffset: 70,
+        };
         if (this.player) {
             options.playerWorldX = this.player.getWorldX();
             options.playerWorldY = this.player.getWorldY();
@@ -2453,12 +3714,9 @@ export class GameWorld extends Scene {
                     state.groundItem.itemAttribute,
                     state.groundItem.itemColor,
                 );
-                EventBus.emit(ITEM_DROPPED_TO_GROUND, {
-                    itemId: state.groundItem.itemId,
-                    effectOverrides: state.groundItem.effectOverrides,
-                    itemAttribute: state.groundItem.itemAttribute,
-                    itemColor: state.groundItem.itemColor,
-                });
+                // Do NOT emit ITEM_DROPPED_TO_GROUND here — that fires for every pile
+                // entering view and filled Item Drops with junk. Notable loot is logged
+                // on bag pickup only (ITEM_ADD_FROM_GROUND → ItemDrops.store).
             }
         }
     }
@@ -2501,7 +3759,7 @@ export class GameWorld extends Scene {
                 itemAttribute,
                 itemColor,
             );
-            groundItem.setDepth(worldY * DEPTH_MULTIPLIER - DEPTH_MULTIPLIER / 2);
+            groundItem.setDepth(worldY * DEPTH_MULTIPLIER - 5);
             this.groundItems.push(groundItem);
         } catch (error) {
             console.warn(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to create GroundItem:`, error);
@@ -2780,6 +4038,7 @@ export class GameWorld extends Scene {
                 hairStyleIndex: data.hairStyleIndex,
             },
             data.characterName,
+            data.citizenshipSide,
         );
         if (data.spawnProtection) {
             otherPlayer.setSpawnProtectionEffect(true);
@@ -2866,6 +4125,7 @@ export class GameWorld extends Scene {
                 visibleEquippedItems,
                 appearance,
                 snap?.characterName ?? '',
+                snap?.citizenshipSide ?? 'traveler',
             );
             otherPlayer.syncActiveTemporaryEffects(snap?.activeTemporaryEffects ?? []);
             otherPlayer.applySpeedsMs({
@@ -2972,7 +4232,13 @@ export class GameWorld extends Scene {
     }
 
     private handleSpellCastCancelled(data: SpellCastCancelledEventData): void {
-        if (data.playerId === this.selfPlayerId || !this.player || !this.mapManager || this.loadingMap) {
+        if (!this.player || !this.mapManager || this.loadingMap) {
+            return;
+        }
+
+        // Local player: clear cast bar only (do not re-send cancel — already cancelled on server).
+        if (data.playerId === this.selfPlayerId) {
+            this.player.cancelPendingCast();
             return;
         }
 
@@ -2985,20 +4251,22 @@ export class GameWorld extends Scene {
     }
 
     private handleCastAoeSpell(data: CastAoeSpellEventData): void {
-        if (!this.player || !this.mapManager || this.loadingMap || !this.castManager) {
+        if (!this.mapManager || this.loadingMap || !this.castManager) {
             return;
         }
 
         const caster = this.resolvePlayerById(data.playerId);
-        if (!caster) {
+        if (caster) {
+            if (data.playerId !== this.selfPlayerId) {
+                caster.clearRemoteSpellCast();
+            }
+            this.castManager.dispatchNetworkPlayerAoeSpell(caster, data);
             return;
         }
 
-        if (data.playerId !== this.selfPlayerId) {
-            caster.clearRemoteSpellCast();
-        }
-
-        this.castManager.dispatchNetworkPlayerAoeSpell(caster, data);
+        // Caster left camera range mid-cast — still play impact/AoE at the target cell
+        // so VFX is not silently dropped (intermittent "no animation" reports).
+        this.castManager.dispatchNetworkAoeSpellAtTarget(data.spellId, data.x, data.y);
     }
 
     private handleCastDirectionalAoeSpell(data: CastDirectionalAoeSpellEventData): void {
@@ -3019,16 +4287,17 @@ export class GameWorld extends Scene {
     }
 
     private handleMonsterCastAoeSpell(data: MonsterCastAoeSpellEventData): void {
-        if (!this.player || !this.mapManager || this.loadingMap || !this.castManager) {
+        if (!this.mapManager || this.loadingMap || !this.castManager) {
             return;
         }
 
         const monster = this.resolveMonsterById(data.monsterId);
-        if (!monster || monster.isDead()) {
+        if (monster && !monster.isDead()) {
+            this.castManager.dispatchNetworkMonsterAoeSpell(monster, data);
             return;
         }
-
-        this.castManager.dispatchNetworkMonsterAoeSpell(monster, data);
+        // Monster despawned / out of range — still show impact at target.
+        this.castManager.dispatchNetworkAoeSpellAtTarget(data.spellId, data.x, data.y);
     }
 
     private handleMonsterCastDirectionalAoeSpell(data: MonsterCastDirectionalAoeSpellEventData): void {
@@ -3199,7 +4468,7 @@ export class GameWorld extends Scene {
         playerId: string,
         worldX: number,
         worldY: number,
-        movementSpeedMs: number = 220,
+        movementSpeedMs: number = 260,
         runningMode: boolean = true,
         attackMode: boolean = true,
         disconnected: boolean = false,
@@ -3213,6 +4482,7 @@ export class GameWorld extends Scene {
             hairStyleIndex: 0,
         },
         characterName: string = '',
+        citizenshipSide: string = 'traveler',
     ): Player {
         const resolvedDirection = toDirection(direction);
         const initialDirection = resolvedDirection === Direction.None ? Direction.NorthEast : resolvedDirection;
@@ -3231,6 +4501,7 @@ export class GameWorld extends Scene {
         );
         player.setPlayerId(playerId);
         player.setCharacterName(characterName);
+        player.setCitizenshipSide(citizenshipSide);
         player.setRunMode(runningMode);
         player.setAttackMode(attackMode);
         player.setDisconnected(disconnected);
@@ -3260,22 +4531,115 @@ export class GameWorld extends Scene {
         }
     }
 
+    /** Wire chat broadcasts to Olympia overhead labels above speaker heads (Parity P1.3 / P2.1). */
+    private setupChatOverheadListener(): void {
+        subscribeSafe(
+            'GameWorld',
+            CHAT_MESSAGE_RECEIVED,
+            (payload: {
+                senderCharacterName: string;
+                message: string;
+                channel?: number;
+            }) => {
+                const channel = chatChannelFromProto(payload.channel);
+                if (channel === 'whisper' && !sysMenuDialogStore.state.whisperEnabled) {
+                    return;
+                }
+                if (channel === 'global' && !sysMenuDialogStore.state.shoutEnabled) {
+                    return;
+                }
+                const speaker = this.findPlayerByCharacterName(payload.senderCharacterName);
+                if (!speaker) {
+                    return;
+                }
+                speaker.showChatOverhead(payload.message, chatChannelOverheadColor(channel));
+            },
+        );
+    }
+
+    private setupScreenshotListener(): void {
+        subscribeSafe('GameWorld', IN_UI_TAKE_SCREENSHOT, () => {
+            captureManualScreenshot(this.game);
+        });
+    }
+
+    private findPlayerByCharacterName(name: string): Player | undefined {
+        const needle = name.trim();
+        if (!needle) {
+            return undefined;
+        }
+        for (const player of this.playersById.values()) {
+            const label = player.getCharacterName().trim();
+            if (label && label.localeCompare(needle, undefined, { sensitivity: 'accent' }) === 0) {
+                return player;
+            }
+        }
+        return undefined;
+    }
+
+    /** Soft night tint from client game hour (until server hour is on the snapshot). */
+    private updateDayNightOverlay(): void {
+        const cam = this.cameras?.main;
+        if (!cam || this.loadingMap) {
+            return;
+        }
+        const hour = getOlympiaGameHour();
+        const strength = getOlympiaNightStrength(hour);
+        if (!this.dayNightOverlay) {
+            this.dayNightOverlay = this.add.rectangle(0, 0, cam.width, cam.height, 0x081028, 0);
+            this.dayNightOverlay.setOrigin(0, 0);
+            this.dayNightOverlay.setScrollFactor(0);
+            this.dayNightOverlay.setDepth(HIGH_DEPTH - 10);
+        }
+        this.dayNightOverlay.setPosition(0, 0);
+        this.dayNightOverlay.setSize(cam.width, cam.height);
+        if (hour !== this.lastDayNightHour) {
+            this.lastDayNightHour = hour;
+            this.dayNightOverlay.setFillStyle(0x081028, strength);
+            this.dayNightOverlay.setVisible(strength > 0.01);
+        }
+    }
+
     /**
-     * Olympia-style warp: only when idle on a teleport tile (Helbreath MapTeleportLocs).
-     * Avoids predicting warps before the server confirms movement (wrong destination).
+     * Warp when idle on a teleport tile.
+     * Prefer **server** `teleportLocs` (GameWorlds.json — farm gray pads, etc.), then
+     * Olympia static MapTeleportLocs. Without the server map, pad warps never fire.
      */
     private tryPlayerWarp(tileX?: number, tileY?: number): void {
         if (!this.player || this.pendingPredictedWorldTransfer || this.awaitingTransferredWorldState || this.loadingMap) {
             return;
         }
-
-        const worldX = tileX ?? this.player.getWorldX();
-        const worldY = tileY ?? this.player.getWorldY();
-        const rawMapName = this.initialGameWorldState?.mapName ?? this.mapManager?.getCurrentMap()?.fileName;
-        if (!rawMapName || !this.gameWorldId) {
+        if (this.player.isMoving()) {
             return;
         }
 
+        const worldX = tileX ?? this.player.getWorldX();
+        const worldY = tileY ?? this.player.getWorldY();
+        if (!this.gameWorldId) {
+            return;
+        }
+
+        // 1) Server-authoritative pads (InitialGameWorldState.teleportLocs)
+        const serverTarget =
+            this.teleportTargetsBySourceCell.get(this.getTeleportCellKey(worldX, worldY)) ??
+            this.findServerTeleportNear(worldX, worldY, 1);
+        if (serverTarget?.worldId && serverTarget.worldId !== this.gameWorldId) {
+            const destLabel = serverTarget.loc
+                ? `@ (${serverTarget.loc.x},${serverTarget.loc.y})`
+                : '';
+            console.log(
+                `[GameWorld:${this.gameWorldId}] Server warp (${worldX},${worldY}) → ${serverTarget.worldId} ${destLabel}`,
+            );
+            MapWarpSystem.getInstance().markWarpTriggered();
+            this.beginWorldTransfer(serverTarget.worldId, serverTarget.worldId);
+            return;
+        }
+
+        // 2) Legacy Olympia MapTeleportLocs (buildings / edges)
+        const rawMapName = this.initialGameWorldState?.mapName ?? this.mapManager?.getCurrentMap()?.fileName;
+        if (!rawMapName) {
+            return;
+        }
         const mapName = normalizeMapId(rawMapName);
         const transfer = MapWarpSystem.getInstance().checkWarp(
             this.mapManager?.getCurrentMap(),
@@ -3293,6 +4657,33 @@ export class GameWorld extends Scene {
             `[GameWorld:${this.gameWorldId}] Warp ${mapName}(${worldX},${worldY}) → ${transfer.worldId} (${transfer.mapName}) @ (${transfer.spawnX},${transfer.spawnY})`,
         );
         this.beginWorldTransfer(transfer.worldId, transfer.mapName);
+    }
+
+    /** Chebyshev-radius lookup for server teleport cells (matches pad radius-1 doorstep). */
+    private findServerTeleportNear(
+        tileX: number,
+        tileY: number,
+        radius: number,
+    ): TeleportTarget | undefined {
+        let best: TeleportTarget | undefined;
+        let bestDist = Infinity;
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                const d = Math.max(Math.abs(dx), Math.abs(dy));
+                if (d > radius) {
+                    continue;
+                }
+                const t = this.teleportTargetsBySourceCell.get(this.getTeleportCellKey(tileX + dx, tileY + dy));
+                if (!t) {
+                    continue;
+                }
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = t;
+                }
+            }
+        }
+        return best;
     }
 
     /**
@@ -3327,6 +4718,8 @@ export class GameWorld extends Scene {
 
     public shutdown() {
         runSafeSync('GameWorld:shutdown', () => {
+            clearGameWorldCanvasPresentation(this);
+            document.body.classList.remove('game-world-active');
             EventBus.emit(OUT_UI_HOVER_GROUND_ITEM, false);
             EventBus.emit(OUT_UI_HOVER_GROUND_ITEM_INFO, undefined);
             EventBus.emit(OUT_UI_HOVER_MONSTER, undefined);
@@ -3386,8 +4779,12 @@ export class GameWorld extends Scene {
             this.loadingOverlayController?.destroyImmediate();
             this.loadingOverlayController = undefined;
 
+            this.stopAmbientWeather();
             this.weatherManager?.destroy();
             this.weatherManager = undefined;
+            this.dayNightOverlay?.destroy();
+            this.dayNightOverlay = undefined;
+            this.lastDayNightHour = -1;
 
             if (this.soundManager) {
                 this.soundManager.stopAllSounds();
@@ -3395,13 +4792,11 @@ export class GameWorld extends Scene {
 
             this.initializationStarted = false;
             this.loadingMap = true;
-            this.awaitingTransferredWorldState = false;
-            this.pendingPredictedWorldTransfer = false;
+            this.clearPendingWorldTransfer('shutdown');
             this.initialGameWorldState = undefined;
             this.pendingLoadedMap = undefined;
             this.teleportTargetsBySourceCell.clear();
             this.lastTeleportLocSets = [];
-            this.clearPendingRequestedWorldChangeListener();
             this.mapManager?.resetCapturingState();
             this.collidingMapObjects.clear();
 
@@ -3418,6 +4813,7 @@ export class GameWorld extends Scene {
             EventBus.off(IN_UI_TOGGLE_GRID_DISPLAY);
             EventBus.off(IN_UI_GROUND_ITEM_DISPLAY_SIZE_CHANGED);
             EventBus.off(IN_UI_CHANGE_WEATHER);
+            EventBus.off(IN_UI_RAIN_SOUNDS_CHANGED);
             EventBus.off(OUT_WEATHER_SYNCED);
             cancelPlayerDialogPhaserNotificationDebouncers();
             EventBus.off(IN_UI_CHANGE_MOVEMENT_SPEED);
@@ -3429,6 +4825,7 @@ export class GameWorld extends Scene {
             EventBus.off(IN_UI_CHANGE_ALLOW_DASH_ATTACK);
             EventBus.off(IN_UI_CHANGE_CAST_SPEED);
             EventBus.off(IN_UI_CHANGE_ATTACK_MODE);
+            EventBus.off(IN_UI_CHANGE_SAFE_ATTACK_MODE);
             EventBus.off(IN_UI_CHANGE_RUN_MODE);
             // `off(event)` alone drops every listener; appearance events are shared (e.g. InventoryManager on gender, Player on all four), so remove only this scene's handler.
             EventBus.off(IN_UI_CHANGE_GENDER, this.syncPlayerAppearanceHandler);
@@ -3440,10 +4837,38 @@ export class GameWorld extends Scene {
             EventBus.off(PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED, this.playerItemAppearancePrefetchHandler);
             EventBus.off(IN_UI_PLAYER_RESURRECT);
             EventBus.off(IN_UI_REQUEST_SERVER_RESURRECT);
+            EventBus.off(IN_UI_CLAIM_KILL_MILESTONE);
+            EventBus.off(IN_UI_BEGINNER_PATH_ENROLL);
+            EventBus.off(IN_UI_BEGINNER_PATH_ABANDON);
+            EventBus.off(IN_UI_BEGINNER_PATH_TALK);
+            EventBus.off(IN_UI_BEGINNER_PATH_UI_ACTION);
+            EventBus.off(IN_UI_CREATE_PARTY);
+            EventBus.off(IN_UI_JOIN_PARTY);
+            EventBus.off(IN_UI_LEAVE_PARTY);
+            EventBus.off(IN_UI_REQUEST_REBIRTH);
+            EventBus.off(IN_UI_REQUEST_REBIRTH_ROLLBACK);
+            EventBus.off(IN_UI_SET_LEVEL_BLOCK);
+            EventBus.off(IN_UI_MAJESTIC_UPGRADE);
+            EventBus.off(IN_UI_STONE_ITEM_UPGRADE);
+            EventBus.off(IN_UI_ITEM_DISENCHANT);
+            EventBus.off(IN_UI_CIC_ITEM_MERGE);
+            EventBus.off(IN_UI_SIPHON_GEM_UPGRADE);
+            EventBus.off(IN_UI_ITEM_ENCHANT);
+            EventBus.off(IN_UI_ENCHANT_MATERIAL_UPGRADE);
+            EventBus.off(IN_UI_GET_ENCHANT_MATERIALS);
+            EventBus.off(IN_UI_MAJESTIC_STAT_RESPEC);
+            EventBus.off(IN_UI_LEVEL_UP_SETTINGS);
             EventBus.off(PLAYER_DIED_RECEIVED);
+            EventBus.off(ENEMY_KILL_AWARDED_RECEIVED);
             EventBus.off(PLAYER_RESURRECTED_RECEIVED);
             EventBus.off(IN_UI_PLAY_MUSIC);
             EventBus.off(IN_UI_CHANGE_PLAY_MAP_MUSIC);
+            EventBus.off(IN_UI_CHANGE_MUSIC_ENABLED);
+            EventBus.off(IN_UI_CHANGE_SOUND_ENABLED);
+            EventBus.off(IN_UI_MUTE_ALL_SOUNDS);
+            EventBus.off(IN_UI_UNMUTE_ALL_SOUNDS);
+            EventBus.off(IN_UI_CHANGE_DETAIL_LEVEL);
+            EventBus.off(IN_UI_GAME_VIEWPORT_RESIZED);
             EventBus.off(IN_UI_CHANGE_MUSIC_VOLUME);
             EventBus.off(IN_UI_CHANGE_SOUND_VOLUME);
             EventBus.off(IN_UI_SUMMON_MONSTER);
@@ -3534,6 +4959,8 @@ function toRegistryInitialGameWorldState(data: InitialGameWorldStateEventData): 
         movementSpeedMs: data.movementSpeedMs,
         runMode: data.runMode,
         attackMode: data.attackMode,
+        safeAttackMode: data.safeAttackMode,
+        citizenshipSide: data.citizenshipSide,
         attackType: data.attackType,
         allowDashAttack: data.allowDashAttack,
         teleportLocs: data.teleportLocs,

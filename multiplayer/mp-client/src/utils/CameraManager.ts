@@ -127,8 +127,11 @@ export class CameraManager {
             if (this.cameraFollowPlayer) {
                 const target = this.getFollowTarget();
                 if (target) {
-                    camera.scrollX = target.x - camera.width / 2;
-                    camera.scrollY = target.y - camera.height / 2;
+                    // Must account for zoom — plain scroll = target - width/2 desyncs
+                    // screen center vs world (loot click / pad cells feel "shifted").
+                    const z = camera.zoom > 0 ? camera.zoom : 1;
+                    camera.scrollX = target.x - camera.width / (2 * z);
+                    camera.scrollY = target.y - camera.height / (2 * z);
                 }
             }
 
@@ -211,8 +214,9 @@ export class CameraManager {
             const target = this.getFollowTarget();
             if (target && this.scene.cameras?.main) {
                 const camera = this.scene.cameras.main;
-                camera.scrollX = target.x - camera.width / 2;
-                camera.scrollY = target.y - camera.height / 2;
+                const z = camera.zoom > 0 ? camera.zoom : 1;
+                camera.scrollX = target.x - camera.width / (2 * z);
+                camera.scrollY = target.y - camera.height / (2 * z);
             }
         }
     }

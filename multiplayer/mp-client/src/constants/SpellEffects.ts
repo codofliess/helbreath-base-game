@@ -190,7 +190,7 @@ export const GENERIC_SPELL_VFX: Partial<Record<number, GenericSpellVfxConfig>> =
         kind: 'effects',
         effectKeys: [EFFECT_ILLUSION_MOVEMENT_BASE, EFFECT_ILLUSION_MOVEMENT_TORRENT],
     },
-    [SPELL_HASTE_ID]: { kind: 'effect', effectKey: EFFECT_UNKNOWN_SMALL_RECOVERY_1, atCaster: true },
+    [SPELL_HASTE_ID]: { kind: 'effect', effectKey: EFFECT_UNKNOWN_SMALL_RECOVERY_1, atCaster: false },
     [SPELL_ILLUSION_ID]: { kind: 'effect', effectKey: EFFECT_BLUE_APPARITION },
     [SPELL_MASS_MAGIC_MISSILE_ID]: { kind: 'energy-strike' },
     [SPELL_INHIBITION_CASTING_ID]: { kind: 'effect', effectKey: EFFECT_INHIBITION_CASTING_1 },

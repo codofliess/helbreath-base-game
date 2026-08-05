@@ -1,12 +1,28 @@
-import type { Scene } from 'phaser';
+import type { GameObjects, Scene } from 'phaser';
 import type { GameAssetConfig } from '../game/objects/GameAsset';
 import { AnimationType, GameAsset } from '../game/objects/GameAsset';
 import type { Direction } from './CoordinateUtils';
 import { Gender, SkinColor } from '../Types';
-import { DEFAULT_ANIMATION_FRAME_RATE, DEPTH_MULTIPLIER, LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
+import {
+    DEFAULT_ANIMATION_FRAME_RATE,
+    DEPTH_MULTIPLIER,
+    ENTITY_DEPTH_BIAS,
+    LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND,
+    PLAYER_BODY_SCALE_X,
+} from '../Config';
 import { calculateFrameRateFromDuration } from './AnimationUtils';
 import { getItemEquippedAppearanceSpriteNames } from '../constants/Assets';
-import { getItemByEquippedSprite, getItemById, ITEMS, ItemTypes, mergeItemEffects, WEAPON_SPRITE_OVERWRITES, type Effect } from '../constants/Items';
+import {
+    getItemByEquippedSprite,
+    getItemById,
+    ITEMS,
+    ItemEffect,
+    ItemTypes,
+    mergeItemEffects,
+    WEAPON_SPRITE_OVERWRITES,
+    type Effect,
+} from '../constants/Items';
+import { olympiaItemColorToSpriteTint } from '../constants/OlympiaItemName';
 import {
     arePlayerItemAppearanceLoaded,
     loadPlayerItemAppearanceOnDemand,
@@ -32,7 +48,29 @@ export enum PlayerState {
 }
 
 type GearSlot = 'human' | 'hair' | 'underwear' | 'hauberk' | 'leggings' | 'boots' | 'helm' | 'armor' | 'weapon' | 'cape' | 'shield' | 'accessory';
-type EquippedItems = Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[] }>>;
+
+/**
+ * Non-catalog sprite name used only to reserve weapon/shield/accessory draw-order slots while unequipped.
+ * Forced onto the pending placeholder texture so a cached catalog sheet (e.g. ITEMS[0] / msw) cannot appear.
+ */
+const UNEQUIPPED_ARMAMENT_PLACEHOLDER = '__unequipped_armament__';
+type EquippedItems = Partial<Record<ItemTypes, { itemId: number; effectOverrides?: Effect[]; itemColor?: number }>>;
+
+/** Merge catalog effects with Olympia m_cItemColor → TINT_APPEARANCE (poison BH green, etc.). */
+function effectsWithOlympiaItemColor(
+    itemDefEffects: Effect[] | undefined,
+    effectOverrides: Effect[] | undefined,
+    itemColor: number | undefined,
+): Effect[] | undefined {
+    const base = mergeItemEffects(itemDefEffects, effectOverrides) ?? [];
+    const tint = olympiaItemColorToSpriteTint(itemColor);
+    if (tint === undefined) {
+        return base.length > 0 ? base : undefined;
+    }
+    const without = base.filter((e) => e.effect !== ItemEffect.TINT_APPEARANCE);
+    without.push({ effect: ItemEffect.TINT_APPEARANCE, effectColor: tint });
+    return without;
+}
 
 export type GearConfig = {
     human: string;
@@ -334,21 +372,12 @@ export class PlayerAppearanceManager {
     }
 
     /**
-     * `buildAssetConfigs` fills default armor/weapon/etc. from the item catalog when inventory slots are empty,
-     * but `resolveGearFromEquippedItems` leaves those fields undefined. Align manager state with what is actually
-     * on each {@link GameAsset} so visibility, lazy loads, and animation config stay consistent.
+     * `buildAssetConfigs` fills default clothing layers from the item catalog when inventory slots are empty,
+     * but `resolveGearFromEquippedItems` leaves those fields undefined. Align clothing state with what is
+     * actually on each {@link GameAsset}. Never adopt weapon/shield/accessory — unequipped armament slots use
+     * {@link UNEQUIPPED_ARMAMENT_PLACEHOLDER} (not ITEMS[0]/msw); adopting that would reintroduce a ghost weapon.
      */
     private syncDefaultGearFromRenderedAssets(): void {
-        if (this.weaponAssetIndex >= 0 && this.weapon === undefined) {
-            const w = this.assets[this.weaponAssetIndex].getSpriteName();
-            this.weapon = w;
-            this.weaponStartSpriteSheetIndex = getItemByEquippedSprite(w)?.startSpriteSheetIndex;
-        }
-        if (this.shieldAssetIndex >= 0 && this.shield === undefined) {
-            const s = this.assets[this.shieldAssetIndex].getSpriteName();
-            this.shield = s;
-            this.shieldStartSpriteSheetIndex = getItemByEquippedSprite(s)?.startSpriteSheetIndex;
-        }
         if (this.armorAssetIndex >= 0 && this.armor === undefined) {
             this.armor = this.assets[this.armorAssetIndex].getSpriteName();
         }
@@ -367,9 +396,6 @@ export class PlayerAppearanceManager {
         if (this.capeAssetIndex >= 0 && this.cape === undefined) {
             this.cape = this.assets[this.capeAssetIndex].getSpriteName();
         }
-        if (this.accessoryAssetIndex >= 0 && this.accessory === undefined) {
-            this.accessory = this.assets[this.accessoryAssetIndex].getSpriteName();
-        }
         this.updateAccessoryOffset();
     }
 
@@ -379,8 +405,18 @@ export class PlayerAppearanceManager {
             return;
         }
         const seen = new Set<string>();
-        for (const asset of this.assets) {
+        for (let i = 0; i < this.assets.length; i++) {
+            const asset = this.assets[i];
             if (!asset.isPendingLazyPlayerItemAppearance()) {
+                continue;
+            }
+            const slot = this.getGearSlotForSprite(asset.getSpriteName(), i);
+            // Unequipped armament placeholders must never fetch a catalog sheet.
+            if (
+                (slot === 'weapon' && this.weapon === undefined) ||
+                (slot === 'shield' && this.shield === undefined) ||
+                (slot === 'accessory' && this.accessory === undefined)
+            ) {
                 continue;
             }
             const name = asset.getSpriteName();
@@ -408,65 +444,60 @@ export class PlayerAppearanceManager {
         equippedItems: EquippedItems,
         gender: Gender,
     ): GearConfig {
+        /** Prefer gender sprite; fall back to opposite so missing female/male rows never go invisible. */
+        const equippedSprite = (
+            def: { equippedSpriteMale?: string; equippedSpriteFemale?: string } | undefined,
+        ): string | undefined => {
+            if (!def) {
+                return undefined;
+            }
+            if (gender === Gender.MALE) {
+                return def.equippedSpriteMale || def.equippedSpriteFemale;
+            }
+            return def.equippedSpriteFemale || def.equippedSpriteMale;
+        };
+
         const weaponItem = equippedItems[ItemTypes.WEAPON];
         const weaponDef = weaponItem ? getItemById(weaponItem.itemId) : undefined;
-        const weapon = gear.weapon ?? (weaponDef
-            ? (gender === Gender.MALE ? weaponDef.equippedSpriteMale : weaponDef.equippedSpriteFemale)
-            : undefined);
+        const weapon = gear.weapon ?? equippedSprite(weaponDef);
         const weaponStartSpriteSheetIndex = gear.weaponStartSpriteSheetIndex
             ?? weaponDef?.startSpriteSheetIndex
             ?? (weapon ? getItemByEquippedSprite(weapon)?.startSpriteSheetIndex : undefined);
 
         const shieldItem = equippedItems[ItemTypes.SHIELD];
         const shieldDef = shieldItem ? getItemById(shieldItem.itemId) : undefined;
-        const shield = gear.shield ?? (shieldDef
-            ? (gender === Gender.MALE ? shieldDef.equippedSpriteMale : shieldDef.equippedSpriteFemale)
-            : undefined);
+        const shield = gear.shield ?? equippedSprite(shieldDef);
         const shieldStartSpriteSheetIndex = gear.shieldStartSpriteSheetIndex
             ?? shieldDef?.startSpriteSheetIndex
             ?? (shield ? getItemByEquippedSprite(shield)?.startSpriteSheetIndex : undefined);
 
         const armorItem = equippedItems[ItemTypes.ARMOR];
         const armorDef = armorItem ? getItemById(armorItem.itemId) : undefined;
-        const armor = gear.armor ?? (armorDef
-            ? (gender === Gender.MALE ? armorDef.equippedSpriteMale : armorDef.equippedSpriteFemale)
-            : undefined);
+        const armor = gear.armor ?? equippedSprite(armorDef);
 
         const hauberkItem = equippedItems[ItemTypes.HAUBERK];
         const hauberkDef = hauberkItem ? getItemById(hauberkItem.itemId) : undefined;
-        const hauberk = gear.hauberk ?? (hauberkDef
-            ? (gender === Gender.MALE ? hauberkDef.equippedSpriteMale : hauberkDef.equippedSpriteFemale)
-            : undefined);
+        const hauberk = gear.hauberk ?? equippedSprite(hauberkDef);
 
         const leggingsItem = equippedItems[ItemTypes.LEGGINGS];
         const leggingsDef = leggingsItem ? getItemById(leggingsItem.itemId) : undefined;
-        const leggings = gear.leggings ?? (leggingsDef
-            ? (gender === Gender.MALE ? leggingsDef.equippedSpriteMale : leggingsDef.equippedSpriteFemale)
-            : undefined);
+        const leggings = gear.leggings ?? equippedSprite(leggingsDef);
 
         const bootsItem = equippedItems[ItemTypes.BOOTS];
         const bootsDef = bootsItem ? getItemById(bootsItem.itemId) : undefined;
-        const boots = gear.boots ?? (bootsDef
-            ? (gender === Gender.MALE ? bootsDef.equippedSpriteMale : bootsDef.equippedSpriteFemale)
-            : undefined);
+        const boots = gear.boots ?? equippedSprite(bootsDef);
 
         const helmItem = equippedItems[ItemTypes.HELMET];
         const helmDef = helmItem ? getItemById(helmItem.itemId) : undefined;
-        const helm = gear.helm ?? (helmDef
-            ? (gender === Gender.MALE ? helmDef.equippedSpriteMale : helmDef.equippedSpriteFemale)
-            : undefined);
+        const helm = gear.helm ?? equippedSprite(helmDef);
 
         const capeItem = equippedItems[ItemTypes.CAPE];
         const capeDef = capeItem ? getItemById(capeItem.itemId) : undefined;
-        const cape = gear.cape ?? (capeDef
-            ? (gender === Gender.MALE ? capeDef.equippedSpriteMale : capeDef.equippedSpriteFemale)
-            : undefined);
+        const cape = gear.cape ?? equippedSprite(capeDef);
 
         const accessoryItem = equippedItems[ItemTypes.ACCESSORY];
         const accessoryDef = accessoryItem ? getItemById(accessoryItem.itemId) : undefined;
-        const accessory = gear.accessory ?? (accessoryDef
-            ? (gender === Gender.MALE ? accessoryDef.equippedSpriteMale : accessoryDef.equippedSpriteFemale)
-            : undefined);
+        const accessory = gear.accessory ?? equippedSprite(accessoryDef);
 
         const underwear = gear.underwear ?? (gender === Gender.MALE ? 'mpt' : 'wpt');
         return { ...gear, weapon, weaponStartSpriteSheetIndex, shield, shieldStartSpriteSheetIndex, armor, hauberk, leggings, boots, helm, cape, accessory, underwear };
@@ -498,35 +529,32 @@ export class PlayerAppearanceManager {
         };
 
         const isFemale = gear.human === 'ww' || gear.human === 'yw' || gear.human === 'bw';
-        const defaultBoots = isFemale
-            ? ITEMS.find((i) => i.itemType === ItemTypes.BOOTS)?.equippedSpriteFemale
-            : ITEMS.find((i) => i.itemType === ItemTypes.BOOTS)?.equippedSpriteMale;
-        const defaultArmor = ITEMS.find((i) => i.itemType === ItemTypes.ARMOR);
-        const defaultHauberk = ITEMS.find((i) => i.itemType === ItemTypes.HAUBERK);
-        const defaultLeggings = ITEMS.find((i) => i.itemType === ItemTypes.LEGGINGS);
-        const defaultHelm = ITEMS.find((i) => i.itemType === ItemTypes.HELMET);
-        const defaultCape = ITEMS.find((i) => i.itemType === ItemTypes.CAPE);
         const underwear = gear.underwear ?? (isFemale ? 'wpt' : 'mpt');
         const hairStyleIndex = gear.hairStyleIndex ?? 0;
         const hair = isFemale ? 'whr' : 'mhr';
+        // No ghost clothing: only draw layers that are actually equipped (plus body/hair/underwear).
+        // Catalog-first-item fallbacks made unequipped chars look armored/caped.
         const gearBySlot: Record<GearSlot, string | undefined> = {
             human: gear.human,
             hair,
             underwear,
-            hauberk: gear.hauberk ?? (isFemale ? defaultHauberk?.equippedSpriteFemale : defaultHauberk?.equippedSpriteMale),
-            leggings: gear.leggings ?? (isFemale ? defaultLeggings?.equippedSpriteFemale : defaultLeggings?.equippedSpriteMale),
-            boots: gear.boots ?? defaultBoots,
-            helm: gear.helm ?? (isFemale ? defaultHelm?.equippedSpriteFemale : defaultHelm?.equippedSpriteMale),
-            armor: gear.armor ?? (isFemale ? defaultArmor?.equippedSpriteFemale : defaultArmor?.equippedSpriteMale),
-            weapon: gear.weapon ?? (ITEMS[0]?.equippedSpriteMale),
-            shield: gear.shield ?? (ITEMS.find((i) => i.itemType === ItemTypes.SHIELD)?.equippedSpriteMale),
-            cape: gear.cape ?? (isFemale ? defaultCape?.equippedSpriteFemale : defaultCape?.equippedSpriteMale),
-            accessory: gear.accessory ?? (ITEMS.find((i) => i.itemType === ItemTypes.ACCESSORY)?.equippedSpriteMale),
+            hauberk: gear.hauberk,
+            leggings: gear.leggings,
+            boots: gear.boots,
+            helm: gear.helm,
+            armor: gear.armor,
+            weapon: gear.weapon,
+            shield: gear.shield,
+            cape: gear.cape,
+            accessory: gear.accessory,
         };
 
         const gearRenderOrder = getGearRenderOrder(direction, state === PlayerState.Run);
         for (const slot of gearRenderOrder) {
-            const spriteName = gearBySlot[slot];
+            const equippedSpriteName = gearBySlot[slot];
+            const isUnequippedArmament =
+                (slot === 'weapon' || slot === 'shield' || slot === 'accessory') && !equippedSpriteName;
+            const spriteName = isUnequippedArmament ? UNEQUIPPED_ARMAMENT_PLACEHOLDER : equippedSpriteName;
             if (!spriteName) {
                 continue;
             }
@@ -582,7 +610,21 @@ export class PlayerAppearanceManager {
                     break;
                 }
                 case 'weapon': {
-                    const armamentStateIndex = ARMAMENT_STATE_INDEX[state];
+                    if (isUnequippedArmament) {
+                        // Reserve draw order only — invisible pending texture, never a catalog weapon sheet.
+                        configs.push({
+                            spriteName,
+                            spriteSheetIndex: 0,
+                            direction: 0,
+                            animationType: AnimationType.FullFrame,
+                            pendingLazyPlayerItemAppearance: true,
+                        });
+                        break;
+                    }
+                    // Cast/PickUp/Die use -1; using that raw made sheet index jump to a wrong sword
+                    // (looks like a floating detached weapon — Morlak Flameberge report).
+                    const rawArmament = ARMAMENT_STATE_INDEX[state];
+                    const armamentStateIndex = rawArmament >= 0 ? rawArmament : 1; // IdleCombat fallback
                     const base = gear.weaponStartSpriteSheetIndex ?? 0;
                     const spriteSheetIndex = base + armamentStateIndex * 8 + direction;
                     const weaponItem = getItemByEquippedSprite(spriteName);
@@ -597,10 +639,23 @@ export class PlayerAppearanceManager {
                     break;
                 }
                 case 'shield': {
+                    if (isUnequippedArmament) {
+                        configs.push({
+                            spriteName,
+                            spriteSheetIndex: 0,
+                            direction: 0,
+                            framesPerDirection: 8,
+                            animationType: AnimationType.DirectionalSubFrame,
+                            pendingLazyPlayerItemAppearance: true,
+                        });
+                        break;
+                    }
                     const armamentStateIndex = ARMAMENT_STATE_INDEX[state];
                     const base = gear.shieldStartSpriteSheetIndex ?? 0;
                     const effectiveStateIndex = armamentStateIndex >= 0 ? armamentStateIndex : 1;
-                    const spriteSheetIndex = base + effectiveStateIndex;
+                    // Merien/etc. can claim start>=63 while msh/wsh.spr only pack 0..62.
+                    // Cap so we never request a non-existent sheet at Player construct time.
+                    const spriteSheetIndex = Math.min(62, Math.max(0, base + effectiveStateIndex));
                     const shieldItem = getItemByEquippedSprite(spriteName);
                     const effects = shieldItem?.effects;
                     configs.push({
@@ -614,6 +669,17 @@ export class PlayerAppearanceManager {
                     break;
                 }
                 case 'accessory': {
+                    if (isUnequippedArmament) {
+                        configs.push({
+                            spriteName,
+                            spriteSheetIndex: 0,
+                            direction: 0,
+                            framesPerDirection: 8,
+                            animationType: AnimationType.FullFrame,
+                            pendingLazyPlayerItemAppearance: true,
+                        });
+                        break;
+                    }
                     const angelicState = ANGELIC_STATE_FROM_PLAYER_STATE[state];
                     const spriteSheetIndex = angelicState * 8 + direction;
                     const framesPerDirection = ANGELIC_STATE_FRAME_COUNT[angelicState] ?? 8;
@@ -671,7 +737,13 @@ export class PlayerAppearanceManager {
             }
         }
 
-        return { configs, assetIndices };
+        // Slight horizontal stretch (height unchanged) — Olympia-on-classic-FOV feel.
+        const scaledConfigs =
+            PLAYER_BODY_SCALE_X === 1
+                ? configs
+                : configs.map((c) => ({ ...c, scaleX: PLAYER_BODY_SCALE_X, scaleY: 1 }));
+
+        return { configs: scaledConfigs, assetIndices };
     }
 
     public getGender(): Gender {
@@ -680,6 +752,43 @@ export class PlayerAppearanceManager {
 
     public getHumanSpriteName(): string {
         return this.humanSpriteName;
+    }
+
+    public getHairStyleIndex(): number {
+        return this.hairStyleIndex;
+    }
+
+    public getUnderwearColorIndex(): number {
+        return this.underwearColorIndex;
+    }
+
+    /**
+     * Visible body/gear layers currently drawn on the map (depth-sorted).
+     * Used by F5 paper-doll to snapshot the exact avatar, not a rebuilt mannequin.
+     */
+    public getVisibleSpritesForCapture(): Array<{ sprite: GameObjects.Sprite; spriteName: string }> {
+        const out: Array<{ sprite: GameObjects.Sprite; spriteName: string }> = [];
+        for (let i = 0; i < this.assets.length; i++) {
+            const asset = this.assets[i];
+            if (asset.isPendingLazyPlayerItemAppearance()) {
+                continue;
+            }
+            const name = asset.getSpriteName();
+            if (!name || name === UNEQUIPPED_ARMAMENT_PLACEHOLDER || name.startsWith('__')) {
+                continue;
+            }
+            const spr = asset.sprite;
+            if (!spr?.active || !spr.visible || spr.alpha < 0.05) {
+                continue;
+            }
+            const texKey = spr.texture?.key;
+            if (!texKey || texKey === '__MISSING' || texKey === '__DEFAULT') {
+                continue;
+            }
+            out.push({ sprite: spr, spriteName: name });
+        }
+        out.sort((a, b) => a.sprite.depth - b.sprite.depth);
+        return out;
     }
 
     public getAccessoryAssetIndex(): number {
@@ -719,15 +828,60 @@ export class PlayerAppearanceManager {
             shadowManager.updateShadowSprite(this.humanSpriteName, shadowSpriteSheetIndex);
         }
 
-        this.applyEquipItem(ItemTypes.WEAPON, equippedItems[ItemTypes.WEAPON]?.itemId, equippedItems[ItemTypes.WEAPON]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.SHIELD, equippedItems[ItemTypes.SHIELD]?.itemId, equippedItems[ItemTypes.SHIELD]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.ARMOR, equippedItems[ItemTypes.ARMOR]?.itemId, equippedItems[ItemTypes.ARMOR]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.HAUBERK, equippedItems[ItemTypes.HAUBERK]?.itemId, equippedItems[ItemTypes.HAUBERK]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.LEGGINGS, equippedItems[ItemTypes.LEGGINGS]?.itemId, equippedItems[ItemTypes.LEGGINGS]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.BOOTS, equippedItems[ItemTypes.BOOTS]?.itemId, equippedItems[ItemTypes.BOOTS]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.HELMET, equippedItems[ItemTypes.HELMET]?.itemId, equippedItems[ItemTypes.HELMET]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.CAPE, equippedItems[ItemTypes.CAPE]?.itemId, equippedItems[ItemTypes.CAPE]?.effectOverrides);
-        this.applyEquipItem(ItemTypes.ACCESSORY, equippedItems[ItemTypes.ACCESSORY]?.itemId, equippedItems[ItemTypes.ACCESSORY]?.effectOverrides);
+        this.applyEquipItem(
+            ItemTypes.WEAPON,
+            equippedItems[ItemTypes.WEAPON]?.itemId,
+            equippedItems[ItemTypes.WEAPON]?.effectOverrides,
+            equippedItems[ItemTypes.WEAPON]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.SHIELD,
+            equippedItems[ItemTypes.SHIELD]?.itemId,
+            equippedItems[ItemTypes.SHIELD]?.effectOverrides,
+            equippedItems[ItemTypes.SHIELD]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.ARMOR,
+            equippedItems[ItemTypes.ARMOR]?.itemId,
+            equippedItems[ItemTypes.ARMOR]?.effectOverrides,
+            equippedItems[ItemTypes.ARMOR]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.HAUBERK,
+            equippedItems[ItemTypes.HAUBERK]?.itemId,
+            equippedItems[ItemTypes.HAUBERK]?.effectOverrides,
+            equippedItems[ItemTypes.HAUBERK]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.LEGGINGS,
+            equippedItems[ItemTypes.LEGGINGS]?.itemId,
+            equippedItems[ItemTypes.LEGGINGS]?.effectOverrides,
+            equippedItems[ItemTypes.LEGGINGS]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.BOOTS,
+            equippedItems[ItemTypes.BOOTS]?.itemId,
+            equippedItems[ItemTypes.BOOTS]?.effectOverrides,
+            equippedItems[ItemTypes.BOOTS]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.HELMET,
+            equippedItems[ItemTypes.HELMET]?.itemId,
+            equippedItems[ItemTypes.HELMET]?.effectOverrides,
+            equippedItems[ItemTypes.HELMET]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.CAPE,
+            equippedItems[ItemTypes.CAPE]?.itemId,
+            equippedItems[ItemTypes.CAPE]?.effectOverrides,
+            equippedItems[ItemTypes.CAPE]?.itemColor,
+        );
+        this.applyEquipItem(
+            ItemTypes.ACCESSORY,
+            equippedItems[ItemTypes.ACCESSORY]?.itemId,
+            equippedItems[ItemTypes.ACCESSORY]?.effectOverrides,
+            equippedItems[ItemTypes.ACCESSORY]?.itemColor,
+        );
         this.syncHairVisibility();
         this.applyChilledToAllAssets();
         this.applySaturateToEligibleAssets();
@@ -735,12 +889,19 @@ export class PlayerAppearanceManager {
         this.applyInvisibilityAlpha();
     }
 
-    public handleEquip(itemType: ItemTypes, itemId: number | undefined, effectOverrides?: Effect[]): void {
-        this.applyEquipItem(itemType, itemId, effectOverrides);
+    public handleEquip(
+        itemType: ItemTypes,
+        itemId: number | undefined,
+        effectOverrides?: Effect[],
+        itemColor?: number,
+    ): void {
+        this.applyEquipItem(itemType, itemId, effectOverrides, itemColor);
     }
 
     public updateDepth(worldY: number, direction: Direction, currentState: PlayerState): void {
-        const baseDepth = worldY * DEPTH_MULTIPLIER;
+        // +20 above same-row map objects (carpets/furniture) so players never draw under floor decals.
+        // Callers pass logical or visual worldY; bias matches GameObject entity depth.
+        const baseDepth = worldY * DEPTH_MULTIPLIER + ENTITY_DEPTH_BIAS;
         const order = getGearRenderOrder(direction, currentState === PlayerState.Run);
         for (let i = 0; i < this.assets.length; i++) {
             const slot = this.getGearSlotForSprite(this.assets[i].getSpriteName(), i);
@@ -943,34 +1104,39 @@ export class PlayerAppearanceManager {
         this.applyInvisibilityAlpha();
     }
 
-    private applyEquipItem(itemType: ItemTypes, itemId: number | undefined, effectOverrides?: Effect[]): void {
+    private applyEquipItem(
+        itemType: ItemTypes,
+        itemId: number | undefined,
+        effectOverrides?: Effect[],
+        itemColor?: number,
+    ): void {
         switch (itemType) {
             case ItemTypes.WEAPON:
-                this.applyWeaponEquip(itemId, effectOverrides);
+                this.applyWeaponEquip(itemId, effectOverrides, itemColor);
                 break;
             case ItemTypes.SHIELD:
-                this.applyShieldEquip(itemId, effectOverrides);
+                this.applyShieldEquip(itemId, effectOverrides, itemColor);
                 break;
             case ItemTypes.ARMOR:
-                this.applySimpleEquip(itemId, this.armorAssetIndex, 'armor', effectOverrides);
+                this.applySimpleEquip(itemId, this.armorAssetIndex, 'armor', effectOverrides, itemColor);
                 break;
             case ItemTypes.HAUBERK:
-                this.applySimpleEquip(itemId, this.hauberkAssetIndex, 'hauberk', effectOverrides);
+                this.applySimpleEquip(itemId, this.hauberkAssetIndex, 'hauberk', effectOverrides, itemColor);
                 break;
             case ItemTypes.LEGGINGS:
-                this.applySimpleEquip(itemId, this.leggingsAssetIndex, 'leggings', effectOverrides);
+                this.applySimpleEquip(itemId, this.leggingsAssetIndex, 'leggings', effectOverrides, itemColor);
                 break;
             case ItemTypes.BOOTS:
-                this.applySimpleEquip(itemId, this.bootsAssetIndex, 'boots', effectOverrides);
+                this.applySimpleEquip(itemId, this.bootsAssetIndex, 'boots', effectOverrides, itemColor);
                 break;
             case ItemTypes.HELMET:
-                this.applySimpleEquip(itemId, this.helmAssetIndex, 'helm', effectOverrides);
+                this.applySimpleEquip(itemId, this.helmAssetIndex, 'helm', effectOverrides, itemColor);
                 break;
             case ItemTypes.CAPE:
-                this.applySimpleEquip(itemId, this.capeAssetIndex, 'cape', effectOverrides);
+                this.applySimpleEquip(itemId, this.capeAssetIndex, 'cape', effectOverrides, itemColor);
                 break;
             case ItemTypes.ACCESSORY:
-                this.applyAccessoryEquip(itemId, effectOverrides);
+                this.applyAccessoryEquip(itemId, effectOverrides, itemColor);
                 break;
         }
         this.applyChilledToAllAssets();
@@ -991,8 +1157,10 @@ export class PlayerAppearanceManager {
             return false;
         }
         if (arePlayerItemAppearanceLoaded(this.scene, sprite)) {
-            if (this.assets.some((a) => a.isPendingLazyPlayerItemAppearance() && a.getSpriteName() === sprite)) {
-                this.flushPendingLazyItemPromotionForSprite(sprite);
+            // Sheets already registered: promote synchronously so the following setVisible / state
+            // refresh is not blocked by a leftover unequipped-placeholder pending flag.
+            if (asset.isPendingLazyPlayerItemAppearance() && asset.getSpriteName() === sprite) {
+                asset.promotePendingPlayerItemAppearance();
             }
             return false;
         }
@@ -1047,14 +1215,12 @@ export class PlayerAppearanceManager {
         );
     }
 
-    private applyWeaponEquip(itemId: number | undefined, effectOverrides?: Effect[]): void {
+    private applyWeaponEquip(itemId: number | undefined, effectOverrides?: Effect[], itemColor?: number): void {
         if (itemId === undefined) {
             this.weapon = undefined;
             this.weaponStartSpriteSheetIndex = undefined;
             if (this.weaponAssetIndex >= 0) {
-                const weaponAsset = this.assets[this.weaponAssetIndex];
-                weaponAsset.setItemEffects(undefined);
-                weaponAsset.setVisible(false);
+                this.assets[this.weaponAssetIndex].resetToUnequippedArmamentPlaceholder(UNEQUIPPED_ARMAMENT_PLACEHOLDER);
             }
             return;
         }
@@ -1071,7 +1237,9 @@ export class PlayerAppearanceManager {
         if (this.weaponAssetIndex >= 0) {
             const weaponAsset = this.assets[this.weaponAssetIndex];
             weaponAsset.setSpriteName(sprite);
-            weaponAsset.setItemEffects(mergeItemEffects(itemDef.effects, effectOverrides));
+            // Unequipped placeholder kept sheet 0; sync base sheet so lazy promote targets a real texture.
+            weaponAsset.setSpriteSheetIndex(itemDef.startSpriteSheetIndex ?? 0);
+            weaponAsset.setItemEffects(effectsWithOlympiaItemColor(itemDef.effects, effectOverrides, itemColor));
             if (this.scheduleLazyItemAppearanceIfNeeded(sprite, weaponAsset)) {
                 return;
             }
@@ -1079,14 +1247,12 @@ export class PlayerAppearanceManager {
         }
     }
 
-    private applyShieldEquip(itemId: number | undefined, effectOverrides?: Effect[]): void {
+    private applyShieldEquip(itemId: number | undefined, effectOverrides?: Effect[], itemColor?: number): void {
         if (itemId === undefined) {
             this.shield = undefined;
             this.shieldStartSpriteSheetIndex = undefined;
             if (this.shieldAssetIndex >= 0) {
-                const shieldAsset = this.assets[this.shieldAssetIndex];
-                shieldAsset.setItemEffects(undefined);
-                shieldAsset.setVisible(false);
+                this.assets[this.shieldAssetIndex].resetToUnequippedArmamentPlaceholder(UNEQUIPPED_ARMAMENT_PLACEHOLDER);
             }
             return;
         }
@@ -1103,15 +1269,24 @@ export class PlayerAppearanceManager {
         if (this.shieldAssetIndex >= 0) {
             const shieldAsset = this.assets[this.shieldAssetIndex];
             shieldAsset.setSpriteName(sprite);
-            shieldAsset.setItemEffects(mergeItemEffects(itemDef.effects, effectOverrides));
+            // Shields share msh/wsh with per-item offsets (7, 14, …). Placeholder sheet 0 must not stick.
+            shieldAsset.setSpriteSheetIndex(itemDef.startSpriteSheetIndex ?? 0);
+            shieldAsset.setItemEffects(effectsWithOlympiaItemColor(itemDef.effects, effectOverrides, itemColor));
             if (this.scheduleLazyItemAppearanceIfNeeded(sprite, shieldAsset)) {
                 return;
             }
+            // VerifyFix: shield layer becomes visible once the slot has an equipped sprite.
             shieldAsset.setVisible(true);
         }
     }
 
-    private applySimpleEquip(itemId: number | undefined, assetIndex: number, slot: 'armor' | 'hauberk' | 'leggings' | 'boots' | 'helm' | 'cape', effectOverrides?: Effect[]): void {
+    private applySimpleEquip(
+        itemId: number | undefined,
+        assetIndex: number,
+        slot: 'armor' | 'hauberk' | 'leggings' | 'boots' | 'helm' | 'cape',
+        effectOverrides?: Effect[],
+        itemColor?: number,
+    ): void {
         if (itemId === undefined) {
             this[slot] = undefined;
             if (assetIndex >= 0) {
@@ -1136,7 +1311,7 @@ export class PlayerAppearanceManager {
         if (assetIndex >= 0) {
             const asset = this.assets[assetIndex];
             asset.setSpriteName(sprite);
-            asset.setItemEffects(mergeItemEffects(itemDef.effects, effectOverrides));
+            asset.setItemEffects(effectsWithOlympiaItemColor(itemDef.effects, effectOverrides, itemColor));
             if (this.scheduleLazyItemAppearanceIfNeeded(sprite, asset)) {
                 if (slot === 'helm') {
                     this.syncHairVisibility();
@@ -1150,14 +1325,13 @@ export class PlayerAppearanceManager {
         }
     }
 
-    private applyAccessoryEquip(itemId: number | undefined, effectOverrides?: Effect[]): void {
+    private applyAccessoryEquip(itemId: number | undefined, effectOverrides?: Effect[], itemColor?: number): void {
         if (itemId === undefined) {
             this.accessory = undefined;
             this.accessoryOffsetX = 0;
             this.accessoryOffsetY = 0;
             if (this.accessoryAssetIndex >= 0) {
-                this.assets[this.accessoryAssetIndex].setItemEffects(undefined);
-                this.assets[this.accessoryAssetIndex].setVisible(false);
+                this.assets[this.accessoryAssetIndex].resetToUnequippedArmamentPlaceholder(UNEQUIPPED_ARMAMENT_PLACEHOLDER);
             }
             return;
         }
@@ -1175,7 +1349,8 @@ export class PlayerAppearanceManager {
         if (this.accessoryAssetIndex >= 0) {
             const accessoryAsset = this.assets[this.accessoryAssetIndex];
             accessoryAsset.setSpriteName(sprite);
-            accessoryAsset.setItemEffects(mergeItemEffects(itemDef.effects, effectOverrides));
+            accessoryAsset.setSpriteSheetIndex(itemDef.startSpriteSheetIndex ?? 0);
+            accessoryAsset.setItemEffects(effectsWithOlympiaItemColor(itemDef.effects, effectOverrides, itemColor));
             if (this.scheduleLazyItemAppearanceIfNeeded(sprite, accessoryAsset)) {
                 return;
             }
@@ -1359,7 +1534,8 @@ export class PlayerAppearanceManager {
         }
 
         if (slot === 'weapon') {
-            const armamentStateIndex = ARMAMENT_STATE_INDEX[newState];
+            const rawArmament = ARMAMENT_STATE_INDEX[newState];
+            const armamentStateIndex = rawArmament >= 0 ? rawArmament : 1; // IdleCombat fallback
             const base = this.weaponStartSpriteSheetIndex ?? getItemByEquippedSprite(spriteName)?.startSpriteSheetIndex ?? 0;
             const spriteSheetIndex = base + armamentStateIndex * 8 + direction;
             return {
@@ -1373,7 +1549,7 @@ export class PlayerAppearanceManager {
             const armamentStateIndex = ARMAMENT_STATE_INDEX[newState];
             const base = this.shieldStartSpriteSheetIndex ?? getItemByEquippedSprite(spriteName)?.startSpriteSheetIndex ?? 0;
             const effectiveStateIndex = armamentStateIndex >= 0 ? armamentStateIndex : 1;
-            const spriteSheetIndex = base + effectiveStateIndex;
+            const spriteSheetIndex = Math.min(62, Math.max(0, base + effectiveStateIndex));
             return {
                 animationKey: `sprite-${spriteName}-${spriteSheetIndex}`,
                 animationDirection: direction,

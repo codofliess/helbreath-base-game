@@ -17,6 +17,7 @@ import {
     PLAYER_CAST_SPEED_MS_MIN,
     PLAYER_CAST_SPEED_MS_MAX,
     setAttackMode,
+    setSafeAttackMode,
     setRunMode,
     setAllowDashAttack,
     setGender,
@@ -51,6 +52,7 @@ export function PlayerDialog({
     const attackType = useStore(playerDialogStore, (state) => state.attackType);
     const castSpeedMs = useStore(playerDialogStore, (state) => state.castSpeedMs);
     const attackMode = useStore(playerDialogStore, (state) => state.attackMode);
+    const safeAttackMode = useStore(playerDialogStore, (state) => state.safeAttackMode);
     const runMode = useStore(playerDialogStore, (state) => state.runMode);
     const allowDashAttack = useStore(playerDialogStore, (state) => state.allowDashAttack);
     const stunDurationMs = useStore(playerDialogStore, (state) => state.stunDurationMs);
@@ -183,9 +185,18 @@ export function PlayerDialog({
                     <div className="rpg-zoom-container" style={{ marginTop: '6px', marginBottom: '6px' }}>
                         <RpgCheckbox
                             id="attack-mode-checkbox"
-                            label="Attack mode"
+                            label="Attack mode (Tab) — Peace when off"
                             checked={attackMode}
                             onCheckedChange={(checked) => setAttackMode(checked === true)}
+                        />
+                    </div>
+
+                    <div className="rpg-zoom-container" style={{ marginTop: '6px', marginBottom: '6px' }}>
+                        <RpgCheckbox
+                            id="safe-attack-mode-checkbox"
+                            label="Safe Attack — no friendly PvP (dock mode cycle)"
+                            checked={safeAttackMode}
+                            onCheckedChange={(checked) => setSafeAttackMode(checked === true)}
                         />
                     </div>
 

@@ -1,18 +1,31 @@
 import { useRef, useState, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
-import { DndContext } from '@dnd-kit/core';
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { toast } from 'react-toastify';
 import type { Id } from 'react-toastify';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { ControlsDialog } from './ui/dialogs/ControlsDialog';
 import { MapDialog } from './ui/dialogs/MapDialog';
 import { CameraDialog } from './ui/dialogs/CameraDialog';
-import { MinimapDialog } from './ui/dialogs/MinimapDialog';
 import { AssetDebugOverlay } from './ui/overlays/AssetDebugOverlay';
 import { InventoryItemHoverOverlay } from './ui/overlays/InventoryItemHoverOverlay';
 import { MonsterHoverOverlay } from './ui/overlays/MonsterHoverOverlay';
 import { NpcHoverOverlay } from './ui/overlays/NpcHoverOverlay';
 import { PlayerHoverOverview } from './ui/overlays/PlayerHoverOverview';
+import { QuestTrackerHud } from './ui/overlays/QuestTrackerHud';
+import { SystemLogOverlay } from './ui/overlays/SystemLogOverlay';
+import { ChatComposeBar } from './ui/overlays/ChatComposeBar';
+import { ChatWorldLog } from './ui/overlays/ChatWorldLog';
+import { CornerMinimapHud } from './ui/overlays/CornerMinimapHud';
+import { HudTutorialOverlay } from './ui/overlays/HudTutorialOverlay';
+import { TestnetHud } from './ui/overlays/TestnetHud';
+import { tryStartHudTutorial } from './ui/store/HudTutorial.store';
+import { progressionStore } from './ui/store/Progression.store';
+import {
+    discordPresenceClear,
+    discordPresenceEnterWorld,
+    installDiscordPresenceLifecycle,
+} from './utils/DiscordPresence';
 import { SoundDialog } from './ui/dialogs/SoundDialog';
 import { MonsterDialog } from './ui/dialogs/MonsterDialog';
 import { NPCDialog } from './ui/dialogs/NPCDialog';
@@ -26,16 +39,52 @@ import { ItemDialog } from './ui/dialogs/ItemDialog';
 import { ServerDialog } from './ui/dialogs/ServerDialog';
 import { PerformanceDialog } from './ui/dialogs/PerformanceDialog';
 import { ConnectDialog } from './ui/dialogs/ConnectDialog';
+import { ReferralCharListPanel } from './ui/components/ReferralCharListPanel';
+import { DeskModeJumpTab } from './ui/components/DeskModeJumpTab';
+import { BleedingOnlineStrip } from './ui/components/BleedingOnlineStrip';
+import { CitySelectDialog } from './ui/dialogs/CitySelectDialog';
+import { ShopDialog } from './ui/dialogs/ShopDialog';
+import { MagicShopDialog } from './ui/dialogs/MagicShopDialog';
+import { CashShopDialog } from './ui/dialogs/CashShopDialog';
+import { WarehouseDialog } from './ui/dialogs/WarehouseDialog';
+import { BlacksmithDialog } from './ui/dialogs/BlacksmithDialog';
+import { NpcTalkDialog } from './ui/dialogs/NpcTalkDialog';
 import { DeathDialog } from './ui/dialogs/DeathDialog';
 import { ConnectingDialog } from './ui/dialogs/ConnectingDialog';
 import { ServerMessageDialog } from './ui/dialogs/ServerMessageDialog';
 import { ChatDialog } from './ui/dialogs/ChatDialog';
+import { SkillDialog } from './ui/dialogs/SkillDialog';
+import { EnchantBagDialog } from './ui/dialogs/EnchantBagDialog';
+import { SysMenuDialog } from './ui/dialogs/SysMenuDialog';
+import { MobKillsDialog } from './ui/dialogs/MobKillsDialog';
+import { TournamentDialog } from './ui/dialogs/TournamentDialog';
+import { ArenaPactDialog } from './ui/dialogs/ArenaPactDialog';
+import { DuelWatchDialog } from './ui/dialogs/DuelWatchDialog';
+import { openDuelWatch } from './ui/store/DuelWatch.store';
+import { ArenaKitBuilderDialog } from './ui/dialogs/ArenaKitBuilderDialog';
+import { TrainingDialog } from './ui/dialogs/TrainingDialog';
+import { AuctionBoardDialog } from './ui/dialogs/AuctionBoardDialog';
+import { GuildWarehouseDialog } from './ui/dialogs/GuildWarehouseDialog';
+import { AntiBotToolsDialog } from './ui/dialogs/AntiBotToolsDialog';
 import { EventBus, type ToastRequestedEvent } from './game/EventBus';
-import { OUT_MAP_LOADED, TOAST_DISMISS_LOGOUT_COUNTDOWN, TOAST_REQUESTED } from './constants/EventNames';
+import {
+    CURRENT_SCENE_READY,
+    IN_UI_CHANGE_MAP,
+    OUT_MAP_LOADED,
+    OUT_UI_OPEN_MAGIC_SHOP,
+    OUT_UI_OPEN_CASH_SHOP,
+    OUT_UI_OPEN_SHOP,
+    OUT_UI_OPEN_BLACKSMITH,
+    OUT_UI_OPEN_WAREHOUSE,
+    OUT_UI_OPEN_NPC_TALK,
+    TOAST_DISMISS_LOGOUT_COUNTDOWN,
+    TOAST_REQUESTED,
+} from './constants/EventNames';
 import { DIALOG_START_X, DIALOG_START_Y } from './Config';
 import { mapDialogStore, setMapDialogOpen } from './ui/store/MapDialog.store';
 import { cameraDialogStore, setCameraDialogOpen } from './ui/store/CameraDialog.store';
-import { minimapDialogStore, setMinimapDialogOpen } from './ui/store/MinimapDialog.store';
+import { setMinimapDialogOpen } from './ui/store/MinimapDialog.store';
+import { setGuideMapEnabled } from './ui/store/SysMenuDialog.store';
 import { soundDialogStore, setSoundDialogOpen } from './ui/store/SoundDialog.store';
 import { monsterDialogStore } from './ui/store/MonsterDialog.store';
 import { npcDialogStore } from './ui/store/NPCDialog.store';
@@ -44,12 +93,26 @@ import { castDialogStore } from './ui/store/CastDialog.store';
 import { controlsDialogStore, setControlsDialogOpen } from './ui/store/ControlsDialog.store';
 import { playerDialogStore, setPlayerDialogOpen } from './ui/store/PlayerDialog.store';
 import { characterDialogStore, setCharacterDialogOpen } from './ui/store/CharacterDialog.store';
+import {
+    citySelectDialogStore,
+    setCitySelectDialogOpen,
+} from './ui/store/CitySelectDialog.store';
+import { openShopDialog, shopDialogStore } from './ui/store/ShopDialog.store';
+import { magicShopDialogStore, setMagicShopOpen } from './ui/store/MagicShopDialog.store';
+import { cashShopDialogStore, openCashShopDialog } from './ui/store/CashShopDialog.store';
+import { openWarehouseDialog, warehouseDialogStore } from './ui/store/WarehouseDialog.store';
+import { openBlacksmithDialog, blacksmithDialogStore } from './ui/store/BlacksmithDialog.store';
+import { openNpcTalkDialog, npcTalkDialogStore, type NpcTalkRole } from './ui/store/NpcTalkDialog.store';
+import { getNetworkManager } from './utils/RegistryUtils';
+import { getTravelerWorldId, isTravelerPlayerMode } from './utils/playerMode';
 import { inventoryDialogStore, setInventoryDialogOpen } from './ui/store/InventoryDialog.store';
+import { arenaSlimModeStore } from './ui/store/ArenaSlimMode.store';
 import { itemDialogStore, setItemDialogOpen } from './ui/store/ItemDialog.store';
 import { serverDialogStore, setServerDialogOpen } from './ui/store/ServerDialog.store';
 import { performanceDialogStore, setPerformanceDialogOpen } from './ui/store/PerformanceDialog.store';
 import { appStore, setCursorSpriteKey } from './ui/store/App.store';
 import { CURSOR_GRAB_1, CURSOR_GRAB_2 } from './constants/SpriteKeys';
+import { buildCssCursorValue, type CombatCursorMode } from './utils/CursorPresentation';
 import { deathDialogStore } from './ui/store/DeathDialog.store';
 import { connectingDialogStore } from './ui/store/ConnectingDialog.store';
 import { connectDialogStore } from './ui/store/ConnectDialog.store';
@@ -74,7 +137,6 @@ function App()
     const [cameraDialogPosition, setCameraDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [playerDialogPosition, setPlayerDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [characterDialogPosition, setCharacterDialogPosition] = useState(CHILD_DIALOG_POSITION);
-    const [minimapDialogPosition, setMinimapDialogPosition] = useState({ x: 1060, y: 20 });
     const [soundDialogPosition, setSoundDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [monsterDialogPosition, setMonsterDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [npcDialogPosition, setNPCDialogPosition] = useState(CHILD_DIALOG_POSITION);
@@ -85,18 +147,7 @@ function App()
     const [serverDialogPosition, setServerDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [performanceDialogPosition, setPerformanceDialogPosition] = useState(CHILD_DIALOG_POSITION);
     const [chatDialogPosition, setChatDialogPosition] = useState(CHILD_DIALOG_POSITION);
-    // Death dialog: initial center (matches dialog size below)
-    const [deathDialogPosition, setDeathDialogPosition] = useState(() => {
-        if (typeof window === 'undefined') {
-            return { x: 0, y: 0 };
-        }
-        const dialogWidth = 280;
-        const dialogHeight = 120;
-        return {
-            x: Math.max(0, (window.innerWidth - dialogWidth) / 2),
-            y: Math.max(0, (window.innerHeight - dialogHeight) / 2)
-        };
-    });
+    const [olympiaMenuPosition, setOlympiaMenuPosition] = useState(CHILD_DIALOG_POSITION);
     const [connectingDialogPosition, setConnectingDialogPosition] = useState(() => {
         if (typeof window === 'undefined') {
             return { x: 0, y: 0 };
@@ -119,24 +170,12 @@ function App()
             y: Math.max(0, (window.innerHeight - dialogHeight) / 2)
         };
     });
-    const [connectDialogPosition, setConnectDialogPosition] = useState(() => {
-        if (typeof window === 'undefined') {
-            return { x: 0, y: 0 };
-        }
-        const dialogWidth = 320;
-        const dialogHeight = 280;
-        return {
-            x: Math.max(0, (window.innerWidth - dialogWidth) / 2),
-            y: Math.max(0, (window.innerHeight - dialogHeight) / 2)
-        };
-    });
     // Z-index state for bringing dialogs to front
     const [dialogZIndex, setDialogZIndex] = useState(10000);
     const [mapDialogZIndex, setMapDialogZIndex] = useState(10001);
     const [cameraDialogZIndex, setCameraDialogZIndex] = useState(10002);
     const [playerDialogZIndex, setPlayerDialogZIndex] = useState(10003);
     const [characterDialogZIndex, setCharacterDialogZIndex] = useState(10003);
-    const [minimapDialogZIndex, setMinimapDialogZIndex] = useState(10004);
     const [soundDialogZIndex, setSoundDialogZIndex] = useState(10005);
     const [monsterDialogZIndex, setMonsterDialogZIndex] = useState(10006);
     const [npcDialogZIndex, setNPCDialogZIndex] = useState(10007);
@@ -147,6 +186,7 @@ function App()
     const [serverDialogZIndex, setServerDialogZIndex] = useState(10014);
     const [performanceDialogZIndex, setPerformanceDialogZIndex] = useState(10016);
     const [chatDialogZIndex, setChatDialogZIndex] = useState(10019);
+    const [olympiaMenuZIndex, setOlympiaMenuZIndex] = useState(10020);
     const [deathDialogZIndex, setDeathDialogZIndex] = useState(10013);
     const [connectDialogZIndex, setConnectDialogZIndex] = useState(10018);
     const nextZIndexRef = useRef(10020);
@@ -155,7 +195,6 @@ function App()
     const showCameraDialog = useStore(cameraDialogStore, (state) => state.isOpen);
     const showPlayerDialog = useStore(playerDialogStore, (state) => state.isOpen);
     const showCharacterDialog = useStore(characterDialogStore, (state) => state.isOpen);
-    const showMinimapDialog = useStore(minimapDialogStore, (state) => state.isOpen && state.minimapAvailable);
     const showSoundDialog = useStore(soundDialogStore, (state) => state.isOpen);
     const showMonsterDialog = useStore(monsterDialogStore, (state) => state.isOpen);
     const showNPCDialog = useStore(npcDialogStore, (state) => state.isOpen);
@@ -170,31 +209,152 @@ function App()
     const showDeathDialog = useStore(deathDialogStore, (state) => state.isOpen);
     const showConnectingDialog = useStore(connectingDialogStore, (state) => state.isOpen);
     const showConnectDialog = useStore(connectDialogStore, (state) => state.isOpen);
+    const showCitySelectDialog = useStore(citySelectDialogStore, (state) => state.isOpen);
     const showServerMessageDialog = useStore(serverMessageDialogStore, (state) => state.isOpen);
     const serverMessageDialogMessage = useStore(serverMessageDialogStore, (state) => state.message);
     const spriteFrameMap = useStore(appStore, (state) => state.spriteFrameMap);
     const cursorSpriteKey = useStore(appStore, (state) => state.cursorSpriteKey);
     const cursorImage = spriteFrameMap.get(cursorSpriteKey);
     const [isMapLoaded, setIsMapLoaded] = useState(false);
+    /** True only while Phaser GameWorld is the active scene — never during SELECTCHAR / hub. */
+    const [isInGameWorld, setIsInGameWorld] = useState(false);
+    const travelerMode = isTravelerPlayerMode();
+    /** World HUDs (dock, minimap, quest log) must never paint over login desks. */
+    const showWorldHud = isMapLoaded && isInGameWorld;
+    /** Duel-focused HUD: bag + combat only (see ArenaSlimMode.store). */
+    const arenaSlim = useStore(
+        arenaSlimModeStore,
+        (s) => s.forceEnabled || s.worldIsArena,
+    );
+    const showFullWorldChrome = showWorldHud && !arenaSlim;
+
+    const dialogDragSensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 4 },
+        }),
+    );
 
     const hasInitialMapLoadRef = useRef(false);
+    const [citySelectDialogPosition] = useState({ x: Math.max(40, DIALOG_START_X), y: Math.max(80, DIALOG_START_Y) });
+    const [citySelectDialogZIndex, setCitySelectDialogZIndex] = useState(10020);
+    const [shopDialogPosition] = useState({ x: 320, y: DIALOG_START_Y });
+    const [shopDialogZIndex, setShopDialogZIndex] = useState(10021);
+    const [magicShopDialogPosition] = useState({ x: 360, y: DIALOG_START_Y });
+    const [magicShopDialogZIndex, setMagicShopDialogZIndex] = useState(10022);
+    const [cashShopDialogPosition] = useState({ x: 380, y: DIALOG_START_Y });
+    const [cashShopDialogZIndex, setCashShopDialogZIndex] = useState(10023);
+    const [warehouseDialogPosition] = useState({ x: 280, y: DIALOG_START_Y });
+    const [warehouseDialogZIndex, setWarehouseDialogZIndex] = useState(10023);
+    const [blacksmithDialogPosition] = useState({ x: 340, y: DIALOG_START_Y + 20 });
+    const [blacksmithDialogZIndex, setBlacksmithDialogZIndex] = useState(10024);
+    const [npcTalkDialogPosition] = useState({ x: 400, y: DIALOG_START_Y + 40 });
+    const [npcTalkDialogZIndex, setNpcTalkDialogZIndex] = useState(10025);
+    const showShopDialog = useStore(shopDialogStore, (state) => state.isOpen);
+    const showMagicShopDialog = useStore(magicShopDialogStore, (state) => state.isOpen);
+    const showCashShopDialog = useStore(cashShopDialogStore, (state) => state.isOpen);
+    const showWarehouseDialog = useStore(warehouseDialogStore, (state) => state.isOpen);
+    const showBlacksmithDialog = useStore(blacksmithDialogStore, (state) => state.isOpen);
+    const showNpcTalkDialog = useStore(npcTalkDialogStore, (state) => state.isOpen);
+
+    // Discord Rich Presence lifecycle (local Discord desktop RPC when available).
+    useEffect(() => {
+        installDiscordPresenceLifecycle();
+    }, []);
+
+    // Deep link: ?watch=matchId opens multi-cam Watch cartelera.
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const watchId = params.get('watch')?.trim();
+            if (watchId) {
+                openDuelWatch(watchId);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
 
     // Listen to map loaded events from Phaser via EventBus
     useEffect(() => {
         const handleMapLoaded = () => {
             setIsMapLoaded(true);
-            setControlsDialogOpen(true);
+            setIsInGameWorld(true);
+            if (!travelerMode) {
+                setControlsDialogOpen(true);
+            }
             if (!hasInitialMapLoadRef.current) {
                 hasInitialMapLoadRef.current = true;
                 setMinimapDialogOpen(true);
+                setGuideMapEnabled(true);
             }
-            // Position minimap in top right corner
-            const minimapWidth = 300; // Approximate minimap dialog width
-            const margin = 20;
-            setMinimapDialogPosition({
-                x: window.innerWidth - minimapWidth - margin,
-                y: margin,
-            });
+
+            // Discord: "Playing Helbreath Chain Lords" under username (Discord desktop must be open).
+            window.setTimeout(() => {
+                try {
+                    const name =
+                        characterDialogStore.state.stats.playerName?.trim() ||
+                        (localStorage.getItem('gameState') &&
+                            (JSON.parse(localStorage.getItem('gameState') || '{}') as { characterName?: string })
+                                .characterName) ||
+                        '';
+                    const level = progressionStore.state.level || characterDialogStore.state.stats.level || 0;
+                    const mapName =
+                        (typeof localStorage !== 'undefined' &&
+                            (JSON.parse(localStorage.getItem('gameState') || '{}') as { mapName?: string }).mapName) ||
+                        undefined;
+                    void discordPresenceEnterWorld({
+                        characterName: typeof name === 'string' ? name : undefined,
+                        level,
+                        mapName,
+                    });
+                } catch {
+                    void discordPresenceEnterWorld();
+                }
+            }, 400);
+
+            // First-run HUD tour for new low-level travelers (once per character).
+            // Delay until dock is painted so spotlight can find fullscreen button.
+            window.setTimeout(() => {
+                try {
+                    const name =
+                        characterDialogStore.state.stats.playerName?.trim() ||
+                        localStorage.getItem('gameState') &&
+                            (JSON.parse(localStorage.getItem('gameState') || '{}') as { characterName?: string })
+                                .characterName ||
+                        '';
+                    const level = progressionStore.state.level || characterDialogStore.state.stats.level || 1;
+                    if (typeof name === 'string' && name.length > 0 && name !== 'Player') {
+                        tryStartHudTutorial(name, level);
+                    } else if (level <= 5) {
+                        // Fallback key if name not yet synced
+                        tryStartHudTutorial(`anon-lv${level}`, level);
+                    }
+                } catch {
+                    // ignore
+                }
+            }, 900);
+
+            if (!travelerMode) {
+                return;
+            }
+
+            const game = phaserRef.current?.game;
+            const networkManager = game ? getNetworkManager(game) : undefined;
+            if (!networkManager) {
+                return;
+            }
+
+            const travelerWorldId = getTravelerWorldId();
+            const currentWorldId = networkManager.getCurrentGameWorldId();
+            // Set from server citizenship on InitialState (markCityChosen) and city pick UI.
+            // Never force-warp citizens back to traveler — that was wiping Elvine/Aresden logins.
+            const { hasChosenCity } = citySelectDialogStore.state;
+
+            if (!hasChosenCity && currentWorldId === travelerWorldId) {
+                setCitySelectDialogOpen(true);
+            } else {
+                setCitySelectDialogOpen(false);
+            }
         };
 
         EventBus.on(OUT_MAP_LOADED, handleMapLoaded);
@@ -202,39 +362,119 @@ function App()
         return () => {
             EventBus.off(OUT_MAP_LOADED, handleMapLoaded);
         };
+    }, [travelerMode]);
+
+    /**
+     * SELECTCHAR / Create Character live on LoginScreen. If isMapLoaded stayed true after
+     * a prior world session, HotkeyBar + dock would paint under/over the classic desk.
+     * Reset world HUD ownership whenever we leave GameWorld.
+     */
+    useEffect(() => {
+        const handleSceneReady = (sceneInstance: { scene?: { key?: string } }) => {
+            const key = sceneInstance?.scene?.key ?? '';
+            if (key === 'LoginScreen' || key === 'LoadingScreen' || key === 'Boot') {
+                setIsMapLoaded(false);
+                setIsInGameWorld(false);
+                hasInitialMapLoadRef.current = false;
+                document.body.classList.remove('game-world-active');
+                discordPresenceClear();
+                // Right-side event letters must not stick on Character List / hub.
+                toast.dismiss();
+                logoutCountdownToastId = undefined;
+                return;
+            }
+            if (key === 'GameWorld') {
+                setIsInGameWorld(true);
+            }
+        };
+
+        EventBus.on(CURRENT_SCENE_READY, handleSceneReady);
+        return () => {
+            EventBus.off(CURRENT_SCENE_READY, handleSceneReady);
+        };
     }, []);
 
     useEffect(() => {
+        /** Dedupe identical letters (double level-up packet / double-click) within this window. */
+        const recentToastKeys = new Map<string, number>();
+        const DEDUPE_MS = 900;
+
         const handleToastRequested = ({
             message,
             severity,
             autoClose,
             trackForLogoutDismiss,
         }: ToastRequestedEvent) => {
-            const toastMessage = <span className="rpg-toast-message">{message}</span>;
-            /** Only the logout countdown toast shows the auto-close progress strip. */
+            const text = (message ?? '').trim();
+            if (!text) {
+                return;
+            }
+
+            const now = Date.now();
+            const dedupeKey = `${severity}:${text}`;
+            const last = recentToastKeys.get(dedupeKey) ?? 0;
+            if (now - last < DEDUPE_MS && trackForLogoutDismiss !== true) {
+                return;
+            }
+            recentToastKeys.set(dedupeKey, now);
+            // Prune map so it does not grow forever
+            if (recentToastKeys.size > 40) {
+                for (const [k, t] of recentToastKeys) {
+                    if (now - t > 10_000) {
+                        recentToastKeys.delete(k);
+                    }
+                }
+            }
+
+            const toastMessage = <span className="rpg-toast-message">{text}</span>;
+            // Event letters (level-up, tips, etc.): hard 3s lifetime unless logout countdown.
+            // Always a finite number — never leave green/gold letters stuck on screen.
+            const closeMs: number | false =
+                trackForLogoutDismiss === true
+                    ? (typeof autoClose === 'number' && autoClose > 0 ? autoClose : false)
+                    : Math.min(
+                          typeof autoClose === 'number' && autoClose > 0 ? autoClose : 3000,
+                          3000,
+                      );
+
             const options = {
-                hideProgressBar: trackForLogoutDismiss !== true,
-                ...(autoClose !== undefined ? { autoClose } : {}),
+                hideProgressBar: true,
+                autoClose: closeMs,
+                pauseOnHover: false,
+                pauseOnFocusLoss: false,
+                closeOnClick: true,
+                draggable: false,
+                // Force unmount after exit so transparent letter toasts cannot linger.
+                onClose: undefined as (() => void) | undefined,
             };
 
+            let id: Id | undefined;
             switch (severity) {
                 case 'success':
-                    toast.success(toastMessage, options);
+                    id = toast.success(toastMessage, options);
                     break;
                 case 'warning':
-                    toast.warning(toastMessage, options);
+                    id = toast.warning(toastMessage, options);
                     break;
                 case 'error':
-                    toast.error(toastMessage, options);
+                    id = toast.error(toastMessage, options);
                     break;
-                case 'info': {
-                    const id = toast.info(toastMessage, options);
+                case 'info':
+                default: {
+                    id = toast.info(toastMessage, options);
                     if (trackForLogoutDismiss) {
                         logoutCountdownToastId = id;
                     }
                     break;
                 }
+            }
+
+            // Hard failsafe: if toastify fails to auto-dismiss (CSS/animation), kill it.
+            if (id !== undefined && closeMs !== false && typeof closeMs === 'number') {
+                const toastId = id;
+                window.setTimeout(() => {
+                    toast.dismiss(toastId);
+                }, closeMs + 400);
             }
         };
 
@@ -253,6 +493,49 @@ function App()
         return () => {
             EventBus.off(TOAST_REQUESTED, handleToastRequested);
             EventBus.off(TOAST_DISMISS_LOGOUT_COUNTDOWN, handleDismissLogoutCountdown);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleOpenShop = (data: { npcId: string; npcName: string }) => {
+            openShopDialog(data.npcId, data.npcName);
+        };
+        const handleOpenMagicShop = (data?: { npcId?: string; npcName?: string }) => {
+            setMagicShopOpen(true, {
+                npcId: data?.npcId,
+                npcName: data?.npcName,
+            });
+        };
+        const handleOpenCashShop = (data: { npcId: string; npcName: string }) => {
+            openCashShopDialog(data.npcId, data.npcName);
+        };
+        const handleOpenBlacksmith = (data: { npcId: string; npcName: string }) => {
+            openBlacksmithDialog(data.npcId, data.npcName);
+        };
+        const handleOpenWarehouse = (data: { npcId: string; npcName: string }) => {
+            openWarehouseDialog(data.npcId, data.npcName);
+        };
+        const handleOpenNpcTalk = (data: {
+            npcId: string;
+            npcName: string;
+            role: NpcTalkRole;
+            title: string;
+        }) => {
+            openNpcTalkDialog(data);
+        };
+        EventBus.on(OUT_UI_OPEN_SHOP, handleOpenShop);
+        EventBus.on(OUT_UI_OPEN_MAGIC_SHOP, handleOpenMagicShop);
+        EventBus.on(OUT_UI_OPEN_CASH_SHOP, handleOpenCashShop);
+        EventBus.on(OUT_UI_OPEN_BLACKSMITH, handleOpenBlacksmith);
+        EventBus.on(OUT_UI_OPEN_WAREHOUSE, handleOpenWarehouse);
+        EventBus.on(OUT_UI_OPEN_NPC_TALK, handleOpenNpcTalk);
+        return () => {
+            EventBus.off(OUT_UI_OPEN_SHOP, handleOpenShop);
+            EventBus.off(OUT_UI_OPEN_MAGIC_SHOP, handleOpenMagicShop);
+            EventBus.off(OUT_UI_OPEN_CASH_SHOP, handleOpenCashShop);
+            EventBus.off(OUT_UI_OPEN_BLACKSMITH, handleOpenBlacksmith);
+            EventBus.off(OUT_UI_OPEN_WAREHOUSE, handleOpenWarehouse);
+            EventBus.off(OUT_UI_OPEN_NPC_TALK, handleOpenNpcTalk);
         };
     }, []);
 
@@ -280,12 +563,6 @@ function App()
             bringDialogToFront('character-dialog');
         }
     }, [showCharacterDialog]);
-
-    useEffect(() => {
-        if (showMinimapDialog) {
-            bringDialogToFront('minimap-dialog');
-        }
-    }, [showMinimapDialog]);
 
     useEffect(() => {
         if (showSoundDialog) {
@@ -359,85 +636,40 @@ function App()
         }
     }, [showDeathDialog]);
 
-    // Center Connect dialog on viewport when shown or window resizes
     useEffect(() => {
-        if (!showConnectDialog) {
-            return;
+        if (showShopDialog) {
+            bringDialogToFront('shop-dialog');
         }
+    }, [showShopDialog]);
 
-        const centerDialog = () => {
-            const dialogElement = document.querySelector('[data-dialog-id="connect-dialog"]');
-            if (dialogElement instanceof HTMLElement) {
-                const rect = dialogElement.getBoundingClientRect();
-                const dialogWidth = rect.width || dialogElement.offsetWidth || 320;
-                const dialogHeight = rect.height || dialogElement.offsetHeight || 280;
-                const newX = (window.innerWidth - dialogWidth) / 2;
-                const newY = (window.innerHeight - dialogHeight) / 2;
-                setConnectDialogPosition({
-                    x: Math.max(0, newX),
-                    y: Math.max(0, newY)
-                });
-            } else {
-                const dialogWidth = 320;
-                const dialogHeight = 280;
-                setConnectDialogPosition({
-                    x: Math.max(0, (window.innerWidth - dialogWidth) / 2),
-                    y: Math.max(0, (window.innerHeight - dialogHeight) / 2)
-                });
-            }
-        };
-
-        const rafId = requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                centerDialog();
-            });
-        });
-        window.addEventListener('resize', centerDialog);
-        return () => {
-            cancelAnimationFrame(rafId);
-            window.removeEventListener('resize', centerDialog);
-        };
-    }, [showConnectDialog]);
-
-    // Center Death dialog on viewport when shown or window resizes
     useEffect(() => {
-        if (!showDeathDialog) {
-            return;
+        if (showMagicShopDialog) {
+            bringDialogToFront('magic-shop-dialog');
         }
+    }, [showMagicShopDialog]);
+    useEffect(() => {
+        if (showCashShopDialog) {
+            bringDialogToFront('cash-shop-dialog');
+        }
+    }, [showCashShopDialog]);
 
-        const centerDialog = () => {
-            const dialogElement = document.querySelector('[data-dialog-id="death-dialog"]');
-            if (dialogElement instanceof HTMLElement) {
-                const rect = dialogElement.getBoundingClientRect();
-                const dialogWidth = rect.width || dialogElement.offsetWidth || 280;
-                const dialogHeight = rect.height || dialogElement.offsetHeight || 120;
-                const newX = (window.innerWidth - dialogWidth) / 2;
-                const newY = (window.innerHeight - dialogHeight) / 2;
-                setDeathDialogPosition({
-                    x: Math.max(0, newX),
-                    y: Math.max(0, newY)
-                });
-            } else {
-                const dialogWidth = 280;
-                const dialogHeight = 120;
-                setDeathDialogPosition({
-                    x: Math.max(0, (window.innerWidth - dialogWidth) / 2),
-                    y: Math.max(0, (window.innerHeight - dialogHeight) / 2)
-                });
-            }
-        };
+    useEffect(() => {
+        if (showWarehouseDialog) {
+            bringDialogToFront('warehouse-dialog');
+        }
+    }, [showWarehouseDialog]);
 
-        const rafId = requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                centerDialog();
-            });
-        });
-        window.addEventListener('resize', centerDialog);
-        return () => {
-            cancelAnimationFrame(rafId);
-            window.removeEventListener('resize', centerDialog);
-        };
-    }, [showDeathDialog]);
+    useEffect(() => {
+        if (showBlacksmithDialog) {
+            bringDialogToFront('blacksmith-dialog');
+        }
+    }, [showBlacksmithDialog]);
+
+    useEffect(() => {
+        if (showNpcTalkDialog) {
+            bringDialogToFront('npc-talk-dialog');
+        }
+    }, [showNpcTalkDialog]);
 
     // Center Connecting dialog on viewport when shown or window resizes
     useEffect(() => {
@@ -539,9 +771,6 @@ function App()
             case 'character-dialog':
                 setCharacterDialogZIndex(currentZIndex);
                 break;
-            case 'minimap-dialog':
-                setMinimapDialogZIndex(currentZIndex);
-                break;
             case 'sound-dialog':
                 setSoundDialogZIndex(currentZIndex);
                 break;
@@ -572,8 +801,37 @@ function App()
             case 'chat-dialog':
                 setChatDialogZIndex(currentZIndex);
                 break;
+            case 'skill-dialog':
+            case 'sys-menu-dialog':
+            case 'mob-kills-dialog':
+            case 'tournament-dialog':
+            case 'training-dialog':
+            case 'auction-board-dialog':
+                setOlympiaMenuZIndex(currentZIndex);
+                break;
             case 'connect-dialog':
                 setConnectDialogZIndex(currentZIndex);
+                break;
+            case 'city-select-dialog':
+                setCitySelectDialogZIndex(currentZIndex);
+                break;
+            case 'shop-dialog':
+                setShopDialogZIndex(currentZIndex);
+                break;
+            case 'magic-shop-dialog':
+                setMagicShopDialogZIndex(currentZIndex);
+                break;
+            case 'cash-shop-dialog':
+                setCashShopDialogZIndex(currentZIndex);
+                break;
+            case 'warehouse-dialog':
+                setWarehouseDialogZIndex(currentZIndex);
+                break;
+            case 'blacksmith-dialog':
+                setBlacksmithDialogZIndex(currentZIndex);
+                break;
+            case 'npc-talk-dialog':
+                setNpcTalkDialogZIndex(currentZIndex);
                 break;
             case 'death-dialog':
                 setDeathDialogZIndex(currentZIndex);
@@ -611,9 +869,6 @@ function App()
             case 'character-dialog':
                 currentPosition = characterDialogPosition;
                 break;
-            case 'minimap-dialog':
-                currentPosition = minimapDialogPosition;
-                break;
             case 'sound-dialog':
                 currentPosition = soundDialogPosition;
                 break;
@@ -644,11 +899,13 @@ function App()
             case 'chat-dialog':
                 currentPosition = chatDialogPosition;
                 break;
-            case 'connect-dialog':
-                currentPosition = connectDialogPosition;
-                break;
-            case 'death-dialog':
-                currentPosition = deathDialogPosition;
+            case 'skill-dialog':
+            case 'sys-menu-dialog':
+            case 'mob-kills-dialog':
+            case 'tournament-dialog':
+            case 'training-dialog':
+            case 'auction-board-dialog':
+                currentPosition = olympiaMenuPosition;
                 break;
             case 'connecting-dialog':
                 currentPosition = connectingDialogPosition;
@@ -695,9 +952,6 @@ function App()
             case 'character-dialog':
                 setCharacterDialogPosition(position);
                 break;
-            case 'minimap-dialog':
-                setMinimapDialogPosition(position);
-                break;
             case 'sound-dialog':
                 setSoundDialogPosition(position);
                 break;
@@ -728,11 +982,13 @@ function App()
             case 'chat-dialog':
                 setChatDialogPosition(position);
                 break;
-            case 'connect-dialog':
-                setConnectDialogPosition(position);
-                break;
-            case 'death-dialog':
-                setDeathDialogPosition(position);
+            case 'skill-dialog':
+            case 'sys-menu-dialog':
+            case 'mob-kills-dialog':
+            case 'tournament-dialog':
+            case 'training-dialog':
+            case 'auction-board-dialog':
+                setOlympiaMenuPosition(position);
                 break;
             case 'connecting-dialog':
                 setConnectingDialogPosition(position);
@@ -744,24 +1000,74 @@ function App()
     };
 
 
-    // Set custom cursor for the entire viewport using CSS variable
+    // Apply scaled cursor + pivot hotspot; cast cursors tint to Peace / Attack / Safe.
     useEffect(() => {
-        if (cursorImage) {
-            // Set CSS variable instead of directly overwriting cursor style
-            document.documentElement.style.setProperty('--custom-cursor', `url(${cursorImage}), auto`);
-        }
-
+        let cancelled = false;
+        const apply = async () => {
+            if (!cursorImage) {
+                return;
+            }
+            const { attackMode, safeAttackMode } = playerDialogStore.state;
+            const combatMode: CombatCursorMode = !attackMode ? 'peace' : safeAttackMode ? 'safe' : 'attack';
+            try {
+                const css = await buildCssCursorValue(cursorSpriteKey, cursorImage, { combatMode });
+                if (!cancelled) {
+                    document.documentElement.style.setProperty('--custom-cursor', css);
+                }
+            } catch {
+                if (!cancelled) {
+                    document.documentElement.style.setProperty('--custom-cursor', `url(${cursorImage}), auto`);
+                }
+            }
+        };
+        void apply();
         return () => {
-            // Remove CSS variable when component unmounts or cursorImage changes
+            cancelled = true;
             document.documentElement.style.removeProperty('--custom-cursor');
         };
-    }, [cursorImage]);
+    }, [cursorImage, cursorSpriteKey]);
+
+    // Re-tint cast cursor when combat mode changes while casting.
+    useEffect(() => {
+        const unsub = playerDialogStore.subscribe(() => {
+            const { cursorSpriteKey: key, spriteFrameMap: map } = appStore.state;
+            const raw = map.get(key);
+            if (!raw) {
+                return;
+            }
+            const { attackMode, safeAttackMode } = playerDialogStore.state;
+            const combatMode: CombatCursorMode = !attackMode ? 'peace' : safeAttackMode ? 'safe' : 'attack';
+            void buildCssCursorValue(key, raw, { combatMode }).then((css) => {
+                document.documentElement.style.setProperty('--custom-cursor', css);
+            });
+        });
+        return () => {
+            unsub();
+        };
+    }, []);
 
     // Re-apply cursor every 500ms to recover from browser reverting to default, and animate grab cursor.
     // In fullscreen, hovering the browser's "exit fullscreen" toast resets cursor to OS default.
     // Force a brief state change (grab for 1ms then back) to kick the browser into re-applying our cursor.
     useEffect(() => {
         let forceRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
+        let applyGen = 0;
+
+        const applyCursorKey = (key: string, map: Map<string, string>) => {
+            const image = map.get(key);
+            if (!image) {
+                return;
+            }
+            const gen = ++applyGen;
+            const { attackMode, safeAttackMode } = playerDialogStore.state;
+            const combatMode: CombatCursorMode = !attackMode ? 'peace' : safeAttackMode ? 'safe' : 'attack';
+            void buildCssCursorValue(key, image, { combatMode }).then((css) => {
+                if (gen !== applyGen) {
+                    return;
+                }
+                document.documentElement.style.setProperty('--custom-cursor', css);
+            });
+        };
 
         const interval = setInterval(() => {
             const { cursorSpriteKey: key, spriteFrameMap: map } = appStore.state;
@@ -777,14 +1083,11 @@ function App()
                 const flashImage = map.get(CURSOR_GRAB_1);
                 if (flashImage) {
                     setCursorSpriteKey(CURSOR_GRAB_1);
-                    document.documentElement.style.setProperty('--custom-cursor', `url(${flashImage}), auto`);
+                    applyCursorKey(CURSOR_GRAB_1, map);
                 }
                 forceRefreshTimeout = setTimeout(() => {
                     setCursorSpriteKey(correctKey);
-                    const image = map.get(correctKey);
-                    if (image) {
-                        document.documentElement.style.setProperty('--custom-cursor', `url(${image}), auto`);
-                    }
+                    applyCursorKey(correctKey, map);
                     forceRefreshTimeout = null;
                 }, 1);
             } else {
@@ -797,10 +1100,7 @@ function App()
                     imageKey = CURSOR_GRAB_1;
                     setCursorSpriteKey(CURSOR_GRAB_1);
                 }
-                const image = map.get(imageKey);
-                if (image) {
-                    document.documentElement.style.setProperty('--custom-cursor', `url(${image}), auto`);
-                }
+                applyCursorKey(imageKey, map);
             }
         }, 500);
 
@@ -811,11 +1111,11 @@ function App()
     }, []);
 
     return (
-        <DndContext onDragEnd={handleDragEnd}>
+        <DndContext sensors={dialogDragSensors} onDragEnd={handleDragEnd}>
             <div id="app">
                 <PhaserGame ref={phaserRef} />
                 
-                {showControlsDialog && (
+                {showControlsDialog && !travelerMode && (
                     <ControlsDialog
                         position={dialogPosition}
                         phaserRef={phaserRef}
@@ -824,7 +1124,7 @@ function App()
                     />
                 )}
                 
-                {showMapDialog && (
+                {showMapDialog && !travelerMode && (
                     <MapDialog
                         position={mapDialogPosition}
                         onClose={() => setMapDialogOpen(false)}
@@ -833,7 +1133,7 @@ function App()
                     />
                 )}
                 
-                {showCameraDialog && (
+                {showCameraDialog && !travelerMode && (
                     <CameraDialog
                         position={cameraDialogPosition}
                         onClose={() => setCameraDialogOpen(false)}
@@ -842,7 +1142,7 @@ function App()
                     />
                 )}
                 
-                {showPlayerDialog && (
+                {showPlayerDialog && !travelerMode && (
                     <PlayerDialog
                         position={playerDialogPosition}
                         onClose={() => setPlayerDialogOpen(false)}
@@ -851,26 +1151,21 @@ function App()
                     />
                 )}
 
-                {showCharacterDialog && (
+                {showCharacterDialog && !arenaSlim && (
                     <CharacterDialog
                         position={characterDialogPosition}
                         onClose={() => setCharacterDialogOpen(false)}
                         zIndex={characterDialogZIndex}
                         onBringToFront={() => bringDialogToFront('character-dialog')}
+                        onPositionChange={setCharacterDialogPosition}
                     />
                 )}
                 
-                {isMapLoaded && showMinimapDialog && (
-                    <MinimapDialog
-                        position={minimapDialogPosition}
-                        onClose={() => setMinimapDialogOpen(false)}
-                        onPositionChange={(newPosition) => setMinimapDialogPosition(newPosition)}
-                        zIndex={minimapDialogZIndex}
-                        onBringToFront={() => bringDialogToFront('minimap-dialog')}
-                    />
-                )}
+                {/* Minimap: toolbar only captures clicks; map body is click-through (CornerMinimapHud). */}
+                {showWorldHud && <CornerMinimapHud />}
+                {showFullWorldChrome && <TestnetHud phaserRef={phaserRef} />}
                 
-                {showSoundDialog && (
+                {showSoundDialog && !travelerMode && (
                     <SoundDialog
                         position={soundDialogPosition}
                         onClose={() => setSoundDialogOpen(false)}
@@ -879,7 +1174,7 @@ function App()
                     />
                 )}
                 
-                {showMonsterDialog && (
+                {showMonsterDialog && !travelerMode && (
                     <MonsterDialog
                         position={monsterDialogPosition}
                         phaserRef={phaserRef}
@@ -888,7 +1183,7 @@ function App()
                     />
                 )}
                 
-                {showNPCDialog && (
+                {showNPCDialog && !travelerMode && (
                     <NPCDialog
                         position={npcDialogPosition}
                         zIndex={npcDialogZIndex}
@@ -896,7 +1191,7 @@ function App()
                     />
                 )}
                 
-                {showEffectDialog && (
+                {showEffectDialog && !travelerMode && (
                     <EffectDialog
                         position={effectDialogPosition}
                         zIndex={effectDialogZIndex}
@@ -909,6 +1204,7 @@ function App()
                         position={castDialogPosition}
                         zIndex={castDialogZIndex}
                         onBringToFront={() => bringDialogToFront('cast-dialog')}
+                        onPositionChange={setCastDialogPosition}
                     />
                 )}
                 
@@ -918,10 +1214,13 @@ function App()
                         onClose={() => setInventoryDialogOpen(false)}
                         zIndex={inventoryDialogZIndex}
                         onBringToFront={() => bringDialogToFront('inventory-dialog')}
+                        onPositionChange={setInventoryDialogPosition}
+                        phaserRef={phaserRef}
+                        simpleBagOnly={arenaSlim}
                     />
                 )}
                 
-                {showItemDialog && (
+                {showItemDialog && !travelerMode && !arenaSlim && (
                     <ItemDialog
                         position={itemDialogPosition}
                         onClose={() => setItemDialogOpen(false)}
@@ -930,7 +1229,7 @@ function App()
                     />
                 )}
                 
-                {showServerDialog && (
+                {showServerDialog && !travelerMode && (
                     <ServerDialog
                         position={serverDialogPosition}
                         onClose={() => setServerDialogOpen(false)}
@@ -939,7 +1238,7 @@ function App()
                     />
                 )}
                 
-                {showPerformanceDialog && (
+                {showPerformanceDialog && !travelerMode && (
                     <PerformanceDialog
                         position={performanceDialogPosition}
                         onClose={() => setPerformanceDialogOpen(false)}
@@ -958,18 +1257,106 @@ function App()
                         onBringToFront={() => bringDialogToFront('chat-dialog')}
                     />
                 )}
-                
-                {isMapLoaded && <HotkeyBar />}
 
-                <AssetDebugOverlay />
+                {!arenaSlim && (
+                    <>
+                        <SkillDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('skill-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <EnchantBagDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('enchant-bag-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <SysMenuDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('sys-menu-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <MobKillsDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('mob-kills-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                        />
+                        <TournamentDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('tournament-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                        />
+                        <DuelWatchDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('duel-watch-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <TrainingDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('training-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <AuctionBoardDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('auction-board-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                            phaserRef={phaserRef}
+                        />
+                        <GuildWarehouseDialog
+                            position={olympiaMenuPosition}
+                            zIndex={olympiaMenuZIndex}
+                            onBringToFront={() => bringDialogToFront('guild-warehouse-dialog')}
+                            onPositionChange={setOlympiaMenuPosition}
+                        />
+                        {!isTravelerPlayerMode() ? (
+                            <AntiBotToolsDialog
+                                position={olympiaMenuPosition}
+                                zIndex={olympiaMenuZIndex}
+                                onBringToFront={() => bringDialogToFront('anti-bot-tools-dialog')}
+                                onPositionChange={setOlympiaMenuPosition}
+                                phaserRef={phaserRef}
+                            />
+                        ) : null}
+                    </>
+                )}
+                {/* Duel panel always available in arena (create/ready/bag stake). */}
+                <ArenaPactDialog
+                    position={olympiaMenuPosition}
+                    zIndex={Math.max(olympiaMenuZIndex, 10080)}
+                    onBringToFront={() => bringDialogToFront('arena-pact-dialog')}
+                    onPositionChange={setOlympiaMenuPosition}
+                    phaserRef={phaserRef}
+                />
+                
+                {showWorldHud && <HotkeyBar phaserRef={phaserRef} />}
+                {showFullWorldChrome && <HudTutorialOverlay />}
+                {showFullWorldChrome && <QuestTrackerHud />}
+                {/* System log: duel-only strip in slim (DC, bag, kills) — still useful. */}
+                {showWorldHud && <SystemLogOverlay />}
+                {showWorldHud && <ChatWorldLog duelOnly={arenaSlim} />}
+                {showWorldHud && <ChatComposeBar phaserRef={phaserRef} duelOnly={arenaSlim} />}
+
+                {!travelerMode && !arenaSlim && <AssetDebugOverlay />}
                 <InventoryItemHoverOverlay />
-                <MonsterHoverOverlay />
-                <NpcHoverOverlay />
+                {/* Monster/NPC hover: skip in slim — less work mid-duel (players still hoverable). */}
+                {showFullWorldChrome && <MonsterHoverOverlay />}
+                {showFullWorldChrome && <NpcHoverOverlay />}
                 <PlayerHoverOverview />
                 
                 {showDeathDialog && (
                     <DeathDialog
-                        position={deathDialogPosition}
                         zIndex={deathDialogZIndex}
                         onBringToFront={() => bringDialogToFront('death-dialog')}
                     />
@@ -983,10 +1370,66 @@ function App()
                 )}
 
                 {showConnectDialog && (
-                    <ConnectDialog
-                        position={connectDialogPosition}
-                        zIndex={connectDialogZIndex}
-                        onBringToFront={() => bringDialogToFront('connect-dialog')}
+                    <ConnectDialog zIndex={connectDialogZIndex} />
+                )}
+                <ArenaKitBuilderDialog zIndex={10050} />
+                <ReferralCharListPanel />
+                <DeskModeJumpTab />
+                <BleedingOnlineStrip />
+                {showCitySelectDialog && travelerMode && (
+                    <CitySelectDialog
+                        position={citySelectDialogPosition}
+                        zIndex={citySelectDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('city-select-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showShopDialog && (
+                    <ShopDialog
+                        position={shopDialogPosition}
+                        zIndex={shopDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('shop-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showCashShopDialog && (
+                    <CashShopDialog
+                        position={cashShopDialogPosition}
+                        zIndex={cashShopDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('cash-shop-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showMagicShopDialog && (
+                    <MagicShopDialog
+                        position={magicShopDialogPosition}
+                        zIndex={magicShopDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('magic-shop-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showWarehouseDialog && (
+                    <WarehouseDialog
+                        position={warehouseDialogPosition}
+                        zIndex={warehouseDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('warehouse-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showBlacksmithDialog && (
+                    <BlacksmithDialog
+                        position={blacksmithDialogPosition}
+                        zIndex={blacksmithDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('blacksmith-dialog')}
+                        phaserRef={phaserRef}
+                    />
+                )}
+                {showNpcTalkDialog && (
+                    <NpcTalkDialog
+                        position={npcTalkDialogPosition}
+                        zIndex={npcTalkDialogZIndex}
+                        onBringToFront={() => bringDialogToFront('npc-talk-dialog')}
+                        phaserRef={phaserRef}
                     />
                 )}
                 {showServerMessageDialog && (

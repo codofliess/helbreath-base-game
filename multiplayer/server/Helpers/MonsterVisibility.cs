@@ -176,12 +176,17 @@ public static class MonsterVisibility {
         }
     }
 
-    /// <summary>Sends <see cref="MonsterDied"/> to every connected player whose view includes <paramref name="monster"/>.</summary>
-    public static void BroadcastMonsterDied(GameWorldRef wr, GameWorldMonster monster) {
+    /// <summary>Sends <see cref="MonsterDied"/> to every connected player whose view includes <paramref name="monster"/>; credits exp and kill counters when <paramref name="killer"/> is provided.</summary>
+    public static void BroadcastMonsterDied(GameWorldRef wr, GameWorldMonster monster, GameWorldPlayer? killer = null) {
         ArgumentNullException.ThrowIfNull(monster);
 
-        MonsterLoot.TryDropLootOnDeath(wr, monster);
+        MonsterLoot.TryDropLootOnDeath(wr, monster, killer);
         monster.ClearAllTemporaryEffects(wr);
+        if (killer is not null && !killer.Disconnected) {
+            Progression.HandleMonsterKilled(wr, killer, monster);
+        }
+
+        TimedChallenge.OnMonsterDied(wr, monster);
 
         var message = NetworkManager.CreateMonsterDied(monster.MonsterId, monster.CorpseDecayDurationMs);
         foreach (var recipient in wr.PlayerSpatialGrid.GetNearbyPlayers(monster.PosX, monster.PosY, excludeDisconnected: true)) {
@@ -241,6 +246,15 @@ public static class MonsterVisibility {
         int destY = -1,
         int? knockbackFromX = null,
         int? knockbackFromY = null) {
+        // PvP kill attribution: remember the last player hit so a death within the window credits this attacker.
+        if (wr.World.TryGetConnectedPlayerById(targetPlayerId, out var attributionTarget) &&
+            wr.World.TryGetConnectedPlayerById(attackerPlayerId, out var attributionAttacker)) {
+            var attributionName = string.IsNullOrWhiteSpace(attributionAttacker.CharacterName)
+                ? $"Fighter#{attackerPlayerId}"
+                : attributionAttacker.CharacterName.Trim();
+            attributionTarget.RegisterPlayerAttacker(attackerPlayerId, attributionName);
+        }
+
         var combatMessage = NetworkManager.CreatePlayerTakeDamage(
             targetPlayerId,
             damage,
@@ -295,6 +309,10 @@ public static class MonsterVisibility {
 
         target.ApplyDamage(damage);
         if (damage > 0) {
+            // Mana Converting + Charge Critical gear effects on damage taken.
+            if (Helpers.PlayerDerivedStats.ApplyOnDamageTakenGearEffects(target, damage)) {
+                Helpers.Progression.SendProgressionUpdated(target, leveledUp: false);
+            }
             target.NotifyCombatDamageMayCancelLogout();
         }
 
@@ -303,6 +321,7 @@ public static class MonsterVisibility {
         }
 
         NetworkManager.SendToPlayer(target, NetworkManager.CreateHpUpdated(target.Hp, target.MaxHp));
+        Party.NotifyVitalsChanged(target);
         if (target.IsDead) {
             wr.World.HandlePlayerDeath(wr, target);
         }
@@ -411,7 +430,8 @@ public static class MonsterVisibility {
             }
         }
 
-        MonsterChase.EvaluateChaseForMonster(wr, monster, newV);
+        // Refresh mutual range BEFORE chase eval so newly entered players are visible to AI.
         monster.ReplacePlayersInRange(newV.Keys);
+        MonsterChase.EvaluateChaseForMonster(wr, monster, newV);
     }
 }

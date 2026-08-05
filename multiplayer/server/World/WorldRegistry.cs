@@ -52,7 +52,10 @@ public sealed class WorldRegistry : IDisposable {
         IReadOnlyList<GameWorldDwellAreaConfig>? dwellAreas = null,
         IReadOnlyList<GameWorldTeleportSet>? teleportLocs = null,
         IReadOnlyList<GameWorldNpcPlacementConfig>? initialNpcs = null,
-        int? workerThread = null) {
+        int? workerThread = null,
+        TournamentConfig? tournamentConfig = null,
+        Mmorpg.Network.WeatherMode defaultWeather = Mmorpg.Network.WeatherMode.Dry,
+        IReadOnlyList<GameWorldMiningNodeConfig>? miningNodes = null) {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(occupancyTracker);
         ArgumentNullException.ThrowIfNull(monsterCatalog);
@@ -61,7 +64,7 @@ public sealed class WorldRegistry : IDisposable {
         ArgumentNullException.ThrowIfNull(itemsById);
         ArgumentNullException.ThrowIfNull(npcsById);
 
-        var world = new GameWorld(id, map, music, occupancyTracker, settings, monsterCatalog, monstersById, spellsById, itemsById, npcsById, dwellAreas, teleportLocs, initialNpcs);
+        var world = new GameWorld(id, map, music, occupancyTracker, settings, monsterCatalog, monstersById, spellsById, itemsById, npcsById, dwellAreas, teleportLocs, initialNpcs, tournamentConfig, defaultWeather, miningNodes);
         if (!gameWorldsById.TryAdd(id, world)) {
             throw new InvalidOperationException($"A game world with id '{id}' is already registered.");
         }

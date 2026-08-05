@@ -63,7 +63,7 @@ export function NpcHoverOverlay() {
                         color: 'var(--rpg-parchment)',
                         fontSize: '13px',
                         fontWeight: 'bold',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'Tahoma, MS Sans Serif, Segoe UI, sans-serif',
                         textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8)',
                         whiteSpace: 'nowrap',
                         textAlign: 'left',
@@ -76,7 +76,7 @@ export function NpcHoverOverlay() {
                         color: NPC_LABEL_COLOR,
                         fontSize: '12px',
                         fontWeight: 'bold',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'Tahoma, MS Sans Serif, Segoe UI, sans-serif',
                         textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9)',
                         textAlign: 'left',
                     }}

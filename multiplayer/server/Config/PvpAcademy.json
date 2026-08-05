@@ -1,0 +1,78 @@
+{
+  "learning": {
+    "guardWaves": [1, 2, 2, 2, 3],
+    "guardCatalogId": 31,
+    "darkElfCatalogId": 15,
+    "tips": {
+      "wave1": "Open: position · don't stand in the pack · pick one target.",
+      "wave2": "Chill → Paralyze (or poison path) · keep DS up.",
+      "wave3": "Reset if low · pot · re-engage · don't overcommit.",
+      "wave4": "Priority low HP · watch multi-aggro.",
+      "wave5": "Final push · clean spacing · finish order."
+    }
+  },
+  "challenge": {
+    "note": "Hero-set GM NPCs + player-like AI = TBD. Scaffold uses Guards with tier labels.",
+    "tiers": [
+      {
+        "id": "easy",
+        "mode": 10,
+        "label": "Easy",
+        "ai": "predictable move · rare free hits · almost no self PFM/AMP",
+        "kit": "basic war/mage stubs",
+        "selfBuffs": false,
+        "offensiveCcOnPlayer": false,
+        "invis": false,
+        "merienCharges": 0,
+        "xelima": false
+      },
+      {
+        "id": "intermediate",
+        "mode": 11,
+        "label": "Intermediate",
+        "ai": "slow self PFM/PFA/AMP · steady poke",
+        "kit": "war + mage profiles",
+        "selfBuffs": true,
+        "selfBuffIntervalMs": 8000,
+        "offensiveCcOnPlayer": false,
+        "invis": false,
+        "merienCharges": 0,
+        "xelima": false
+      },
+      {
+        "id": "hard",
+        "mode": 12,
+        "label": "Hard",
+        "ai": "defends + PFA/DS on you · Chill · occasional invi",
+        "kit": "full mid PvP toolkit",
+        "selfBuffs": true,
+        "selfBuffIntervalMs": 5000,
+        "offensiveCcOnPlayer": true,
+        "chill": true,
+        "invis": true,
+        "merienCharges": 0,
+        "xelima": false
+      },
+      {
+        "id": "elite",
+        "mode": 13,
+        "label": "Elite",
+        "ai": "full tools · invi pots · 1 Merien · Xelima if needed · strong Para",
+        "kit": "hero set + consumables",
+        "selfBuffs": true,
+        "selfBuffIntervalMs": 3500,
+        "offensiveCcOnPlayer": true,
+        "chill": true,
+        "paralyze": true,
+        "invis": true,
+        "merienCharges": 1,
+        "xelima": true
+      }
+    ]
+  },
+  "enduranceEttinOnly": {
+    "enabled": true,
+    "catalogId": 0,
+    "note": "Optional pressure pack — Ettins only; not the academy ladder."
+  }
+}

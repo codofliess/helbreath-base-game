@@ -1,7 +1,7 @@
 import type { Scene } from 'phaser';
 
 import { LOAD_MAP_ASSETS_ON_DEMAND } from '../Config';
-import { ASSETS, AssetType, type AssetData } from '../constants/Assets';
+import { ASSETS, AssetType, Minimap, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
 import { HBMap } from '../game/assets/HBMap';
 import { setMap } from './RegistryUtils';
@@ -31,14 +31,27 @@ export function shouldLoadMapAssetsOnDemand(): boolean {
     return LOAD_MAP_ASSETS_ON_DEMAND;
 }
 
+/**
+ * Resolve map asset metadata. Prefer the static {@link ASSETS} catalog; if a map is
+ * missing there (e.g. barracks floor 2), still allow HTTP load from game-assets/maps.
+ */
 function getMapAssetByFileName(mapFileName: string): AssetData {
+    const normalized = mapFileName.endsWith('.amd') ? mapFileName : `${mapFileName}.amd`;
     const asset = ASSETS.find(
-        (a) => a.assetType === AssetType.MAP && a.fileName === mapFileName,
+        (a) => a.assetType === AssetType.MAP && a.fileName === normalized,
     );
-    if (!asset) {
-        throw new Error(`[MapAssets] Unknown map file: ${mapFileName}`);
+    if (asset) {
+        return asset;
     }
-    return asset;
+    const base = normalized.replace(/\.amd$/i, '');
+    console.warn(`[MapAssets] Map '${normalized}' not in ASSETS catalog — loading via HTTP fallback.`);
+    return {
+        key: `map-${base}`,
+        fileName: normalized,
+        assetType: AssetType.MAP,
+        mapName: base,
+        minimap: Minimap.NONE,
+    };
 }
 
 const sortedTileSpriteAssets: AssetData[] = ASSETS.filter(
@@ -112,7 +125,8 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
         if (!asset.spriteType) {
             throw new Error(`[MapAssets] Tile asset ${asset.key} is missing spriteType`);
         }
-        const response = await fetch(`assets/sprites/${asset.fileName}`);
+        // Absolute path so login deep-links / base URL never resolve to /assets (CF poison / 404).
+        const response = await fetch(`/game-assets/sprites/${asset.fileName}`);
         if (!response.ok) {
             throw new Error(
                 `[MapAssets] Failed to fetch tile sprite ${asset.fileName}: ${response.status} ${response.statusText}`,
@@ -144,7 +158,7 @@ export async function prepareMapForGameWorld(scene: Scene, mapFileName: string):
     const mapAsset = getMapAssetByFileName(mapFileName);
     const mapKey = mapAsset.key;
 
-    const response = await fetch(`assets/maps/${mapFileName}`);
+    const response = await fetch(`/game-assets/maps/${mapFileName}`);
     if (!response.ok) {
         throw new Error(
             `[MapAssets] Failed to fetch map ${mapFileName}: ${response.status} ${response.statusText}`,

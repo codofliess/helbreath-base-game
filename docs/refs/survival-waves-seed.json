@@ -1,0 +1,49 @@
+{
+  "source": "Helbreath Last Stand patterns (design only) — https://helbreath-waves.pages.dev/",
+  "waveSeconds": 60,
+  "maxConcurrentEnemies": 10,
+  "spawnIntervalBaseSec": 0.95,
+  "spawnIntervalMinSec": 0.38,
+  "notes": "catalogId TBD — map names to multiplayer/server Config Monsters.json before ship",
+  "escalation": {
+    "damagePerWave": 0.065,
+    "hpPerWave": 0.16
+  },
+  "quota": {
+    "1": 14,
+    "2": 12,
+    "3to7": "min(10, 3+wave)",
+    "8": 8,
+    "9to10": 7,
+    "11to12": 6,
+    "13to14": 1,
+    "endless": "min(10, 6+floor((wave-15)/15)); bosses phase=1"
+  },
+  "waves": [
+    { "wave": 1, "key": "slime", "name": "SLIMES", "sub": "The first stirrings", "catalogHint": "Slime / weak early", "catalogId": null, "baseHp": 22, "speed": 48, "damage": 7, "xp": 6, "gold": 3 },
+    { "wave": 2, "key": "ant", "name": "GIANT ANTS", "sub": "The earth begins to crawl", "catalogHint": "Giant Ant", "catalogId": null, "baseHp": 34, "speed": 67, "damage": 8, "xp": 9, "gold": 4 },
+    { "wave": 3, "key": "orc", "name": "ORCS", "sub": "War drums in the distance", "catalogHint": "Orc", "catalogId": null, "baseHp": 66, "speed": 54, "damage": 11, "xp": 13, "gold": 6 },
+    { "wave": 4, "key": "scorpion", "name": "SCORPIONS", "sub": "Venom on the wind", "catalogHint": "Scorpion", "catalogId": null, "baseHp": 82, "speed": 74, "damage": 12, "xp": 16, "gold": 8 },
+    { "wave": 5, "key": "zombie", "name": "ZOMBIES", "sub": "The dead refuse their rest", "catalogHint": "Zombie", "catalogId": null, "baseHp": 120, "speed": 43, "damage": 15, "xp": 20, "gold": 11 },
+    { "wave": 6, "key": "skeleton", "name": "SKELETONS", "sub": "Only bones remain", "catalogHint": "Skeleton", "catalogId": null, "baseHp": 105, "speed": 62, "damage": 17, "xp": 24, "gold": 14 },
+    { "wave": 7, "key": "stone-golem", "name": "STONE GOLEMS", "sub": "The earth itself rises", "catalogHint": "Stone Golem", "catalogId": null, "baseHp": 150, "speed": 40, "damage": 20, "xp": 32, "gold": 18 },
+    { "wave": 8, "key": "werewolf", "name": "WEREWOLVES", "sub": "Howls cross the battlefield", "catalogHint": "Werewolf", "catalogId": null, "baseHp": 185, "speed": 64, "damage": 26, "xp": 40, "gold": 24 },
+    { "wave": 9, "key": "demon", "name": "DEMONS", "sub": "The abyss opens", "catalogHint": "Demon", "catalogId": null, "baseHp": 245, "speed": 42, "damage": 34, "xp": 52, "gold": 32 },
+    { "wave": 10, "key": "gargoyle", "name": "GARGOYLES", "sub": "Stone wings descend", "catalogHint": "Gargoyle", "catalogId": null, "baseHp": 310, "speed": 48, "damage": 44, "xp": 68, "gold": 42 },
+    { "wave": 11, "key": "hellclaw", "name": "HELLCLAWS", "sub": "Claws from below", "catalogHint": "Hellclaw", "catalogId": null, "baseHp": 430, "speed": 52, "damage": 56, "xp": 90, "gold": 55 },
+    { "wave": 12, "key": "tigerworm", "name": "TIGERWORMS", "sub": "The ground devours the living", "catalogHint": "Tiger Worm", "catalogId": null, "baseHp": 600, "speed": 42, "damage": 70, "xp": 120, "gold": 72 },
+    { "wave": 13, "key": "wyvern", "name": "WYVERN", "sub": "A single ancient terror descends", "catalogHint": "Wyvern", "catalogId": null, "baseHp": 1100, "speed": 45, "damage": 153, "xp": 260, "gold": 150, "boss": true },
+    { "wave": 14, "key": "abaddon", "name": "ABADDON", "sub": "Absolute evil enters the field", "catalogHint": "Abaddon", "catalogId": null, "baseHp": 2200, "speed": 39, "damage": 246, "xp": 520, "gold": 300, "boss": true }
+  ],
+  "blessingsOptional": [
+    { "id": "sweep", "name": "Sweeping Blow", "stat": "+1 multi-target (max 4)" },
+    { "id": "vitality", "name": "Vitality", "stat": "+50 max HP (instance)" },
+    { "id": "tempered", "name": "Tempered Steel", "stat": "+2 damage (instance)" },
+    { "id": "pa", "name": "Physical Absorption", "stat": "+1% PA cap 80" },
+    { "id": "renewal", "name": "Renewal", "stat": "+10 HP / 5s" },
+    { "id": "goldfind", "name": "Gold Find", "stat": "+10% gold (challenge)" },
+    { "id": "siphon", "name": "Life Siphon", "stat": "+1% siphon cap 10%" },
+    { "id": "evasion", "name": "Evasion Training", "stat": "+10 DR" },
+    { "id": "rhythm", "name": "Battle Rhythm", "stat": "+12% attack speed" }
+  ]
+}

@@ -45,9 +45,18 @@ public class GameWorldMonster : GameWorldActionableEntity {
     /// <summary>While set and <c>now</c> is before this instant, <see cref="TickAi"/> skips all AI (stunlock). Not extended by a new stunlock until elapsed.</summary>
     private DateTimeOffset? stunlockUntil;
 
-    /// <summary>When set to the current combat target, ongoing chase ignores <see cref="ChaseMaxDistanceCells"/> until cleared (the attacker damaged this monster).</summary>
+    /// <summary>When set to the current combat target, damage-aggro hold / longer leash apply (the attacker damaged this monster).</summary>
     private CombatTargetKind damageAggroTargetKind;
     private long? damageAggroTargetId;
+    /// <summary>
+    /// After last damage from a player, keep "anger" at least until this instant even if the
+    /// soft proximity leash would peel (Olympia feel: don't drop the irritator in a few frames).
+    /// </summary>
+    private DateTimeOffset? damageAggroHoldUntil;
+    /// <summary>Minimum stickiness after each damaging hit that sets/refreshes damage aggro.</summary>
+    private const int DamageAggroHoldMs = 4500;
+    /// <summary>Extra Chebyshev cells beyond <see cref="ChaseDistanceCells"/> before proximity aggro drops (hysteresis).</summary>
+    private const int ProximityAggroHysteresisCells = 2;
 
     /// <summary>Distinguishes wander rest (chase may preempt) from post-damage recovery (<see cref="TryEndStayInIdleForChasePrecedence"/> must not clear).</summary>
     private enum IdleGateKind {
@@ -77,17 +86,29 @@ public class GameWorldMonster : GameWorldActionableEntity {
     private readonly int baseMovementSpeedMs;
     private readonly int baseAttackSpeedMs;
 
-    /// <summary>Authoritative milliseconds per movement step when moving; 0 disables movement and wander while chase targeting and melee attacks (when a player is in range) still run.</summary>
+    /// <summary>
+    /// Authoritative milliseconds per movement step when moving; 0 disables movement and wander while chase targeting and melee attacks (when a player is in range) still run.
+    /// Base values come from Olympia <c>Npc.cfg</c> ActionTime (via Monsters.json). While chasing/aggro'd, Olympia
+    /// <c>NpcProcess</c> shortens ActionTime (random −0…700, floor 600 ms) so pursuit is faster than wander.
+    /// </summary>
     public int MovementSpeedMs {
         get {
             if (baseMovementSpeedMs <= 0) {
                 return 0;
             }
 
+            var stepMs = baseMovementSpeedMs;
+            // Olympia NpcProcess: when BEHAVIOR_ATTACK, ActionTime shortens (random −0…700, floor 600).
+            // We use a mid cut (−200 ms, floor 750) so chase is snappier than wander without making
+            // ActionTime-900 mobs (Troll/Ogre/Unicorn) zip at the absolute floor of 600 ms/step.
+            if (combatTargetId.HasValue) {
+                stepMs = Math.Max(750, baseMovementSpeedMs - 200);
+            }
+
             return Math.Max(
                 1,
                 TemporaryEffectSpeedModifierMath.ApplyModifierSumToDurationMs(
-                    baseMovementSpeedMs,
+                    stepMs,
                     temporaryEffectMovementSpeedModifierSum));
         }
     }
@@ -161,10 +182,67 @@ public class GameWorldMonster : GameWorldActionableEntity {
     /// <summary>Index into <c>Monsters.json</c> (<see cref="MonsterConfig.Id"/>); used to respawn dwell-spawned instances.</summary>
     public int CatalogMonsterId { get; }
 
+    /// <summary>
+    /// When set, this monster is a player summon (Summon Creature / similar). Kill exp and loot credit go to this player.
+    /// </summary>
+    public long? SummonOwnerPlayerId { get; set; }
+
+    /// <summary>When set, summon despawns after this UTC time (e.g. goblin 5 minutes).</summary>
+    public DateTimeOffset? SummonExpiresAtUtc { get; set; }
+
+    /// <summary>
+    /// Gold goblin: pure collector — never fights; picks gold + ground items into owner's bag.
+    /// Hostiles never aggro/damage it (players may still kill it).
+    /// </summary>
+    public bool SummonCollectorOnly { get; set; }
+
+    /// <summary>When true, hostiles never aggro or damage this summon — only players may kill it.</summary>
+    public bool ImmuneToMonsterDamage { get; set; }
+
+    /// <summary>Olympia NPC special ability id (0=none, 4=Anti-Magic, …); rolled at spawn.</summary>
+    public int SpecialAbility { get; private set; }
+
+    /// <summary>Extra % on kill exp from SA (e.g. Anti-Magic AbsDamage 21–80). Applied before GetExp.</summary>
+    public int SpecialExpBonusPercent { get; private set; }
+
     /// <summary>Catalog spell entries for AI casts (empty when the monster has no spells).</summary>
     public IReadOnlyList<MonsterSpellEntry> ConfiguredSpells => configuredSpells;
 
+    /// <summary>Olympia Npc.cfg magic level (0 = no ladder cast; negative = guard ladder).</summary>
+    public int MagicLevel { get; }
+
+    /// <summary>Current mana pool for NPC casts (regen when |MagicLevel| &gt; 0).</summary>
+    public int Mana => mana;
+
+    /// <summary>Max mana from catalog at spawn.</summary>
+    public int MaxMana { get; }
+
+    /// <summary>Olympia magic hit ratio (parity seed; stored on instance).</summary>
+    public int MagicHitRatio { get; }
+
+    /// <summary>
+    /// Player damage hits required before <see cref="SetAggroFromDamagePlayerAttacker"/> actually sets chase.
+    /// Default 1; Unicorns use 2 (neutral until the second hit from that player).
+    /// </summary>
+    public int HitsToAggro { get; private set; } = 1;
+
+    /// <summary>Per-player damage hit counts used when <see cref="HitsToAggro"/> &gt; 1.</summary>
+    private Dictionary<long, int>? playerHitsTowardAggro;
+
+    /// <summary>Assign Olympia special ability + exp bonus (call once after spawn).</summary>
+    public void SetSpecialAbility(int specialAbility, int expBonusPercent) {
+        SpecialAbility = Math.Max(0, specialAbility);
+        SpecialExpBonusPercent = Math.Max(0, expBonusPercent);
+    }
+
+    /// <summary>Configure hits-to-aggro after spawn (from catalog <c>hitsToAggro</c>).</summary>
+    public void SetHitsToAggro(int hitsToAggro) {
+        HitsToAggro = Math.Max(1, hitsToAggro);
+    }
+
     private readonly MonsterSpellEntry[] configuredSpells;
+    private int mana;
+    private DateTimeOffset? lastManaRegenAt;
 
     public GameWorldMonster(
         Guid monsterGuid,
@@ -193,7 +271,10 @@ public class GameWorldMonster : GameWorldActionableEntity {
         int corpseDecayDurationMs = 3000,
         int catalogMonsterId = 0,
         int initialFacingDirection = 4,
-        MonsterSpellEntry[]? monsterSpells = null) {
+        MonsterSpellEntry[]? monsterSpells = null,
+        int magicLevel = 0,
+        int maxMana = 0,
+        int magicHitRatio = 0) {
         if (string.IsNullOrWhiteSpace(name)) {
             throw new ArgumentException("Monster name is required.", nameof(name));
         }
@@ -265,6 +346,38 @@ public class GameWorldMonster : GameWorldActionableEntity {
         CatalogMonsterId = catalogMonsterId;
         SetFacingDirection(initialFacingDirection);
         configuredSpells = monsterSpells is { Length: > 0 } s ? s : Array.Empty<MonsterSpellEntry>();
+        MagicLevel = magicLevel;
+        MaxMana = Math.Max(0, maxMana);
+        mana = MaxMana;
+        MagicHitRatio = Math.Max(0, magicHitRatio);
+    }
+
+    /// <summary>Olympia mana regen tick when |MagicLevel| &gt; 0: +1d(maxMana/5) every <see cref="OlympiaMonsterMagic.ManaRegenIntervalMs"/>.</summary>
+    private void TickManaRegen(Random random, DateTimeOffset now) {
+        if (MagicLevel == 0 || MaxMana <= 0) {
+            return;
+        }
+
+        if (lastManaRegenAt is null) {
+            lastManaRegenAt = now;
+            return;
+        }
+
+        if ((now - lastManaRegenAt.Value).TotalMilliseconds < OlympiaMonsterMagic.ManaRegenIntervalMs) {
+            return;
+        }
+
+        lastManaRegenAt = now;
+        var die = Math.Max(1, MaxMana / 5);
+        mana = Math.Min(MaxMana, mana + random.Next(1, die + 1));
+    }
+
+    /// <summary>Spend mana after a successful cast; never goes below 0.</summary>
+    private void SpendMana(int cost) {
+        if (cost <= 0) {
+            return;
+        }
+        mana = Math.Max(0, mana - cost);
     }
 
     /// <summary>Ms remaining until corpse removal when <see cref="Dead"/>; otherwise 0.</summary>
@@ -318,10 +431,25 @@ public class GameWorldMonster : GameWorldActionableEntity {
         SetCombatTarget(CombatTargetKind.Monster, monsterId);
     }
 
-    /// <summary>After a player deals damage: hostile/neutral monsters switch chase to that player and ignore max follow distance until chase clears or target changes. Friendly monsters never target players.</summary>
+    /// <summary>
+    /// After a player deals damage: hostile/neutral monsters switch chase to that player and ignore max
+    /// follow distance until chase clears or target changes. Friendly monsters never target players.
+    /// When <see cref="HitsToAggro"/> &gt; 1 (e.g. Unicorn = 2), the first hit(s) from that player only
+    /// count toward the threshold — no chase until the threshold is reached.
+    /// </summary>
     public void SetAggroFromDamagePlayerAttacker(long attackerPlayerId) {
         if (dead || Allegiance == MonsterAllegiance.Friendly) {
             return;
+        }
+
+        if (HitsToAggro > 1) {
+            playerHitsTowardAggro ??= new Dictionary<long, int>();
+            playerHitsTowardAggro.TryGetValue(attackerPlayerId, out var hits);
+            hits++;
+            playerHitsTowardAggro[attackerPlayerId] = hits;
+            if (hits < HitsToAggro) {
+                return;
+            }
         }
 
         SetDamageAggroTarget(CombatTargetKind.Player, attackerPlayerId);
@@ -347,13 +475,46 @@ public class GameWorldMonster : GameWorldActionableEntity {
         SetDamageAggroTarget(CombatTargetKind.Monster, attackerMonsterId);
     }
 
-    /// <summary>Whether <paramref name="currentTarget"/> is still valid as the ongoing chase target (includes damage-aggro max-distance bypass).</summary>
+    /// <summary>Whether <paramref name="currentTarget"/> is still valid as the ongoing chase target.</summary>
+    /// <remarks>
+    /// Olympia layered aggro: proximity targets are kept only while within <see cref="ChaseDistanceCells"/>
+    /// of this monster's body (enter from one side → only near NPCs lock; leave slowly → far NPCs drop first).
+    /// Damage-aggro uses the longer pit leash (<see cref="ChaseMaxDistanceCells"/> from dwell center).
+    /// </remarks>
     public bool IsOngoingChaseTargetStillValid(GameWorldPlayer currentTarget) {
         if (currentTarget.IsDead || currentTarget.SpawnProtection) {
             return false;
         }
 
-        return !ExceedsNonAggroChaseMaxDistance(CombatTargetKind.Player, currentTarget.PlayerId, currentTarget.PosX, currentTarget.PosY);
+        var isDamageAggro =
+            IsDamageAggroTargetActive() &&
+            damageAggroTargetKind == CombatTargetKind.Player &&
+            damageAggroTargetId == currentTarget.PlayerId;
+
+        if (isDamageAggro) {
+            var now = DateTimeOffset.UtcNow;
+            // Fresh damage: hold anger longer — use body distance with extra slack so peeling
+            // the pit edge for a second does not instantly clear "who irritated me".
+            if (damageAggroHoldUntil.HasValue && now < damageAggroHoldUntil.Value) {
+                var bodyDist = Location.GetDistance(posX, posY, currentTarget.PosX, currentTarget.PosY);
+                var softCap = ChaseDistanceCells + ProximityAggroHysteresisCells + 3;
+                var hardCap = ChaseMaxDistanceCells is int maxD
+                    ? Math.Max(maxD + 2, softCap)
+                    : Math.Max(softCap, 14);
+                return bodyDist <= hardCap;
+            }
+
+            return !ExceedsNonAggroChaseMaxDistance(
+                CombatTargetKind.Player,
+                currentTarget.PlayerId,
+                currentTarget.PosX,
+                currentTarget.PosY);
+        }
+
+        // Proximity aggro: soft leash with +N cell hysteresis so leaving slowly does not
+        // peel the "irritated" NPC in a single step (acquire still uses ChaseDistanceCells).
+        var dist = Location.GetDistance(posX, posY, currentTarget.PosX, currentTarget.PosY);
+        return dist <= ChaseDistanceCells + ProximityAggroHysteresisCells;
     }
 
     /// <summary>Whether <paramref name="currentTarget"/> is still valid as the ongoing chase target (includes damage-aggro max-distance bypass).</summary>
@@ -388,6 +549,8 @@ public class GameWorldMonster : GameWorldActionableEntity {
         combatTargetId = targetId;
         damageAggroTargetKind = targetKind;
         damageAggroTargetId = targetId;
+        // Refresh hold on every damaging hit so multi-hit trains keep the mob locked on.
+        damageAggroHoldUntil = DateTimeOffset.UtcNow.AddMilliseconds(DamageAggroHoldMs);
         CancelCurrentAttackForRetarget();
     }
 
@@ -395,16 +558,28 @@ public class GameWorldMonster : GameWorldActionableEntity {
         return damageAggroTargetKind != CombatTargetKind.None && damageAggroTargetId.HasValue;
     }
 
+    /// <summary>
+    /// Olympia leashing: chase ends when the target is farther than <see cref="ChaseMaxDistanceCells"/>
+    /// from the leash anchor. Pit/dwell mobs leash from the dwell center (return-to-pit);
+    /// summons / free spawns leash from their current cell.
+    /// Damage-aggro no longer ignores this cap (that let pit mobs kite across the whole map).
+    /// </summary>
     private bool ExceedsNonAggroChaseMaxDistance(CombatTargetKind targetKind, long targetId, int targetX, int targetY) {
+        _ = targetKind;
+        _ = targetId;
         if (ChaseMaxDistanceCells is not int maxD) {
             return false;
         }
 
-        if (IsDamageAggroTargetActive() && damageAggroTargetKind == targetKind && damageAggroTargetId == targetId) {
-            return false;
+        int fromX = posX;
+        int fromY = posY;
+        // Dwell pits: leash from home center so training kites drop when player leaves the pit radius.
+        if (HasDwellArea) {
+            fromX = (DwellArea.X1 + DwellArea.X2) / 2;
+            fromY = (DwellArea.Y1 + DwellArea.Y2) / 2;
         }
 
-        return Location.GetDistance(posX, posY, targetX, targetY) > maxD;
+        return Location.GetDistance(fromX, fromY, targetX, targetY) > maxD;
     }
 
     private void CancelCurrentAttackForRetarget() {
@@ -499,11 +674,19 @@ public class GameWorldMonster : GameWorldActionableEntity {
             return;
         }
 
+        TickManaRegen(random, now);
+
         if (stunlockUntil.HasValue && now >= stunlockUntil.Value) {
             stunlockUntil = null;
         }
 
         if (stunlockUntil.HasValue && now < stunlockUntil.Value) {
+            return;
+        }
+
+        // Olympia HOLDOBJECT: paralyzed NPCs neither move nor attack until the effect expires.
+        if (HasTemporaryEffect(TemporaryEffectType.Paralyze) ||
+            HasTemporaryEffect(TemporaryEffectType.Sleep)) {
             return;
         }
 
@@ -644,6 +827,14 @@ public class GameWorldMonster : GameWorldActionableEntity {
         }
 
         var dmg = random.Next(AttackDamageMin, AttackDamageMax + 1);
+        if (!RangedAttack && !TemporaryEffects.RollPhysicalHitVsDefenseShield(p)) {
+            dmg = 0;
+        }
+        if (dmg > 0) {
+            dmg = Helpers.PlayerDerivedStats.ApplyPhysicalMitigation(p, dmg);
+            dmg = Helpers.MobSpecialty.ApplyIncomingDamageReduction(p, CatalogMonsterId, dmg);
+        }
+
         var px = p.PosX;
         var py = p.PosY;
         var attackTypeOut = AttackType;
@@ -653,31 +844,22 @@ public class GameWorldMonster : GameWorldActionableEntity {
         var destKbY = -1;
 
         var remainingStunlock = p.GetRemainingCombatStunlockMs(now);
-        if ((AttackType == AttackType.Stun || AttackType == AttackType.Knockback) && remainingStunlock > 0) {
+        var wantDamageMove = dmg > 0 && (dmg >= Combat.GetDamageMoveThreshold(wr) || AttackType == AttackType.Knockback);
+        if (dmg <= 0) {
+            attackTypeOut = AttackType.NoInterrupt;
+        } else if ((AttackType == AttackType.Stun || AttackType == AttackType.Knockback) && remainingStunlock > 0 && !wantDamageMove) {
             attackTypeOut = AttackType.Interrupt;
-        } else if (AttackType == AttackType.Stun) {
+        } else if (AttackType == AttackType.Stun && !wantDamageMove) {
             stunPacketMs = StunDurationMs;
-        } else if (AttackType == AttackType.Knockback) {
+        } else if (wantDamageMove) {
             stunPacketMs = StunDurationMs;
-            var dir = Location.GetNextGridDirection(posX, posY, px, py);
-            if (dir < 0 || dir > 7) {
+            if (Combat.TryApplyDamageMoveStep(wr, posX, posY, p, px, py, out var kx, out var ky)) {
+                attackTypeOut = AttackType.Knockback;
+                knockbackDurMs = wr.Settings.Timings.KnockbackTimeMs;
+                destKbX = kx;
+                destKbY = ky;
+            } else if (AttackType is AttackType.Stun or AttackType.Knockback) {
                 attackTypeOut = AttackType.Stun;
-            } else {
-                Location.GetDirectionDelta(dir, out var kdx, out var kdy);
-                var kx = px + kdx;
-                var ky = py + kdy;
-                if (wr.OccupancyTracker.IsFreeAndNotTeleportCell(kx, ky)) {
-                    wr.OccupancyTracker.SetFree(px, py);
-                    wr.OccupancyTracker.SetOccupied(kx, ky);
-                    Movement.SetPlayerPosition(wr, p, kx, ky);
-                    Movement.SyncPlayerVisibilityAfterMovement(wr, p, px, py, kx, ky, broadcastPlayerMoved: false);
-                    Combat.ApplyGroundEffectStepDamageToPlayer(wr, p);
-                    knockbackDurMs = wr.Settings.Timings.KnockbackTimeMs;
-                    destKbX = kx;
-                    destKbY = ky;
-                } else {
-                    attackTypeOut = AttackType.Stun;
-                }
             }
         }
 
@@ -747,9 +929,15 @@ public class GameWorldMonster : GameWorldActionableEntity {
         return stayInIdleUntil.HasValue && now < stayInIdleUntil.Value && idleGateKind == IdleGateKind.AttackRecovery;
     }
 
-    /// <summary>Resolves a catalog spell using per-entry cast probability; applies damage and recovery gate like a melee attack.</summary>
+    /// <summary>
+    /// Olympia NBA magic: only when not adjacent, within 9×7, 50% attempt, pick by magic-level ladder + mana
+    /// (Server.cpp ~10648–10795). Academy Hard/Elite keep priority pick among affordable configured spells.
+    /// Frost/Nizie use Ice-Strike special when ladder is empty (ML 10).
+    /// </summary>
     private bool TryCastSpellAgainstChaseTarget(GameWorldRef wr, Random random, DateTimeOffset now) {
-        if (configuredSpells.Length == 0) {
+        var hasLadder = MagicLevel != 0;
+        var hasConfigured = configuredSpells.Length > 0;
+        if (!hasLadder && !hasConfigured) {
             return false;
         }
 
@@ -765,33 +953,120 @@ public class GameWorldMonster : GameWorldActionableEntity {
             return false;
         }
 
+        // Olympia: magic only off-melee (adjacent cells use physical attack / tower specials).
+        if (OlympiaMonsterMagic.IsAdjacent(posX, posY, targetX, targetY)) {
+            return false;
+        }
+
+        if (!OlympiaMonsterMagic.InMagicRectangle(posX, posY, targetX, targetY)) {
+            return false;
+        }
+
         var settings = wr.Settings;
         if (Math.Abs(targetX - posX) > settings.Radius.CameraRadiusX || Math.Abs(targetY - posY) > settings.Radius.CameraRadiusY) {
             return false;
         }
 
-        var candidates = new List<MonsterSpellEntry>();
-        foreach (var entry in configuredSpells) {
-            if (random.NextDouble() <= entry.CastProbability) {
-                candidates.Add(entry);
-            }
-        }
-
-        if (candidates.Count == 0) {
+        // Olympia iDice(1,2)==1 — 50% attempt per AI decision.
+        if (random.Next(1, 3) != 1) {
             return false;
         }
 
-        var picked = candidates[random.Next(candidates.Count)];
-        if (!wr.SpellsById.TryGetValue(picked.SpellId, out var spell)) {
+        var targetParalyzed = IsChaseTargetParalyzed(wr);
+        int spellId;
+        int manaCost;
+
+        // PvP Academy duelists keep configured kits (Elite/Hard use tactical priority pick).
+        if (AcademyCombatAi.IsAcademyDuelist(CatalogMonsterId) && hasConfigured) {
+            if (!TryPickAcademySpell(wr, random, targetParalyzed, out spellId, out manaCost)) {
+                return false;
+            }
+        } else if (hasLadder) {
+            // Frost / Nizie: ML 10 ladder empty → Ice-Strike 1/3 when mana allows.
+            if ((MagicLevel == 10 || OlympiaMonsterMagic.IsFrostNizieCaster(Name)) &&
+                OlympiaMonsterMagic.TryPickFrostNizieIce(mana, random, out spellId, out manaCost)) {
+                // picked ice
+            } else if (!OlympiaMonsterMagic.TryPickSpell(MagicLevel, mana, random, targetParalyzed, out spellId, out manaCost)) {
+                return false;
+            }
+        } else {
+            // Legacy probability path (no ML): independent cast rolls + optional Academy non-elite pick.
+            var candidates = new List<MonsterSpellEntry>();
+            foreach (var entry in configuredSpells) {
+                if (random.NextDouble() <= entry.CastProbability) {
+                    candidates.Add(entry);
+                }
+            }
+            if (candidates.Count == 0) {
+                return false;
+            }
+            var picked = AcademyCombatAi.PickSpell(this, wr, candidates, random);
+            spellId = picked.SpellId;
+            manaCost = OlympiaMonsterMagic.ManaCost(spellId);
+            if (MaxMana > 0 && mana < manaCost) {
+                return false;
+            }
+        }
+
+        if (!wr.SpellsById.TryGetValue(spellId, out var spell)) {
+            return false;
+        }
+
+        if (MaxMana > 0 && mana < manaCost) {
             return false;
         }
 
         TemporaryEffects.BreakInvisibilityIfPresent(wr, this);
-        var dmg = random.Next(AttackDamageMin, AttackDamageMax + 1);
+        var dmg = spell.DamageType.HasValue
+            ? random.Next(AttackDamageMin, AttackDamageMax + 1)
+            : 0;
         BeginSpellCastAttackSync(wr, now, targetX, targetY);
         Casting.ApplyMonsterSpell(wr, this, spell, targetX, targetY, dmg);
-        stayInIdleUntil = now.AddMilliseconds(AttackRecoveryMs + AttackSpeedMs / 2);
+        SpendMana(manaCost);
+        // Olympia m_dwTime = dwTime + 2000 after cast, plus our normal recovery.
+        stayInIdleUntil = now.AddMilliseconds(Math.Max(OlympiaMonsterMagic.CastRecoveryMs, AttackRecoveryMs + AttackSpeedMs / 2));
         idleGateKind = IdleGateKind.AttackRecovery;
+        return true;
+    }
+
+    private bool IsChaseTargetParalyzed(GameWorldRef wr) {
+        if (combatTargetKind == CombatTargetKind.Player && combatTargetId is long pid &&
+            wr.World.TryGetConnectedPlayerById(pid, out var player)) {
+            return player.HasTemporaryEffect(TemporaryEffectType.Paralyze);
+        }
+        if (combatTargetKind == CombatTargetKind.Monster && combatTargetId is long mid &&
+            wr.World.TryGetMonsterByMonsterId(mid, out var mon)) {
+            return mon.HasTemporaryEffect(TemporaryEffectType.Paralyze);
+        }
+        return false;
+    }
+
+    /// <summary>Academy Hard/Elite: priority among configured spells that the caster can afford.</summary>
+    private bool TryPickAcademySpell(
+        GameWorldRef wr,
+        Random random,
+        bool targetParalyzed,
+        out int spellId,
+        out int manaCost) {
+        spellId = -1;
+        manaCost = 0;
+        var candidates = new List<MonsterSpellEntry>();
+        foreach (var entry in configuredSpells) {
+            var cost = OlympiaMonsterMagic.ManaCost(entry.SpellId);
+            if (MaxMana > 0 && mana < cost) {
+                continue;
+            }
+            if (entry.SpellId == OlympiaMonsterMagic.SpellParalyze && targetParalyzed) {
+                continue;
+            }
+            candidates.Add(entry);
+        }
+        if (candidates.Count == 0) {
+            return false;
+        }
+        var picked = AcademyCombatAi.PickSpell(this, wr, candidates, random);
+        spellId = picked.SpellId;
+        manaCost = OlympiaMonsterMagic.ManaCost(spellId);
         return true;
     }
 
@@ -865,6 +1140,7 @@ public class GameWorldMonster : GameWorldActionableEntity {
         combatTargetId = null;
         damageAggroTargetKind = CombatTargetKind.None;
         damageAggroTargetId = null;
+        damageAggroHoldUntil = null;
         finalDestX = -1;
         finalDestY = -1;
         attackAnimationEndDue = null;
@@ -910,6 +1186,35 @@ public class GameWorldMonster : GameWorldActionableEntity {
         }
 
         if (IsAttackRecoveryBlocking(now)) {
+            return;
+        }
+
+        // Gold goblin: never fight — walk to nearest ground loot, else follow owner.
+        if (SummonCollectorOnly) {
+            ClearChaseState();
+            if (TryPickCollectorDestination(wr, out var cx, out var cy)) {
+                finalDestX = cx;
+                finalDestY = cy;
+                if (TryPickNextStepCell(wr, posX, posY, finalDestX, finalDestY, out var cnx, out var cny)) {
+                    ApplyGridStep(wr, cnx, cny, now);
+                } else {
+                    finalDestX = -1;
+                    finalDestY = -1;
+                }
+                return;
+            }
+            // No loot / owner nearby — light wander.
+            if (!TryPickRandomDestination(wr, random, out var wfx, out var wfy)) {
+                return;
+            }
+            finalDestX = wfx;
+            finalDestY = wfy;
+            if (!TryPickNextStepCell(wr, posX, posY, finalDestX, finalDestY, out var wnx, out var wny)) {
+                finalDestX = -1;
+                finalDestY = -1;
+                return;
+            }
+            ApplyGridStep(wr, wnx, wny, now);
             return;
         }
 
@@ -1045,6 +1350,52 @@ public class GameWorldMonster : GameWorldActionableEntity {
         movementDestinationDue = now.AddMilliseconds(MovementSpeedMs);
         MonsterVisibility.SyncMonsterVisibilityAfterMonsterStep(wr, this, prevX, prevY, newX, newY);
         Combat.ApplyGroundEffectStepDamageToMonster(wr, this);
+        if (SummonCollectorOnly && SummonOwnerPlayerId is long collectorOwnerId) {
+            GroundItemPickup.TryAutoPickupAllOnCellForOwner(wr, this, collectorOwnerId);
+        }
+    }
+
+    /// <summary>
+    /// Collector AI: prefer nearest cell with ground loot in radius 7; else follow summon owner.
+    /// </summary>
+    private bool TryPickCollectorDestination(GameWorldRef wr, out int destX, out int destY) {
+        destX = -1;
+        destY = -1;
+        const int lootRadius = 7;
+        var bestDist = int.MaxValue;
+        var foundLoot = false;
+        for (var dy = -lootRadius; dy <= lootRadius; dy++) {
+            for (var dx = -lootRadius; dx <= lootRadius; dx++) {
+                var x = posX + dx;
+                var y = posY + dy;
+                if (!wr.GroundStateTracker.TryPeekTopDroppedItem(x, y, out var top) || top is null) {
+                    continue;
+                }
+                var dist = Math.Max(Math.Abs(dx), Math.Abs(dy));
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    destX = x;
+                    destY = y;
+                    foundLoot = true;
+                }
+            }
+        }
+        if (foundLoot) {
+            return true;
+        }
+
+        if (SummonOwnerPlayerId is long ownerId &&
+            wr.World.TryGetConnectedPlayerById(ownerId, out var owner) &&
+            owner is not null &&
+            !owner.IsDead) {
+            var od = Math.Max(Math.Abs(owner.PosX - posX), Math.Abs(owner.PosY - posY));
+            if (od > 1) {
+                destX = owner.PosX;
+                destY = owner.PosY;
+                return true;
+            }
+        }
+        return false;
     }
 
     private bool TryPickRandomDestination(GameWorldRef wr, Random random, out int destX, out int destY) {
@@ -1053,6 +1404,14 @@ public class GameWorldMonster : GameWorldActionableEntity {
         var xMax = Math.Max(d.X1, d.X2);
         var yMin = Math.Min(d.Y1, d.Y2);
         var yMax = Math.Max(d.Y1, d.Y2);
+        // Collectors: wider wander around owner (no dwell box from city pit).
+        if (SummonCollectorOnly && SummonOwnerPlayerId is long oid &&
+            wr.World.TryGetConnectedPlayerById(oid, out var owner) && owner is not null) {
+            xMin = owner.PosX - 6;
+            xMax = owner.PosX + 6;
+            yMin = owner.PosY - 6;
+            yMax = owner.PosY + 6;
+        }
         const int maxAttempts = 96;
         for (var attempt = 0; attempt < maxAttempts; attempt++) {
             var x = random.Next(xMin, xMax + 1);

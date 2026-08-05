@@ -10,6 +10,7 @@
   "maxDroppedItemsInStack": 10,
   "enableZeroCopyProtobufTransfer": false,
   "maxConsecutiveOutboundSendFailures": 10,
+  "enableMessagePriorityQueue": true,
   "threads": {
     "gameWorldWorkers": 1,
     "globalWorldWorkerThread": 0
@@ -26,16 +27,17 @@
     "blizzardSpellDamageDelayMs": 200,
     "playerPickupAnimationTime": 400,
     "playerBowAnimationTime": 400,
-    "spawnProtectionTime": 20,
+    "spawnProtectionTime": 3,
     "knockbackTimeMs": 100,
     "antiHackTimingLagFactor": 0.05
   },
   "ping": {
-    "timeout": 5000,
+    "timeout": 20000,
     "interval": 1000,
-    "allowedVariance": 500,
+    "allowedVariance": 5000,
     "varianceSampleSize": 20
   },
+
   "gameWorld": {
     "tickInterval": 50,
     "incomingMessagesQueueSize": 10240,
@@ -55,12 +57,12 @@
     "respawnTime": 3000
   },
   "movementSpeedViolationsChecker": {
-    "verbose": false,
-    "limit": 5,
+    "verbose": true,
+    "limit": 20,
     "window": 20,
     "segmentsPerWindow": 20,
-    "paralysisDuration": 10,
-    "maxPingVariance": 50
+    "paralysisDuration": 2,
+    "maxPingVariance": 80
   },
   "debug": {
     "enableGcLogs": false,

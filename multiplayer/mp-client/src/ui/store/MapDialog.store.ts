@@ -136,7 +136,7 @@ export const resetMapDialogToDefaults = () => {
         showWaterCells: false,
         showFarmableCells: false,
         displayGrid: false,
-        groundItemDisplaySize: 'small',
+        groundItemDisplaySize: 'large',
         weather: 'dry',
         // Note: debugMode is preserved and not reset
     }));

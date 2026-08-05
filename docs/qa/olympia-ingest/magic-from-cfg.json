@@ -1,0 +1,327 @@
+[
+  {
+    "id": 0,
+    "name": "Magic-Missile",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 1,
+    "name": "Heal",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 2,
+    "name": "Create-Food",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 10,
+    "name": "Energy-Bolt",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 11,
+    "name": "Staminar-Drain",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 12,
+    "name": "Recall",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 13,
+    "name": "Defense-Shield",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 14,
+    "name": "Celebrating-Light",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 20,
+    "name": "Fire-Ball",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 21,
+    "name": "Great-Heal",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 23,
+    "name": "Staminar-Recovery",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 24,
+    "name": "Protection-From-Arrow",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 25,
+    "name": "Hold-Person",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 26,
+    "name": "Possession",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 27,
+    "name": "Poison",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 28,
+    "name": "Great-Staminar-Recov.",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 30,
+    "name": "Fire-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 31,
+    "name": "Summon-Creature",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 32,
+    "name": "Invisibility",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 33,
+    "name": "Protection-From-Magic",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 34,
+    "name": "Detect-Invisibility",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 35,
+    "name": "Paralyze",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 36,
+    "name": "Cure",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 37,
+    "name": "Lightning-Arrow",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 38,
+    "name": "Tremor",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 40,
+    "name": "Fire-Wall",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 41,
+    "name": "Fire-Field",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 42,
+    "name": "Confuse-Language",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 43,
+    "name": "Lightning",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 44,
+    "name": "Great-Defense-Shield",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 45,
+    "name": "Chill-Wind",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 46,
+    "name": "Poison-Cloud",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 47,
+    "name": "Triple-Energy-Bolt",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 50,
+    "name": "Berserk",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 51,
+    "name": "Lightning-Bolt",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 53,
+    "name": "Mass-Poison",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 54,
+    "name": "Spike-Field",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 55,
+    "name": "Ice-Storm",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 56,
+    "name": "Mass-Lightning-Arrow",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 57,
+    "name": "Ice-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 60,
+    "name": "Energy-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 61,
+    "name": "Mass-Fire-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 62,
+    "name": "Confusion",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 63,
+    "name": "Mass-Chill-Wind",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 64,
+    "name": "Earthworm-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 65,
+    "name": "Absolute-Magic-Protect.",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 66,
+    "name": "Armor-Break",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 67,
+    "name": "Scan",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 70,
+    "name": "Bloody-Shock-Wave",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 71,
+    "name": "Mass-Confusion",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 72,
+    "name": "Mass-Ice-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 73,
+    "name": "Cloud-Kill",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 74,
+    "name": "Lightning-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 76,
+    "name": "Cancellation",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 77,
+    "name": "Illusion-Movement",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 78,
+    "name": "Haste",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 80,
+    "name": "Illusion",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 81,
+    "name": "Meteor-Strike",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 82,
+    "name": "Mass-Magic-Missile",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 83,
+    "name": "Inhibition-Casting",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 90,
+    "name": "Mass-Illusion",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 91,
+    "name": "Blizzard",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 94,
+    "name": "Resurrection",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 95,
+    "name": "Mass-Illusion-Movement",
+    "source": "Magic.cfg"
+  },
+  {
+    "id": 96,
+    "name": "Earth-Shock-Wave",
+    "source": "Magic.cfg"
+  }
+]

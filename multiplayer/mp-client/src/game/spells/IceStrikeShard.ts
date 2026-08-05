@@ -7,7 +7,7 @@ import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../utils/EffectUtils';
 import { calculateFrameRateFromDuration } from '../../utils/AnimationUtils';
 import type { SoundManager } from '../../utils/SoundManager';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import type { CameraManager } from '../../utils/CameraManager';
 
 export type IceStrikeShardConfig = {
@@ -106,7 +106,7 @@ export class IceStrikeShard {
             });
 
             const worldY = convertPixelPosToWorldPos(this.destPixelY);
-            this.shardAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+            this.shardAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
             this.shardAsset.sprite.anims.stop();
             this.shardAsset.sprite.play(shardAnimKey);
@@ -190,7 +190,7 @@ export class IceStrikeShard {
             });
 
             const worldY = convertPixelPosToWorldPos(this.destPixelY);
-            this.impactAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+            this.impactAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
             this.impactAsset.sprite.anims.stop();
             this.impactAsset.sprite.play(impactAnimKey);

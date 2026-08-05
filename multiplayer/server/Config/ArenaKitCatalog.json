@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "starterCredits": 1000,
+  "statTotalPoints": 517,
+  "statMinPer": 10,
+  "level": 150,
+  "critRegen": {
+    "chargesPerTick": 5,
+    "intervalMs": 30000,
+    "maxCharges": 15
+  },
+  "potionPool": 30,
+  "skillsPick100": 4,
+  "skillsPick50": 4,
+  "pvpSkillIds": [4, 6, 9, 10, 11, 12, 13, 14, 16, 17, 18],
+  "gatheringSkillIdsExcluded": [0, 1, 2, 3, 5, 7, 8, 15],
+  "starter": {
+    "note": "Olympia Item2.cfg Hero sets: War = Helm+Armor (high DR/PA), Mage = Cap+Robe (lighter). Base DR/PA from Item.cfg effect type 2 (v1=DR, v2=PA%).",
+    "heroSetWarMale": [
+      { "itemId": 403, "slot": "helmet", "name": "a Hero Helm(M)", "dr": 18, "pa": 24 },
+      { "itemId": 411, "slot": "armor", "name": "a Hero Armor(M)", "dr": 45, "pa": 48 },
+      { "itemId": 419, "slot": "hauberk", "name": "a Hero Hauberk(M)", "dr": 15, "pa": 15 },
+      { "itemId": 423, "slot": "leggings", "name": "a Hero Leggings(M)", "dr": 18, "pa": 25 },
+      { "itemId": 451, "slot": "boots", "name": "Boots" }
+    ],
+    "heroSetWarFemale": [
+      { "itemId": 404, "slot": "helmet", "name": "a Hero Helm(W)", "dr": 18, "pa": 24 },
+      { "itemId": 412, "slot": "armor", "name": "a Hero Armor(W)", "dr": 45, "pa": 48 },
+      { "itemId": 420, "slot": "hauberk", "name": "a Hero Hauberk(W)", "dr": 15, "pa": 15 },
+      { "itemId": 424, "slot": "leggings", "name": "a Hero Leggings(W)", "dr": 18, "pa": 25 },
+      { "itemId": 451, "slot": "boots", "name": "Boots" }
+    ],
+    "heroSetMageMale": [
+      { "itemId": 407, "slot": "helmet", "name": "a Hero Cap(M)", "dr": 12, "pa": 15 },
+      { "itemId": 415, "slot": "armor", "name": "a Hero Robe(M)", "dr": 20, "pa": 20 },
+      { "itemId": 419, "slot": "hauberk", "name": "a Hero Hauberk(M)", "dr": 15, "pa": 15 },
+      { "itemId": 423, "slot": "leggings", "name": "a Hero Leggings(M)", "dr": 18, "pa": 25 },
+      { "itemId": 451, "slot": "boots", "name": "Boots" }
+    ],
+    "heroSetMageFemale": [
+      { "itemId": 408, "slot": "helmet", "name": "a Hero Cap(W)", "dr": 12, "pa": 15 },
+      { "itemId": 416, "slot": "armor", "name": "a Hero Robe(W)", "dr": 20, "pa": 20 },
+      { "itemId": 420, "slot": "hauberk", "name": "a Hero Hauberk(W)", "dr": 15, "pa": 15 },
+      { "itemId": 424, "slot": "leggings", "name": "a Hero Leggings(W)", "dr": 18, "pa": 25 },
+      { "itemId": 451, "slot": "boots", "name": "Boots" }
+    ],
+    "heroSetMale": [
+      { "itemId": 403, "slot": "helmet" },
+      { "itemId": 411, "slot": "armor" },
+      { "itemId": 419, "slot": "hauberk" },
+      { "itemId": 423, "slot": "leggings" },
+      { "itemId": 451, "slot": "boots" }
+    ],
+    "heroSetFemale": [
+      { "itemId": 404, "slot": "helmet" },
+      { "itemId": 412, "slot": "armor" },
+      { "itemId": 420, "slot": "hauberk" },
+      { "itemId": 424, "slot": "leggings" },
+      { "itemId": 451, "slot": "boots" }
+    ],
+    "fixedEquipped": [
+      { "itemId": 648, "slot": "necklace", "name": "Necklace Of Liche", "note": "Mana save 22% (Olympia ADDEFFECT)" },
+      { "itemId": 259, "slot": "weapon", "name": "Magic Wand(M.Shield)", "note": "Default; catalog can replace with war weapons" },
+      { "itemId": 335, "slot": "ring-left", "name": "Emerald Ring", "maxLifeSpan": 3000 }
+    ],
+    "freeCapesInBag": [
+      {
+        "itemId": 402,
+        "name": "Arena Cape CIC+7 / HP Recovery 50%",
+        "criticalIncrease": 7,
+        "hpRegenPct": 50
+      },
+      {
+        "itemId": 402,
+        "name": "Arena Cape MC20 / MP Recovery 50%",
+        "manaConvertPct": 20,
+        "mpRegenPct": 50
+      }
+    ],
+    "_freeArmorNote": "Path-filtered free armor only: mage gets mage-hp50+mage-mp50 (hat/chain/hauberk/legs); war gets war-hp50+war-mp50 (wings/plate/hauberk/legs). Never both layouts. DR/MR stay credit catalog.",
+    "freeArmorInBag": [
+      {
+        "id": "mage-hp50",
+        "label": "Mage set HP50 (Hat/Chain/Hauberk/Plate Legs)",
+        "magic": "hp50",
+        "pieces": [
+          { "slot": "helmet", "itemIdMale": 753, "itemIdFemale": 757, "name": "Wizard-Hat" },
+          { "slot": "armor", "itemIdMale": 456, "itemIdFemale": 476, "name": "Chain Mail" },
+          { "slot": "hauberk", "itemIdMale": 454, "itemIdFemale": 472, "name": "Hauberk" },
+          { "slot": "leggings", "itemIdMale": 462, "itemIdFemale": 483, "name": "Plate Leggings" }
+        ]
+      },
+      {
+        "id": "mage-mp50",
+        "label": "Mage set MP50 (Hat/Chain/Hauberk/Plate Legs)",
+        "magic": "mp50",
+        "pieces": [
+          { "slot": "helmet", "itemIdMale": 753, "itemIdFemale": 757, "name": "Wizard-Hat" },
+          { "slot": "armor", "itemIdMale": 456, "itemIdFemale": 476, "name": "Chain Mail" },
+          { "slot": "hauberk", "itemIdMale": 454, "itemIdFemale": 472, "name": "Hauberk" },
+          { "slot": "leggings", "itemIdMale": 462, "itemIdFemale": 483, "name": "Plate Leggings" }
+        ]
+      },
+      {
+        "id": "war-hp50",
+        "label": "War set HP50 (Wings/Plate/Hauberk/Plate Legs)",
+        "magic": "hp50",
+        "pieces": [
+          { "slot": "helmet", "itemIdMale": 751, "itemIdFemale": 755, "name": "Wings-Helm" },
+          { "slot": "armor", "itemIdMale": 458, "itemIdFemale": 478, "name": "Plate Mail" },
+          { "slot": "hauberk", "itemIdMale": 454, "itemIdFemale": 472, "name": "Hauberk" },
+          { "slot": "leggings", "itemIdMale": 462, "itemIdFemale": 483, "name": "Plate Leggings" }
+        ]
+      },
+      {
+        "id": "war-mp50",
+        "label": "War set MP50 (Wings/Plate/Hauberk/Plate Legs)",
+        "magic": "mp50",
+        "pieces": [
+          { "slot": "helmet", "itemIdMale": 751, "itemIdFemale": 755, "name": "Wings-Helm" },
+          { "slot": "armor", "itemIdMale": 458, "itemIdFemale": 478, "name": "Plate Mail" },
+          { "slot": "hauberk", "itemIdMale": 454, "itemIdFemale": 472, "name": "Hauberk" },
+          { "slot": "leggings", "itemIdMale": 462, "itemIdFemale": 483, "name": "Plate Leggings" }
+        ]
+      }
+    ],
+    "angelsInBag": [
+      { "itemId": 1108, "name": "Angelic Pandent(STR)", "majesticPlus": 15 },
+      { "itemId": 1109, "name": "Angelic Pandent(DEX)", "majesticPlus": 15 },
+      { "itemId": 1110, "name": "Angelic Pandent(INT)", "majesticPlus": 15 },
+      { "itemId": 1111, "name": "Angelic Pandent(MAG)", "majesticPlus": 15 }
+    ],
+    "potionChoices": [
+      { "itemId": 92, "sku": "big-red", "name": "Big Red Potion" },
+      { "itemId": 94, "sku": "big-blue", "name": "Big Blue Potion" },
+      { "itemId": 782, "sku": "green-candy", "name": "Green Candy", "spRestorePct": 50 }
+    ]
+  },
+  "mageFreeSpells": [
+    { "id": "blizzard", "label": "Blizzard", "spellName": "Blizzard" },
+    { "id": "esw", "label": "Energy Strike Wave", "spellName": "Energy Strike" }
+  ],
+  "catalog": [
+    {
+      "sku": "wand-ms22-cp40-hr91-p5",
+      "label": "Wand MS22 CP40 HR91 +5",
+      "cost": 100,
+      "tags": ["mage", "weapon"],
+      "itemId": 259,
+      "plus": 5,
+      "note": "Constructed magic attrs applied at loadout"
+    },
+    {
+      "sku": "berserk-ms20",
+      "label": "Berserk Wand (MS.20)",
+      "cost": 400,
+      "tags": ["mage", "weapon"],
+      "itemId": 861
+    },
+    {
+      "sku": "resur-wand-1use",
+      "label": "Resurrection Wand (1 use / round)",
+      "cost": 300,
+      "tags": ["mage", "consumable"],
+      "itemId": 865,
+      "arenaUsesPerRound": 1
+    },
+    {
+      "sku": "inhibition-cast",
+      "label": "Inhibition Casting (per use, 10s)",
+      "cost": 100,
+      "tags": ["mage", "spell", "perUse"],
+      "spellName": "Inhibition Casting",
+      "durationMs": 10000,
+      "perUse": true
+    },
+    {
+      "sku": "cancellation",
+      "label": "Cancellation (per use)",
+      "cost": 50,
+      "tags": ["mage", "spell", "perUse"],
+      "spellName": "Cancellation",
+      "perUse": true
+    },
+    {
+      "sku": "sleep",
+      "label": "Sleep (per use)",
+      "cost": 100,
+      "tags": ["mage", "spell", "perUse"],
+      "spellName": "Sleep",
+      "perUse": true
+    },
+    {
+      "sku": "gbh-p7",
+      "label": "Giant Battle Hammer +7",
+      "cost": 300,
+      "tags": ["war", "weapon"],
+      "itemId": 762,
+      "plus": 7
+    },
+    {
+      "sku": "storm-p7",
+      "label": "Storm Bringer +7",
+      "cost": 300,
+      "tags": ["war", "weapon"],
+      "itemId": 845,
+      "plus": 7
+    },
+    {
+      "sku": "devastator",
+      "label": "The Devastator",
+      "cost": 700,
+      "tags": ["war", "weapon"],
+      "itemId": 846
+    },
+    {
+      "sku": "blood-rapier-p7",
+      "label": "Blood Rapier +7 (high HR)",
+      "cost": 50,
+      "tags": ["war", "mage", "weapon", "rapier"],
+      "itemId": 492,
+      "plus": 7
+    },
+    {
+      "sku": "ring-of-thirst",
+      "label": "Ring of Thirst",
+      "cost": 150,
+      "tags": ["utility", "ring"],
+      "itemId": 1216,
+      "note": "Life-steal ring"
+    },
+    {
+      "sku": "merien-shield",
+      "label": "Merien Shield (SA 20s / CD 5m)",
+      "cost": 100,
+      "tags": ["war", "shield", "special"],
+      "itemId": 620,
+      "saDurationMs": 20000,
+      "saCooldownMs": 300000
+    },
+    {
+      "sku": "invi-pot",
+      "label": "Invisibility Potion",
+      "cost": 50,
+      "tags": ["utility", "stackable"],
+      "itemId": 273,
+      "stackable": true
+    },
+    {
+      "sku": "set-dr50",
+      "label": "Set DR 50% + Cape MCon15/DR70",
+      "cost": 300,
+      "tags": ["armor", "set", "dr"],
+      "bundleSkus": [
+        "piece-dr50-hat",
+        "piece-dr50-chain",
+        "piece-dr50-hauberk",
+        "piece-dr50-legs",
+        "cape-mcon15-dr70"
+      ],
+      "note": "HP/MP armor is free in bag — credits buy DR/MR only"
+    },
+    {
+      "sku": "piece-dr50-hat",
+      "label": "Hat DR 50%",
+      "cost": 50,
+      "tags": ["armor", "dr"]
+    },
+    {
+      "sku": "piece-dr50-chain",
+      "label": "Chain Mail DR 50%",
+      "cost": 50,
+      "tags": ["armor", "dr"]
+    },
+    {
+      "sku": "piece-dr50-hauberk",
+      "label": "Hauberk DR 50%",
+      "cost": 50,
+      "tags": ["armor", "dr"]
+    },
+    {
+      "sku": "piece-dr50-legs",
+      "label": "Plate Leggings DR 50%",
+      "cost": 50,
+      "tags": ["armor", "dr"]
+    },
+    {
+      "sku": "cape-mcon15-dr70",
+      "label": "Cape MCon15 / DR70",
+      "cost": 100,
+      "tags": ["armor", "dr", "cape"],
+      "itemId": 402,
+      "note": "Mana Convert 15 + Defense Ratio 70"
+    },
+    {
+      "sku": "set-mr50",
+      "label": "Set MR 50% + Cape MCon15/MR70",
+      "cost": 300,
+      "tags": ["armor", "set", "mr"],
+      "bundleSkus": [
+        "piece-mr50-wings",
+        "piece-mr50-plate",
+        "piece-mr50-hauberk",
+        "piece-mr50-legs",
+        "cape-mcon15-mr70"
+      ]
+    },
+    {
+      "sku": "piece-mr50-wings",
+      "label": "Wings MR 50%",
+      "cost": 50,
+      "tags": ["armor", "mr"]
+    },
+    {
+      "sku": "piece-mr50-plate",
+      "label": "Plate Mail MR 50%",
+      "cost": 50,
+      "tags": ["armor", "mr"]
+    },
+    {
+      "sku": "piece-mr50-hauberk",
+      "label": "Hauberk MR 50%",
+      "cost": 50,
+      "tags": ["armor", "mr"]
+    },
+    {
+      "sku": "piece-mr50-legs",
+      "label": "Plate Leggings MR 50%",
+      "cost": 50,
+      "tags": ["armor", "mr"]
+    },
+    {
+      "sku": "cape-mcon15-mr70",
+      "label": "Cape MCon15 / MR70",
+      "cost": 100,
+      "tags": ["armor", "mr", "cape"],
+      "itemId": 402,
+      "note": "Mana Convert 15 + Magic Resist 70"
+    }
+  ],
+  "maps": [
+    {
+      "id": "arena-duel-s",
+      "label": "Duel Small",
+      "map": "fightzone4",
+      "size": "small",
+      "note": "Tight 1v1"
+    },
+    {
+      "id": "arena-duel-m",
+      "label": "Colosseum Medium",
+      "map": "fightzone1",
+      "size": "medium",
+      "note": "Classic medium"
+    },
+    {
+      "id": "arena-duel-l",
+      "label": "Duel Large",
+      "map": "fightzone5",
+      "size": "large",
+      "note": "3v3 room"
+    },
+    {
+      "id": "arena-tourney",
+      "label": "Tournament Field",
+      "map": "fightzone8",
+      "size": "large",
+      "note": "Alt large layout"
+    },
+    {
+      "id": "arena-btfield",
+      "label": "Open Battlefield",
+      "map": "btfield",
+      "size": "xlarge",
+      "note": "Very large multi-team"
+    }
+  ]
+}

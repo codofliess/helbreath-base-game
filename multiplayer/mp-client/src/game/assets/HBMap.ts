@@ -55,13 +55,13 @@ export class HBMapTile {
 
         // Parse flags from byte 8
         const flags = view.getUint8(offset + 8);
-        this.isMoveAllowed = (flags & 0x80) === 0;    // Bit 7: 1 = blocked, 0 = allowed
+        // Tile sprite 19 = deep water; 18 = coastal shore (walkable in .amd flags but looks wet).
+        this.isWater = this.sprite === 19 || this.sprite === 18;
+        // Shore/water are not standable — matches server Map.LoadOccupancy blocking wet sprites.
+        this.isMoveAllowed = (flags & 0x80) === 0 && !this.isWater;    // Bit 7: 1 = blocked, 0 = allowed
         this.isTeleport = (flags & 0x40) !== 0;       // Bit 6: 1 = teleport
         // Bit 5 (0x20): set when farming is allowed on this tile (unlike bit 7 move, where set = blocked).
         this.isFarmingAllowed = (flags & 0x20) !== 0;
-
-        // Tile sprite 19 indicates water
-        this.isWater = this.sprite === 19;
     }
 }
 
@@ -146,11 +146,14 @@ export class HBMap {
     /** Spatial grid for efficient object queries (collision detection, etc.) */
     private spatialGrid: SpatialGrid = new SpatialGrid(TILE_SIZE);
 
-    /** The tilemap object created by renderMapTiles */
-    private tilemap: Phaser.Tilemaps.Tilemap | undefined = undefined;
+    /**
+     * One Phaser tilemap per map row (Y-sorted). A single layer at a fixed depth draws all ground
+     * (including building roofs) under every entity — slugs/players then float over Aresden roofs.
+     */
+    private rowTilemaps: Phaser.Tilemaps.Tilemap[] = [];
 
-    /** The tilemap layer created by renderMapTiles */
-    private tilemapLayer: Phaser.Tilemaps.TilemapLayer | undefined = undefined;
+    /** Row layers aligned with {@link rowTilemaps}; depth = rowY * DEPTH_MULTIPLIER - ground bias. */
+    private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = [];
 
     /** The GameAsset instances created by renderMapObjects */
     private mapObjects: GameAsset[] = [];
@@ -310,6 +313,24 @@ export class HBMap {
     }
 
     /**
+     * Clears dynamic entity occupancy on every tile. Call before re-marking living
+     * actors so stale `occupiedByGameObject` flags cannot accumulate as invisible walls.
+     */
+    public clearDynamicOccupancy(): void {
+        if (!this.loaded) {
+            return;
+        }
+        for (let y = 0; y < this.sizeY; y++) {
+            for (let x = 0; x < this.sizeX; x++) {
+                this.tiles[y][x].occupiedByGameObject = false;
+            }
+        }
+        if (this.isNonMovableCellsHighlightEnabled && this.sceneRef) {
+            this.refreshNonMovableCellsHighlight(this.sceneRef);
+        }
+    }
+
+    /**
      * Checks if a tile is occupied by a game object.
      * 
      * @param x - The x coordinate (column)
@@ -327,6 +348,11 @@ export class HBMap {
      * @returns True if the map is loaded, false otherwise
      */
     public isLoaded(): boolean {
+        return this.loaded;
+    }
+
+    /** Alias for sp-client helpers that still call {@link getIsLoaded}. */
+    public getIsLoaded(): boolean {
         return this.loaded;
     }
 
@@ -378,108 +404,127 @@ export class HBMap {
         const uniqueTileCount = tileKeys.length;
         console.log(`Found ${uniqueTileCount} unique tiles out of ${this.sizeX * this.sizeY} total tiles`);
 
-        // Step 2: Create a compact tileset texture (or reuse if already exists)
+        // Always rebuild the compact tileset. Reusing a prior canvas (e.g. built before
+        // on-demand tile packs finished, or after a failed frame draw) leaves blank cells
+        // that still carry .amd collision — "invisible buildings".
         const tilesetKey = `${this.fileName}-tileset`;
-
-        // Check if tileset texture already exists
-        if (!scene.textures.exists(tilesetKey)) {
-            // Calculate tileset dimensions (arrange tiles in a grid)
-            const tilesPerRow = Math.ceil(Math.sqrt(uniqueTileCount));
-            const tilesetRows = Math.ceil(uniqueTileCount / tilesPerRow);
-            const tilesetWidth = tilesPerRow * TILE_SIZE;
-            const tilesetHeight = tilesetRows * TILE_SIZE;
-
-            const tilesetTexture = scene.textures.createCanvas(
-                tilesetKey,
-                tilesetWidth,
-                tilesetHeight
-            );
-
-            if (!tilesetTexture) {
-                throw new Error('Failed to create tileset texture');
+        this.destroyRowTilemaps();
+        if (scene.textures.exists(tilesetKey)) {
+            try {
+                scene.textures.remove(tilesetKey);
+            } catch (error) {
+                console.warn('Error removing stale tileset texture before rebuild:', error);
             }
-
-            const tilesetSource = tilesetTexture.getSourceImage();
-            if (!(tilesetSource instanceof HTMLCanvasElement)) {
-                throw new Error('Tileset texture source is not a canvas');
-            }
-            
-            const tilesetCtx = tilesetSource.getContext('2d');
-            if (!tilesetCtx) {
-                throw new Error('Failed to get canvas context for tileset');
-            }
-
-            // Disable image smoothing for pixel-perfect rendering
-            tilesetCtx.imageSmoothingEnabled = false;
-
-            // Draw each unique tile into the tileset
-            tileKeys.forEach((tileKey, index) => {
-                const uniqueTile = uniqueTilesMap.get(tileKey)!;
-                const textureKey = `map-tile-${uniqueTile.sprite}`;
-
-                // Calculate position in tileset (row-major order)
-                const tilesetCol = index % tilesPerRow;
-                const tilesetRow = Math.floor(index / tilesPerRow);
-                const destX = tilesetCol * TILE_SIZE;
-                const destY = tilesetRow * TILE_SIZE;
-
-                if (!scene.textures.exists(textureKey)) {
-                    console.warn(`Texture not found: ${textureKey}`);
-                    return;
-                }
-
-                const texture = scene.textures.get(textureKey);
-                const frameKey = String(uniqueTile.spriteFrame);
-
-                if (!texture.has(frameKey)) {
-                    console.warn(`Frame ${frameKey} not found in texture ${textureKey}`);
-                    return;
-                }
-
-                const frame = texture.get(frameKey);
-                const textureSource = texture.source[0];
-
-                if (!textureSource) {
-                    console.warn(`Texture source not found for texture ${textureKey}`);
-                    return;
-                }
-
-                const sourceImage = textureSource.source;
-
-                if (!sourceImage) {
-                    console.warn(`Source image not found for texture ${textureKey}`);
-                    return;
-                }
-
-                // Verify source is a valid image source for canvas drawImage
-                if (!(sourceImage instanceof HTMLCanvasElement || sourceImage instanceof HTMLImageElement || sourceImage instanceof HTMLVideoElement)) {
-                    console.warn(`Source for texture ${textureKey} is not a valid image source`);
-                    return;
-                }
-
-                try {
-                    tilesetCtx.drawImage(
-                        sourceImage,
-                        frame.cutX,
-                        frame.cutY,
-                        frame.cutWidth,
-                        frame.cutHeight,
-                        destX,
-                        destY,
-                        TILE_SIZE,
-                        TILE_SIZE
-                    );
-                } catch (error) {
-                    console.warn(`Failed to draw tile ${tileKey} to tileset:`, error);
-                }
-            });
-
-            tilesetTexture.refresh();
-
-            console.log(`Created tileset: ${tilesetWidth}x${tilesetHeight} pixels (${tilesPerRow}x${tilesetRows} tiles)`);
-        } else {
-            console.log(`Reusing existing tileset texture: ${tilesetKey}`);
         }
+
+        // Calculate tileset dimensions (arrange tiles in a grid)
+        const tilesPerRow = Math.ceil(Math.sqrt(uniqueTileCount));
+        const tilesetRows = Math.ceil(uniqueTileCount / tilesPerRow);
+        const tilesetWidth = tilesPerRow * TILE_SIZE;
+        const tilesetHeight = tilesetRows * TILE_SIZE;
+
+        const tilesetTexture = scene.textures.createCanvas(
+            tilesetKey,
+            tilesetWidth,
+            tilesetHeight
+        );
+
+        if (!tilesetTexture) {
+            throw new Error('Failed to create tileset texture');
+        }
+
+        const tilesetSource = tilesetTexture.getSourceImage();
+        if (!(tilesetSource instanceof HTMLCanvasElement)) {
+            throw new Error('Tileset texture source is not a canvas');
+        }
+
+        const tilesetCtx = tilesetSource.getContext('2d');
+        if (!tilesetCtx) {
+            throw new Error('Failed to get canvas context for tileset');
+        }
+
+        // Disable image smoothing for pixel-perfect rendering
+        tilesetCtx.imageSmoothingEnabled = false;
+
+        let missingTextureCount = 0;
+        let missingFrameCount = 0;
+
+        // Draw each unique tile into the tileset
+        tileKeys.forEach((tileKey, index) => {
+            const uniqueTile = uniqueTilesMap.get(tileKey)!;
+            const textureKey = `map-tile-${uniqueTile.sprite}`;
+
+            // Calculate position in tileset (row-major order)
+            const tilesetCol = index % tilesPerRow;
+            const tilesetRow = Math.floor(index / tilesPerRow);
+            const destX = tilesetCol * TILE_SIZE;
+            const destY = tilesetRow * TILE_SIZE;
+
+            if (!scene.textures.exists(textureKey)) {
+                missingTextureCount++;
+                if (missingTextureCount <= 8) {
+                    console.warn(`Texture not found: ${textureKey}`);
+                }
+                return;
+            }
+
+            const texture = scene.textures.get(textureKey);
+            const frameKey = String(uniqueTile.spriteFrame);
+
+            if (!texture.has(frameKey)) {
+                missingFrameCount++;
+                if (missingFrameCount <= 8) {
+                    console.warn(`Frame ${frameKey} not found in texture ${textureKey}`);
+                }
+                return;
+            }
+
+            const frame = texture.get(frameKey);
+            const textureSource = texture.source[0];
+
+            if (!textureSource) {
+                console.warn(`Texture source not found for texture ${textureKey}`);
+                return;
+            }
+
+            const sourceImage = textureSource.source;
+
+            if (!sourceImage) {
+                console.warn(`Source image not found for texture ${textureKey}`);
+                return;
+            }
+
+            // Verify source is a valid image source for canvas drawImage
+            if (!(sourceImage instanceof HTMLCanvasElement || sourceImage instanceof HTMLImageElement || sourceImage instanceof HTMLVideoElement)) {
+                console.warn(`Source for texture ${textureKey} is not a valid image source`);
+                return;
+            }
+
+            try {
+                tilesetCtx.drawImage(
+                    sourceImage,
+                    frame.cutX,
+                    frame.cutY,
+                    frame.cutWidth,
+                    frame.cutHeight,
+                    destX,
+                    destY,
+                    TILE_SIZE,
+                    TILE_SIZE
+                );
+            } catch (error) {
+                console.warn(`Failed to draw tile ${tileKey} to tileset:`, error);
+            }
+        });
+
+        tilesetTexture.refresh();
+
+        console.log(
+            `Created tileset: ${tilesetWidth}x${tilesetHeight} pixels (${tilesPerRow}x${tilesetRows} tiles)` +
+                (missingTextureCount || missingFrameCount
+                    ? ` [missing textures=${missingTextureCount}, frames=${missingFrameCount}]`
+                    : ''),
+        );
 
         // Step 3: Create a 2D array for tilemap data
         const mapDataArray: number[][] = [];
@@ -506,46 +551,53 @@ export class HBMap {
             mapDataArray.push(row);
         }
 
-        // Create a tilemap from 2D array
-        const tilemap = scene.make.tilemap({
-            data: mapDataArray,
-            tileWidth: TILE_SIZE,
-            tileHeight: TILE_SIZE,
-            width: this.sizeX,
-            height: this.sizeY
-        });
+        // One layer per row so ground/building tiles Y-sort with entities (DEPTH_MULTIPLIER).
+        // Bias ground slightly under same-Y entities/map objects.
+        const groundDepthBias = 10;
+        this.rowTilemaps = [];
+        this.tilemapLayers = [];
 
-        // Add the tileset to the tilemap
-        const tileset = tilemap.addTilesetImage(
-            tilesetKey, // tileset name (can be anything, we use the texture key)
-            tilesetKey, // texture key in the cache
-            TILE_SIZE,
-            TILE_SIZE,
-            0, // margin
-            0  // spacing
+        for (let y = 0; y < this.sizeY; y++) {
+            const rowTilemap = scene.make.tilemap({
+                data: [mapDataArray[y]],
+                tileWidth: TILE_SIZE,
+                tileHeight: TILE_SIZE,
+                width: this.sizeX,
+                height: 1,
+            });
+
+            const tileset = rowTilemap.addTilesetImage(
+                tilesetKey,
+                tilesetKey,
+                TILE_SIZE,
+                TILE_SIZE,
+                0,
+                0,
+            );
+            if (!tileset) {
+                rowTilemap.destroy();
+                this.destroyRowTilemaps();
+                throw new Error(`Failed to add tileset for map row ${y}`);
+            }
+
+            const layer = rowTilemap.createLayer(0, tileset, 0, y * TILE_SIZE);
+            if (!layer) {
+                rowTilemap.destroy();
+                this.destroyRowTilemaps();
+                throw new Error(`Failed to create tilemap layer for map row ${y}`);
+            }
+
+            layer.setDepth(y * DEPTH_MULTIPLIER - groundDepthBias);
+            this.rowTilemaps.push(rowTilemap);
+            this.tilemapLayers.push(layer);
+        }
+
+        console.log(
+            `Map tiles painted: ${this.sizeX}x${this.sizeY} tiles using ${uniqueTileCount} unique tiles (${this.tilemapLayers.length} Y-sorted rows)`,
         );
 
-        if (!tileset) {
-            throw new Error('Failed to add tileset to tilemap');
-        }
-
-        // Create a layer using the tileset
-        const layer = tilemap.createLayer(0, tileset, 0, 0);
-
-        if (!layer) {
-            throw new Error('Failed to create tilemap layer');
-        }
-
-        // Set depth to lowest level to ensure tiles render behind all game objects
-        layer.setDepth(-1000);
-
-        // Store references for later destruction
-        this.tilemap = tilemap;
-        this.tilemapLayer = layer;
-
-        console.log(`Map tiles painted: ${this.sizeX}x${this.sizeY} tiles using ${uniqueTileCount} unique tiles`);
-
-        return tilemap;
+        // Callers historically expected a tilemap; return the first row map as a handle.
+        return this.rowTilemaps[0]!;
     }
 
     /**
@@ -667,12 +719,31 @@ export class HBMap {
     }
 
     /**
-     * Returns the tilemap layer for rendering.
-     * 
-     * @returns The Phaser TilemapLayer instance, or undefined if not yet rendered
+     * Returns the first row tilemap layer (legacy accessor). Prefer Y-sorted {@link tilemapLayers}.
      */
     public getTilemapLayer(): Phaser.Tilemaps.TilemapLayer | undefined {
-        return this.tilemapLayer;
+        return this.tilemapLayers[0];
+    }
+
+    /** Destroys all per-row tilemaps/layers created by {@link renderMapTiles}. */
+    private destroyRowTilemaps(): void {
+        for (const layer of this.tilemapLayers) {
+            try {
+                layer.destroy();
+            } catch {
+                /* already destroyed */
+            }
+        }
+        this.tilemapLayers = [];
+
+        for (const rowTilemap of this.rowTilemaps) {
+            try {
+                rowTilemap.destroy();
+            } catch {
+                /* already destroyed */
+            }
+        }
+        this.rowTilemaps = [];
     }
 
     /**
@@ -712,6 +783,31 @@ export class HBMap {
         this.spatialGrid.clear();
 
         console.log('Map objects destroyed');
+    }
+
+    /**
+     * SysMenu Detail Level (Low / Normal / High):
+     * - Low (0): hide trees + most tall map props (performance + clearer ground)
+     * - Normal (1): show all map objects
+     * - High (2): show all map objects (weather denser separately)
+     */
+    public applyDetailLevel(level: 0 | 1 | 2): void {
+        const showTrees = level !== 0;
+        for (const asset of this.mapObjects) {
+            if (!asset?.sprite) {
+                continue;
+            }
+            // spriteName is map-tile-{index}
+            const name = asset.sprite.texture?.key ?? '';
+            const match = /map-tile-(\d+)/.exec(name);
+            if (!match) {
+                continue;
+            }
+            const spriteIndex = parseInt(match[1], 10);
+            if (isTreeSpriteIndex(spriteIndex)) {
+                asset.setVisible(showTrees);
+            }
+        }
     }
 
     /**
@@ -1139,36 +1235,47 @@ export class HBMap {
             throw new Error('Map must be loaded before enabling grid display');
         }
 
-        // If already enabled, don't re-render
+        // Rebuild if already on (map reloads / toggle flicker).
         if (this.isGridDisplayEnabled) {
-            return;
+            this.disableGridDisplay();
         }
 
-        // Create graphics object for grid lines
+        // Tiles sit at y * DEPTH_MULTIPLIER (~100 per row). Depth 2 was fully under the ground.
+        // Draw the grid above all map rows so SHOW GRID is always visible (Olympia debug style).
+        const gridDepth = this.sizeY * DEPTH_MULTIPLIER + 10_000;
+
         this.gridLinesGraphics = scene.add.graphics();
-        this.gridLinesGraphics.setDepth(2); // Render above tiles but below objects
+        this.gridLinesGraphics.setDepth(gridDepth);
+        this.gridLinesGraphics.setScrollFactor(1, 1);
 
-        // Set line style once for all lines
-        this.gridLinesGraphics.lineStyle(1, 0x000000, 1); // Black, fully opaque
-
-        // Draw vertical grid lines
+        // Exact cell boundaries (integer pixels) — must match convertPixelPosToWorldPos / TILE_SIZE.
+        // Do NOT offset by 0.5: that made the green overlay look half-pixel shifted vs the player
+        // feet cell and ground-item logic, shrinking aim margin when using the grid as a guide.
+        this.gridLinesGraphics.lineStyle(1, 0x000000, 0.55);
         for (let x = 0; x <= this.sizeX; x++) {
             const pixelX = x * TILE_SIZE;
             this.gridLinesGraphics.lineBetween(pixelX, 0, pixelX, this.sizeY * TILE_SIZE);
         }
-
-        // Draw horizontal grid lines
+        for (let y = 0; y <= this.sizeY; y++) {
+            const pixelY = y * TILE_SIZE;
+            this.gridLinesGraphics.lineBetween(0, pixelY, this.sizeX * TILE_SIZE, pixelY);
+        }
+        this.gridLinesGraphics.lineStyle(1, 0x7CFF9A, 0.78);
+        for (let x = 0; x <= this.sizeX; x++) {
+            const pixelX = x * TILE_SIZE;
+            this.gridLinesGraphics.lineBetween(pixelX, 0, pixelX, this.sizeY * TILE_SIZE);
+        }
         for (let y = 0; y <= this.sizeY; y++) {
             const pixelY = y * TILE_SIZE;
             this.gridLinesGraphics.lineBetween(0, pixelY, this.sizeX * TILE_SIZE, pixelY);
         }
 
-        // Create graphics object for hover cell highlight
         this.hoverCellGraphics = scene.add.graphics();
-        this.hoverCellGraphics.setDepth(3); // Render above grid lines
+        this.hoverCellGraphics.setDepth(gridDepth + 1);
+        this.hoverCellGraphics.setScrollFactor(1, 1);
 
         this.isGridDisplayEnabled = true;
-        console.log('Grid display enabled');
+        console.log(`[HBMap] Grid display ON depth=${gridDepth} size=${this.sizeX}x${this.sizeY}`);
     }
 
     /**
@@ -1223,7 +1330,8 @@ export class HBMap {
         // Recreate hover graphics if it was destroyed
         if (!this.hoverCellGraphics) {
             this.hoverCellGraphics = scene.add.graphics();
-            this.hoverCellGraphics.setDepth(3);
+            this.hoverCellGraphics.setDepth(this.sizeY * DEPTH_MULTIPLIER + 10_001);
+            this.hoverCellGraphics.setScrollFactor(1, 1);
         }
 
         // Clear previous hover cell
@@ -1249,31 +1357,13 @@ export class HBMap {
     }
 
     /**
-     * Destroys the tilemap and layer created by renderMapTiles, and removes the tileset texture
+     * Destroys the per-row tilemaps created by renderMapTiles, and removes the tileset texture
      * from the Phaser texture cache to prevent memory leaks when switching maps.
      *
      * @param scene - The Phaser scene (needed to access texture cache for cleanup)
      */
     public destroyMapTiles(scene: Phaser.Scene): void {
-        if (this.tilemapLayer) {
-            try {
-                this.tilemapLayer.destroy();
-            } catch (error) {
-                // Ignore errors if layer is already destroyed
-                console.warn('Error destroying tilemap layer (may already be destroyed):', error);
-            }
-            this.tilemapLayer = undefined;
-        }
-
-        if (this.tilemap) {
-            try {
-                this.tilemap.destroy();
-            } catch (error) {
-                // Ignore errors if tilemap is already destroyed
-                console.warn('Error destroying tilemap (may already be destroyed):', error);
-            }
-            this.tilemap = undefined;
-        }
+        this.destroyRowTilemaps();
 
         // Remove tileset texture from cache to prevent memory leak when switching maps
         const tilesetKey = `${this.fileName}-tileset`;

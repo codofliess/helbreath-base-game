@@ -45,7 +45,9 @@ export { minimapDialogStore, setMinimapDialogOpen };
 
 export const toggleMinimapDialog = () => {
     minimapDialogStore.setState((state) => {
-        if (!state.minimapAvailable) return state;
+        if (!state.minimapAvailable) {
+            return state;
+        }
         return { ...state, isOpen: !state.isOpen };
     });
 };

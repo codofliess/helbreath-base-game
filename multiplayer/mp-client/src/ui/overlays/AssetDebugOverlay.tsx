@@ -60,7 +60,7 @@ export function AssetDebugOverlay() {
                         color: 'var(--rpg-gold)',
                         fontSize: '12px',
                         fontWeight: 'bold',
-                        fontFamily: 'Georgia, serif',
+                        fontFamily: 'Tahoma, MS Sans Serif, Segoe UI, sans-serif',
                         textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
                     }}
                 >

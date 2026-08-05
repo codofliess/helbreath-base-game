@@ -1,19 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@tanstack/react-store';
 import { monsterHoverOverlayStore } from '../store/MonsterHoverOverlay.store';
 import { MONSTER_OVERLAY_TRANSPARENCY } from '../../Config';
-import { MONSTER_ALLEGIANCE_LABELS, MonsterAllegiance } from '../../Types';
+import { MonsterAllegiance } from '../../Types';
+import { OLYMPIA_UI_FONT } from '../../constants/OlympiaTypography';
 import '../rpg-ui.css';
 
-const HEALTH_BAR_MIN_WIDTH = 100;
-const NAME_PADDING = 30;
-const MONSTER_ALLEGIANCE_COLORS: Record<MonsterAllegiance, string> = {
-    [MonsterAllegiance.Hostile]: '#ff6b6b',
-    [MonsterAllegiance.Neutral]: '#6bb3ff',
-    [MonsterAllegiance.Friendly]: '#6bff8a',
+/** Classic PartyStatus HP strip width (~75px in DrawNpcName). */
+const TARGET_HP_BAR_WIDTH = 75;
+const TARGET_HP_BAR_HEIGHT = 6;
+
+/** Hostile targets use Olympia red name; others stay white like DrawNpcName. */
+const NAME_COLOR_BY_ALLEGIANCE: Record<MonsterAllegiance, string> = {
+    [MonsterAllegiance.Hostile]: 'rgb(255, 0, 0)',
+    [MonsterAllegiance.Neutral]: 'rgb(255, 255, 255)',
+    [MonsterAllegiance.Friendly]: 'rgb(255, 255, 255)',
 };
 
+/**
+ * Olympia target / hover mob chrome: red name, optional `(Berserked)`, thin red HP bar.
+ * No brown card — matches SAVE screenshots #53 / #70 (DrawNpcName + Centuu HP strip).
+ */
 export function MonsterHoverOverlay() {
     const monsterInfo = useStore(monsterHoverOverlayStore, (state) => state.monsterInfo);
     const [portalTarget, setPortalTarget] = useState<HTMLElement | undefined>(undefined);
@@ -38,9 +46,22 @@ export function MonsterHoverOverlay() {
     }
 
     const hpPercent = Math.max(0, Math.min(1, monsterInfo.maxHp > 0 ? monsterInfo.hp / monsterInfo.maxHp : 0));
+    const displayName = monsterInfo.berserked ? `${monsterInfo.name} (Berserked)` : monsterInfo.name;
+
+    const nameStyle: CSSProperties = {
+        fontFamily: OLYMPIA_UI_FONT,
+        fontSize: '12px',
+        fontWeight: 'bold',
+        color: NAME_COLOR_BY_ALLEGIANCE[monsterInfo.allegiance],
+        textShadow: '1px 1px 0 rgba(0,0,0,0.9)',
+        whiteSpace: 'nowrap',
+        lineHeight: '14px',
+        pointerEvents: 'none',
+    };
 
     const dialog = (
         <div
+            className="monster-target-overlay"
             style={{
                 position: 'fixed',
                 left: `${monsterInfo.overlayScreenX}px`,
@@ -49,102 +70,35 @@ export function MonsterHoverOverlay() {
                 pointerEvents: 'none',
                 zIndex: 20001,
                 width: 'fit-content',
-                minWidth: HEALTH_BAR_MIN_WIDTH,
+                minWidth: TARGET_HP_BAR_WIDTH,
                 opacity: MONSTER_OVERLAY_TRANSPARENCY,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
             }}
         >
+            <span style={nameStyle}>{displayName}</span>
             <div
+                className="monster-target-hp-track"
                 style={{
-                    background: 'linear-gradient(135deg, rgba(26, 15, 10, 0.98) 0%, rgba(45, 24, 16, 0.98) 100%)',
-                    border: '2px solid var(--rpg-leather)',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(212, 175, 55, 0.15)',
-                    padding: '8px 10px',
-                    position: 'relative',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
+                    width: TARGET_HP_BAR_WIDTH,
+                    height: TARGET_HP_BAR_HEIGHT,
+                    background: 'rgba(40, 10, 10, 0.95)',
+                    border: '1px solid rgba(80, 0, 0, 0.9)',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
                 }}
             >
-                {/* Health bar container - stretches to match dialog width */}
                 <div
+                    className="monster-target-hp-fill"
                     style={{
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: 24,
-                        minWidth: HEALTH_BAR_MIN_WIDTH,
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        padding: `0 ${NAME_PADDING}px`,
-                        background: 'linear-gradient(180deg, rgba(60, 20, 20, 0.95) 0%, rgba(40, 10, 10, 0.95) 100%)',
-                        border: '1px solid rgba(139, 0, 0, 0.8)',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5)',
+                        width: `${hpPercent * 100}%`,
+                        height: '100%',
+                        background: 'linear-gradient(180deg, #e02020 0%, #8b1010 100%)',
+                        transition: 'width 0.12s ease-out',
                     }}
-                >
-                    {/* Health fill */}
-                    <div
-                        style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: `${hpPercent * 100}%`,
-                            background: 'linear-gradient(180deg, #8b2020 0%, #5c1010 50%, #3d0a0a 100%)',
-                            borderRadius: '3px',
-                            transition: 'width 0.15s ease-out',
-                            boxShadow: 'inset 0 1px 0 rgba(255, 100, 100, 0.3)',
-                        }}
-                    />
-
-                    {/* Monster name - in flow so it sizes the bar */}
-                    <span
-                        style={{
-                            position: 'relative',
-                            zIndex: 1,
-                            color: 'var(--rpg-parchment)',
-                            fontSize: '13px',
-                            fontWeight: 'bold',
-                            fontFamily: 'Georgia, serif',
-                            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8)',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        {monsterInfo.name}
-                    </span>
-                </div>
-                <div
-                    style={{
-                        marginTop: '6px',
-                        textAlign: 'center',
-                        color: MONSTER_ALLEGIANCE_COLORS[monsterInfo.allegiance],
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.9)',
-                    }}
-                >
-                    {MONSTER_ALLEGIANCE_LABELS[monsterInfo.allegiance]}
-                </div>
-
-                {/* Stats section - same aesthetics as AssetDebugOverlay */}
-                <div
-                    style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px',
-                        padding: '8px 12px',
-                        marginTop: '8px',
-                        borderTop: '1px solid var(--rpg-leather)',
-                    }}
-                >
-                    <div className="rpg-stat-item">
-                        <span className="rpg-stat-label">Health:</span>
-                        <span className="rpg-stat-value">{monsterInfo.hp}/{monsterInfo.maxHp}</span>
-                    </div>
-                </div>
+                />
             </div>
         </div>
     );

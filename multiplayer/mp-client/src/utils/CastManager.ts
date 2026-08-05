@@ -690,6 +690,21 @@ export class CastManager {
     }
 
     /**
+     * Play network AoE/impact VFX when the caster entity is not in view (left range mid-cast).
+     * Uses the target cell as both origin and target so projectile/impact still shows.
+     */
+    public dispatchNetworkAoeSpellAtTarget(spellId: number, targetWorldX: number, targetWorldY: number): void {
+        const spell = getNetworkManager(this.scene.game)?.getSpellById(spellId);
+        if (!spell) {
+            console.warn('[CastManager] Missing spell config for orphan AoE cast.', { spellId });
+            return;
+        }
+        const ox = convertWorldPosToPixelPos(targetWorldX) + TILE_SIZE / 2;
+        const oy = convertWorldPosToPixelPos(targetWorldY) + TILE_SIZE / 2;
+        this.dispatchNetworkAoeSpellCore(ox, oy, spellId, targetWorldX, targetWorldY, spell);
+    }
+
+    /**
      * Server-driven monster AoE spell visuals.
      */
     public dispatchNetworkMonsterAoeSpell(monster: Monster, data: MonsterCastAoeSpellEventData): void {

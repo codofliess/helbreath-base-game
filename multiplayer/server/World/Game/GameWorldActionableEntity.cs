@@ -11,6 +11,9 @@ namespace Server.World.Game;
 /// Player and monster entities that participate in timed temporary effects (buffs/debuffs) and related network broadcasts.
 /// </summary>
 public abstract class GameWorldActionableEntity : GameWorldEntity {
+    /// <summary>Olympia poison tick interval (classic <c>DEF_POISONTIME</c> ≈ 12s).</summary>
+    public const int PoisonTickIntervalMs = 12_000;
+
     protected readonly Dictionary<TemporaryEffectType, ActiveTemporaryEffectSlot> activeTemporaryEffects = new();
 
     /// <summary>Sum of <see cref="ActiveTemporaryEffectSlot.MovementSpeedModifier"/> across active effects.</summary>
@@ -39,22 +42,43 @@ public abstract class GameWorldActionableEntity : GameWorldEntity {
         int durationMs,
         double movementSpeedModifier,
         double attackSpeedModifier,
-        double castSpeedModifier) {
+        double castSpeedModifier,
+        int poisonLevel = 0) {
         if (!TemporaryEffects.CanApplyTemporaryEffectInGroup(activeTemporaryEffects, group)) {
             return;
         }
 
         var timerId = 0;
-        timerId = wr.Scheduler.SetTimeout(durationMs, () => OnTemporaryEffectTimerExpired(wr, effectType, timerId));
-        activeTemporaryEffects[effectType] = new ActiveTemporaryEffectSlot {
+        var appliedDuration = Math.Max(0, durationMs);
+        timerId = wr.Scheduler.SetTimeout(appliedDuration, () => OnTemporaryEffectTimerExpired(wr, effectType, timerId));
+        var slot = new ActiveTemporaryEffectSlot {
             Group = group,
             ExpiryTimerId = timerId,
             MovementSpeedModifier = movementSpeedModifier,
             AttackSpeedModifier = attackSpeedModifier,
             CastSpeedModifier = castSpeedModifier,
+            PoisonLevel = poisonLevel,
+            AppliedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            DurationMs = appliedDuration,
         };
+        activeTemporaryEffects[effectType] = slot;
         RecalculateTemporaryEffectSpeedSums();
         BroadcastTemporaryEffectApplied(wr, effectType);
+
+        if (this is GameWorldMonster monster) {
+            TimedChallenge.OnMonsterEffectApplied(wr, monster, effectType);
+        } else if (this is GameWorldPlayer player) {
+            if (effectType is TemporaryEffectType.DefenseShield or TemporaryEffectType.GreatDefenseShield) {
+                TimedChallenge.OnPlayerDefenseShieldApplied(wr, player);
+            }
+            if (effectType is TemporaryEffectType.Invisibility or TemporaryEffectType.ProtectFromArrow) {
+                TimedChallenge.OnPlayerBuffApplied(wr, player, effectType);
+            }
+        }
+
+        if (effectType == TemporaryEffectType.Poison && poisonLevel > 0) {
+            StartPoisonTicks(wr, effectType, slot);
+        }
     }
 
     /// <summary>Re-sums modifiers from <see cref="activeTemporaryEffects"/>; <see cref="GameWorldMonster"/> omits cast.</summary>
@@ -87,6 +111,10 @@ public abstract class GameWorldActionableEntity : GameWorldEntity {
         }
 
         wr.Scheduler.ClearTimeout(slot.ExpiryTimerId);
+        if (slot.PoisonTickTimerId != 0) {
+            wr.Scheduler.ClearInterval(slot.PoisonTickTimerId);
+        }
+
         activeTemporaryEffects.Remove(effectType);
         RecalculateTemporaryEffectSpeedSums();
         if (broadcastExpired) {
@@ -94,7 +122,7 @@ public abstract class GameWorldActionableEntity : GameWorldEntity {
         }
     }
 
-    /// <summary>Cancels all temporary-effect timers and clears state; emits expire for each (e.g. on death).</summary>
+    /// <summary>Cancels all temporary-effect timers and clears state; emits expire for each (e.g. on death / Cancellation).</summary>
     public void ClearAllTemporaryEffects(GameWorldRef wr) {
         if (activeTemporaryEffects.Count == 0) {
             return;
@@ -116,9 +144,55 @@ public abstract class GameWorldActionableEntity : GameWorldEntity {
         }
     }
 
+    /// <summary>
+    /// Arena DC snapshot: all active buffs (good + bad) with remaining ms for resume on re-login.
+    /// </summary>
+    public List<Helpers.ArenaPrizeEscrow.BuffSnapshot> SnapshotActiveTemporaryEffectsForArena() {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var list = new List<Helpers.ArenaPrizeEscrow.BuffSnapshot>(activeTemporaryEffects.Count);
+        foreach (var kv in activeTemporaryEffects) {
+            var slot = kv.Value;
+            var elapsed = slot.AppliedAtUnixMs > 0 ? (int)Math.Max(0, now - slot.AppliedAtUnixMs) : 0;
+            var remaining = slot.DurationMs > 0
+                ? Math.Max(0, slot.DurationMs - elapsed)
+                : 1_000; // unknown duration → 1s floor so we do not drop the effect silently
+            if (remaining <= 0) {
+                continue;
+            }
+            list.Add(new Helpers.ArenaPrizeEscrow.BuffSnapshot {
+                EffectType = (int)kv.Key,
+                Group = slot.Group,
+                RemainingMs = remaining,
+                MovementSpeedModifier = slot.MovementSpeedModifier,
+                AttackSpeedModifier = slot.AttackSpeedModifier,
+                CastSpeedModifier = slot.CastSpeedModifier,
+                PoisonLevel = slot.PoisonLevel,
+            });
+        }
+        return list;
+    }
+
+    private void StartPoisonTicks(GameWorldRef wr, TemporaryEffectType effectType, ActiveTemporaryEffectSlot slot) {
+        var poisonLevel = slot.PoisonLevel;
+        var tickId = wr.Scheduler.SetInterval(PoisonTickIntervalMs, () => {
+            if (!activeTemporaryEffects.TryGetValue(effectType, out var current) || current.PoisonLevel <= 0) {
+                return;
+            }
+
+            TemporaryEffects.ApplyPoisonTickDamage(wr, this, current.PoisonLevel);
+        });
+        slot.PoisonTickTimerId = tickId;
+        // First tick after one interval (Olympia waits DEF_POISONTIME from apply).
+        _ = poisonLevel;
+    }
+
     private void OnTemporaryEffectTimerExpired(GameWorldRef wr, TemporaryEffectType effectType, int expectedTimerId) {
         if (!activeTemporaryEffects.TryGetValue(effectType, out var slot) || slot.ExpiryTimerId != expectedTimerId) {
             return;
+        }
+
+        if (slot.PoisonTickTimerId != 0) {
+            wr.Scheduler.ClearInterval(slot.PoisonTickTimerId);
         }
 
         activeTemporaryEffects.Remove(effectType);

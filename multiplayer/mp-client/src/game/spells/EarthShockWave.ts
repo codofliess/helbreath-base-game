@@ -19,11 +19,9 @@ export type EarthShockWaveConfig = {
 };
 
 /**
- * Earth Shock Wave spell. Creates an invisible projectile that travels from the
- * player's anchor to the cursor's target cell, emitting Earth Shock Wave Torrent
- * effects at fixed intervals along its path. When the destination is reached,
- * the projectile remains immobile and continues emitting for the configured
- * duration before destroying.
+ * Earth Shock Wave: ground torrent wave from the caster's **feet** toward the target
+ * (same origin family as BloodyShockWave — not chest offset). Emits torrents along
+ * the path; at destination stays immobile and keeps emitting for `duration`.
  */
 export class EarthShockWave {
     private scene: Scene;
@@ -52,13 +50,20 @@ export class EarthShockWave {
         this.scene = scene;
         this.config = projectileConfig;
         this.torrentConfig = torrentConfig;
-        this.originPixelX = originPixelX;
-        this.originPixelY = originPixelY;
 
         const destCellX = convertPixelPosToWorldPos(cursorPixelX);
         const destCellY = convertPixelPosToWorldPos(cursorPixelY);
         this.destPixelX = convertWorldPosToPixelPos(destCellX) + TILE_SIZE / 2;
         this.destPixelY = convertWorldPosToPixelPos(destCellY) + TILE_SIZE / 2;
+
+        // Ground wave from feet (cell center from CastManager). Nudge toward target so the
+        // first torrent sits in front of the caster (same fix family as BloodyShockWave).
+        const dx = this.destPixelX - originPixelX;
+        const dy = this.destPixelY - originPixelY;
+        const len = Math.hypot(dx, dy) || 1;
+        const FOOT_FORWARD_PX = 14;
+        this.originPixelX = originPixelX + (dx / len) * FOOT_FORWARD_PX;
+        this.originPixelY = originPixelY + (dy / len) * FOOT_FORWARD_PX;
 
         const distancePx = Phaser.Math.Distance.Between(
             originPixelX,

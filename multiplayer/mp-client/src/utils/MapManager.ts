@@ -71,6 +71,14 @@ export class MapManager {
     }
 
     /**
+     * Updates the server-authored map file after a world transfer (e.g. `default.amd` → `aresden.amd`).
+     * Call before on-demand reload so {@link getCurrentMapName} matches the new world.
+     */
+    public setInitialMapName(mapName: string | undefined): void {
+        this.initialMapName = mapName;
+    }
+
+    /**
      * Returns the current map name (e.g. 'aresden.amd').
      * Must be provided by server via InitialGameWorldState.mapName.
      */
@@ -228,7 +236,26 @@ export class MapManager {
         const mapWidth = map.sizeX * TILE_SIZE;
         const mapHeight = map.sizeY * TILE_SIZE;
 
+        let finished = false;
+        const finish = () => {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            this.scene.cameras.main.setScroll(originalScrollX, originalScrollY);
+            this.capturingMinimap = false;
+            this.scene.time.delayedCall(50, finishedCallback);
+        };
+
+        // WebGL snapshot can hang (black "Loading map..." forever). Force continue.
+        const hangTimer = this.scene.time.delayedCall(4000, () => {
+            console.warn(`[MapManager] Minimap snapshot timed out for ${mapName} — continuing without cache.`);
+            this.onAfterSnapshot?.();
+            finish();
+        });
+
         this.scene.game.renderer.snapshot((image: Phaser.Display.Color | HTMLImageElement) => {
+            hangTimer.remove(false);
             this.onAfterSnapshot?.();
 
             if (image instanceof HTMLImageElement) {
@@ -238,45 +265,46 @@ export class MapManager {
                 console.log(`[MapManager] Snapshot size: ${image.width}x${image.height}`);
                 console.log(`[MapManager] Rendered map on canvas: ${renderedWidth}x${renderedHeight} at offset (0, 0)`);
 
-                const canvas = document.createElement('canvas');
-                canvas.width = minimapWidth;
-                canvas.height = minimapHeight;
-                const ctx = canvas.getContext('2d', { alpha: false });
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = minimapWidth;
+                    canvas.height = minimapHeight;
+                    const ctx = canvas.getContext('2d', { alpha: false });
 
-                if (ctx) {
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
+                    if (ctx) {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
 
-                    ctx.drawImage(
-                        image,
-                        0, 0,
-                        renderedWidth,
-                        renderedHeight,
-                        0, 0,
-                        minimapWidth,
-                        minimapHeight
-                    );
+                        ctx.drawImage(
+                            image,
+                            0, 0,
+                            renderedWidth,
+                            renderedHeight,
+                            0, 0,
+                            minimapWidth,
+                            minimapHeight
+                        );
 
-                    const dataUrl = canvas.toDataURL('image/png');
+                        const dataUrl = canvas.toDataURL('image/png');
 
-                    const scaleFactorX = minimapWidth / mapWidth;
-                    const scaleFactorY = minimapHeight / mapHeight;
-                    const scaleFactor = Math.min(scaleFactorX, scaleFactorY);
+                        const scaleFactorX = minimapWidth / mapWidth;
+                        const scaleFactorY = minimapHeight / mapHeight;
+                        const scaleFactor = Math.min(scaleFactorX, scaleFactorY);
 
-                    console.log(`[MapManager] Minimap captured: ${canvas.width}x${canvas.height}, scale: ${scaleFactor}`);
+                        console.log(`[MapManager] Minimap captured: ${canvas.width}x${canvas.height}, scale: ${scaleFactor}`);
 
-                    const originalSize = canvas.width;
-                    setCachedMinimap(this.scene, mapName, { dataUrl, scale: scaleFactor, originalSize });
-                    console.log(`[MapManager] Cached minimap for ${mapName}`);
+                        const originalSize = canvas.width;
+                        setCachedMinimap(this.scene, mapName, { dataUrl, scale: scaleFactor, originalSize });
+                        console.log(`[MapManager] Cached minimap for ${mapName}`);
 
-                    EventBus.emit(OUT_UI_MINIMAP_CAPTURED, { dataUrl, scale: scaleFactor, originalSize });
+                        EventBus.emit(OUT_UI_MINIMAP_CAPTURED, { dataUrl, scale: scaleFactor, originalSize });
+                    }
+                } catch (error) {
+                    console.warn(`[MapManager] Minimap canvas failed for ${mapName}:`, error);
                 }
             }
 
-            this.scene.cameras.main.setScroll(originalScrollX, originalScrollY);
-            this.capturingMinimap = false;
-
-            this.scene.time.delayedCall(50, finishedCallback);
+            finish();
         });
     }
 

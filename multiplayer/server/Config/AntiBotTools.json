@@ -1,0 +1,19 @@
+{
+  "guildPriorityIngress": false,
+  "newPlayerSegment": false,
+  "claimTimeSybilGate": false,
+  "industrialMultiBoxLimits": false,
+  "afkOnMapAllowed": true,
+  "tournamentInhumanPlayTelemetry": false,
+  "tournamentHighStakesMode": false,
+  "softOfflineProgression": false,
+  "maxConcurrentSessions": 8,
+  "actionRateCeilingPerMin": 600,
+  "afkWarnAfterMs": 300000,
+  "afkKickAfterMs": 600000,
+  "softOfflineXpPerTick": 1,
+  "softOfflineTickMs": 60000,
+  "nearCapacityOnline": 3500,
+  "updatedBy": "bootstrap",
+  "updatedAtMs": 0
+}

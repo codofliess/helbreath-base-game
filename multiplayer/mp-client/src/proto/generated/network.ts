@@ -28,6 +28,39 @@ export enum TemporaryEffectType {
   TEMPORARY_EFFECT_TYPE_INVISIBILITY = 0,
   TEMPORARY_EFFECT_TYPE_CHILL = 1,
   TEMPORARY_EFFECT_TYPE_BERSERK = 2,
+  /** TEMPORARY_EFFECT_TYPE_PARALYZE - Olympia HOLDOBJECT (Hold Person / Paralyze): blocks movement; monsters also skip attack AI. */
+  TEMPORARY_EFFECT_TYPE_PARALYZE = 3,
+  /** TEMPORARY_EFFECT_TYPE_POISON - Olympia MAGICTYPE_POISON status DoT (Poison / Mass Poison); Cure removes. */
+  TEMPORARY_EFFECT_TYPE_POISON = 4,
+  /** TEMPORARY_EFFECT_TYPE_CONFUSE_LANGUAGE - Olympia MAGICTYPE_CONFUSE value 1 — Confuse Language (chat garble). */
+  TEMPORARY_EFFECT_TYPE_CONFUSE_LANGUAGE = 5,
+  /** TEMPORARY_EFFECT_TYPE_CONFUSION - Olympia MAGICTYPE_CONFUSE value 2 — Confusion / Mass Confusion. */
+  TEMPORARY_EFFECT_TYPE_CONFUSION = 6,
+  /** TEMPORARY_EFFECT_TYPE_ILLUSION - Olympia MAGICTYPE_CONFUSE value 3 — Illusion / Mass Illusion. */
+  TEMPORARY_EFFECT_TYPE_ILLUSION = 7,
+  /** TEMPORARY_EFFECT_TYPE_ILLUSION_MOVEMENT - Olympia MAGICTYPE_CONFUSE value 4 — Illusion Movement (when typed as CONFUSE). */
+  TEMPORARY_EFFECT_TYPE_ILLUSION_MOVEMENT = 8,
+  /** TEMPORARY_EFFECT_TYPE_INHIBITION - Olympia MAGICTYPE_INHIBITION — blocks spell casting. */
+  TEMPORARY_EFFECT_TYPE_INHIBITION = 9,
+  /** TEMPORARY_EFFECT_TYPE_PROTECT_FROM_ARROW - Olympia MAGICTYPE_PROTECT value 1 — Protection From Arrow. */
+  TEMPORARY_EFFECT_TYPE_PROTECT_FROM_ARROW = 10,
+  /** TEMPORARY_EFFECT_TYPE_PROTECT_FROM_MAGIC - Olympia MAGICTYPE_PROTECT value 2 — Protection From Magic. */
+  TEMPORARY_EFFECT_TYPE_PROTECT_FROM_MAGIC = 11,
+  /** TEMPORARY_EFFECT_TYPE_DEFENSE_SHIELD - Olympia MAGICTYPE_PROTECT value 3 — Defense Shield. */
+  TEMPORARY_EFFECT_TYPE_DEFENSE_SHIELD = 12,
+  /** TEMPORARY_EFFECT_TYPE_GREAT_DEFENSE_SHIELD - Olympia MAGICTYPE_PROTECT value 4 — Great Defense Shield. */
+  TEMPORARY_EFFECT_TYPE_GREAT_DEFENSE_SHIELD = 13,
+  /** TEMPORARY_EFFECT_TYPE_ABSOLUTE_MAGIC_PROTECT - Olympia MAGICTYPE_PROTECT value 5 — Absolute Magic Protection. */
+  TEMPORARY_EFFECT_TYPE_ABSOLUTE_MAGIC_PROTECT = 14,
+  /** TEMPORARY_EFFECT_TYPE_HASTE - Olympia Haste — run speed only; allies of same city (never self). */
+  TEMPORARY_EFFECT_TYPE_HASTE = 15,
+  /**
+   * TEMPORARY_EFFECT_TYPE_SLEEP - Sleep (Nemesis / Helbreath Cursed lineage): blocks action; first damaging hit wakes with +100% damage.
+   * Multi-hit spells (Blizzard etc.) also gain +1 guaranteed hit that ignores MR.
+   */
+  TEMPORARY_EFFECT_TYPE_SLEEP = 16,
+  /** TEMPORARY_EFFECT_TYPE_EXP_BOOST - Cash-shop Exp Tablet: +200% EXP; underfoot aura only (no movement change). */
+  TEMPORARY_EFFECT_TYPE_EXP_BOOST = 17,
   UNRECOGNIZED = -1,
 }
 
@@ -61,6 +94,37 @@ export enum WeatherMode {
   WEATHER_MODE_SNOW_LIGHT = 4,
   WEATHER_MODE_SNOW_MEDIUM = 5,
   WEATHER_MODE_SNOW_HEAVY = 6,
+  UNRECOGNIZED = -1,
+}
+
+/** Olympia chat log tabs (DrawDialogBox chat). Client filters; whisper is routed privately. */
+export enum ChatChannel {
+  CHAT_CHANNEL_GLOBAL = 0,
+  CHAT_CHANNEL_TRADE = 1,
+  CHAT_CHANNEL_TOWN = 2,
+  CHAT_CHANNEL_NEARBY = 3,
+  CHAT_CHANNEL_GUILD = 4,
+  CHAT_CHANNEL_PARTY = 5,
+  CHAT_CHANNEL_WHISPER = 6,
+  CHAT_CHANNEL_MISC = 7,
+  UNRECOGNIZED = -1,
+}
+
+export enum AuctionListingMode {
+  AUCTION_LISTING_MODE_UNSPECIFIED = 0,
+  /** AUCTION_LISTING_MODE_TIME - Timed bidding until expires_at_ms; highest bid wins. */
+  AUCTION_LISTING_MODE_TIME = 1,
+  /** AUCTION_LISTING_MODE_LIMIT - Limit sell: settles when a buyer pays list_price_gold (buy-at-list). */
+  AUCTION_LISTING_MODE_LIMIT = 2,
+  UNRECOGNIZED = -1,
+}
+
+/** Gallery rarity from opposing-city killer rank (PO 2026-07-13): legendary 1-10, rare 11-50, common 51-200. */
+export enum EkScreenshotRarity {
+  EK_SCREENSHOT_RARITY_UNSPECIFIED = 0,
+  EK_SCREENSHOT_RARITY_COMMON = 1,
+  EK_SCREENSHOT_RARITY_RARE = 2,
+  EK_SCREENSHOT_RARITY_LEGENDARY = 3,
   UNRECOGNIZED = -1,
 }
 
@@ -107,7 +171,520 @@ export interface ClientMessage {
     | { $case: "weatherChangeRequest"; value: WeatherChangeRequest }
     | { $case: "summonNpcRequest"; value: SummonNpcRequest }
     | { $case: "killAllNpcsRequest"; value: KillAllNpcsRequest }
+    | { $case: "claimKillMilestoneRequest"; value: ClaimKillMilestoneRequest }
+    | { $case: "rebirthRequest"; value: RebirthRequest }
+    | //
+    /** Cancel last rebirth → L max of previous RB (snapshot). Field 103 (92+ taken by arena pact). */
+    { $case: "rebirthRollbackRequest"; value: RebirthRollbackRequest }
+    | //
+    /** Pre-world: list up to 4 character slots for a wallet after Phantom auth (SELECTCHAR desk). */
+    { $case: "characterListRequest"; value: CharacterListRequest }
+    | //
+    /** Buy a consumable (or listed shop item) from a nearby Shop Keeper NPC. */
+    { $case: "buyShopItemRequest"; value: BuyShopItemRequest }
+    | //
+    /** Optional beginner path 1→80: enroll / re-enroll (no penalty to abandon). */
+    { $case: "beginnerPathEnrollRequest"; value: BeginnerPathEnrollRequest }
+    | { $case: "beginnerPathAbandonRequest"; value: BeginnerPathAbandonRequest }
+    | //
+    /** Talk to a beginner-path NPC (Enzu / Drillmaster / Merc Captain) for talk objectives. */
+    { $case: "beginnerPathTalkRequest"; value: BeginnerPathTalkRequest }
+    | //
+    /** Training Arena: apply a chase-dummy preset (world `training` only). */
+    { $case: "applyTrainingPresetRequest"; value: ApplyTrainingPresetRequest }
+    | //
+    /** Soft UI objectives (open Party/Guild, read EK hint, select Training Arena preset). */
+    { $case: "beginnerPathUiActionRequest"; value: BeginnerPathUiActionRequest }
+    | //
+    /** William warehouse: open snapshot / deposit bag stack / withdraw warehouse stack (proximity-checked). */
+    { $case: "openWarehouseRequest"; value: OpenWarehouseRequest }
+    | { $case: "warehouseDepositRequest"; value: WarehouseDepositRequest }
+    | { $case: "warehouseWithdrawRequest"; value: WarehouseWithdrawRequest }
+    | //
+    /** Tom blacksmith: repair a bag/equipped weapon (Olympia durability). */
+    { $case: "repairItemRequest"; value: RepairItemRequest }
+    | //
+    /** Minimal party MVP: create / join by code / leave (Beginner Path + F5 Party). */
+    { $case: "createPartyRequest"; value: CreatePartyRequest }
+    | { $case: "joinPartyRequest"; value: JoinPartyRequest }
+    | { $case: "leavePartyRequest"; value: LeavePartyRequest }
+    | //
+    /** City NPC desk (Howard / Kennedy / Gail / Perry) — proximity-checked actions. */
+    { $case: "cityNpcServiceRequest"; value: CityNpcServiceRequest }
+    | //
+    /** GM ops: read / mutate anti-bot tool flags (rejected for traveler sessions). */
+    { $case: "getAntiBotToolsRequest"; value: GetAntiBotToolsRequest }
+    | { $case: "setAntiBotToolsRequest"; value: SetAntiBotToolsRequest }
+    | //
+    /** Timed Challenges Mode 1 (Skills): start / abort / daily leaderboard. */
+    { $case: "startTimedChallengeRequest"; value: StartTimedChallengeRequest }
+    | { $case: "abortTimedChallengeRequest"; value: AbortTimedChallengeRequest }
+    | { $case: "getTimedChallengeLeaderboardRequest"; value: GetTimedChallengeLeaderboardRequest }
+    | //
+    /** Trade / auction board MVP (timed bid + limit sell, access rules, 5% fee debt). */
+    { $case: "auctionBoardBrowseRequest"; value: AuctionBoardBrowseRequest }
+    | { $case: "auctionBoardCreateRequest"; value: AuctionBoardCreateRequest }
+    | { $case: "auctionBoardBidRequest"; value: AuctionBoardBidRequest }
+    | { $case: "auctionBoardBuyRequest"; value: AuctionBoardBuyRequest }
+    | { $case: "auctionBoardCancelRequest"; value: AuctionBoardCancelRequest }
+    | { $case: "auctionBoardSettleDebtRequest"; value: AuctionBoardSettleDebtRequest }
+    | //
+    /** Item Drops tab: sell a bag item for gold (Olympia list-price / 2). */
+    { $case: "sellBagItemRequest"; value: SellBagItemRequest }
+    | //
+    /** F5 Level Set: spend unspent LU points into STR/VIT/DEX/INT/MAG/CHR (Olympia MSGID_LEVELUPSETTINGS). */
+    { $case: "levelUpSettingsRequest"; value: LevelUpSettingsRequest }
+    | //
+    /** Olympia Home / DEF_COMMONTYPE_TOGGLESAFEATTACKMODE — blocks non-enemy PvP hits while armed. */
+    { $case: "playerSafeAttackModeChangeRequest"; value: PlayerSafeAttackModeChangeRequest }
+    | //
+    /** Play-mine $HELL: status / claim pending balance (C1 · off-chain credits until mint). */
+    { $case: "hellMiningStatusRequest"; value: HellMiningStatusRequest }
+    | { $case: "hellMiningClaimRequest"; value: HellMiningClaimRequest }
+    | //
+    /** Olympia majestic / gizon upgrade for Angelic pendants and Dark Knight weapons. */
+    { $case: "majesticUpgradeRequest"; value: MajesticUpgradeRequest }
+    | //
+    /** Soul / Guild / Unbind seals (~USD 5): bind_state on item instance. */
+    { $case: "itemBindRequest"; value: ItemBindRequest }
+    | //
+    /** Cashier cash shop (stablecoin USDC/USDT or pending $HELL). */
+    { $case: "buyCashShopItemRequest"; value: BuyCashShopItemRequest }
+    | //
+    /** Pre-world: check if a display name is free before Create Character confirms. */
+    { $case: "characterNameCheckRequest"; value: CharacterNameCheckRequest }
+    | //
+    /** Chain Lords: freeze level (exp → majestic) or unfreeze (exp → levels again). */
+    { $case: "setLevelBlockRequest"; value: SetLevelBlockRequest }
+    | //
+    /** Xelima / Merien stone upgrade (Olympia + CL fail rules). Optional Integrity anti-burn. */
+    { $case: "stoneItemUpgradeRequest"; value: StoneItemUpgradeRequest }
+    | //
+    /** Mining (0) / Fishing (1) gather attempt (rod near water / pickaxe near node). */
+    { $case: "skillGatherRequest"; value: SkillGatherRequest }
+    | //
+    /** Snapshot skill masteries (0–100) for F8 Skill dialog. */
+    { $case: "getSkillsStateRequest"; value: GetSkillsStateRequest }
+    | //
+    /** Olympia disenchant / enchant / combine shards+fragments (armor specs). */
+    { $case: "itemDisenchantRequest"; value: ItemDisenchantRequest }
+    | { $case: "itemEnchantRequest"; value: ItemEnchantRequest }
+    | { $case: "enchantMaterialUpgradeRequest"; value: EnchantMaterialUpgradeRequest }
+    | { $case: "getEnchantMaterialsRequest"; value: GetEnchantMaterialsRequest }
+    | //
+    /** Olympia MSGID_STATECHANGEPOINT: spend 1 majestic to drop 3 stat points (respec sink). */
+    { $case: "majesticStatRespecRequest"; value: MajesticStatRespecRequest }
+    | //
+    /** Merge 2 same-CIC same-stat-kind gear → next CIC (min HP/SP/MP value). */
+    { $case: "cicItemMergeRequest"; value: CicItemMergeRequest }
+    | //
+    /** Upgrade Mana/HP Siphon gem by spending matching siphon shards. */
+    { $case: "siphonGemUpgradeRequest"; value: SiphonGemUpgradeRequest }
+    | //
+    /** Olympia DEF_COMMONTYPE_REQUEST_ACTIVATESPECABLTY — Page Up activates Merien/Xelima SA. */
+    { $case: "activateSpecialAbilityRequest"; value: ActivateSpecialAbilityRequest }
+    | //
+    /** Arm/disarm Super Attack (crit) — charges only spent while armed. */
+    { $case: "setSuperAttackArmedRequest"; value: SetSuperAttackArmedRequest }
+    | //
+    /** Arena pact duel: create / invite / ready / cancel / list open invites. */
+    { $case: "arenaPactCreateRequest"; value: ArenaPactCreateRequest }
+    | { $case: "arenaPactInviteRequest"; value: ArenaPactInviteRequest }
+    | { $case: "arenaPactRespondRequest"; value: ArenaPactRespondRequest }
+    | { $case: "arenaPactReadyRequest"; value: ArenaPactReadyRequest }
+    | { $case: "arenaPactCancelRequest"; value: ArenaPactCancelRequest }
+    | { $case: "arenaPactListRequest"; value: ArenaPactListRequest }
+    | //
+    /** Pre-countdown: captains propose / accept tech equalization. */
+    { $case: "arenaPactTechProposeRequest"; value: ArenaPactTechProposeRequest }
+    | { $case: "arenaPactTechVoteRequest"; value: ArenaPactTechVoteRequest }
+    | //
+    /** During tech_sample on map: continuous self-report until photo freezes. */
+    { $case: "arenaPactTechReportRequest"; value: ArenaPactTechReportRequest }
+    | //
+    /** Fighter or host sets/updates POV or global stream URL for Watch multi-cam. */
+    { $case: "arenaPactSetStreamRequest"; value: ArenaPactSetStreamRequest }
+    | //
+    /** World / tournament Go-Live on public cartelera (not a pact duel). */
+    { $case: "streamBroadcastRequest"; value: StreamBroadcastRequest }
+    | //
+    /**
+     * (103 = rebirth_rollback_request, declared near rebirth_request)
+     * Arena prize bag (captain pledges / re-OK / signed loss).
+     */
+    { $case: "arenaPactPrizePledgeRequest"; value: ArenaPactPrizePledgeRequest }
+    | { $case: "arenaPactPrizeConfirmRequest"; value: ArenaPactPrizeConfirmRequest }
+    | { $case: "arenaPactSignLossRequest"; value: ArenaPactSignLossRequest }
     | undefined;
+}
+
+/** Attach / update a live stream for cartelera multi-cam (Twitch, YouTube, Discord Go Live link). */
+export interface ArenaPactSetStreamRequest {
+  matchId: string;
+  /** Full URL (https://twitch.tv/…, youtube, discord.gg/…, etc.). */
+  streamUrl: string;
+  /** Host only: when true, sets match-level global cam (not personal POV). */
+  isGlobal: boolean;
+}
+
+/** Announce or stop a public stream on the global cartelera (World hunt / raid / tournament desk). */
+export interface StreamBroadcastRequest {
+  /** world | tournament | other */
+  kind: string;
+  title: string;
+  streamUrl: string;
+  /** false = remove from cartelera */
+  active: boolean;
+}
+
+export interface StreamBroadcastState {
+  broadcastId: string;
+  kind: string;
+  title: string;
+  characterName: string;
+  streamUrl: string;
+  streamPlatform: string;
+  worldId: string;
+  startedAtMs: bigint;
+  expiresAtMs: bigint;
+  active: boolean;
+}
+
+/** Two bag item UIDs (same base id for shields; same cic level + cic_stat_kind for all). */
+export interface CicItemMergeRequest {
+  itemUidA: bigint;
+  itemUidB: bigint;
+}
+
+/** Spend siphon shards of current gem level to raise siphon_level +1. */
+export interface SiphonGemUpgradeRequest {
+  itemUid: bigint;
+}
+
+/** Empty: activate equipped Merien/Xelima special ability (cooldown-gated). */
+export interface ActivateSpecialAbilityRequest {
+}
+
+/** When armed=true and SuperAttackLeft>0, melee crits consume charges until disarmed or empty. */
+export interface SetSuperAttackArmedRequest {
+  armed: boolean;
+}
+
+/**
+ * Special ability lifecycle (Olympia sV1 status codes).
+ * status: 1=activated, 2=set on equip, 3=expired, 4=released, 5=cooldown ready
+ */
+export interface SpecialAbilityStatus {
+  status: number;
+  abilityType: number;
+  /** Activated: remaining active seconds. Equip/ready: cooldown remaining seconds. */
+  durationOrCooldownSec: number;
+  /** When status=1 (activated), nearby clients can play VFX on this player. */
+  playerId: bigint;
+}
+
+/** Break magic item → shards (primary) + fragments (secondary); item destroyed. */
+export interface ItemDisenchantRequest {
+  itemUid: bigint;
+}
+
+/** kind: 0 = apply matching shard (primary +1), 1 = apply matching fragment (secondary +1). */
+export interface ItemEnchantRequest {
+  itemUid: bigint;
+  kind: number;
+}
+
+/**
+ * Combine materials: kind 0 shard / 1 fragment; mode 0 one / 2 all-shard / 1 one-frag / 3 all-frag.
+ * level = current material level (1-based); crafts level+1.
+ */
+export interface EnchantMaterialUpgradeRequest {
+  kind: number;
+  type: number;
+  level: number;
+  mode: number;
+}
+
+export interface GetEnchantMaterialsRequest {
+}
+
+/** stat_a/b/c: 0=Str 1=Vit 2=Dex 3=Int 4=Mag 5=Chr — three points removed (1 majestic). */
+export interface MajesticStatRespecRequest {
+  statA: number;
+  statB: number;
+  statC: number;
+}
+
+/** skill_id: 0 = Mining, 1 = Fishing (Olympia SKILLCFG order). */
+export interface SkillGatherRequest {
+  skillId: number;
+}
+
+export interface GetSkillsStateRequest {
+}
+
+/** Upgrade bag/equipped weapon (Xelima) or armor/shield (Merien). Optionally spend Integrity to prevent burn past +7. */
+export interface StoneItemUpgradeRequest {
+  itemUid: bigint;
+  /** When true, consume Stone of Integrity (1112) on fail in the burn zone (+7 and up) instead of destroying the item. */
+  useIntegrityStone: boolean;
+}
+
+/** Toggle Block Level: while blocked, kill exp converts to majestic points instead of levels. */
+export interface SetLevelBlockRequest {
+  blocked: boolean;
+}
+
+/** Spend majestic (gizon) points to upgrade a bag item (angels / DK weapons). */
+export interface MajesticUpgradeRequest {
+  itemUid: bigint;
+}
+
+/** Client confirms Level Set allocations (deltas spent from current LU pool). */
+export interface LevelUpSettingsRequest {
+  str: number;
+  vit: number;
+  dex: number;
+  intel: number;
+  mag: number;
+  chr: number;
+}
+
+/** Client asks to start a timed challenge run (Mode 1 Skills CC / Mode 2–3 PVP Skills). */
+export interface StartTimedChallengeRequest {
+  gameWorldId: string;
+  /** 1 = Skills CC protocol, 2 = PVP Guards (wave kills), 3 = PVP Dark Elves (invis pot + PFA then wave kills). */
+  mode: number;
+}
+
+/** Client aborts the active timed challenge (no reward / no board entry). */
+export interface AbortTimedChallengeRequest {
+  gameWorldId: string;
+}
+
+/** Client asks for today's Mode leaderboard (best times). */
+export interface GetTimedChallengeLeaderboardRequest {
+  mode: number;
+}
+
+/** Per-listing seller access controls (deny rules + optional gates; combinable). */
+export interface AuctionAccessRules {
+  onlyOwnCity: boolean;
+  onlyOwnGuild: boolean;
+  blockedGuildIds: string[];
+  blockedPlayerNames: string[];
+  /** Anti-alt: buyer must be full level (server threshold) and reputation >= 100. */
+  requireFullLevelAndRep100: boolean;
+}
+
+export interface AuctionListing {
+  listingId: string;
+  sellerWallet: string;
+  sellerName: string;
+  sellerCity: string;
+  sellerGuildId: string;
+  mode: AuctionListingMode;
+  itemId: number;
+  itemUid: bigint;
+  quantity: number;
+  itemAttribute: number;
+  itemColor: number;
+  curLifeSpan: number;
+  maxLifeSpan: number;
+  /** Limit buy-now / list price (gold). Also used as reserve context for timed auctions. */
+  listPriceGold: number;
+  minBidGold: number;
+  currentBidGold: number;
+  currentBidderName: string;
+  createdAtMs: bigint;
+  expiresAtMs: bigint;
+  access:
+    | AuctionAccessRules
+    | undefined;
+  /** active | sold | expired | cancelled */
+  status: string;
+  itemName: string;
+}
+
+export interface AuctionBoardBrowseRequest {
+  gameWorldId: string;
+}
+
+export interface AuctionBoardCreateRequest {
+  gameWorldId: string;
+  itemUid: bigint;
+  mode: AuctionListingMode;
+  listPriceGold: number;
+  minBidGold: number;
+  /** Timed auction duration; clamped server-side (1–168 hours). Ignored for limit sells (use default shelf life). */
+  durationHours: number;
+  access: AuctionAccessRules | undefined;
+}
+
+export interface AuctionBoardBidRequest {
+  gameWorldId: string;
+  listingId: string;
+  bidGold: number;
+}
+
+export interface AuctionBoardBuyRequest {
+  gameWorldId: string;
+  listingId: string;
+}
+
+export interface AuctionBoardCancelRequest {
+  gameWorldId: string;
+  listingId: string;
+}
+
+export interface AuctionBoardSettleDebtRequest {
+  gameWorldId: string;
+}
+
+export interface AuctionBoardSnapshot {
+  listings: AuctionListing[];
+  message: string;
+  myDebtGold: number;
+  myDebtDueMs: bigint;
+  myTradeBlocked: boolean;
+  /** Mock vs real: MVP settles gold in bag (item 90); on-chain $HELL wallet not wired. */
+  settlementNote: string;
+}
+
+export interface AuctionBoardActionResult {
+  ok: boolean;
+  message: string;
+  listing?: AuctionListing | undefined;
+  myDebtGold: number;
+  myDebtDueMs: bigint;
+  myTradeBlocked: boolean;
+}
+
+export interface HellMiningStatusRequest {
+  gameWorldId: string;
+}
+
+/** amount 0 = claim all pending. Without HELL_MINT env, server refuses and keeps pending. */
+export interface HellMiningClaimRequest {
+  gameWorldId: string;
+  amount: bigint;
+}
+
+export interface HellMiningStatus {
+  pendingHell: bigint;
+  claimedHell: bigint;
+  remainingPool: bigint;
+  utcDay: string;
+  todayCredits: number;
+  todayMonsterKills: number;
+  todayMonsterCreditGranted: boolean;
+  todayDirectTokens: bigint;
+  todaySettled: boolean;
+  claimAvailable: boolean;
+  /** Utility/mining copy only — never salary/APY/ROI. */
+  note: string;
+}
+
+export interface HellMiningClaimResult {
+  ok: boolean;
+  message: string;
+  pendingHell: bigint;
+  claimedAmount: bigint;
+}
+
+/** Client asks the training arena world to spawn War/Mage chase dummies for a preset id. */
+export interface ApplyTrainingPresetRequest {
+  presetId: string;
+  gameWorldId: string;
+}
+
+/** Start or resume the optional beginner training path. */
+export interface BeginnerPathEnrollRequest {
+}
+
+/** Leave the beginner path with no gameplay penalty (XP/worlds/items unaffected). */
+export interface BeginnerPathAbandonRequest {
+}
+
+/** Credit a talk objective when interacting with a farm training NPC. */
+export interface BeginnerPathTalkRequest {
+  catalogNpcId: number;
+}
+
+/** Credit a soft UI objective (action_id must match BeginnerPath.json uiActionId). */
+export interface BeginnerPathUiActionRequest {
+  actionId: string;
+}
+
+/** Client asks Tom to repair one weapon by item uid (bag or equipped). */
+export interface RepairItemRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  itemUid: bigint;
+}
+
+/** Sell one bag stack for gold (Item Drops / bag quick-sell). Uses Olympia NPC buy-back ≈ list price / 2. */
+export interface SellBagItemRequest {
+  gameWorldId: string;
+  itemUid: bigint;
+}
+
+export interface SellBagItemResult {
+  ok: boolean;
+  message: string;
+  goldGained?: number | undefined;
+  itemUid?: bigint | undefined;
+}
+
+/**
+ * City NPC desk action (Howard guild registry, Kennedy city hall, Gail cathedral, Perry command).
+ * action: open | register_guild_interest | city_brief | heal | bless | donate | crusade_brief
+ */
+export interface CityNpcServiceRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  action: string;
+  /** Gold amount for donate (ignored for other actions). */
+  donateGold?: number | undefined;
+}
+
+/** Authoritative reply for city NPC desk UIs (status + role-specific snapshot fields). */
+export interface CityNpcServiceResult {
+  ok: boolean;
+  message: string;
+  role: string;
+  npcName: string;
+  guildInterestRegistered: boolean;
+  citizenshipSide: string;
+  cityServicesSummary: string;
+  hp: number;
+  maxHp: number;
+  goldSpent: number;
+  crusadeStatus: string;
+  blessed: boolean;
+}
+
+/** Client buys quantity of an item from a shop NPC (validated server-side: proximity + catalog; grants one stack/request). */
+export interface BuyShopItemRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  itemId: number;
+  /** Units to purchase in this request (server clamps to 1..50). */
+  quantity: number;
+}
+
+/** Claim a completed kill/rebirth milestone reward, choosing one item from the milestone's reward list. */
+export interface ClaimKillMilestoneRequest {
+  milestoneId: string;
+  chosenItemId: number;
+}
+
+/** Request a rebirth: requires max level; resets exp/level and increments rebirth count. */
+export interface RebirthRequest {
+}
+
+/** Undo last rebirth: restore pre-rebirth snapshot (L max of previous RB + stats/maj); progress kept via snapshot. */
+export interface RebirthRollbackRequest {
 }
 
 export interface WeatherChangeRequest {
@@ -159,6 +736,8 @@ export interface PlayerItemDropRequested {
 }
 
 export interface PlayerItemPickupRequested {
+  /** Max ground-stack items to take this request (1 = normal click; up to 9 with Ctrl). */
+  maxItems: number;
 }
 
 export interface ChangePlayerAttackTypeRequest {
@@ -281,6 +860,125 @@ export interface LogoutCancelledRequest {
 export interface AuthenticateRequest {
   id: string;
   characterName: string;
+  /** HMAC token from middleware-node after Sign-In With Solana (optional until wallet auth enabled). */
+  authToken: string;
+  /** When set (e.g. "traveler"), overrides Settings.initialMap for this login if the world exists. */
+  preferredInitialWorldId?:
+    | string
+    | undefined;
+  /** Desk slot 0–3 when creating or claiming a character; used for SELECTCHAR ordering. */
+  slotIndex?:
+    | number
+    | undefined;
+  /** Optional create-character appearance (applied only when no persisted character exists). */
+  gender?: PlayerGender | undefined;
+  skinColor?: PlayerSkinColor | undefined;
+  hairStyleIndex?: number | undefined;
+  underwearColorIndex?:
+    | number
+    | undefined;
+  /**
+   * Client play mode: "gm" (sandbox tooling) or "traveler" (real-player). Traveler sessions
+   * use soft combat defaults, limited spells, and a separate save namespace so GM OP kits do not leak.
+   */
+  playerMode?:
+    | string
+    | undefined;
+  /**
+   * Optional create-character point-buy (classic Helbreath: base 10 each, max 14, sum must be 70).
+   * Applied only when no persisted character exists; omitted fields keep server defaults.
+   */
+  str?: number | undefined;
+  vit?: number | undefined;
+  dex?: number | undefined;
+  intel?: number | undefined;
+  mag?: number | undefined;
+  chr?:
+    | number
+    | undefined;
+  /** Optional referral code from ?ref= (first login only; server ignores if already attributed). */
+  referralCode?:
+    | string
+    | undefined;
+  /** Arena Pre-Ready kit JSON (validated against ArenaKitCatalog.json on tournament-arena entry). */
+  arenaKitJson?: string | undefined;
+}
+
+/** Pre-world request: wallet + auth token → up to 4 character slot summaries for the SELECTCHAR desk. */
+export interface CharacterListRequest {
+  id: string;
+  authToken: string;
+  /** Same semantics as AuthenticateRequest.player_mode — traveler lists only traveler saves. */
+  playerMode?: string | undefined;
+}
+
+/**
+ * Pre-world: is this character name free for a new create?
+ * Available = not used by another account (case-insensitive). Same wallet may re-use its own name.
+ */
+export interface CharacterNameCheckRequest {
+  id: string;
+  authToken: string;
+  characterName: string;
+}
+
+export interface CharacterNameCheckResponse {
+  available: boolean;
+  /** Human-readable status for Create Character desk (empty when available). */
+  message: string;
+  characterName: string;
+}
+
+/**
+ * Visible equipment row for SELECTCHAR walk preview (Olympia DrawObject_OnMove_ForMenu).
+ * Slot names match persistence: weapon, shield, armor, hauberk, leggings, boots, helmet, cape, accessory.
+ */
+export interface CharacterEquipPreview {
+  slot: string;
+  itemId: number;
+}
+
+/** One occupied SELECTCHAR desk slot (empty slots are omitted; client fills 0–3). */
+export interface CharacterSlotSummary {
+  slotIndex: number;
+  name: string;
+  level: number;
+  exp: bigint;
+  rebirth: number;
+  hoursPlayed: number;
+  str: number;
+  vit: number;
+  dex: number;
+  intel: number;
+  mag: number;
+  chr: number;
+  /** Appearance for ND_SELECTCHAR layered preview (same enums as AuthenticateRequest). */
+  gender: PlayerGender;
+  skinColor: PlayerSkinColor;
+  hairStyleIndex: number;
+  underwearColorIndex: number;
+  /** Equipped gear for menu walk/rotate preview (from state_json EquippedItems). */
+  equipped: CharacterEquipPreview[];
+  /** Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler). */
+  citizenshipSide: string;
+}
+
+export interface CharacterListResponse {
+  characters: CharacterSlotSummary[];
+  /** Wallet referral code (Name-XXXX). Stable once issued. */
+  referralCode?:
+    | string
+    | undefined;
+  /** True if this wallet already consumed a referral benefit (lifetime once). */
+  referralAlreadyAttributed?:
+    | boolean
+    | undefined;
+  /** Full share URL when server knows public play host. */
+  referralShareUrl?:
+    | string
+    | undefined;
+  /** Open PVP duel invites for any world character name on this wallet (hub inbox seed). */
+  arenaPactInvites: ArenaPactState[];
 }
 
 export interface LogoutRequest {
@@ -306,6 +1004,11 @@ export interface PlayerAttackModeChangeRequest {
   attackMode: boolean;
 }
 
+/** Client toggles Safe Attack (Olympia Home key); only meaningful while Attack/Combat mode is on. */
+export interface PlayerSafeAttackModeChangeRequest {
+  safeAttackMode: boolean;
+}
+
 export interface PlayerMovementStateChanged {
   playerId: bigint;
   runningMode: boolean;
@@ -315,6 +1018,11 @@ export interface PlayerMovementStateChanged {
 export interface PlayerAttackModeChanged {
   playerId: bigint;
   attackMode: boolean;
+}
+
+/** Echo of Safe Attack to the requesting client (not broadcast to observers). */
+export interface PlayerSafeAttackModeChanged {
+  safeAttackMode: boolean;
 }
 
 export interface PlayerDisconnected {
@@ -374,8 +1082,14 @@ export interface GroundItemEntry {
   itemUid: bigint;
   quantity?: number | undefined;
   effectOverrides: ItemEffectEntry[];
-  itemAttribute?: number | undefined;
+  /** Helbreath Olympia m_dwAttribute bitfield (shards/fragments/rep bonus). */
+  itemAttribute?:
+    | number
+    | undefined;
+  /** Olympia item name color tier (1–8); 0 = default. */
   itemColor?: number | undefined;
+  curLifeSpan?: number | undefined;
+  maxLifeSpan?: number | undefined;
 }
 
 export interface GroundStateCell {
@@ -467,7 +1181,810 @@ export interface ServerMessage {
     | { $case: "npcsEnteredRange"; value: NpcsEnteredRange }
     | { $case: "npcsLeftRange"; value: NpcsLeftRange }
     | { $case: "logoutCancelled"; value: LogoutCancelled }
+    | { $case: "progressionState"; value: ProgressionState }
+    | { $case: "progressionUpdated"; value: ProgressionUpdated }
+    | { $case: "monsterKillsUpdated"; value: MonsterKillsUpdated }
+    | { $case: "killMilestoneClaimResult"; value: KillMilestoneClaimResult }
+    | //
+    /** Pre-world response to CharacterListRequest (SELECTCHAR desk metadata). */
+    { $case: "characterListResponse"; value: CharacterListResponse }
+    | { $case: "buyShopItemResult"; value: BuyShopItemResult }
+    | //
+    /** Optional beginner path 1→80 snapshot (join + after enroll/abandon/progress). */
+    { $case: "beginnerPathState"; value: BeginnerPathState }
+    | //
+    /** Training Arena ApplyPreset result (ok + spawned count + status text). */
+    { $case: "trainingPresetApplied"; value: TrainingPresetApplied }
+    | { $case: "warehouseState"; value: WarehouseState }
+    | { $case: "warehouseMutationResult"; value: WarehouseMutationResult }
+    | { $case: "repairItemResult"; value: RepairItemResult }
+    | { $case: "itemLifeSpanUpdated"; value: ItemLifeSpanUpdated }
+    | { $case: "cityNpcServiceResult"; value: CityNpcServiceResult }
+    | //
+    /** Minimal party snapshot after create / join / leave (self + members). */
+    { $case: "partyState"; value: PartyState }
+    | //
+    /** GM ops: current anti-bot tool flags + tunables (reply to get / after set). */
+    { $case: "antiBotToolsState"; value: AntiBotToolsState }
+    | { $case: "setAntiBotToolsResult"; value: SetAntiBotToolsResult }
+    | //
+    /** Timed Challenges Mode 1: live run state / finish / daily board. */
+    { $case: "timedChallengeState"; value: TimedChallengeState }
+    | { $case: "timedChallengeFinished"; value: TimedChallengeFinished }
+    | { $case: "timedChallengeLeaderboard"; value: TimedChallengeLeaderboard }
+    | //
+    /** Trade / auction board MVP: board snapshot + action ack. */
+    { $case: "auctionBoardSnapshot"; value: AuctionBoardSnapshot }
+    | { $case: "auctionBoardActionResult"; value: AuctionBoardActionResult }
+    | //
+    /** Item Drops / bag quick-sell result. */
+    { $case: "sellBagItemResult"; value: SellBagItemResult }
+    | //
+    /** Self only (killer): open-world eligible Enemy Kill — triggers Olympia-style auto screenshot. */
+    { $case: "enemyKillAwarded"; value: EnemyKillAwarded }
+    | //
+    /** Self only: result of LevelUpSettingsRequest (updated stats + LU pool + vitals). */
+    { $case: "levelUpSettingsApplied"; value: LevelUpSettingsApplied }
+    | //
+    /** Self only: Safe Attack mode after PlayerSafeAttackModeChangeRequest (Olympia DEF_NOTIFY_SAFEATTACKMODE). */
+    { $case: "playerSafeAttackModeChanged"; value: PlayerSafeAttackModeChanged }
+    | //
+    /** Play-mine $HELL: pending balance + today's credits (C1). */
+    { $case: "hellMiningStatus"; value: HellMiningStatus }
+    | { $case: "hellMiningClaimResult"; value: HellMiningClaimResult }
+    | //
+    /** Majestic / gizon item upgrade result (angels + DK weapons). */
+    { $case: "majesticUpgradeResult"; value: MajesticUpgradeResult }
+    | //
+    /** Soul / Guild / Unbind seal result + optional inventory row refresh. */
+    { $case: "itemBindResult"; value: ItemBindResult }
+    | { $case: "buyCashShopItemResult"; value: BuyCashShopItemResult }
+    | //
+    /** Pre-world reply to CharacterNameCheckRequest (Create Character live validation). */
+    { $case: "characterNameCheckResponse"; value: CharacterNameCheckResponse }
+    | //
+    /** Result of StoneItemUpgradeRequest (Xelima/Merien). */
+    { $case: "stoneItemUpgradeResult"; value: StoneItemUpgradeResult }
+    | //
+    /** Mining / Fishing gather result (+ skill level after attempt). */
+    { $case: "skillGatherResult"; value: SkillGatherResult }
+    | //
+    /** Full skill mastery list for F8 (0–100; 100 = Super / rare gather unlocks / cNFT-eligible). */
+    { $case: "skillsState"; value: SkillsState }
+    | //
+    /** Olympia enchant materials + result of disenchant/enchant/combine. */
+    { $case: "enchantMaterialsState"; value: EnchantMaterialsState }
+    | { $case: "enchantResult"; value: EnchantResult }
+    | { $case: "majesticStatRespecResult"; value: MajesticStatRespecResult }
+    | { $case: "cicItemMergeResult"; value: CicItemMergeResult }
+    | { $case: "siphonGemUpgradeResult"; value: SiphonGemUpgradeResult }
+    | //
+    /** Olympia DEF_NOTIFY_SPECIALABILITYSTATUS / ENABLED. */
+    { $case: "specialAbilityStatus"; value: SpecialAbilityStatus }
+    | //
+    /** Arena pact duel match snapshot (create / invite / ready / countdown / live). */
+    { $case: "arenaPactState"; value: ArenaPactState }
+    | { $case: "arenaPactListResponse"; value: ArenaPactListResponse }
+    | //
+    /** World / tournament Go-Live ack for cartelera. */
+    { $case: "streamBroadcastState"; value: StreamBroadcastState }
     | undefined;
+}
+
+/** Captain pledges a whitelist asset into the prize bag (drafting/editing). */
+export interface ArenaPactPrizePledgeRequest {
+  matchId: string;
+  /** Whitelist asset id: HELL | USDC | USDT | SOL | CNFT_DROP (no BTC/ETH). */
+  assetId: string;
+  /** Amount in asset base units (SPL decimals / whole HELL). */
+  amount: bigint;
+  /** Optional on-chain instance id for cNFT/NFT. */
+  instanceId?: string | undefined;
+}
+
+/** Captain re-OK after bag edit (or confirm draft → lock). */
+export interface ArenaPactPrizeConfirmRequest {
+  matchId: string;
+}
+
+/** DC / mid-duel: fighter signs LOSS so opponent receives the prize bag immediately. */
+export interface ArenaPactSignLossRequest {
+  matchId: string;
+}
+
+export interface ArenaPactCreateRequest {
+  /** Arena world id (colosseum, arena-duel-s, …). */
+  mapId: string;
+  /** Optional stake asset id from ArenaStakeAllowlist.json (ignored until escrow ships). */
+  stakeAssetId?: string | undefined;
+  stakeAmount?:
+    | bigint
+    | undefined;
+  /** Pre-Ready kit JSON for the host (same shape as AuthenticateRequest.arena_kit_json). */
+  arenaKitJson?:
+    | string
+    | undefined;
+  /** Unix ms when the Ready window opens (date + hour + minute set by host). 0 = open Ready now. */
+  opensAtMs: bigint;
+  /** Ready window length in seconds (default 900 = 15 minutes). All must Ready before countdown. */
+  readyWindowSec: number;
+  /** Publish on chainlords.net cartelera + Discord Events. */
+  isPublic: boolean;
+  /** Optional public title (e.g. "Blood Friday 1v1"). */
+  title?:
+    | string
+    | undefined;
+  /** Host first-person stream (Twitch / YouTube / Discord Go Live URL). */
+  hostStreamUrl?:
+    | string
+    | undefined;
+  /** Optional "global" production cam (wide shot / cast). Side cams = fighter POVs. */
+  globalStreamUrl?: string | undefined;
+}
+
+export interface ArenaPactInviteRequest {
+  matchId: string;
+  /** Invitee character / kit name (online preferred; offline invites still queue for hub inbox). */
+  targetCharacterName: string;
+}
+
+export interface ArenaPactRespondRequest {
+  matchId: string;
+  /** true = accept invite into roster; false = decline. */
+  accept: boolean;
+  arenaKitJson?:
+    | string
+    | undefined;
+  /**
+   * "accept" | "decline" | "honor" — honor accepts but clears stake (play for honor, no $).
+   * When set, overrides accept bool: honor→accept+clear stake, decline→reject, accept→accept with stake.
+   */
+  responseMode?:
+    | string
+    | undefined;
+  /** Invitee POV stream URL when accepting (optional). */
+  streamUrl?: string | undefined;
+}
+
+export interface ArenaPactReadyRequest {
+  matchId: string;
+  ready: boolean;
+  /** Optional kit refresh at ready time. */
+  arenaKitJson?:
+    | string
+    | undefined;
+  /** Client self-report for duel fairness transparency (not used for anti-cheat alone). */
+  reportPingMs?: number | undefined;
+  reportPingVarianceMs?: number | undefined;
+  reportFps?: number | undefined;
+}
+
+export interface ArenaPactCancelRequest {
+  matchId: string;
+}
+
+export interface ArenaPactListRequest {
+  /** Pre-world hub inbox (wallet-auth): list invites for these character/kit names. */
+  id?: string | undefined;
+  authToken?: string | undefined;
+  filterNames: string[];
+}
+
+/**
+ * Pre-countdown tech agreement (captains / all fighters vote).
+ * mode: "as_is" | "equalize_ping" | "fixed_delay"
+ */
+export interface ArenaPactTechProposeRequest {
+  matchId: string;
+  mode: string;
+  /**
+   * equalize_ping: min/max artificial delay ms (floor toward worst ping).
+   * fixed_delay: min ignored; max = fixed delay applied to everyone (clamped).
+   */
+  paramMinMs: number;
+  paramMaxMs: number;
+  /** Soft quality floor (warn / record only in v1). 0 = none. */
+  fpsFloor: number;
+  /** When true, equalizer also delays movement packets (easy on/off for testing). */
+  applyToMovement: boolean;
+}
+
+export interface ArenaPactTechVoteRequest {
+  matchId: string;
+  /** true = accept current proposal; false = reject (clears accepts, stays in tech_agree). */
+  accept: boolean;
+}
+
+/** Heartbeat while on map during tech_sample (server freezes a "photo" after a few seconds). */
+export interface ArenaPactTechReportRequest {
+  matchId: string;
+  pingMs: number;
+  pingVarianceMs: number;
+  fps: number;
+}
+
+export interface ArenaPactFighter {
+  characterName: string;
+  wallet: string;
+  ready: boolean;
+  /** 0 = team A (host side), 1 = team B. */
+  team: number;
+  /** Last self-reported tech snapshot (shown to all fighters for transparency). */
+  pingMs?: number | undefined;
+  pingVarianceMs?: number | undefined;
+  fps?:
+    | number
+    | undefined;
+  /** Accepted current tech proposal (pre-countdown). */
+  techAccepted: boolean;
+  /** True when invited but has not yet Accept / 4Honor / Decline. */
+  invitePending: boolean;
+  /** First-person stream URL for multi-cam Watch (Twitch / YT / Discord). */
+  streamUrl?:
+    | string
+    | undefined;
+  /** twitch | youtube | discord | other */
+  streamPlatform?: string | undefined;
+}
+
+export interface ArenaPactPrizeLine {
+  assetId: string;
+  amount: bigint;
+  captainName: string;
+  team: number;
+  instanceId?: string | undefined;
+}
+
+export interface ArenaPactState {
+  matchId: string;
+  /** scheduled | ready_window | tech_sample | tech_agree | countdown | live | dc_grace | done | cancelled | expired */
+  status: string;
+  mapId: string;
+  hostName: string;
+  fighters: ArenaPactFighter[];
+  /** Seconds left: until open (scheduled), Ready window, countdown, live, or DC grace. */
+  secondsLeft: number;
+  message: string;
+  stakeAssetId?: string | undefined;
+  stakeAmount?:
+    | bigint
+    | undefined;
+  /** Hard cancel / invite TTL (unix ms). */
+  expiresAtMs: bigint;
+  /** When Ready window opens (unix ms). */
+  opensAtMs: bigint;
+  /** When Ready window ends (unix ms); 0 before open. */
+  readyEndsAtMs: bigint;
+  /** Ready window length configured at create (seconds). */
+  readyWindowSec: number;
+  /** Agreed / proposed tech profile (valid in tech_agree and later). */
+  techMode?: string | undefined;
+  techParamMinMs?: number | undefined;
+  techParamMaxMs?: number | undefined;
+  techFpsFloor?: number | undefined;
+  techProposedBy?:
+    | string
+    | undefined;
+  /** Snapshot: worst ping / lowest fps among reporters (server computed). */
+  techWorstPingMs?: number | undefined;
+  techLowestFps?:
+    | number
+    | undefined;
+  /** Equalizer applies to movement when true (toggleable in tech propose). */
+  techApplyToMovement: boolean;
+  /** Private to team captains only (server fills per recipient): your personal input delay ms. */
+  yourDelayMs?:
+    | number
+    | undefined;
+  /** Cartelera / Discord public listing. */
+  isPublic: boolean;
+  title?:
+    | string
+    | undefined;
+  /** Wide / cast "global cam" (Discord-style main share). */
+  globalStreamUrl?: string | undefined;
+  globalStreamPlatform?:
+    | string
+    | undefined;
+  /** Public watch page hint (https://play.chainlords.net/?watch=…). */
+  watchUrl?:
+    | string
+    | undefined;
+  /** Prize bag state: drafting | locked | editing | live_frozen | dc_grace | settled | refunded */
+  prizeBagState?: string | undefined;
+  prizeLines: ArenaPactPrizeLine[];
+  prizePendingConfirm: string[];
+  prizeSummary?:
+    | string
+    | undefined;
+  /** DC grace: who disconnected + unix ms grace ends. */
+  dcCharacterName?: string | undefined;
+  dcGraceEndsAtMs?: bigint | undefined;
+}
+
+export interface ArenaPactListResponse {
+  matches: ArenaPactState[];
+}
+
+export interface CicItemMergeResult {
+  success: boolean;
+  message: string;
+  itemUid: bigint;
+  itemId: number;
+  cicLevel: number;
+  cicStatKind: number;
+  cicStatValue: number;
+}
+
+export interface SiphonGemUpgradeResult {
+  success: boolean;
+  message: string;
+  itemUid: bigint;
+  itemId: number;
+  siphonLevel: number;
+}
+
+export interface EnchantMaterialEntry {
+  isShard: boolean;
+  type: number;
+  level: number;
+  count: number;
+  name: string;
+}
+
+export interface EnchantMaterialsState {
+  materials: EnchantMaterialEntry[];
+}
+
+export interface EnchantResult {
+  success: boolean;
+  message: string;
+  itemUid: bigint;
+  itemId: number;
+  itemAttribute: number;
+  materialType: number;
+  materialLevel: number;
+}
+
+export interface MajesticStatRespecResult {
+  success: boolean;
+  message: string;
+  str: number;
+  vit: number;
+  dex: number;
+  intel: number;
+  mag: number;
+  chr: number;
+  majesticPoints: number;
+  luPoints: number;
+  talentsSummary: string;
+}
+
+export interface SkillGatherResult {
+  ok: boolean;
+  message: string;
+  skillId: number;
+  skillLevel: number;
+  /** 0 when nothing was granted (fail / empty cast). */
+  itemId: number;
+  itemName: string;
+  /** When true, item was a rare 100%-skill loot (stones / zems / mid rings / gear). */
+  rareLoot: boolean;
+}
+
+export interface SkillEntry {
+  skillId: number;
+  name: string;
+  level: number;
+  /** True when level >= 100 — Super Attack / rare gather / skill-cNFT eligible (mint post-test). */
+  maxed: boolean;
+}
+
+export interface SkillsState {
+  skills: SkillEntry[];
+}
+
+export interface StoneItemUpgradeResult {
+  success: boolean;
+  message: string;
+  itemUid: bigint;
+  itemId: number;
+  itemAttribute: number;
+  burned: boolean;
+  downgraded: boolean;
+}
+
+/** currency: 1=stablecoin (USDC/USDT allowlisted mint), 2=pending $HELL credits. */
+export interface BuyCashShopItemRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  skuId: string;
+  quantity: number;
+  currency: number;
+  /** Required for stablecoin: genuine mint address (allowlisted). */
+  stablecoinMint: string;
+  /** Optional SPL transfer signature; required when not Development dev-grant. */
+  paymentTxSignature: string;
+}
+
+export interface BuyCashShopItemResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Item bind_state: 0=unbound, 1=soulbound, 2=guildbound (server authoritative). */
+export interface ItemBindRequest {
+  itemUid: bigint;
+  /** 1 = soul bind, 2 = guild bind, 3 = unbind. */
+  action: number;
+}
+
+export interface ItemBindResult {
+  ok: boolean;
+  message: string;
+  itemUid: bigint;
+  bindState: number;
+  boundGuildId: string;
+}
+
+/** Authoritative live state while a timed challenge run is active (or cleared on abort). */
+export interface TimedChallengeState {
+  active: boolean;
+  mode: number;
+  targetsTotal: number;
+  targetsCompleted: number;
+  startedAtMs: bigint;
+  message: string;
+  /** Client may treat mana as free / refill while true (also unlocks practice spells for traveler). */
+  freeMana: boolean;
+  /** 1-based wave index for PVP Skills modes; omitted/0 when N/A (Mode 1). */
+  waveIndex?: number | undefined;
+  waveCount?:
+    | number
+    | undefined;
+  /** 0 = combat waves, 1 = setup (drink invis pot + cast PFA before first Dark Elf wave). */
+  phase?: number | undefined;
+}
+
+/** Result when a run completes (all targets protocol-cleared) or fails to start. */
+export interface TimedChallengeFinished {
+  ok: boolean;
+  message: string;
+  mode: number;
+  elapsedMs: number;
+  hardThresholdMet: boolean;
+  expBoostGranted: boolean;
+  stoneGranted: boolean;
+  isDailyBest: boolean;
+  dailyRank: number;
+}
+
+export interface TimedChallengeLeaderboardEntry {
+  characterName: string;
+  /** Truncated wallet for display (anti-sybil key stays server-side). */
+  walletSuffix: string;
+  elapsedMs: number;
+}
+
+export interface TimedChallengeLeaderboard {
+  mode: number;
+  utcDay: string;
+  entries: TimedChallengeLeaderboardEntry[];
+  yourBestMs?: number | undefined;
+}
+
+/** GM client asks for the current anti-bot / AFK / tournament-AI tool flags. */
+export interface GetAntiBotToolsRequest {
+}
+
+/** GM client asks to replace all tool flags (partial updates are not supported — send full snapshot). */
+export interface SetAntiBotToolsRequest {
+  flags: AntiBotToolsFlags | undefined;
+}
+
+/** Toggleable anti-bot / capacity / tournament-AI controls (docs/ANTIBOT-AIRDROP.md). */
+export interface AntiBotToolsFlags {
+  /** Prefer proven guild members near capacity. */
+  guildPriorityIngress: boolean;
+  /** Overflow / queue / delayed-claim path for ultra-new accounts. */
+  newPlayerSegment: boolean;
+  /** Passport / score gate on Helvet / airdrop claim (middleware stub). */
+  claimTimeSybilGate: boolean;
+  /** Max concurrent sessions / action-rate ceilings / wallet clustering hooks. */
+  industrialMultiBoxLimits: boolean;
+  /** When true, long AFK on map is allowed (product default). When false, warn/kick after idle. */
+  afkOnMapAllowed: boolean;
+  /** Log cast/move anomaly signals in rated / coliseum arenas. */
+  tournamentInhumanPlayTelemetry: boolean;
+  /** Require stream / identity stubs before prize (flag + UI note only). */
+  tournamentHighStakesMode: boolean;
+  /** Optional worker-friendly XP drip while AFK / soft offline. */
+  softOfflineProgression: boolean;
+}
+
+/** Authoritative anti-bot tools snapshot for the GM control panel. */
+export interface AntiBotToolsState {
+  flags: AntiBotToolsFlags | undefined;
+  maxConcurrentSessions: number;
+  actionRateCeilingPerMin: number;
+  afkWarnAfterMs: number;
+  afkKickAfterMs: number;
+  updatedBy: string;
+  updatedAtMs: bigint;
+}
+
+/** Result of SetAntiBotToolsRequest (ok + echo state, or rejection reason). */
+export interface SetAntiBotToolsResult {
+  ok: boolean;
+  message: string;
+  state: AntiBotToolsState | undefined;
+}
+
+/** Create a new party (solo leader). Credits beginner-path create_or_join_party when active. */
+export interface CreatePartyRequest {
+}
+
+/** Join an existing party by short code from the leader's Party panel. */
+export interface JoinPartyRequest {
+  partyCode: string;
+}
+
+/** Leave the current party (or dismiss if last member). */
+export interface LeavePartyRequest {
+}
+
+/** One party member with vitals for the F5 Party panel (Olympia parity P2.9). */
+export interface PartyMember {
+  name: string;
+  hp: number;
+  maxHp: number;
+  isLeader: boolean;
+}
+
+/** Authoritative party membership for the requesting player (and members on membership change). */
+export interface PartyState {
+  inParty: boolean;
+  partyCode: string;
+  memberNames: string[];
+  isLeader: boolean;
+  message: string;
+  members: PartyMember[];
+}
+
+/** Result of ApplyTrainingPresetRequest (spawn/despawn chase dummies in world `training`). */
+export interface TrainingPresetApplied {
+  ok: boolean;
+  message: string;
+  presetId: string;
+  spawnedCount: number;
+}
+
+/** Full beginner-path snapshot for the Quest panel and UI hints. */
+export interface BeginnerPathState {
+  enrolled: boolean;
+  abandoned: boolean;
+  activeQuestId?: string | undefined;
+  activeQuestTitle: string;
+  activeQuestHint: string;
+  progress: number;
+  required: number;
+  objectiveKind: string;
+  completedQuestIds: string[];
+  canEnroll: boolean;
+  statusMessage: string;
+  /** Next stub quest title when live path is exhausted (empty if none). */
+  nextStubTitle: string;
+  /** When objective_kind is ui_action, the expected client action id. */
+  uiActionId: string;
+}
+
+/** Result of BuyShopItemRequest (ok + human-readable status for the shop UI). */
+export interface BuyShopItemResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Result of RepairItemRequest at Tom the blacksmith. */
+export interface RepairItemResult {
+  ok: boolean;
+  message: string;
+  itemUid?: bigint | undefined;
+  curLifeSpan?: number | undefined;
+  maxLifeSpan?: number | undefined;
+  pricePaid?: number | undefined;
+}
+
+/** Self-only durability update after combat wear (or similar). */
+export interface ItemLifeSpanUpdated {
+  itemUid: bigint;
+  curLifeSpan: number;
+  maxLifeSpan: number;
+}
+
+/** Client asks William for the current warehouse snapshot (must be near catalog npc 4). */
+export interface OpenWarehouseRequest {
+  gameWorldId: string;
+  npcId: bigint;
+}
+
+/** Move one bag stack (full quantity) into warehouse storage. */
+export interface WarehouseDepositRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  itemUid: bigint;
+}
+
+/** Move one warehouse stack (full quantity) back into the bag. */
+export interface WarehouseWithdrawRequest {
+  gameWorldId: string;
+  npcId: bigint;
+  itemUid: bigint;
+}
+
+/** Authoritative warehouse contents after open / deposit / withdraw. */
+export interface WarehouseState {
+  items: InventoryItemEntry[];
+  maxSlots: number;
+  message: string;
+}
+
+/** Result of a warehouse deposit/withdraw that failed before state could change (success uses WarehouseState). */
+export interface WarehouseMutationResult {
+  ok: boolean;
+  message: string;
+}
+
+/** One lifetime kill counter row keyed by catalog monster id. */
+export interface MonsterKillEntry {
+  monsterId: number;
+  monsterName: string;
+  kills: bigint;
+  /** Olympia specialty: level from kills only (150*L^2 or species base_kills*L^2). */
+  specialtyLevel: number;
+  /** specialty_level + stake bonus levels (floor(staked/100k)*10). */
+  effectiveLevel: number;
+  /** Kills required to reach specialty_level+1 (from kill base only). */
+  nextKills: bigint;
+  /** Wallet stake contribution to effective_level. */
+  stakeBonusLevels: number;
+  /** Compact bonus summary at effective_level (e.g. "+1 dmg, -1 taken, +11.4% drop"). */
+  bonusSummary: string;
+}
+
+/** Milestone directory row plus this character's progress and claim state. */
+export interface KillMilestoneEntry {
+  milestoneId: string;
+  /** 0 = monster kill count milestone; 1 = rebirth milestone. */
+  kind: number;
+  monsterId?: number | undefined;
+  monsterName?: string | undefined;
+  required: bigint;
+  progress: bigint;
+  claimed: boolean;
+  rewardItemIds: number[];
+}
+
+/** Full progression snapshot sent on join (after InitialState). */
+export interface ProgressionState {
+  exp: bigint;
+  level: number;
+  rebirth: number;
+  expForNextLevel: bigint;
+  maxLevel: number;
+  maxRebirth: number;
+  monsterKills: MonsterKillEntry[];
+  milestones: KillMilestoneEntry[];
+  /** Olympia unspent level-up attribute points: level*3 - (sumStats-70) - 3. */
+  luPoints: number;
+  mp: number;
+  maxMp: number;
+  sp: number;
+  maxSp: number;
+  /**
+   * Cumulative exp required to reach the current level (0 at level 1). HUD bar uses
+   * (exp - exp_for_current_level) / (exp_for_next_level - exp_for_current_level).
+   */
+  expForCurrentLevel: bigint;
+  /** Olympia majestic / gizon points (angel + DK upgrades). */
+  majesticPoints: number;
+  /** Chain Lords Block Level: when true, new exp → majestic instead of leveling. */
+  levelBlocked: boolean;
+  /** Mock / ledger $HELL staked on this wallet (utility; no yield). Specialty uses floor(staked/100k)*10. */
+  stakedHell: bigint;
+  /** Olympia m_iHungerStatus 0–100 (100 = full). */
+  hunger: number;
+  /** Lifetime open-world Enemy Kill (PvP) count for this wallet (PvpAcademy ledger). */
+  enemyKills: number;
+  /** Super Attack charges on join (same fields as ProgressionUpdated). */
+  superAttackLeft: number;
+  maxSuperAttack: number;
+  superAttackArmed: boolean;
+}
+
+/** Incremental exp/level/rebirth change for the local player. */
+export interface ProgressionUpdated {
+  exp: bigint;
+  level: number;
+  rebirth: number;
+  expForNextLevel: bigint;
+  leveledUp: boolean;
+  /** Olympia unspent LU points after this update. */
+  luPoints: number;
+  /** Authoritative vitals after level change (Olympia HP/MP/SP formulas). */
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  sp: number;
+  maxSp: number;
+  /** Cumulative exp required to reach the current level (0 at level 1). */
+  expForCurrentLevel: bigint;
+  /** Olympia majestic / gizon points (angel + DK upgrades). */
+  majesticPoints: number;
+  /** Chain Lords Block Level flag after this update. */
+  levelBlocked: boolean;
+  /** Olympia m_iHungerStatus 0–100 (100 = full). */
+  hunger: number;
+  /** Olympia m_iSuperAttackLeft — critical / super-attack charges remaining. */
+  superAttackLeft: number;
+  /** Cap = Level/10 (min 1). */
+  maxSuperAttack: number;
+  /** True when player armed Super Attack (crit will fire on next melee hits). */
+  superAttackArmed: boolean;
+}
+
+/** Result of a majestic (gizon) item upgrade attempt. */
+export interface MajesticUpgradeResult {
+  success: boolean;
+  error?: string | undefined;
+  majesticPoints: number;
+  itemUid: bigint;
+  itemId: number;
+  itemAttribute: number;
+  /** True when DK form transformed (e.g. Sang Ah Flameberge → Dark Knight Flameberge). */
+  itemTransformed: boolean;
+}
+
+/** Result of applying Level Set (F5) attribute point spends. */
+export interface LevelUpSettingsApplied {
+  success: boolean;
+  error?: string | undefined;
+  level: number;
+  str: number;
+  vit: number;
+  dex: number;
+  intel: number;
+  mag: number;
+  chr: number;
+  luPoints: number;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  sp: number;
+  maxSp: number;
+}
+
+/** Incremental kill counter change for the local player after a credited monster death. */
+export interface MonsterKillsUpdated {
+  monsterId: number;
+  monsterName: string;
+  kills: bigint;
+  totalKills: bigint;
+  /** Specialty snapshot for this species after the kill (same fields as MonsterKillEntry). */
+  specialtyLevel: number;
+  effectiveLevel: number;
+  nextKills: bigint;
+  stakeBonusLevels: number;
+  bonusSummary: string;
+}
+
+/** Result of a ClaimKillMilestoneRequest. */
+export interface KillMilestoneClaimResult {
+  milestoneId: string;
+  success: boolean;
+  grantedItemId?: number | undefined;
+  error?: string | undefined;
 }
 
 export interface TemporaryEffectApplied {
@@ -524,6 +2041,29 @@ export interface InventoryItemEntry {
   bagZIndex?: number | undefined;
   itemAttribute?: number | undefined;
   itemColor?: number | undefined;
+  curLifeSpan?: number | undefined;
+  maxLifeSpan?:
+    | number
+    | undefined;
+  /** 0=unbound, 1=soulbound, 2=guildbound. */
+  bindState?: number | undefined;
+  boundGuildId?:
+    | string
+    | undefined;
+  /** CIC craft tier 0=none, 3–7 = CIC3…CIC7 (capes/shields/armor merge). */
+  cicLevel?:
+    | number
+    | undefined;
+  /** 0=none, 1=HP, 2=SP, 3=MP (must match when merging). */
+  cicStatKind?:
+    | number
+    | undefined;
+  /** e.g. 35 for "HP35" — merge result uses min of both donors. */
+  cicStatValue?:
+    | number
+    | undefined;
+  /** Siphon gem power level 0–15 (Mana/HP Siphoning gems). */
+  siphonLevel?: number | undefined;
 }
 
 export interface EquippedInventoryItemEntry {
@@ -629,6 +2169,23 @@ export interface InitialState {
   hairStyleIndex: number;
   underwearColorIndex: number;
   npcDirectory: NpcDirectoryEntry[];
+  /** Classic STR/VIT/DEX/INT/MAG/CHR (create-char point-buy + persistence). */
+  str: number;
+  vit: number;
+  dex: number;
+  intel: number;
+  mag: number;
+  chr: number;
+  /** Olympia unspent LU points + MP/SP pools (HP already above). */
+  luPoints: number;
+  mp: number;
+  maxMp: number;
+  sp: number;
+  maxSp: number;
+  /** Olympia Safe Attack (Home): when true with attack_mode, PvP hits non-enemies are rejected. */
+  safeAttackMode: boolean;
+  /** Citizenship for hover affiliation / FOE: "aresden" | "elvine" | "traveler" (empty = traveler). */
+  citizenshipSide: string;
 }
 
 export interface ItemAddedToBag {
@@ -717,10 +2274,27 @@ export interface PlayerPickupPerformed {
   animationTimeMs: number;
 }
 
+/** Self-only to the killer when an open-world PvP kill qualifies as an Enemy Kill (level rule). */
+export interface EnemyKillAwarded {
+  victimPlayerId: bigint;
+  victimName: string;
+  victimLevel: number;
+  killerLevel: number;
+  /** Snapshot rank of the victim on the opposing city's killer ladder (1-based); omit when unknown. */
+  victimCityKillerRank?: number | undefined;
+  rarity: EkScreenshotRarity;
+  mapName: string;
+  /** Killer's lifetime EK count after this award (PvpAcademy ledger). */
+  killerEkCount: number;
+}
+
 export interface PlayerDied {
   playerId: bigint;
   x: number;
   y: number;
+  /** Set when another player landed the killing blow (PvP kill attribution for death screen and ledger). */
+  killerPlayerId?: bigint | undefined;
+  killerName?: string | undefined;
 }
 
 export interface PlayerResurrected {
@@ -917,12 +2491,29 @@ export interface SendMessage {
 
 export interface ChatMessageSendRequest {
   message: string;
+  /** Speaker's preferred chat language tag for Holy Spirit-style display (e.g. eng, arg, bra). */
+  sourceLanguageTag?:
+    | string
+    | undefined;
+  /** Channel tab for this line; omitted/unspecified treated as Global. */
+  channel?:
+    | ChatChannel
+    | undefined;
+  /** Required when channel is Whisper — destination character name (case-insensitive match). */
+  whisperTargetCharacterName?: string | undefined;
 }
 
 export interface ChatMessageReceived {
   senderCharacterName: string;
   timestampMs: bigint;
   message: string;
+  /** Echo of the sender's source_language_tag when provided on send. */
+  sourceLanguageTag?: string | undefined;
+  channel?:
+    | ChatChannel
+    | undefined;
+  /** Present on whisper lines so UI can show "to X" / filter Whisper tab. */
+  whisperTargetCharacterName?: string | undefined;
 }
 
 export interface PlayerEnteredRange {
@@ -944,7 +2535,11 @@ export interface PlayerEnteredRange {
   characterName: string;
   activeTemporaryEffects: TemporaryEffectType[];
   attackSpeedMs?: number | undefined;
-  castSpeedMs?: number | undefined;
+  castSpeedMs?:
+    | number
+    | undefined;
+  /** Citizenship for DrawObjectName-style hover: "aresden" | "elvine" | "traveler". */
+  citizenshipSide: string;
 }
 
 export interface MonsterInRange {
@@ -1202,6 +2797,201 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "killAllNpcsRequest":
         KillAllNpcsRequest.encode(message.payload.value, writer.uint32(330).fork()).join();
+        break;
+      case "claimKillMilestoneRequest":
+        ClaimKillMilestoneRequest.encode(message.payload.value, writer.uint32(338).fork()).join();
+        break;
+      case "rebirthRequest":
+        RebirthRequest.encode(message.payload.value, writer.uint32(346).fork()).join();
+        break;
+      case "rebirthRollbackRequest":
+        RebirthRollbackRequest.encode(message.payload.value, writer.uint32(826).fork()).join();
+        break;
+      case "characterListRequest":
+        CharacterListRequest.encode(message.payload.value, writer.uint32(354).fork()).join();
+        break;
+      case "buyShopItemRequest":
+        BuyShopItemRequest.encode(message.payload.value, writer.uint32(362).fork()).join();
+        break;
+      case "beginnerPathEnrollRequest":
+        BeginnerPathEnrollRequest.encode(message.payload.value, writer.uint32(370).fork()).join();
+        break;
+      case "beginnerPathAbandonRequest":
+        BeginnerPathAbandonRequest.encode(message.payload.value, writer.uint32(378).fork()).join();
+        break;
+      case "beginnerPathTalkRequest":
+        BeginnerPathTalkRequest.encode(message.payload.value, writer.uint32(386).fork()).join();
+        break;
+      case "applyTrainingPresetRequest":
+        ApplyTrainingPresetRequest.encode(message.payload.value, writer.uint32(394).fork()).join();
+        break;
+      case "beginnerPathUiActionRequest":
+        BeginnerPathUiActionRequest.encode(message.payload.value, writer.uint32(402).fork()).join();
+        break;
+      case "openWarehouseRequest":
+        OpenWarehouseRequest.encode(message.payload.value, writer.uint32(410).fork()).join();
+        break;
+      case "warehouseDepositRequest":
+        WarehouseDepositRequest.encode(message.payload.value, writer.uint32(418).fork()).join();
+        break;
+      case "warehouseWithdrawRequest":
+        WarehouseWithdrawRequest.encode(message.payload.value, writer.uint32(426).fork()).join();
+        break;
+      case "repairItemRequest":
+        RepairItemRequest.encode(message.payload.value, writer.uint32(434).fork()).join();
+        break;
+      case "createPartyRequest":
+        CreatePartyRequest.encode(message.payload.value, writer.uint32(442).fork()).join();
+        break;
+      case "joinPartyRequest":
+        JoinPartyRequest.encode(message.payload.value, writer.uint32(450).fork()).join();
+        break;
+      case "leavePartyRequest":
+        LeavePartyRequest.encode(message.payload.value, writer.uint32(458).fork()).join();
+        break;
+      case "cityNpcServiceRequest":
+        CityNpcServiceRequest.encode(message.payload.value, writer.uint32(466).fork()).join();
+        break;
+      case "getAntiBotToolsRequest":
+        GetAntiBotToolsRequest.encode(message.payload.value, writer.uint32(474).fork()).join();
+        break;
+      case "setAntiBotToolsRequest":
+        SetAntiBotToolsRequest.encode(message.payload.value, writer.uint32(482).fork()).join();
+        break;
+      case "startTimedChallengeRequest":
+        StartTimedChallengeRequest.encode(message.payload.value, writer.uint32(490).fork()).join();
+        break;
+      case "abortTimedChallengeRequest":
+        AbortTimedChallengeRequest.encode(message.payload.value, writer.uint32(498).fork()).join();
+        break;
+      case "getTimedChallengeLeaderboardRequest":
+        GetTimedChallengeLeaderboardRequest.encode(message.payload.value, writer.uint32(506).fork()).join();
+        break;
+      case "auctionBoardBrowseRequest":
+        AuctionBoardBrowseRequest.encode(message.payload.value, writer.uint32(514).fork()).join();
+        break;
+      case "auctionBoardCreateRequest":
+        AuctionBoardCreateRequest.encode(message.payload.value, writer.uint32(522).fork()).join();
+        break;
+      case "auctionBoardBidRequest":
+        AuctionBoardBidRequest.encode(message.payload.value, writer.uint32(530).fork()).join();
+        break;
+      case "auctionBoardBuyRequest":
+        AuctionBoardBuyRequest.encode(message.payload.value, writer.uint32(538).fork()).join();
+        break;
+      case "auctionBoardCancelRequest":
+        AuctionBoardCancelRequest.encode(message.payload.value, writer.uint32(546).fork()).join();
+        break;
+      case "auctionBoardSettleDebtRequest":
+        AuctionBoardSettleDebtRequest.encode(message.payload.value, writer.uint32(554).fork()).join();
+        break;
+      case "sellBagItemRequest":
+        SellBagItemRequest.encode(message.payload.value, writer.uint32(562).fork()).join();
+        break;
+      case "levelUpSettingsRequest":
+        LevelUpSettingsRequest.encode(message.payload.value, writer.uint32(570).fork()).join();
+        break;
+      case "playerSafeAttackModeChangeRequest":
+        PlayerSafeAttackModeChangeRequest.encode(message.payload.value, writer.uint32(578).fork()).join();
+        break;
+      case "hellMiningStatusRequest":
+        HellMiningStatusRequest.encode(message.payload.value, writer.uint32(586).fork()).join();
+        break;
+      case "hellMiningClaimRequest":
+        HellMiningClaimRequest.encode(message.payload.value, writer.uint32(594).fork()).join();
+        break;
+      case "majesticUpgradeRequest":
+        MajesticUpgradeRequest.encode(message.payload.value, writer.uint32(602).fork()).join();
+        break;
+      case "itemBindRequest":
+        ItemBindRequest.encode(message.payload.value, writer.uint32(610).fork()).join();
+        break;
+      case "buyCashShopItemRequest":
+        BuyCashShopItemRequest.encode(message.payload.value, writer.uint32(618).fork()).join();
+        break;
+      case "characterNameCheckRequest":
+        CharacterNameCheckRequest.encode(message.payload.value, writer.uint32(626).fork()).join();
+        break;
+      case "setLevelBlockRequest":
+        SetLevelBlockRequest.encode(message.payload.value, writer.uint32(634).fork()).join();
+        break;
+      case "stoneItemUpgradeRequest":
+        StoneItemUpgradeRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
+        break;
+      case "skillGatherRequest":
+        SkillGatherRequest.encode(message.payload.value, writer.uint32(650).fork()).join();
+        break;
+      case "getSkillsStateRequest":
+        GetSkillsStateRequest.encode(message.payload.value, writer.uint32(658).fork()).join();
+        break;
+      case "itemDisenchantRequest":
+        ItemDisenchantRequest.encode(message.payload.value, writer.uint32(666).fork()).join();
+        break;
+      case "itemEnchantRequest":
+        ItemEnchantRequest.encode(message.payload.value, writer.uint32(674).fork()).join();
+        break;
+      case "enchantMaterialUpgradeRequest":
+        EnchantMaterialUpgradeRequest.encode(message.payload.value, writer.uint32(682).fork()).join();
+        break;
+      case "getEnchantMaterialsRequest":
+        GetEnchantMaterialsRequest.encode(message.payload.value, writer.uint32(690).fork()).join();
+        break;
+      case "majesticStatRespecRequest":
+        MajesticStatRespecRequest.encode(message.payload.value, writer.uint32(698).fork()).join();
+        break;
+      case "cicItemMergeRequest":
+        CicItemMergeRequest.encode(message.payload.value, writer.uint32(706).fork()).join();
+        break;
+      case "siphonGemUpgradeRequest":
+        SiphonGemUpgradeRequest.encode(message.payload.value, writer.uint32(714).fork()).join();
+        break;
+      case "activateSpecialAbilityRequest":
+        ActivateSpecialAbilityRequest.encode(message.payload.value, writer.uint32(722).fork()).join();
+        break;
+      case "setSuperAttackArmedRequest":
+        SetSuperAttackArmedRequest.encode(message.payload.value, writer.uint32(730).fork()).join();
+        break;
+      case "arenaPactCreateRequest":
+        ArenaPactCreateRequest.encode(message.payload.value, writer.uint32(738).fork()).join();
+        break;
+      case "arenaPactInviteRequest":
+        ArenaPactInviteRequest.encode(message.payload.value, writer.uint32(746).fork()).join();
+        break;
+      case "arenaPactRespondRequest":
+        ArenaPactRespondRequest.encode(message.payload.value, writer.uint32(754).fork()).join();
+        break;
+      case "arenaPactReadyRequest":
+        ArenaPactReadyRequest.encode(message.payload.value, writer.uint32(762).fork()).join();
+        break;
+      case "arenaPactCancelRequest":
+        ArenaPactCancelRequest.encode(message.payload.value, writer.uint32(770).fork()).join();
+        break;
+      case "arenaPactListRequest":
+        ArenaPactListRequest.encode(message.payload.value, writer.uint32(778).fork()).join();
+        break;
+      case "arenaPactTechProposeRequest":
+        ArenaPactTechProposeRequest.encode(message.payload.value, writer.uint32(786).fork()).join();
+        break;
+      case "arenaPactTechVoteRequest":
+        ArenaPactTechVoteRequest.encode(message.payload.value, writer.uint32(794).fork()).join();
+        break;
+      case "arenaPactTechReportRequest":
+        ArenaPactTechReportRequest.encode(message.payload.value, writer.uint32(802).fork()).join();
+        break;
+      case "arenaPactSetStreamRequest":
+        ArenaPactSetStreamRequest.encode(message.payload.value, writer.uint32(810).fork()).join();
+        break;
+      case "streamBroadcastRequest":
+        StreamBroadcastRequest.encode(message.payload.value, writer.uint32(818).fork()).join();
+        break;
+      case "arenaPactPrizePledgeRequest":
+        ArenaPactPrizePledgeRequest.encode(message.payload.value, writer.uint32(834).fork()).join();
+        break;
+      case "arenaPactPrizeConfirmRequest":
+        ArenaPactPrizeConfirmRequest.encode(message.payload.value, writer.uint32(842).fork()).join();
+        break;
+      case "arenaPactSignLossRequest":
+        ArenaPactSignLossRequest.encode(message.payload.value, writer.uint32(850).fork()).join();
         break;
     }
     return writer;
@@ -1632,6 +3422,691 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = { $case: "killAllNpcsRequest", value: KillAllNpcsRequest.decode(reader, reader.uint32()) };
           continue;
         }
+        case 42: {
+          if (tag !== 338) {
+            break;
+          }
+
+          message.payload = {
+            $case: "claimKillMilestoneRequest",
+            value: ClaimKillMilestoneRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 43: {
+          if (tag !== 346) {
+            break;
+          }
+
+          message.payload = { $case: "rebirthRequest", value: RebirthRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 103: {
+          if (tag !== 826) {
+            break;
+          }
+
+          message.payload = {
+            $case: "rebirthRollbackRequest",
+            value: RebirthRollbackRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 44: {
+          if (tag !== 354) {
+            break;
+          }
+
+          message.payload = {
+            $case: "characterListRequest",
+            value: CharacterListRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 45: {
+          if (tag !== 362) {
+            break;
+          }
+
+          message.payload = { $case: "buyShopItemRequest", value: BuyShopItemRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 46: {
+          if (tag !== 370) {
+            break;
+          }
+
+          message.payload = {
+            $case: "beginnerPathEnrollRequest",
+            value: BeginnerPathEnrollRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 47: {
+          if (tag !== 378) {
+            break;
+          }
+
+          message.payload = {
+            $case: "beginnerPathAbandonRequest",
+            value: BeginnerPathAbandonRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 48: {
+          if (tag !== 386) {
+            break;
+          }
+
+          message.payload = {
+            $case: "beginnerPathTalkRequest",
+            value: BeginnerPathTalkRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 49: {
+          if (tag !== 394) {
+            break;
+          }
+
+          message.payload = {
+            $case: "applyTrainingPresetRequest",
+            value: ApplyTrainingPresetRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 50: {
+          if (tag !== 402) {
+            break;
+          }
+
+          message.payload = {
+            $case: "beginnerPathUiActionRequest",
+            value: BeginnerPathUiActionRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 51: {
+          if (tag !== 410) {
+            break;
+          }
+
+          message.payload = {
+            $case: "openWarehouseRequest",
+            value: OpenWarehouseRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 52: {
+          if (tag !== 418) {
+            break;
+          }
+
+          message.payload = {
+            $case: "warehouseDepositRequest",
+            value: WarehouseDepositRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 53: {
+          if (tag !== 426) {
+            break;
+          }
+
+          message.payload = {
+            $case: "warehouseWithdrawRequest",
+            value: WarehouseWithdrawRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 54: {
+          if (tag !== 434) {
+            break;
+          }
+
+          message.payload = { $case: "repairItemRequest", value: RepairItemRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 55: {
+          if (tag !== 442) {
+            break;
+          }
+
+          message.payload = { $case: "createPartyRequest", value: CreatePartyRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 56: {
+          if (tag !== 450) {
+            break;
+          }
+
+          message.payload = { $case: "joinPartyRequest", value: JoinPartyRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 57: {
+          if (tag !== 458) {
+            break;
+          }
+
+          message.payload = { $case: "leavePartyRequest", value: LeavePartyRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 58: {
+          if (tag !== 466) {
+            break;
+          }
+
+          message.payload = {
+            $case: "cityNpcServiceRequest",
+            value: CityNpcServiceRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 59: {
+          if (tag !== 474) {
+            break;
+          }
+
+          message.payload = {
+            $case: "getAntiBotToolsRequest",
+            value: GetAntiBotToolsRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 60: {
+          if (tag !== 482) {
+            break;
+          }
+
+          message.payload = {
+            $case: "setAntiBotToolsRequest",
+            value: SetAntiBotToolsRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 61: {
+          if (tag !== 490) {
+            break;
+          }
+
+          message.payload = {
+            $case: "startTimedChallengeRequest",
+            value: StartTimedChallengeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 62: {
+          if (tag !== 498) {
+            break;
+          }
+
+          message.payload = {
+            $case: "abortTimedChallengeRequest",
+            value: AbortTimedChallengeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 63: {
+          if (tag !== 506) {
+            break;
+          }
+
+          message.payload = {
+            $case: "getTimedChallengeLeaderboardRequest",
+            value: GetTimedChallengeLeaderboardRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 64: {
+          if (tag !== 514) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardBrowseRequest",
+            value: AuctionBoardBrowseRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 65: {
+          if (tag !== 522) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardCreateRequest",
+            value: AuctionBoardCreateRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 66: {
+          if (tag !== 530) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardBidRequest",
+            value: AuctionBoardBidRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 67: {
+          if (tag !== 538) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardBuyRequest",
+            value: AuctionBoardBuyRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 68: {
+          if (tag !== 546) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardCancelRequest",
+            value: AuctionBoardCancelRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 69: {
+          if (tag !== 554) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardSettleDebtRequest",
+            value: AuctionBoardSettleDebtRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 70: {
+          if (tag !== 562) {
+            break;
+          }
+
+          message.payload = { $case: "sellBagItemRequest", value: SellBagItemRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 71: {
+          if (tag !== 570) {
+            break;
+          }
+
+          message.payload = {
+            $case: "levelUpSettingsRequest",
+            value: LevelUpSettingsRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 72: {
+          if (tag !== 578) {
+            break;
+          }
+
+          message.payload = {
+            $case: "playerSafeAttackModeChangeRequest",
+            value: PlayerSafeAttackModeChangeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 73: {
+          if (tag !== 586) {
+            break;
+          }
+
+          message.payload = {
+            $case: "hellMiningStatusRequest",
+            value: HellMiningStatusRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 74: {
+          if (tag !== 594) {
+            break;
+          }
+
+          message.payload = {
+            $case: "hellMiningClaimRequest",
+            value: HellMiningClaimRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 75: {
+          if (tag !== 602) {
+            break;
+          }
+
+          message.payload = {
+            $case: "majesticUpgradeRequest",
+            value: MajesticUpgradeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 76: {
+          if (tag !== 610) {
+            break;
+          }
+
+          message.payload = { $case: "itemBindRequest", value: ItemBindRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 77: {
+          if (tag !== 618) {
+            break;
+          }
+
+          message.payload = {
+            $case: "buyCashShopItemRequest",
+            value: BuyCashShopItemRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 78: {
+          if (tag !== 626) {
+            break;
+          }
+
+          message.payload = {
+            $case: "characterNameCheckRequest",
+            value: CharacterNameCheckRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 79: {
+          if (tag !== 634) {
+            break;
+          }
+
+          message.payload = {
+            $case: "setLevelBlockRequest",
+            value: SetLevelBlockRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 80: {
+          if (tag !== 642) {
+            break;
+          }
+
+          message.payload = {
+            $case: "stoneItemUpgradeRequest",
+            value: StoneItemUpgradeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 81: {
+          if (tag !== 650) {
+            break;
+          }
+
+          message.payload = { $case: "skillGatherRequest", value: SkillGatherRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 82: {
+          if (tag !== 658) {
+            break;
+          }
+
+          message.payload = {
+            $case: "getSkillsStateRequest",
+            value: GetSkillsStateRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 83: {
+          if (tag !== 666) {
+            break;
+          }
+
+          message.payload = {
+            $case: "itemDisenchantRequest",
+            value: ItemDisenchantRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 84: {
+          if (tag !== 674) {
+            break;
+          }
+
+          message.payload = { $case: "itemEnchantRequest", value: ItemEnchantRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 85: {
+          if (tag !== 682) {
+            break;
+          }
+
+          message.payload = {
+            $case: "enchantMaterialUpgradeRequest",
+            value: EnchantMaterialUpgradeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 86: {
+          if (tag !== 690) {
+            break;
+          }
+
+          message.payload = {
+            $case: "getEnchantMaterialsRequest",
+            value: GetEnchantMaterialsRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 87: {
+          if (tag !== 698) {
+            break;
+          }
+
+          message.payload = {
+            $case: "majesticStatRespecRequest",
+            value: MajesticStatRespecRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 88: {
+          if (tag !== 706) {
+            break;
+          }
+
+          message.payload = {
+            $case: "cicItemMergeRequest",
+            value: CicItemMergeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 89: {
+          if (tag !== 714) {
+            break;
+          }
+
+          message.payload = {
+            $case: "siphonGemUpgradeRequest",
+            value: SiphonGemUpgradeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 90: {
+          if (tag !== 722) {
+            break;
+          }
+
+          message.payload = {
+            $case: "activateSpecialAbilityRequest",
+            value: ActivateSpecialAbilityRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 91: {
+          if (tag !== 730) {
+            break;
+          }
+
+          message.payload = {
+            $case: "setSuperAttackArmedRequest",
+            value: SetSuperAttackArmedRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 92: {
+          if (tag !== 738) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactCreateRequest",
+            value: ArenaPactCreateRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 93: {
+          if (tag !== 746) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactInviteRequest",
+            value: ArenaPactInviteRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 94: {
+          if (tag !== 754) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactRespondRequest",
+            value: ArenaPactRespondRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 95: {
+          if (tag !== 762) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactReadyRequest",
+            value: ArenaPactReadyRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 96: {
+          if (tag !== 770) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactCancelRequest",
+            value: ArenaPactCancelRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 97: {
+          if (tag !== 778) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactListRequest",
+            value: ArenaPactListRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 98: {
+          if (tag !== 786) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactTechProposeRequest",
+            value: ArenaPactTechProposeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 99: {
+          if (tag !== 794) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactTechVoteRequest",
+            value: ArenaPactTechVoteRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 100: {
+          if (tag !== 802) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactTechReportRequest",
+            value: ArenaPactTechReportRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 101: {
+          if (tag !== 810) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactSetStreamRequest",
+            value: ArenaPactSetStreamRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 102: {
+          if (tag !== 818) {
+            break;
+          }
+
+          message.payload = {
+            $case: "streamBroadcastRequest",
+            value: StreamBroadcastRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 104: {
+          if (tag !== 834) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactPrizePledgeRequest",
+            value: ArenaPactPrizePledgeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 105: {
+          if (tag !== 842) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactPrizeConfirmRequest",
+            value: ArenaPactPrizeConfirmRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 106: {
+          if (tag !== 850) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactSignLossRequest",
+            value: ArenaPactSignLossRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1995,7 +4470,4347 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         }
         break;
       }
+      case "claimKillMilestoneRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "claimKillMilestoneRequest",
+            value: ClaimKillMilestoneRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "rebirthRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "rebirthRequest", value: RebirthRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "rebirthRollbackRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "rebirthRollbackRequest",
+            value: RebirthRollbackRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "characterListRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "characterListRequest",
+            value: CharacterListRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "buyShopItemRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "buyShopItemRequest",
+            value: BuyShopItemRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "beginnerPathEnrollRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "beginnerPathEnrollRequest",
+            value: BeginnerPathEnrollRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "beginnerPathAbandonRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "beginnerPathAbandonRequest",
+            value: BeginnerPathAbandonRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "beginnerPathTalkRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "beginnerPathTalkRequest",
+            value: BeginnerPathTalkRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "applyTrainingPresetRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "applyTrainingPresetRequest",
+            value: ApplyTrainingPresetRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "beginnerPathUiActionRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "beginnerPathUiActionRequest",
+            value: BeginnerPathUiActionRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "openWarehouseRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "openWarehouseRequest",
+            value: OpenWarehouseRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "warehouseDepositRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "warehouseDepositRequest",
+            value: WarehouseDepositRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "warehouseWithdrawRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "warehouseWithdrawRequest",
+            value: WarehouseWithdrawRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "repairItemRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "repairItemRequest", value: RepairItemRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "createPartyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "createPartyRequest",
+            value: CreatePartyRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "joinPartyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "joinPartyRequest", value: JoinPartyRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "leavePartyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "leavePartyRequest", value: LeavePartyRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "cityNpcServiceRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "cityNpcServiceRequest",
+            value: CityNpcServiceRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "getAntiBotToolsRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "getAntiBotToolsRequest",
+            value: GetAntiBotToolsRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "setAntiBotToolsRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "setAntiBotToolsRequest",
+            value: SetAntiBotToolsRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "startTimedChallengeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "startTimedChallengeRequest",
+            value: StartTimedChallengeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "abortTimedChallengeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "abortTimedChallengeRequest",
+            value: AbortTimedChallengeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "getTimedChallengeLeaderboardRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "getTimedChallengeLeaderboardRequest",
+            value: GetTimedChallengeLeaderboardRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardBrowseRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardBrowseRequest",
+            value: AuctionBoardBrowseRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardCreateRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardCreateRequest",
+            value: AuctionBoardCreateRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardBidRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardBidRequest",
+            value: AuctionBoardBidRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardBuyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardBuyRequest",
+            value: AuctionBoardBuyRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardCancelRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardCancelRequest",
+            value: AuctionBoardCancelRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardSettleDebtRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardSettleDebtRequest",
+            value: AuctionBoardSettleDebtRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "sellBagItemRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "sellBagItemRequest",
+            value: SellBagItemRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "levelUpSettingsRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "levelUpSettingsRequest",
+            value: LevelUpSettingsRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "playerSafeAttackModeChangeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "playerSafeAttackModeChangeRequest",
+            value: PlayerSafeAttackModeChangeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "hellMiningStatusRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "hellMiningStatusRequest",
+            value: HellMiningStatusRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "hellMiningClaimRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "hellMiningClaimRequest",
+            value: HellMiningClaimRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "majesticUpgradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "majesticUpgradeRequest",
+            value: MajesticUpgradeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "itemBindRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "itemBindRequest", value: ItemBindRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "buyCashShopItemRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "buyCashShopItemRequest",
+            value: BuyCashShopItemRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "characterNameCheckRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "characterNameCheckRequest",
+            value: CharacterNameCheckRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "setLevelBlockRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "setLevelBlockRequest",
+            value: SetLevelBlockRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "stoneItemUpgradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "stoneItemUpgradeRequest",
+            value: StoneItemUpgradeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "skillGatherRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "skillGatherRequest",
+            value: SkillGatherRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "getSkillsStateRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "getSkillsStateRequest",
+            value: GetSkillsStateRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "itemDisenchantRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "itemDisenchantRequest",
+            value: ItemDisenchantRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "itemEnchantRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "itemEnchantRequest",
+            value: ItemEnchantRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "enchantMaterialUpgradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "enchantMaterialUpgradeRequest",
+            value: EnchantMaterialUpgradeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "getEnchantMaterialsRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "getEnchantMaterialsRequest",
+            value: GetEnchantMaterialsRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "majesticStatRespecRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "majesticStatRespecRequest",
+            value: MajesticStatRespecRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "cicItemMergeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "cicItemMergeRequest",
+            value: CicItemMergeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "siphonGemUpgradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "siphonGemUpgradeRequest",
+            value: SiphonGemUpgradeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "activateSpecialAbilityRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "activateSpecialAbilityRequest",
+            value: ActivateSpecialAbilityRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "setSuperAttackArmedRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "setSuperAttackArmedRequest",
+            value: SetSuperAttackArmedRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactCreateRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactCreateRequest",
+            value: ArenaPactCreateRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactInviteRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactInviteRequest",
+            value: ArenaPactInviteRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactRespondRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactRespondRequest",
+            value: ArenaPactRespondRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactReadyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactReadyRequest",
+            value: ArenaPactReadyRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactCancelRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactCancelRequest",
+            value: ArenaPactCancelRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactListRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactListRequest",
+            value: ArenaPactListRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactTechProposeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactTechProposeRequest",
+            value: ArenaPactTechProposeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactTechVoteRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactTechVoteRequest",
+            value: ArenaPactTechVoteRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactTechReportRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactTechReportRequest",
+            value: ArenaPactTechReportRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactSetStreamRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactSetStreamRequest",
+            value: ArenaPactSetStreamRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "streamBroadcastRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "streamBroadcastRequest",
+            value: StreamBroadcastRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactPrizePledgeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactPrizePledgeRequest",
+            value: ArenaPactPrizePledgeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactPrizeConfirmRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactPrizeConfirmRequest",
+            value: ArenaPactPrizeConfirmRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactSignLossRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactSignLossRequest",
+            value: ArenaPactSignLossRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBaseArenaPactSetStreamRequest(): ArenaPactSetStreamRequest {
+  return { matchId: "", streamUrl: "", isGlobal: false };
+}
+
+export const ArenaPactSetStreamRequest: MessageFns<ArenaPactSetStreamRequest> = {
+  encode(message: ArenaPactSetStreamRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.streamUrl !== "") {
+      writer.uint32(18).string(message.streamUrl);
+    }
+    if (message.isGlobal !== false) {
+      writer.uint32(24).bool(message.isGlobal);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactSetStreamRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactSetStreamRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.streamUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.isGlobal = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactSetStreamRequest>, I>>(base?: I): ArenaPactSetStreamRequest {
+    return ArenaPactSetStreamRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactSetStreamRequest>, I>>(object: I): ArenaPactSetStreamRequest {
+    const message = createBaseArenaPactSetStreamRequest();
+    message.matchId = object.matchId ?? "";
+    message.streamUrl = object.streamUrl ?? "";
+    message.isGlobal = object.isGlobal ?? false;
+    return message;
+  },
+};
+
+function createBaseStreamBroadcastRequest(): StreamBroadcastRequest {
+  return { kind: "", title: "", streamUrl: "", active: false };
+}
+
+export const StreamBroadcastRequest: MessageFns<StreamBroadcastRequest> = {
+  encode(message: StreamBroadcastRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== "") {
+      writer.uint32(10).string(message.kind);
+    }
+    if (message.title !== "") {
+      writer.uint32(18).string(message.title);
+    }
+    if (message.streamUrl !== "") {
+      writer.uint32(26).string(message.streamUrl);
+    }
+    if (message.active !== false) {
+      writer.uint32(32).bool(message.active);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamBroadcastRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStreamBroadcastRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.kind = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.title = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.streamUrl = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.active = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<StreamBroadcastRequest>, I>>(base?: I): StreamBroadcastRequest {
+    return StreamBroadcastRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StreamBroadcastRequest>, I>>(object: I): StreamBroadcastRequest {
+    const message = createBaseStreamBroadcastRequest();
+    message.kind = object.kind ?? "";
+    message.title = object.title ?? "";
+    message.streamUrl = object.streamUrl ?? "";
+    message.active = object.active ?? false;
+    return message;
+  },
+};
+
+function createBaseStreamBroadcastState(): StreamBroadcastState {
+  return {
+    broadcastId: "",
+    kind: "",
+    title: "",
+    characterName: "",
+    streamUrl: "",
+    streamPlatform: "",
+    worldId: "",
+    startedAtMs: 0n,
+    expiresAtMs: 0n,
+    active: false,
+  };
+}
+
+export const StreamBroadcastState: MessageFns<StreamBroadcastState> = {
+  encode(message: StreamBroadcastState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.broadcastId !== "") {
+      writer.uint32(10).string(message.broadcastId);
+    }
+    if (message.kind !== "") {
+      writer.uint32(18).string(message.kind);
+    }
+    if (message.title !== "") {
+      writer.uint32(26).string(message.title);
+    }
+    if (message.characterName !== "") {
+      writer.uint32(34).string(message.characterName);
+    }
+    if (message.streamUrl !== "") {
+      writer.uint32(42).string(message.streamUrl);
+    }
+    if (message.streamPlatform !== "") {
+      writer.uint32(50).string(message.streamPlatform);
+    }
+    if (message.worldId !== "") {
+      writer.uint32(58).string(message.worldId);
+    }
+    if (message.startedAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.startedAtMs) !== message.startedAtMs) {
+        throw new globalThis.Error("value provided for field message.startedAtMs of type int64 too large");
+      }
+      writer.uint32(64).int64(message.startedAtMs);
+    }
+    if (message.expiresAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresAtMs) !== message.expiresAtMs) {
+        throw new globalThis.Error("value provided for field message.expiresAtMs of type int64 too large");
+      }
+      writer.uint32(72).int64(message.expiresAtMs);
+    }
+    if (message.active !== false) {
+      writer.uint32(80).bool(message.active);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamBroadcastState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStreamBroadcastState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.broadcastId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.kind = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.title = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.streamUrl = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.streamPlatform = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.worldId = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.startedAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.expiresAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.active = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<StreamBroadcastState>, I>>(base?: I): StreamBroadcastState {
+    return StreamBroadcastState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StreamBroadcastState>, I>>(object: I): StreamBroadcastState {
+    const message = createBaseStreamBroadcastState();
+    message.broadcastId = object.broadcastId ?? "";
+    message.kind = object.kind ?? "";
+    message.title = object.title ?? "";
+    message.characterName = object.characterName ?? "";
+    message.streamUrl = object.streamUrl ?? "";
+    message.streamPlatform = object.streamPlatform ?? "";
+    message.worldId = object.worldId ?? "";
+    message.startedAtMs = object.startedAtMs ?? 0n;
+    message.expiresAtMs = object.expiresAtMs ?? 0n;
+    message.active = object.active ?? false;
+    return message;
+  },
+};
+
+function createBaseCicItemMergeRequest(): CicItemMergeRequest {
+  return { itemUidA: 0n, itemUidB: 0n };
+}
+
+export const CicItemMergeRequest: MessageFns<CicItemMergeRequest> = {
+  encode(message: CicItemMergeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUidA !== 0n) {
+      if (BigInt.asIntN(64, message.itemUidA) !== message.itemUidA) {
+        throw new globalThis.Error("value provided for field message.itemUidA of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUidA);
+    }
+    if (message.itemUidB !== 0n) {
+      if (BigInt.asIntN(64, message.itemUidB) !== message.itemUidB) {
+        throw new globalThis.Error("value provided for field message.itemUidB of type int64 too large");
+      }
+      writer.uint32(16).int64(message.itemUidB);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CicItemMergeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCicItemMergeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUidA = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.itemUidB = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CicItemMergeRequest>, I>>(base?: I): CicItemMergeRequest {
+    return CicItemMergeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CicItemMergeRequest>, I>>(object: I): CicItemMergeRequest {
+    const message = createBaseCicItemMergeRequest();
+    message.itemUidA = object.itemUidA ?? 0n;
+    message.itemUidB = object.itemUidB ?? 0n;
+    return message;
+  },
+};
+
+function createBaseSiphonGemUpgradeRequest(): SiphonGemUpgradeRequest {
+  return { itemUid: 0n };
+}
+
+export const SiphonGemUpgradeRequest: MessageFns<SiphonGemUpgradeRequest> = {
+  encode(message: SiphonGemUpgradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SiphonGemUpgradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSiphonGemUpgradeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SiphonGemUpgradeRequest>, I>>(base?: I): SiphonGemUpgradeRequest {
+    return SiphonGemUpgradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SiphonGemUpgradeRequest>, I>>(object: I): SiphonGemUpgradeRequest {
+    const message = createBaseSiphonGemUpgradeRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseActivateSpecialAbilityRequest(): ActivateSpecialAbilityRequest {
+  return {};
+}
+
+export const ActivateSpecialAbilityRequest: MessageFns<ActivateSpecialAbilityRequest> = {
+  encode(_: ActivateSpecialAbilityRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ActivateSpecialAbilityRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseActivateSpecialAbilityRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ActivateSpecialAbilityRequest>, I>>(base?: I): ActivateSpecialAbilityRequest {
+    return ActivateSpecialAbilityRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ActivateSpecialAbilityRequest>, I>>(_: I): ActivateSpecialAbilityRequest {
+    const message = createBaseActivateSpecialAbilityRequest();
+    return message;
+  },
+};
+
+function createBaseSetSuperAttackArmedRequest(): SetSuperAttackArmedRequest {
+  return { armed: false };
+}
+
+export const SetSuperAttackArmedRequest: MessageFns<SetSuperAttackArmedRequest> = {
+  encode(message: SetSuperAttackArmedRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.armed !== false) {
+      writer.uint32(8).bool(message.armed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SetSuperAttackArmedRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetSuperAttackArmedRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.armed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SetSuperAttackArmedRequest>, I>>(base?: I): SetSuperAttackArmedRequest {
+    return SetSuperAttackArmedRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetSuperAttackArmedRequest>, I>>(object: I): SetSuperAttackArmedRequest {
+    const message = createBaseSetSuperAttackArmedRequest();
+    message.armed = object.armed ?? false;
+    return message;
+  },
+};
+
+function createBaseSpecialAbilityStatus(): SpecialAbilityStatus {
+  return { status: 0, abilityType: 0, durationOrCooldownSec: 0, playerId: 0n };
+}
+
+export const SpecialAbilityStatus: MessageFns<SpecialAbilityStatus> = {
+  encode(message: SpecialAbilityStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    if (message.abilityType !== 0) {
+      writer.uint32(16).int32(message.abilityType);
+    }
+    if (message.durationOrCooldownSec !== 0) {
+      writer.uint32(24).int32(message.durationOrCooldownSec);
+    }
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(32).int64(message.playerId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SpecialAbilityStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSpecialAbilityStatus();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.abilityType = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.durationOrCooldownSec = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.playerId = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SpecialAbilityStatus>, I>>(base?: I): SpecialAbilityStatus {
+    return SpecialAbilityStatus.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SpecialAbilityStatus>, I>>(object: I): SpecialAbilityStatus {
+    const message = createBaseSpecialAbilityStatus();
+    message.status = object.status ?? 0;
+    message.abilityType = object.abilityType ?? 0;
+    message.durationOrCooldownSec = object.durationOrCooldownSec ?? 0;
+    message.playerId = object.playerId ?? 0n;
+    return message;
+  },
+};
+
+function createBaseItemDisenchantRequest(): ItemDisenchantRequest {
+  return { itemUid: 0n };
+}
+
+export const ItemDisenchantRequest: MessageFns<ItemDisenchantRequest> = {
+  encode(message: ItemDisenchantRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ItemDisenchantRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseItemDisenchantRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ItemDisenchantRequest>, I>>(base?: I): ItemDisenchantRequest {
+    return ItemDisenchantRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ItemDisenchantRequest>, I>>(object: I): ItemDisenchantRequest {
+    const message = createBaseItemDisenchantRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseItemEnchantRequest(): ItemEnchantRequest {
+  return { itemUid: 0n, kind: 0 };
+}
+
+export const ItemEnchantRequest: MessageFns<ItemEnchantRequest> = {
+  encode(message: ItemEnchantRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    if (message.kind !== 0) {
+      writer.uint32(16).int32(message.kind);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ItemEnchantRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseItemEnchantRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.kind = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ItemEnchantRequest>, I>>(base?: I): ItemEnchantRequest {
+    return ItemEnchantRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ItemEnchantRequest>, I>>(object: I): ItemEnchantRequest {
+    const message = createBaseItemEnchantRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    message.kind = object.kind ?? 0;
+    return message;
+  },
+};
+
+function createBaseEnchantMaterialUpgradeRequest(): EnchantMaterialUpgradeRequest {
+  return { kind: 0, type: 0, level: 0, mode: 0 };
+}
+
+export const EnchantMaterialUpgradeRequest: MessageFns<EnchantMaterialUpgradeRequest> = {
+  encode(message: EnchantMaterialUpgradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== 0) {
+      writer.uint32(8).int32(message.kind);
+    }
+    if (message.type !== 0) {
+      writer.uint32(16).int32(message.type);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(32).int32(message.mode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EnchantMaterialUpgradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEnchantMaterialUpgradeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.kind = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.type = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<EnchantMaterialUpgradeRequest>, I>>(base?: I): EnchantMaterialUpgradeRequest {
+    return EnchantMaterialUpgradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EnchantMaterialUpgradeRequest>, I>>(
+    object: I,
+  ): EnchantMaterialUpgradeRequest {
+    const message = createBaseEnchantMaterialUpgradeRequest();
+    message.kind = object.kind ?? 0;
+    message.type = object.type ?? 0;
+    message.level = object.level ?? 0;
+    message.mode = object.mode ?? 0;
+    return message;
+  },
+};
+
+function createBaseGetEnchantMaterialsRequest(): GetEnchantMaterialsRequest {
+  return {};
+}
+
+export const GetEnchantMaterialsRequest: MessageFns<GetEnchantMaterialsRequest> = {
+  encode(_: GetEnchantMaterialsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetEnchantMaterialsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetEnchantMaterialsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<GetEnchantMaterialsRequest>, I>>(base?: I): GetEnchantMaterialsRequest {
+    return GetEnchantMaterialsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetEnchantMaterialsRequest>, I>>(_: I): GetEnchantMaterialsRequest {
+    const message = createBaseGetEnchantMaterialsRequest();
+    return message;
+  },
+};
+
+function createBaseMajesticStatRespecRequest(): MajesticStatRespecRequest {
+  return { statA: 0, statB: 0, statC: 0 };
+}
+
+export const MajesticStatRespecRequest: MessageFns<MajesticStatRespecRequest> = {
+  encode(message: MajesticStatRespecRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.statA !== 0) {
+      writer.uint32(8).int32(message.statA);
+    }
+    if (message.statB !== 0) {
+      writer.uint32(16).int32(message.statB);
+    }
+    if (message.statC !== 0) {
+      writer.uint32(24).int32(message.statC);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MajesticStatRespecRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMajesticStatRespecRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.statA = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.statB = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.statC = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MajesticStatRespecRequest>, I>>(base?: I): MajesticStatRespecRequest {
+    return MajesticStatRespecRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MajesticStatRespecRequest>, I>>(object: I): MajesticStatRespecRequest {
+    const message = createBaseMajesticStatRespecRequest();
+    message.statA = object.statA ?? 0;
+    message.statB = object.statB ?? 0;
+    message.statC = object.statC ?? 0;
+    return message;
+  },
+};
+
+function createBaseSkillGatherRequest(): SkillGatherRequest {
+  return { skillId: 0 };
+}
+
+export const SkillGatherRequest: MessageFns<SkillGatherRequest> = {
+  encode(message: SkillGatherRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== 0) {
+      writer.uint32(8).int32(message.skillId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillGatherRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSkillGatherRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.skillId = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SkillGatherRequest>, I>>(base?: I): SkillGatherRequest {
+    return SkillGatherRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillGatherRequest>, I>>(object: I): SkillGatherRequest {
+    const message = createBaseSkillGatherRequest();
+    message.skillId = object.skillId ?? 0;
+    return message;
+  },
+};
+
+function createBaseGetSkillsStateRequest(): GetSkillsStateRequest {
+  return {};
+}
+
+export const GetSkillsStateRequest: MessageFns<GetSkillsStateRequest> = {
+  encode(_: GetSkillsStateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetSkillsStateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetSkillsStateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<GetSkillsStateRequest>, I>>(base?: I): GetSkillsStateRequest {
+    return GetSkillsStateRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetSkillsStateRequest>, I>>(_: I): GetSkillsStateRequest {
+    const message = createBaseGetSkillsStateRequest();
+    return message;
+  },
+};
+
+function createBaseStoneItemUpgradeRequest(): StoneItemUpgradeRequest {
+  return { itemUid: 0n, useIntegrityStone: false };
+}
+
+export const StoneItemUpgradeRequest: MessageFns<StoneItemUpgradeRequest> = {
+  encode(message: StoneItemUpgradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    if (message.useIntegrityStone !== false) {
+      writer.uint32(16).bool(message.useIntegrityStone);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StoneItemUpgradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStoneItemUpgradeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.useIntegrityStone = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<StoneItemUpgradeRequest>, I>>(base?: I): StoneItemUpgradeRequest {
+    return StoneItemUpgradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StoneItemUpgradeRequest>, I>>(object: I): StoneItemUpgradeRequest {
+    const message = createBaseStoneItemUpgradeRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    message.useIntegrityStone = object.useIntegrityStone ?? false;
+    return message;
+  },
+};
+
+function createBaseSetLevelBlockRequest(): SetLevelBlockRequest {
+  return { blocked: false };
+}
+
+export const SetLevelBlockRequest: MessageFns<SetLevelBlockRequest> = {
+  encode(message: SetLevelBlockRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.blocked !== false) {
+      writer.uint32(8).bool(message.blocked);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SetLevelBlockRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetLevelBlockRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.blocked = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SetLevelBlockRequest>, I>>(base?: I): SetLevelBlockRequest {
+    return SetLevelBlockRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetLevelBlockRequest>, I>>(object: I): SetLevelBlockRequest {
+    const message = createBaseSetLevelBlockRequest();
+    message.blocked = object.blocked ?? false;
+    return message;
+  },
+};
+
+function createBaseMajesticUpgradeRequest(): MajesticUpgradeRequest {
+  return { itemUid: 0n };
+}
+
+export const MajesticUpgradeRequest: MessageFns<MajesticUpgradeRequest> = {
+  encode(message: MajesticUpgradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MajesticUpgradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMajesticUpgradeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MajesticUpgradeRequest>, I>>(base?: I): MajesticUpgradeRequest {
+    return MajesticUpgradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MajesticUpgradeRequest>, I>>(object: I): MajesticUpgradeRequest {
+    const message = createBaseMajesticUpgradeRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseLevelUpSettingsRequest(): LevelUpSettingsRequest {
+  return { str: 0, vit: 0, dex: 0, intel: 0, mag: 0, chr: 0 };
+}
+
+export const LevelUpSettingsRequest: MessageFns<LevelUpSettingsRequest> = {
+  encode(message: LevelUpSettingsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.str !== 0) {
+      writer.uint32(8).int32(message.str);
+    }
+    if (message.vit !== 0) {
+      writer.uint32(16).int32(message.vit);
+    }
+    if (message.dex !== 0) {
+      writer.uint32(24).int32(message.dex);
+    }
+    if (message.intel !== 0) {
+      writer.uint32(32).int32(message.intel);
+    }
+    if (message.mag !== 0) {
+      writer.uint32(40).int32(message.mag);
+    }
+    if (message.chr !== 0) {
+      writer.uint32(48).int32(message.chr);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): LevelUpSettingsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseLevelUpSettingsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<LevelUpSettingsRequest>, I>>(base?: I): LevelUpSettingsRequest {
+    return LevelUpSettingsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<LevelUpSettingsRequest>, I>>(object: I): LevelUpSettingsRequest {
+    const message = createBaseLevelUpSettingsRequest();
+    message.str = object.str ?? 0;
+    message.vit = object.vit ?? 0;
+    message.dex = object.dex ?? 0;
+    message.intel = object.intel ?? 0;
+    message.mag = object.mag ?? 0;
+    message.chr = object.chr ?? 0;
+    return message;
+  },
+};
+
+function createBaseStartTimedChallengeRequest(): StartTimedChallengeRequest {
+  return { gameWorldId: "", mode: 0 };
+}
+
+export const StartTimedChallengeRequest: MessageFns<StartTimedChallengeRequest> = {
+  encode(message: StartTimedChallengeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(16).int32(message.mode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StartTimedChallengeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStartTimedChallengeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<StartTimedChallengeRequest>, I>>(base?: I): StartTimedChallengeRequest {
+    return StartTimedChallengeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StartTimedChallengeRequest>, I>>(object: I): StartTimedChallengeRequest {
+    const message = createBaseStartTimedChallengeRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.mode = object.mode ?? 0;
+    return message;
+  },
+};
+
+function createBaseAbortTimedChallengeRequest(): AbortTimedChallengeRequest {
+  return { gameWorldId: "" };
+}
+
+export const AbortTimedChallengeRequest: MessageFns<AbortTimedChallengeRequest> = {
+  encode(message: AbortTimedChallengeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AbortTimedChallengeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAbortTimedChallengeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AbortTimedChallengeRequest>, I>>(base?: I): AbortTimedChallengeRequest {
+    return AbortTimedChallengeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AbortTimedChallengeRequest>, I>>(object: I): AbortTimedChallengeRequest {
+    const message = createBaseAbortTimedChallengeRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    return message;
+  },
+};
+
+function createBaseGetTimedChallengeLeaderboardRequest(): GetTimedChallengeLeaderboardRequest {
+  return { mode: 0 };
+}
+
+export const GetTimedChallengeLeaderboardRequest: MessageFns<GetTimedChallengeLeaderboardRequest> = {
+  encode(message: GetTimedChallengeLeaderboardRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mode !== 0) {
+      writer.uint32(8).int32(message.mode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTimedChallengeLeaderboardRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTimedChallengeLeaderboardRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<GetTimedChallengeLeaderboardRequest>, I>>(
+    base?: I,
+  ): GetTimedChallengeLeaderboardRequest {
+    return GetTimedChallengeLeaderboardRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetTimedChallengeLeaderboardRequest>, I>>(
+    object: I,
+  ): GetTimedChallengeLeaderboardRequest {
+    const message = createBaseGetTimedChallengeLeaderboardRequest();
+    message.mode = object.mode ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionAccessRules(): AuctionAccessRules {
+  return {
+    onlyOwnCity: false,
+    onlyOwnGuild: false,
+    blockedGuildIds: [],
+    blockedPlayerNames: [],
+    requireFullLevelAndRep100: false,
+  };
+}
+
+export const AuctionAccessRules: MessageFns<AuctionAccessRules> = {
+  encode(message: AuctionAccessRules, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.onlyOwnCity !== false) {
+      writer.uint32(8).bool(message.onlyOwnCity);
+    }
+    if (message.onlyOwnGuild !== false) {
+      writer.uint32(16).bool(message.onlyOwnGuild);
+    }
+    for (const v of message.blockedGuildIds) {
+      writer.uint32(26).string(v!);
+    }
+    for (const v of message.blockedPlayerNames) {
+      writer.uint32(34).string(v!);
+    }
+    if (message.requireFullLevelAndRep100 !== false) {
+      writer.uint32(40).bool(message.requireFullLevelAndRep100);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionAccessRules {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionAccessRules();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.onlyOwnCity = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.onlyOwnGuild = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.blockedGuildIds.push(reader.string());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.blockedPlayerNames.push(reader.string());
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.requireFullLevelAndRep100 = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionAccessRules>, I>>(base?: I): AuctionAccessRules {
+    return AuctionAccessRules.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionAccessRules>, I>>(object: I): AuctionAccessRules {
+    const message = createBaseAuctionAccessRules();
+    message.onlyOwnCity = object.onlyOwnCity ?? false;
+    message.onlyOwnGuild = object.onlyOwnGuild ?? false;
+    message.blockedGuildIds = object.blockedGuildIds?.map((e) => e) || [];
+    message.blockedPlayerNames = object.blockedPlayerNames?.map((e) => e) || [];
+    message.requireFullLevelAndRep100 = object.requireFullLevelAndRep100 ?? false;
+    return message;
+  },
+};
+
+function createBaseAuctionListing(): AuctionListing {
+  return {
+    listingId: "",
+    sellerWallet: "",
+    sellerName: "",
+    sellerCity: "",
+    sellerGuildId: "",
+    mode: 0,
+    itemId: 0,
+    itemUid: 0n,
+    quantity: 0,
+    itemAttribute: 0,
+    itemColor: 0,
+    curLifeSpan: 0,
+    maxLifeSpan: 0,
+    listPriceGold: 0,
+    minBidGold: 0,
+    currentBidGold: 0,
+    currentBidderName: "",
+    createdAtMs: 0n,
+    expiresAtMs: 0n,
+    access: undefined,
+    status: "",
+    itemName: "",
+  };
+}
+
+export const AuctionListing: MessageFns<AuctionListing> = {
+  encode(message: AuctionListing, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.listingId !== "") {
+      writer.uint32(10).string(message.listingId);
+    }
+    if (message.sellerWallet !== "") {
+      writer.uint32(18).string(message.sellerWallet);
+    }
+    if (message.sellerName !== "") {
+      writer.uint32(26).string(message.sellerName);
+    }
+    if (message.sellerCity !== "") {
+      writer.uint32(34).string(message.sellerCity);
+    }
+    if (message.sellerGuildId !== "") {
+      writer.uint32(42).string(message.sellerGuildId);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(48).int32(message.mode);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(56).int32(message.itemId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(64).int64(message.itemUid);
+    }
+    if (message.quantity !== 0) {
+      writer.uint32(72).int32(message.quantity);
+    }
+    if (message.itemAttribute !== 0) {
+      writer.uint32(80).uint32(message.itemAttribute);
+    }
+    if (message.itemColor !== 0) {
+      writer.uint32(88).int32(message.itemColor);
+    }
+    if (message.curLifeSpan !== 0) {
+      writer.uint32(96).int32(message.curLifeSpan);
+    }
+    if (message.maxLifeSpan !== 0) {
+      writer.uint32(104).int32(message.maxLifeSpan);
+    }
+    if (message.listPriceGold !== 0) {
+      writer.uint32(112).int32(message.listPriceGold);
+    }
+    if (message.minBidGold !== 0) {
+      writer.uint32(120).int32(message.minBidGold);
+    }
+    if (message.currentBidGold !== 0) {
+      writer.uint32(128).int32(message.currentBidGold);
+    }
+    if (message.currentBidderName !== "") {
+      writer.uint32(138).string(message.currentBidderName);
+    }
+    if (message.createdAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.createdAtMs) !== message.createdAtMs) {
+        throw new globalThis.Error("value provided for field message.createdAtMs of type int64 too large");
+      }
+      writer.uint32(144).int64(message.createdAtMs);
+    }
+    if (message.expiresAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresAtMs) !== message.expiresAtMs) {
+        throw new globalThis.Error("value provided for field message.expiresAtMs of type int64 too large");
+      }
+      writer.uint32(152).int64(message.expiresAtMs);
+    }
+    if (message.access !== undefined) {
+      AuctionAccessRules.encode(message.access, writer.uint32(162).fork()).join();
+    }
+    if (message.status !== "") {
+      writer.uint32(170).string(message.status);
+    }
+    if (message.itemName !== "") {
+      writer.uint32(178).string(message.itemName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionListing {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionListing();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.listingId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sellerWallet = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.sellerName = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.sellerCity = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.sellerGuildId = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.mode = reader.int32() as any;
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.quantity = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.itemColor = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.curLifeSpan = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.maxLifeSpan = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.listPriceGold = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.minBidGold = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.currentBidGold = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.currentBidderName = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.createdAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.expiresAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.access = AuctionAccessRules.decode(reader, reader.uint32());
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 22: {
+          if (tag !== 178) {
+            break;
+          }
+
+          message.itemName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionListing>, I>>(base?: I): AuctionListing {
+    return AuctionListing.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionListing>, I>>(object: I): AuctionListing {
+    const message = createBaseAuctionListing();
+    message.listingId = object.listingId ?? "";
+    message.sellerWallet = object.sellerWallet ?? "";
+    message.sellerName = object.sellerName ?? "";
+    message.sellerCity = object.sellerCity ?? "";
+    message.sellerGuildId = object.sellerGuildId ?? "";
+    message.mode = object.mode ?? 0;
+    message.itemId = object.itemId ?? 0;
+    message.itemUid = object.itemUid ?? 0n;
+    message.quantity = object.quantity ?? 0;
+    message.itemAttribute = object.itemAttribute ?? 0;
+    message.itemColor = object.itemColor ?? 0;
+    message.curLifeSpan = object.curLifeSpan ?? 0;
+    message.maxLifeSpan = object.maxLifeSpan ?? 0;
+    message.listPriceGold = object.listPriceGold ?? 0;
+    message.minBidGold = object.minBidGold ?? 0;
+    message.currentBidGold = object.currentBidGold ?? 0;
+    message.currentBidderName = object.currentBidderName ?? "";
+    message.createdAtMs = object.createdAtMs ?? 0n;
+    message.expiresAtMs = object.expiresAtMs ?? 0n;
+    message.access = (object.access !== undefined && object.access !== null)
+      ? AuctionAccessRules.fromPartial(object.access)
+      : undefined;
+    message.status = object.status ?? "";
+    message.itemName = object.itemName ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardBrowseRequest(): AuctionBoardBrowseRequest {
+  return { gameWorldId: "" };
+}
+
+export const AuctionBoardBrowseRequest: MessageFns<AuctionBoardBrowseRequest> = {
+  encode(message: AuctionBoardBrowseRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardBrowseRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardBrowseRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardBrowseRequest>, I>>(base?: I): AuctionBoardBrowseRequest {
+    return AuctionBoardBrowseRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardBrowseRequest>, I>>(object: I): AuctionBoardBrowseRequest {
+    const message = createBaseAuctionBoardBrowseRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardCreateRequest(): AuctionBoardCreateRequest {
+  return {
+    gameWorldId: "",
+    itemUid: 0n,
+    mode: 0,
+    listPriceGold: 0,
+    minBidGold: 0,
+    durationHours: 0,
+    access: undefined,
+  };
+}
+
+export const AuctionBoardCreateRequest: MessageFns<AuctionBoardCreateRequest> = {
+  encode(message: AuctionBoardCreateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(16).int64(message.itemUid);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(24).int32(message.mode);
+    }
+    if (message.listPriceGold !== 0) {
+      writer.uint32(32).int32(message.listPriceGold);
+    }
+    if (message.minBidGold !== 0) {
+      writer.uint32(40).int32(message.minBidGold);
+    }
+    if (message.durationHours !== 0) {
+      writer.uint32(48).int32(message.durationHours);
+    }
+    if (message.access !== undefined) {
+      AuctionAccessRules.encode(message.access, writer.uint32(58).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardCreateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardCreateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.mode = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.listPriceGold = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.minBidGold = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.durationHours = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.access = AuctionAccessRules.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardCreateRequest>, I>>(base?: I): AuctionBoardCreateRequest {
+    return AuctionBoardCreateRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardCreateRequest>, I>>(object: I): AuctionBoardCreateRequest {
+    const message = createBaseAuctionBoardCreateRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.mode = object.mode ?? 0;
+    message.listPriceGold = object.listPriceGold ?? 0;
+    message.minBidGold = object.minBidGold ?? 0;
+    message.durationHours = object.durationHours ?? 0;
+    message.access = (object.access !== undefined && object.access !== null)
+      ? AuctionAccessRules.fromPartial(object.access)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseAuctionBoardBidRequest(): AuctionBoardBidRequest {
+  return { gameWorldId: "", listingId: "", bidGold: 0 };
+}
+
+export const AuctionBoardBidRequest: MessageFns<AuctionBoardBidRequest> = {
+  encode(message: AuctionBoardBidRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.listingId !== "") {
+      writer.uint32(18).string(message.listingId);
+    }
+    if (message.bidGold !== 0) {
+      writer.uint32(24).int32(message.bidGold);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardBidRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardBidRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.listingId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.bidGold = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardBidRequest>, I>>(base?: I): AuctionBoardBidRequest {
+    return AuctionBoardBidRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardBidRequest>, I>>(object: I): AuctionBoardBidRequest {
+    const message = createBaseAuctionBoardBidRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.listingId = object.listingId ?? "";
+    message.bidGold = object.bidGold ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionBoardBuyRequest(): AuctionBoardBuyRequest {
+  return { gameWorldId: "", listingId: "" };
+}
+
+export const AuctionBoardBuyRequest: MessageFns<AuctionBoardBuyRequest> = {
+  encode(message: AuctionBoardBuyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.listingId !== "") {
+      writer.uint32(18).string(message.listingId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardBuyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardBuyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.listingId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardBuyRequest>, I>>(base?: I): AuctionBoardBuyRequest {
+    return AuctionBoardBuyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardBuyRequest>, I>>(object: I): AuctionBoardBuyRequest {
+    const message = createBaseAuctionBoardBuyRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.listingId = object.listingId ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardCancelRequest(): AuctionBoardCancelRequest {
+  return { gameWorldId: "", listingId: "" };
+}
+
+export const AuctionBoardCancelRequest: MessageFns<AuctionBoardCancelRequest> = {
+  encode(message: AuctionBoardCancelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.listingId !== "") {
+      writer.uint32(18).string(message.listingId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardCancelRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardCancelRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.listingId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardCancelRequest>, I>>(base?: I): AuctionBoardCancelRequest {
+    return AuctionBoardCancelRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardCancelRequest>, I>>(object: I): AuctionBoardCancelRequest {
+    const message = createBaseAuctionBoardCancelRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.listingId = object.listingId ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardSettleDebtRequest(): AuctionBoardSettleDebtRequest {
+  return { gameWorldId: "" };
+}
+
+export const AuctionBoardSettleDebtRequest: MessageFns<AuctionBoardSettleDebtRequest> = {
+  encode(message: AuctionBoardSettleDebtRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardSettleDebtRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardSettleDebtRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardSettleDebtRequest>, I>>(base?: I): AuctionBoardSettleDebtRequest {
+    return AuctionBoardSettleDebtRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardSettleDebtRequest>, I>>(
+    object: I,
+  ): AuctionBoardSettleDebtRequest {
+    const message = createBaseAuctionBoardSettleDebtRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardSnapshot(): AuctionBoardSnapshot {
+  return { listings: [], message: "", myDebtGold: 0, myDebtDueMs: 0n, myTradeBlocked: false, settlementNote: "" };
+}
+
+export const AuctionBoardSnapshot: MessageFns<AuctionBoardSnapshot> = {
+  encode(message: AuctionBoardSnapshot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.listings) {
+      AuctionListing.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.myDebtGold !== 0) {
+      writer.uint32(24).int32(message.myDebtGold);
+    }
+    if (message.myDebtDueMs !== 0n) {
+      if (BigInt.asIntN(64, message.myDebtDueMs) !== message.myDebtDueMs) {
+        throw new globalThis.Error("value provided for field message.myDebtDueMs of type int64 too large");
+      }
+      writer.uint32(32).int64(message.myDebtDueMs);
+    }
+    if (message.myTradeBlocked !== false) {
+      writer.uint32(40).bool(message.myTradeBlocked);
+    }
+    if (message.settlementNote !== "") {
+      writer.uint32(50).string(message.settlementNote);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardSnapshot {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardSnapshot();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.listings.push(AuctionListing.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.myDebtGold = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.myDebtDueMs = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.myTradeBlocked = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.settlementNote = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardSnapshot>, I>>(base?: I): AuctionBoardSnapshot {
+    return AuctionBoardSnapshot.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardSnapshot>, I>>(object: I): AuctionBoardSnapshot {
+    const message = createBaseAuctionBoardSnapshot();
+    message.listings = object.listings?.map((e) => AuctionListing.fromPartial(e)) || [];
+    message.message = object.message ?? "";
+    message.myDebtGold = object.myDebtGold ?? 0;
+    message.myDebtDueMs = object.myDebtDueMs ?? 0n;
+    message.myTradeBlocked = object.myTradeBlocked ?? false;
+    message.settlementNote = object.settlementNote ?? "";
+    return message;
+  },
+};
+
+function createBaseAuctionBoardActionResult(): AuctionBoardActionResult {
+  return { ok: false, message: "", listing: undefined, myDebtGold: 0, myDebtDueMs: 0n, myTradeBlocked: false };
+}
+
+export const AuctionBoardActionResult: MessageFns<AuctionBoardActionResult> = {
+  encode(message: AuctionBoardActionResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.listing !== undefined) {
+      AuctionListing.encode(message.listing, writer.uint32(26).fork()).join();
+    }
+    if (message.myDebtGold !== 0) {
+      writer.uint32(32).int32(message.myDebtGold);
+    }
+    if (message.myDebtDueMs !== 0n) {
+      if (BigInt.asIntN(64, message.myDebtDueMs) !== message.myDebtDueMs) {
+        throw new globalThis.Error("value provided for field message.myDebtDueMs of type int64 too large");
+      }
+      writer.uint32(40).int64(message.myDebtDueMs);
+    }
+    if (message.myTradeBlocked !== false) {
+      writer.uint32(48).bool(message.myTradeBlocked);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionBoardActionResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuctionBoardActionResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.listing = AuctionListing.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.myDebtGold = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.myDebtDueMs = reader.int64() as bigint;
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.myTradeBlocked = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AuctionBoardActionResult>, I>>(base?: I): AuctionBoardActionResult {
+    return AuctionBoardActionResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionBoardActionResult>, I>>(object: I): AuctionBoardActionResult {
+    const message = createBaseAuctionBoardActionResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.listing = (object.listing !== undefined && object.listing !== null)
+      ? AuctionListing.fromPartial(object.listing)
+      : undefined;
+    message.myDebtGold = object.myDebtGold ?? 0;
+    message.myDebtDueMs = object.myDebtDueMs ?? 0n;
+    message.myTradeBlocked = object.myTradeBlocked ?? false;
+    return message;
+  },
+};
+
+function createBaseHellMiningStatusRequest(): HellMiningStatusRequest {
+  return { gameWorldId: "" };
+}
+
+export const HellMiningStatusRequest: MessageFns<HellMiningStatusRequest> = {
+  encode(message: HellMiningStatusRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HellMiningStatusRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHellMiningStatusRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<HellMiningStatusRequest>, I>>(base?: I): HellMiningStatusRequest {
+    return HellMiningStatusRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<HellMiningStatusRequest>, I>>(object: I): HellMiningStatusRequest {
+    const message = createBaseHellMiningStatusRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    return message;
+  },
+};
+
+function createBaseHellMiningClaimRequest(): HellMiningClaimRequest {
+  return { gameWorldId: "", amount: 0n };
+}
+
+export const HellMiningClaimRequest: MessageFns<HellMiningClaimRequest> = {
+  encode(message: HellMiningClaimRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.amount !== 0n) {
+      if (BigInt.asIntN(64, message.amount) !== message.amount) {
+        throw new globalThis.Error("value provided for field message.amount of type int64 too large");
+      }
+      writer.uint32(16).int64(message.amount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HellMiningClaimRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHellMiningClaimRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.amount = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<HellMiningClaimRequest>, I>>(base?: I): HellMiningClaimRequest {
+    return HellMiningClaimRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<HellMiningClaimRequest>, I>>(object: I): HellMiningClaimRequest {
+    const message = createBaseHellMiningClaimRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.amount = object.amount ?? 0n;
+    return message;
+  },
+};
+
+function createBaseHellMiningStatus(): HellMiningStatus {
+  return {
+    pendingHell: 0n,
+    claimedHell: 0n,
+    remainingPool: 0n,
+    utcDay: "",
+    todayCredits: 0,
+    todayMonsterKills: 0,
+    todayMonsterCreditGranted: false,
+    todayDirectTokens: 0n,
+    todaySettled: false,
+    claimAvailable: false,
+    note: "",
+  };
+}
+
+export const HellMiningStatus: MessageFns<HellMiningStatus> = {
+  encode(message: HellMiningStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pendingHell !== 0n) {
+      if (BigInt.asIntN(64, message.pendingHell) !== message.pendingHell) {
+        throw new globalThis.Error("value provided for field message.pendingHell of type int64 too large");
+      }
+      writer.uint32(8).int64(message.pendingHell);
+    }
+    if (message.claimedHell !== 0n) {
+      if (BigInt.asIntN(64, message.claimedHell) !== message.claimedHell) {
+        throw new globalThis.Error("value provided for field message.claimedHell of type int64 too large");
+      }
+      writer.uint32(16).int64(message.claimedHell);
+    }
+    if (message.remainingPool !== 0n) {
+      if (BigInt.asIntN(64, message.remainingPool) !== message.remainingPool) {
+        throw new globalThis.Error("value provided for field message.remainingPool of type int64 too large");
+      }
+      writer.uint32(24).int64(message.remainingPool);
+    }
+    if (message.utcDay !== "") {
+      writer.uint32(34).string(message.utcDay);
+    }
+    if (message.todayCredits !== 0) {
+      writer.uint32(40).int32(message.todayCredits);
+    }
+    if (message.todayMonsterKills !== 0) {
+      writer.uint32(48).int32(message.todayMonsterKills);
+    }
+    if (message.todayMonsterCreditGranted !== false) {
+      writer.uint32(56).bool(message.todayMonsterCreditGranted);
+    }
+    if (message.todayDirectTokens !== 0n) {
+      if (BigInt.asIntN(64, message.todayDirectTokens) !== message.todayDirectTokens) {
+        throw new globalThis.Error("value provided for field message.todayDirectTokens of type int64 too large");
+      }
+      writer.uint32(64).int64(message.todayDirectTokens);
+    }
+    if (message.todaySettled !== false) {
+      writer.uint32(72).bool(message.todaySettled);
+    }
+    if (message.claimAvailable !== false) {
+      writer.uint32(80).bool(message.claimAvailable);
+    }
+    if (message.note !== "") {
+      writer.uint32(90).string(message.note);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HellMiningStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHellMiningStatus();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pendingHell = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.claimedHell = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.remainingPool = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.utcDay = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.todayCredits = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.todayMonsterKills = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.todayMonsterCreditGranted = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.todayDirectTokens = reader.int64() as bigint;
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.todaySettled = reader.bool();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.claimAvailable = reader.bool();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.note = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<HellMiningStatus>, I>>(base?: I): HellMiningStatus {
+    return HellMiningStatus.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<HellMiningStatus>, I>>(object: I): HellMiningStatus {
+    const message = createBaseHellMiningStatus();
+    message.pendingHell = object.pendingHell ?? 0n;
+    message.claimedHell = object.claimedHell ?? 0n;
+    message.remainingPool = object.remainingPool ?? 0n;
+    message.utcDay = object.utcDay ?? "";
+    message.todayCredits = object.todayCredits ?? 0;
+    message.todayMonsterKills = object.todayMonsterKills ?? 0;
+    message.todayMonsterCreditGranted = object.todayMonsterCreditGranted ?? false;
+    message.todayDirectTokens = object.todayDirectTokens ?? 0n;
+    message.todaySettled = object.todaySettled ?? false;
+    message.claimAvailable = object.claimAvailable ?? false;
+    message.note = object.note ?? "";
+    return message;
+  },
+};
+
+function createBaseHellMiningClaimResult(): HellMiningClaimResult {
+  return { ok: false, message: "", pendingHell: 0n, claimedAmount: 0n };
+}
+
+export const HellMiningClaimResult: MessageFns<HellMiningClaimResult> = {
+  encode(message: HellMiningClaimResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.pendingHell !== 0n) {
+      if (BigInt.asIntN(64, message.pendingHell) !== message.pendingHell) {
+        throw new globalThis.Error("value provided for field message.pendingHell of type int64 too large");
+      }
+      writer.uint32(24).int64(message.pendingHell);
+    }
+    if (message.claimedAmount !== 0n) {
+      if (BigInt.asIntN(64, message.claimedAmount) !== message.claimedAmount) {
+        throw new globalThis.Error("value provided for field message.claimedAmount of type int64 too large");
+      }
+      writer.uint32(32).int64(message.claimedAmount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HellMiningClaimResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHellMiningClaimResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.pendingHell = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.claimedAmount = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<HellMiningClaimResult>, I>>(base?: I): HellMiningClaimResult {
+    return HellMiningClaimResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<HellMiningClaimResult>, I>>(object: I): HellMiningClaimResult {
+    const message = createBaseHellMiningClaimResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.pendingHell = object.pendingHell ?? 0n;
+    message.claimedAmount = object.claimedAmount ?? 0n;
+    return message;
+  },
+};
+
+function createBaseApplyTrainingPresetRequest(): ApplyTrainingPresetRequest {
+  return { presetId: "", gameWorldId: "" };
+}
+
+export const ApplyTrainingPresetRequest: MessageFns<ApplyTrainingPresetRequest> = {
+  encode(message: ApplyTrainingPresetRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.presetId !== "") {
+      writer.uint32(10).string(message.presetId);
+    }
+    if (message.gameWorldId !== "") {
+      writer.uint32(18).string(message.gameWorldId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ApplyTrainingPresetRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseApplyTrainingPresetRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.presetId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ApplyTrainingPresetRequest>, I>>(base?: I): ApplyTrainingPresetRequest {
+    return ApplyTrainingPresetRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ApplyTrainingPresetRequest>, I>>(object: I): ApplyTrainingPresetRequest {
+    const message = createBaseApplyTrainingPresetRequest();
+    message.presetId = object.presetId ?? "";
+    message.gameWorldId = object.gameWorldId ?? "";
+    return message;
+  },
+};
+
+function createBaseBeginnerPathEnrollRequest(): BeginnerPathEnrollRequest {
+  return {};
+}
+
+export const BeginnerPathEnrollRequest: MessageFns<BeginnerPathEnrollRequest> = {
+  encode(_: BeginnerPathEnrollRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BeginnerPathEnrollRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBeginnerPathEnrollRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BeginnerPathEnrollRequest>, I>>(base?: I): BeginnerPathEnrollRequest {
+    return BeginnerPathEnrollRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BeginnerPathEnrollRequest>, I>>(_: I): BeginnerPathEnrollRequest {
+    const message = createBaseBeginnerPathEnrollRequest();
+    return message;
+  },
+};
+
+function createBaseBeginnerPathAbandonRequest(): BeginnerPathAbandonRequest {
+  return {};
+}
+
+export const BeginnerPathAbandonRequest: MessageFns<BeginnerPathAbandonRequest> = {
+  encode(_: BeginnerPathAbandonRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BeginnerPathAbandonRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBeginnerPathAbandonRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BeginnerPathAbandonRequest>, I>>(base?: I): BeginnerPathAbandonRequest {
+    return BeginnerPathAbandonRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BeginnerPathAbandonRequest>, I>>(_: I): BeginnerPathAbandonRequest {
+    const message = createBaseBeginnerPathAbandonRequest();
+    return message;
+  },
+};
+
+function createBaseBeginnerPathTalkRequest(): BeginnerPathTalkRequest {
+  return { catalogNpcId: 0 };
+}
+
+export const BeginnerPathTalkRequest: MessageFns<BeginnerPathTalkRequest> = {
+  encode(message: BeginnerPathTalkRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.catalogNpcId !== 0) {
+      writer.uint32(8).int32(message.catalogNpcId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BeginnerPathTalkRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBeginnerPathTalkRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.catalogNpcId = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BeginnerPathTalkRequest>, I>>(base?: I): BeginnerPathTalkRequest {
+    return BeginnerPathTalkRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BeginnerPathTalkRequest>, I>>(object: I): BeginnerPathTalkRequest {
+    const message = createBaseBeginnerPathTalkRequest();
+    message.catalogNpcId = object.catalogNpcId ?? 0;
+    return message;
+  },
+};
+
+function createBaseBeginnerPathUiActionRequest(): BeginnerPathUiActionRequest {
+  return { actionId: "" };
+}
+
+export const BeginnerPathUiActionRequest: MessageFns<BeginnerPathUiActionRequest> = {
+  encode(message: BeginnerPathUiActionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.actionId !== "") {
+      writer.uint32(10).string(message.actionId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BeginnerPathUiActionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBeginnerPathUiActionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.actionId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BeginnerPathUiActionRequest>, I>>(base?: I): BeginnerPathUiActionRequest {
+    return BeginnerPathUiActionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BeginnerPathUiActionRequest>, I>>(object: I): BeginnerPathUiActionRequest {
+    const message = createBaseBeginnerPathUiActionRequest();
+    message.actionId = object.actionId ?? "";
+    return message;
+  },
+};
+
+function createBaseRepairItemRequest(): RepairItemRequest {
+  return { gameWorldId: "", npcId: 0n, itemUid: 0n };
+}
+
+export const RepairItemRequest: MessageFns<RepairItemRequest> = {
+  encode(message: RepairItemRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RepairItemRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRepairItemRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<RepairItemRequest>, I>>(base?: I): RepairItemRequest {
+    return RepairItemRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RepairItemRequest>, I>>(object: I): RepairItemRequest {
+    const message = createBaseRepairItemRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseSellBagItemRequest(): SellBagItemRequest {
+  return { gameWorldId: "", itemUid: 0n };
+}
+
+export const SellBagItemRequest: MessageFns<SellBagItemRequest> = {
+  encode(message: SellBagItemRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(16).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SellBagItemRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSellBagItemRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SellBagItemRequest>, I>>(base?: I): SellBagItemRequest {
+    return SellBagItemRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SellBagItemRequest>, I>>(object: I): SellBagItemRequest {
+    const message = createBaseSellBagItemRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseSellBagItemResult(): SellBagItemResult {
+  return { ok: false, message: "", goldGained: undefined, itemUid: undefined };
+}
+
+export const SellBagItemResult: MessageFns<SellBagItemResult> = {
+  encode(message: SellBagItemResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.goldGained !== undefined) {
+      writer.uint32(24).int32(message.goldGained);
+    }
+    if (message.itemUid !== undefined) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(32).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SellBagItemResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSellBagItemResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.goldGained = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SellBagItemResult>, I>>(base?: I): SellBagItemResult {
+    return SellBagItemResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SellBagItemResult>, I>>(object: I): SellBagItemResult {
+    const message = createBaseSellBagItemResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.goldGained = object.goldGained ?? undefined;
+    message.itemUid = object.itemUid ?? undefined;
+    return message;
+  },
+};
+
+function createBaseCityNpcServiceRequest(): CityNpcServiceRequest {
+  return { gameWorldId: "", npcId: 0n, action: "", donateGold: undefined };
+}
+
+export const CityNpcServiceRequest: MessageFns<CityNpcServiceRequest> = {
+  encode(message: CityNpcServiceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.action !== "") {
+      writer.uint32(26).string(message.action);
+    }
+    if (message.donateGold !== undefined) {
+      writer.uint32(32).int32(message.donateGold);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CityNpcServiceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCityNpcServiceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.action = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.donateGold = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CityNpcServiceRequest>, I>>(base?: I): CityNpcServiceRequest {
+    return CityNpcServiceRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CityNpcServiceRequest>, I>>(object: I): CityNpcServiceRequest {
+    const message = createBaseCityNpcServiceRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.action = object.action ?? "";
+    message.donateGold = object.donateGold ?? undefined;
+    return message;
+  },
+};
+
+function createBaseCityNpcServiceResult(): CityNpcServiceResult {
+  return {
+    ok: false,
+    message: "",
+    role: "",
+    npcName: "",
+    guildInterestRegistered: false,
+    citizenshipSide: "",
+    cityServicesSummary: "",
+    hp: 0,
+    maxHp: 0,
+    goldSpent: 0,
+    crusadeStatus: "",
+    blessed: false,
+  };
+}
+
+export const CityNpcServiceResult: MessageFns<CityNpcServiceResult> = {
+  encode(message: CityNpcServiceResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.role !== "") {
+      writer.uint32(26).string(message.role);
+    }
+    if (message.npcName !== "") {
+      writer.uint32(34).string(message.npcName);
+    }
+    if (message.guildInterestRegistered !== false) {
+      writer.uint32(40).bool(message.guildInterestRegistered);
+    }
+    if (message.citizenshipSide !== "") {
+      writer.uint32(50).string(message.citizenshipSide);
+    }
+    if (message.cityServicesSummary !== "") {
+      writer.uint32(58).string(message.cityServicesSummary);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(64).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(72).int32(message.maxHp);
+    }
+    if (message.goldSpent !== 0) {
+      writer.uint32(80).int32(message.goldSpent);
+    }
+    if (message.crusadeStatus !== "") {
+      writer.uint32(90).string(message.crusadeStatus);
+    }
+    if (message.blessed !== false) {
+      writer.uint32(96).bool(message.blessed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CityNpcServiceResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCityNpcServiceResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.role = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.npcName = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.guildInterestRegistered = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.citizenshipSide = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.cityServicesSummary = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.hp = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.maxHp = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.goldSpent = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.crusadeStatus = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.blessed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CityNpcServiceResult>, I>>(base?: I): CityNpcServiceResult {
+    return CityNpcServiceResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CityNpcServiceResult>, I>>(object: I): CityNpcServiceResult {
+    const message = createBaseCityNpcServiceResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.role = object.role ?? "";
+    message.npcName = object.npcName ?? "";
+    message.guildInterestRegistered = object.guildInterestRegistered ?? false;
+    message.citizenshipSide = object.citizenshipSide ?? "";
+    message.cityServicesSummary = object.cityServicesSummary ?? "";
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.goldSpent = object.goldSpent ?? 0;
+    message.crusadeStatus = object.crusadeStatus ?? "";
+    message.blessed = object.blessed ?? false;
+    return message;
+  },
+};
+
+function createBaseBuyShopItemRequest(): BuyShopItemRequest {
+  return { gameWorldId: "", npcId: 0n, itemId: 0, quantity: 0 };
+}
+
+export const BuyShopItemRequest: MessageFns<BuyShopItemRequest> = {
+  encode(message: BuyShopItemRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(24).int32(message.itemId);
+    }
+    if (message.quantity !== 0) {
+      writer.uint32(32).int32(message.quantity);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BuyShopItemRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBuyShopItemRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.quantity = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BuyShopItemRequest>, I>>(base?: I): BuyShopItemRequest {
+    return BuyShopItemRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BuyShopItemRequest>, I>>(object: I): BuyShopItemRequest {
+    const message = createBaseBuyShopItemRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.quantity = object.quantity ?? 0;
+    return message;
+  },
+};
+
+function createBaseClaimKillMilestoneRequest(): ClaimKillMilestoneRequest {
+  return { milestoneId: "", chosenItemId: 0 };
+}
+
+export const ClaimKillMilestoneRequest: MessageFns<ClaimKillMilestoneRequest> = {
+  encode(message: ClaimKillMilestoneRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.milestoneId !== "") {
+      writer.uint32(10).string(message.milestoneId);
+    }
+    if (message.chosenItemId !== 0) {
+      writer.uint32(16).int32(message.chosenItemId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClaimKillMilestoneRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseClaimKillMilestoneRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.milestoneId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.chosenItemId = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ClaimKillMilestoneRequest>, I>>(base?: I): ClaimKillMilestoneRequest {
+    return ClaimKillMilestoneRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClaimKillMilestoneRequest>, I>>(object: I): ClaimKillMilestoneRequest {
+    const message = createBaseClaimKillMilestoneRequest();
+    message.milestoneId = object.milestoneId ?? "";
+    message.chosenItemId = object.chosenItemId ?? 0;
+    return message;
+  },
+};
+
+function createBaseRebirthRequest(): RebirthRequest {
+  return {};
+}
+
+export const RebirthRequest: MessageFns<RebirthRequest> = {
+  encode(_: RebirthRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RebirthRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRebirthRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<RebirthRequest>, I>>(base?: I): RebirthRequest {
+    return RebirthRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RebirthRequest>, I>>(_: I): RebirthRequest {
+    const message = createBaseRebirthRequest();
+    return message;
+  },
+};
+
+function createBaseRebirthRollbackRequest(): RebirthRollbackRequest {
+  return {};
+}
+
+export const RebirthRollbackRequest: MessageFns<RebirthRollbackRequest> = {
+  encode(_: RebirthRollbackRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RebirthRollbackRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRebirthRollbackRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<RebirthRollbackRequest>, I>>(base?: I): RebirthRollbackRequest {
+    return RebirthRollbackRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RebirthRollbackRequest>, I>>(_: I): RebirthRollbackRequest {
+    const message = createBaseRebirthRollbackRequest();
     return message;
   },
 };
@@ -2552,11 +9367,14 @@ export const PlayerItemDropRequested: MessageFns<PlayerItemDropRequested> = {
 };
 
 function createBasePlayerItemPickupRequested(): PlayerItemPickupRequested {
-  return {};
+  return { maxItems: 0 };
 }
 
 export const PlayerItemPickupRequested: MessageFns<PlayerItemPickupRequested> = {
-  encode(_: PlayerItemPickupRequested, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: PlayerItemPickupRequested, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.maxItems !== 0) {
+      writer.uint32(8).int32(message.maxItems);
+    }
     return writer;
   },
 
@@ -2567,6 +9385,14 @@ export const PlayerItemPickupRequested: MessageFns<PlayerItemPickupRequested> = 
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.maxItems = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2579,8 +9405,9 @@ export const PlayerItemPickupRequested: MessageFns<PlayerItemPickupRequested> = 
   create<I extends Exact<DeepPartial<PlayerItemPickupRequested>, I>>(base?: I): PlayerItemPickupRequested {
     return PlayerItemPickupRequested.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<PlayerItemPickupRequested>, I>>(_: I): PlayerItemPickupRequested {
+  fromPartial<I extends Exact<DeepPartial<PlayerItemPickupRequested>, I>>(object: I): PlayerItemPickupRequested {
     const message = createBasePlayerItemPickupRequested();
+    message.maxItems = object.maxItems ?? 0;
     return message;
   },
 };
@@ -3744,7 +10571,26 @@ export const LogoutCancelledRequest: MessageFns<LogoutCancelledRequest> = {
 };
 
 function createBaseAuthenticateRequest(): AuthenticateRequest {
-  return { id: "", characterName: "" };
+  return {
+    id: "",
+    characterName: "",
+    authToken: "",
+    preferredInitialWorldId: undefined,
+    slotIndex: undefined,
+    gender: undefined,
+    skinColor: undefined,
+    hairStyleIndex: undefined,
+    underwearColorIndex: undefined,
+    playerMode: undefined,
+    str: undefined,
+    vit: undefined,
+    dex: undefined,
+    intel: undefined,
+    mag: undefined,
+    chr: undefined,
+    referralCode: undefined,
+    arenaKitJson: undefined,
+  };
 }
 
 export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
@@ -3754,6 +10600,54 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     }
     if (message.characterName !== "") {
       writer.uint32(18).string(message.characterName);
+    }
+    if (message.authToken !== "") {
+      writer.uint32(26).string(message.authToken);
+    }
+    if (message.preferredInitialWorldId !== undefined) {
+      writer.uint32(34).string(message.preferredInitialWorldId);
+    }
+    if (message.slotIndex !== undefined) {
+      writer.uint32(40).int32(message.slotIndex);
+    }
+    if (message.gender !== undefined) {
+      writer.uint32(48).int32(message.gender);
+    }
+    if (message.skinColor !== undefined) {
+      writer.uint32(56).int32(message.skinColor);
+    }
+    if (message.hairStyleIndex !== undefined) {
+      writer.uint32(64).int32(message.hairStyleIndex);
+    }
+    if (message.underwearColorIndex !== undefined) {
+      writer.uint32(72).int32(message.underwearColorIndex);
+    }
+    if (message.playerMode !== undefined) {
+      writer.uint32(82).string(message.playerMode);
+    }
+    if (message.str !== undefined) {
+      writer.uint32(88).int32(message.str);
+    }
+    if (message.vit !== undefined) {
+      writer.uint32(96).int32(message.vit);
+    }
+    if (message.dex !== undefined) {
+      writer.uint32(104).int32(message.dex);
+    }
+    if (message.intel !== undefined) {
+      writer.uint32(112).int32(message.intel);
+    }
+    if (message.mag !== undefined) {
+      writer.uint32(120).int32(message.mag);
+    }
+    if (message.chr !== undefined) {
+      writer.uint32(128).int32(message.chr);
+    }
+    if (message.referralCode !== undefined) {
+      writer.uint32(138).string(message.referralCode);
+    }
+    if (message.arenaKitJson !== undefined) {
+      writer.uint32(146).string(message.arenaKitJson);
     }
     return writer;
   },
@@ -3781,6 +10675,134 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
           message.characterName = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.authToken = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.preferredInitialWorldId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.slotIndex = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.gender = reader.int32() as any;
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.skinColor = reader.int32() as any;
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.hairStyleIndex = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.underwearColorIndex = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.playerMode = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.referralCode = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.arenaKitJson = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3797,6 +10819,662 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     const message = createBaseAuthenticateRequest();
     message.id = object.id ?? "";
     message.characterName = object.characterName ?? "";
+    message.authToken = object.authToken ?? "";
+    message.preferredInitialWorldId = object.preferredInitialWorldId ?? undefined;
+    message.slotIndex = object.slotIndex ?? undefined;
+    message.gender = object.gender ?? undefined;
+    message.skinColor = object.skinColor ?? undefined;
+    message.hairStyleIndex = object.hairStyleIndex ?? undefined;
+    message.underwearColorIndex = object.underwearColorIndex ?? undefined;
+    message.playerMode = object.playerMode ?? undefined;
+    message.str = object.str ?? undefined;
+    message.vit = object.vit ?? undefined;
+    message.dex = object.dex ?? undefined;
+    message.intel = object.intel ?? undefined;
+    message.mag = object.mag ?? undefined;
+    message.chr = object.chr ?? undefined;
+    message.referralCode = object.referralCode ?? undefined;
+    message.arenaKitJson = object.arenaKitJson ?? undefined;
+    return message;
+  },
+};
+
+function createBaseCharacterListRequest(): CharacterListRequest {
+  return { id: "", authToken: "", playerMode: undefined };
+}
+
+export const CharacterListRequest: MessageFns<CharacterListRequest> = {
+  encode(message: CharacterListRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.authToken !== "") {
+      writer.uint32(18).string(message.authToken);
+    }
+    if (message.playerMode !== undefined) {
+      writer.uint32(26).string(message.playerMode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterListRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterListRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.authToken = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.playerMode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterListRequest>, I>>(base?: I): CharacterListRequest {
+    return CharacterListRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterListRequest>, I>>(object: I): CharacterListRequest {
+    const message = createBaseCharacterListRequest();
+    message.id = object.id ?? "";
+    message.authToken = object.authToken ?? "";
+    message.playerMode = object.playerMode ?? undefined;
+    return message;
+  },
+};
+
+function createBaseCharacterNameCheckRequest(): CharacterNameCheckRequest {
+  return { id: "", authToken: "", characterName: "" };
+}
+
+export const CharacterNameCheckRequest: MessageFns<CharacterNameCheckRequest> = {
+  encode(message: CharacterNameCheckRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.authToken !== "") {
+      writer.uint32(18).string(message.authToken);
+    }
+    if (message.characterName !== "") {
+      writer.uint32(26).string(message.characterName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterNameCheckRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterNameCheckRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.authToken = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterNameCheckRequest>, I>>(base?: I): CharacterNameCheckRequest {
+    return CharacterNameCheckRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterNameCheckRequest>, I>>(object: I): CharacterNameCheckRequest {
+    const message = createBaseCharacterNameCheckRequest();
+    message.id = object.id ?? "";
+    message.authToken = object.authToken ?? "";
+    message.characterName = object.characterName ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterNameCheckResponse(): CharacterNameCheckResponse {
+  return { available: false, message: "", characterName: "" };
+}
+
+export const CharacterNameCheckResponse: MessageFns<CharacterNameCheckResponse> = {
+  encode(message: CharacterNameCheckResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.available !== false) {
+      writer.uint32(8).bool(message.available);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.characterName !== "") {
+      writer.uint32(26).string(message.characterName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterNameCheckResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterNameCheckResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.available = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterNameCheckResponse>, I>>(base?: I): CharacterNameCheckResponse {
+    return CharacterNameCheckResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterNameCheckResponse>, I>>(object: I): CharacterNameCheckResponse {
+    const message = createBaseCharacterNameCheckResponse();
+    message.available = object.available ?? false;
+    message.message = object.message ?? "";
+    message.characterName = object.characterName ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterEquipPreview(): CharacterEquipPreview {
+  return { slot: "", itemId: 0 };
+}
+
+export const CharacterEquipPreview: MessageFns<CharacterEquipPreview> = {
+  encode(message: CharacterEquipPreview, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.slot !== "") {
+      writer.uint32(10).string(message.slot);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(16).int32(message.itemId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterEquipPreview {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterEquipPreview();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.slot = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterEquipPreview>, I>>(base?: I): CharacterEquipPreview {
+    return CharacterEquipPreview.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterEquipPreview>, I>>(object: I): CharacterEquipPreview {
+    const message = createBaseCharacterEquipPreview();
+    message.slot = object.slot ?? "";
+    message.itemId = object.itemId ?? 0;
+    return message;
+  },
+};
+
+function createBaseCharacterSlotSummary(): CharacterSlotSummary {
+  return {
+    slotIndex: 0,
+    name: "",
+    level: 0,
+    exp: 0n,
+    rebirth: 0,
+    hoursPlayed: 0,
+    str: 0,
+    vit: 0,
+    dex: 0,
+    intel: 0,
+    mag: 0,
+    chr: 0,
+    gender: 0,
+    skinColor: 0,
+    hairStyleIndex: 0,
+    underwearColorIndex: 0,
+    equipped: [],
+    citizenshipSide: "",
+  };
+}
+
+export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
+  encode(message: CharacterSlotSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.slotIndex !== 0) {
+      writer.uint32(8).int32(message.slotIndex);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.exp !== 0n) {
+      if (BigInt.asIntN(64, message.exp) !== message.exp) {
+        throw new globalThis.Error("value provided for field message.exp of type int64 too large");
+      }
+      writer.uint32(32).int64(message.exp);
+    }
+    if (message.rebirth !== 0) {
+      writer.uint32(40).int32(message.rebirth);
+    }
+    if (message.hoursPlayed !== 0) {
+      writer.uint32(49).double(message.hoursPlayed);
+    }
+    if (message.str !== 0) {
+      writer.uint32(56).int32(message.str);
+    }
+    if (message.vit !== 0) {
+      writer.uint32(64).int32(message.vit);
+    }
+    if (message.dex !== 0) {
+      writer.uint32(72).int32(message.dex);
+    }
+    if (message.intel !== 0) {
+      writer.uint32(80).int32(message.intel);
+    }
+    if (message.mag !== 0) {
+      writer.uint32(88).int32(message.mag);
+    }
+    if (message.chr !== 0) {
+      writer.uint32(96).int32(message.chr);
+    }
+    if (message.gender !== 0) {
+      writer.uint32(104).int32(message.gender);
+    }
+    if (message.skinColor !== 0) {
+      writer.uint32(112).int32(message.skinColor);
+    }
+    if (message.hairStyleIndex !== 0) {
+      writer.uint32(120).int32(message.hairStyleIndex);
+    }
+    if (message.underwearColorIndex !== 0) {
+      writer.uint32(128).int32(message.underwearColorIndex);
+    }
+    for (const v of message.equipped) {
+      CharacterEquipPreview.encode(v!, writer.uint32(138).fork()).join();
+    }
+    if (message.citizenshipSide !== "") {
+      writer.uint32(146).string(message.citizenshipSide);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterSlotSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterSlotSummary();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.slotIndex = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.exp = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.rebirth = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 49) {
+            break;
+          }
+
+          message.hoursPlayed = reader.double();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.gender = reader.int32() as any;
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.skinColor = reader.int32() as any;
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.hairStyleIndex = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.underwearColorIndex = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.equipped.push(CharacterEquipPreview.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.citizenshipSide = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterSlotSummary>, I>>(base?: I): CharacterSlotSummary {
+    return CharacterSlotSummary.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterSlotSummary>, I>>(object: I): CharacterSlotSummary {
+    const message = createBaseCharacterSlotSummary();
+    message.slotIndex = object.slotIndex ?? 0;
+    message.name = object.name ?? "";
+    message.level = object.level ?? 0;
+    message.exp = object.exp ?? 0n;
+    message.rebirth = object.rebirth ?? 0;
+    message.hoursPlayed = object.hoursPlayed ?? 0;
+    message.str = object.str ?? 0;
+    message.vit = object.vit ?? 0;
+    message.dex = object.dex ?? 0;
+    message.intel = object.intel ?? 0;
+    message.mag = object.mag ?? 0;
+    message.chr = object.chr ?? 0;
+    message.gender = object.gender ?? 0;
+    message.skinColor = object.skinColor ?? 0;
+    message.hairStyleIndex = object.hairStyleIndex ?? 0;
+    message.underwearColorIndex = object.underwearColorIndex ?? 0;
+    message.equipped = object.equipped?.map((e) => CharacterEquipPreview.fromPartial(e)) || [];
+    message.citizenshipSide = object.citizenshipSide ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterListResponse(): CharacterListResponse {
+  return {
+    characters: [],
+    referralCode: undefined,
+    referralAlreadyAttributed: undefined,
+    referralShareUrl: undefined,
+    arenaPactInvites: [],
+  };
+}
+
+export const CharacterListResponse: MessageFns<CharacterListResponse> = {
+  encode(message: CharacterListResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.characters) {
+      CharacterSlotSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.referralCode !== undefined) {
+      writer.uint32(18).string(message.referralCode);
+    }
+    if (message.referralAlreadyAttributed !== undefined) {
+      writer.uint32(24).bool(message.referralAlreadyAttributed);
+    }
+    if (message.referralShareUrl !== undefined) {
+      writer.uint32(34).string(message.referralShareUrl);
+    }
+    for (const v of message.arenaPactInvites) {
+      ArenaPactState.encode(v!, writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterListResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterListResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.characters.push(CharacterSlotSummary.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.referralCode = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.referralAlreadyAttributed = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.referralShareUrl = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.arenaPactInvites.push(ArenaPactState.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterListResponse>, I>>(base?: I): CharacterListResponse {
+    return CharacterListResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterListResponse>, I>>(object: I): CharacterListResponse {
+    const message = createBaseCharacterListResponse();
+    message.characters = object.characters?.map((e) => CharacterSlotSummary.fromPartial(e)) || [];
+    message.referralCode = object.referralCode ?? undefined;
+    message.referralAlreadyAttributed = object.referralAlreadyAttributed ?? undefined;
+    message.referralShareUrl = object.referralShareUrl ?? undefined;
+    message.arenaPactInvites = object.arenaPactInvites?.map((e) => ArenaPactState.fromPartial(e)) || [];
     return message;
   },
 };
@@ -4063,6 +11741,56 @@ export const PlayerAttackModeChangeRequest: MessageFns<PlayerAttackModeChangeReq
   },
 };
 
+function createBasePlayerSafeAttackModeChangeRequest(): PlayerSafeAttackModeChangeRequest {
+  return { safeAttackMode: false };
+}
+
+export const PlayerSafeAttackModeChangeRequest: MessageFns<PlayerSafeAttackModeChangeRequest> = {
+  encode(message: PlayerSafeAttackModeChangeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.safeAttackMode !== false) {
+      writer.uint32(8).bool(message.safeAttackMode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerSafeAttackModeChangeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePlayerSafeAttackModeChangeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.safeAttackMode = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PlayerSafeAttackModeChangeRequest>, I>>(
+    base?: I,
+  ): PlayerSafeAttackModeChangeRequest {
+    return PlayerSafeAttackModeChangeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerSafeAttackModeChangeRequest>, I>>(
+    object: I,
+  ): PlayerSafeAttackModeChangeRequest {
+    const message = createBasePlayerSafeAttackModeChangeRequest();
+    message.safeAttackMode = object.safeAttackMode ?? false;
+    return message;
+  },
+};
+
 function createBasePlayerMovementStateChanged(): PlayerMovementStateChanged {
   return { playerId: 0n, runningMode: false, movementSpeedMs: 0 };
 }
@@ -4193,6 +11921,52 @@ export const PlayerAttackModeChanged: MessageFns<PlayerAttackModeChanged> = {
     const message = createBasePlayerAttackModeChanged();
     message.playerId = object.playerId ?? 0n;
     message.attackMode = object.attackMode ?? false;
+    return message;
+  },
+};
+
+function createBasePlayerSafeAttackModeChanged(): PlayerSafeAttackModeChanged {
+  return { safeAttackMode: false };
+}
+
+export const PlayerSafeAttackModeChanged: MessageFns<PlayerSafeAttackModeChanged> = {
+  encode(message: PlayerSafeAttackModeChanged, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.safeAttackMode !== false) {
+      writer.uint32(8).bool(message.safeAttackMode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerSafeAttackModeChanged {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePlayerSafeAttackModeChanged();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.safeAttackMode = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PlayerSafeAttackModeChanged>, I>>(base?: I): PlayerSafeAttackModeChanged {
+    return PlayerSafeAttackModeChanged.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerSafeAttackModeChanged>, I>>(object: I): PlayerSafeAttackModeChanged {
+    const message = createBasePlayerSafeAttackModeChanged();
+    message.safeAttackMode = object.safeAttackMode ?? false;
     return message;
   },
 };
@@ -4833,7 +12607,16 @@ export const GroundEffectEntry: MessageFns<GroundEffectEntry> = {
 };
 
 function createBaseGroundItemEntry(): GroundItemEntry {
-  return { itemId: 0, itemUid: 0n, quantity: undefined, effectOverrides: [], itemAttribute: undefined, itemColor: undefined };
+  return {
+    itemId: 0,
+    itemUid: 0n,
+    quantity: undefined,
+    effectOverrides: [],
+    itemAttribute: undefined,
+    itemColor: undefined,
+    curLifeSpan: undefined,
+    maxLifeSpan: undefined,
+  };
 }
 
 export const GroundItemEntry: MessageFns<GroundItemEntry> = {
@@ -4858,6 +12641,12 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
     }
     if (message.itemColor !== undefined) {
       writer.uint32(48).int32(message.itemColor);
+    }
+    if (message.curLifeSpan !== undefined) {
+      writer.uint32(56).int32(message.curLifeSpan);
+    }
+    if (message.maxLifeSpan !== undefined) {
+      writer.uint32(64).int32(message.maxLifeSpan);
     }
     return writer;
   },
@@ -4917,6 +12706,22 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
           message.itemColor = reader.int32();
           continue;
         }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.curLifeSpan = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.maxLifeSpan = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4937,6 +12742,8 @@ export const GroundItemEntry: MessageFns<GroundItemEntry> = {
     message.effectOverrides = object.effectOverrides?.map((e) => ItemEffectEntry.fromPartial(e)) || [];
     message.itemAttribute = object.itemAttribute ?? undefined;
     message.itemColor = object.itemColor ?? undefined;
+    message.curLifeSpan = object.curLifeSpan ?? undefined;
+    message.maxLifeSpan = object.maxLifeSpan ?? undefined;
     return message;
   },
 };
@@ -5382,6 +13189,135 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         break;
       case "logoutCancelled":
         LogoutCancelled.encode(message.payload.value, writer.uint32(506).fork()).join();
+        break;
+      case "progressionState":
+        ProgressionState.encode(message.payload.value, writer.uint32(514).fork()).join();
+        break;
+      case "progressionUpdated":
+        ProgressionUpdated.encode(message.payload.value, writer.uint32(522).fork()).join();
+        break;
+      case "monsterKillsUpdated":
+        MonsterKillsUpdated.encode(message.payload.value, writer.uint32(530).fork()).join();
+        break;
+      case "killMilestoneClaimResult":
+        KillMilestoneClaimResult.encode(message.payload.value, writer.uint32(538).fork()).join();
+        break;
+      case "characterListResponse":
+        CharacterListResponse.encode(message.payload.value, writer.uint32(546).fork()).join();
+        break;
+      case "buyShopItemResult":
+        BuyShopItemResult.encode(message.payload.value, writer.uint32(554).fork()).join();
+        break;
+      case "beginnerPathState":
+        BeginnerPathState.encode(message.payload.value, writer.uint32(562).fork()).join();
+        break;
+      case "trainingPresetApplied":
+        TrainingPresetApplied.encode(message.payload.value, writer.uint32(570).fork()).join();
+        break;
+      case "warehouseState":
+        WarehouseState.encode(message.payload.value, writer.uint32(578).fork()).join();
+        break;
+      case "warehouseMutationResult":
+        WarehouseMutationResult.encode(message.payload.value, writer.uint32(586).fork()).join();
+        break;
+      case "repairItemResult":
+        RepairItemResult.encode(message.payload.value, writer.uint32(594).fork()).join();
+        break;
+      case "itemLifeSpanUpdated":
+        ItemLifeSpanUpdated.encode(message.payload.value, writer.uint32(602).fork()).join();
+        break;
+      case "cityNpcServiceResult":
+        CityNpcServiceResult.encode(message.payload.value, writer.uint32(610).fork()).join();
+        break;
+      case "partyState":
+        PartyState.encode(message.payload.value, writer.uint32(618).fork()).join();
+        break;
+      case "antiBotToolsState":
+        AntiBotToolsState.encode(message.payload.value, writer.uint32(626).fork()).join();
+        break;
+      case "setAntiBotToolsResult":
+        SetAntiBotToolsResult.encode(message.payload.value, writer.uint32(634).fork()).join();
+        break;
+      case "timedChallengeState":
+        TimedChallengeState.encode(message.payload.value, writer.uint32(642).fork()).join();
+        break;
+      case "timedChallengeFinished":
+        TimedChallengeFinished.encode(message.payload.value, writer.uint32(650).fork()).join();
+        break;
+      case "timedChallengeLeaderboard":
+        TimedChallengeLeaderboard.encode(message.payload.value, writer.uint32(658).fork()).join();
+        break;
+      case "auctionBoardSnapshot":
+        AuctionBoardSnapshot.encode(message.payload.value, writer.uint32(666).fork()).join();
+        break;
+      case "auctionBoardActionResult":
+        AuctionBoardActionResult.encode(message.payload.value, writer.uint32(674).fork()).join();
+        break;
+      case "sellBagItemResult":
+        SellBagItemResult.encode(message.payload.value, writer.uint32(682).fork()).join();
+        break;
+      case "enemyKillAwarded":
+        EnemyKillAwarded.encode(message.payload.value, writer.uint32(690).fork()).join();
+        break;
+      case "levelUpSettingsApplied":
+        LevelUpSettingsApplied.encode(message.payload.value, writer.uint32(698).fork()).join();
+        break;
+      case "playerSafeAttackModeChanged":
+        PlayerSafeAttackModeChanged.encode(message.payload.value, writer.uint32(706).fork()).join();
+        break;
+      case "hellMiningStatus":
+        HellMiningStatus.encode(message.payload.value, writer.uint32(714).fork()).join();
+        break;
+      case "hellMiningClaimResult":
+        HellMiningClaimResult.encode(message.payload.value, writer.uint32(722).fork()).join();
+        break;
+      case "majesticUpgradeResult":
+        MajesticUpgradeResult.encode(message.payload.value, writer.uint32(730).fork()).join();
+        break;
+      case "itemBindResult":
+        ItemBindResult.encode(message.payload.value, writer.uint32(738).fork()).join();
+        break;
+      case "buyCashShopItemResult":
+        BuyCashShopItemResult.encode(message.payload.value, writer.uint32(746).fork()).join();
+        break;
+      case "characterNameCheckResponse":
+        CharacterNameCheckResponse.encode(message.payload.value, writer.uint32(754).fork()).join();
+        break;
+      case "stoneItemUpgradeResult":
+        StoneItemUpgradeResult.encode(message.payload.value, writer.uint32(762).fork()).join();
+        break;
+      case "skillGatherResult":
+        SkillGatherResult.encode(message.payload.value, writer.uint32(770).fork()).join();
+        break;
+      case "skillsState":
+        SkillsState.encode(message.payload.value, writer.uint32(778).fork()).join();
+        break;
+      case "enchantMaterialsState":
+        EnchantMaterialsState.encode(message.payload.value, writer.uint32(786).fork()).join();
+        break;
+      case "enchantResult":
+        EnchantResult.encode(message.payload.value, writer.uint32(794).fork()).join();
+        break;
+      case "majesticStatRespecResult":
+        MajesticStatRespecResult.encode(message.payload.value, writer.uint32(802).fork()).join();
+        break;
+      case "cicItemMergeResult":
+        CicItemMergeResult.encode(message.payload.value, writer.uint32(810).fork()).join();
+        break;
+      case "siphonGemUpgradeResult":
+        SiphonGemUpgradeResult.encode(message.payload.value, writer.uint32(818).fork()).join();
+        break;
+      case "specialAbilityStatus":
+        SpecialAbilityStatus.encode(message.payload.value, writer.uint32(826).fork()).join();
+        break;
+      case "arenaPactState":
+        ArenaPactState.encode(message.payload.value, writer.uint32(834).fork()).join();
+        break;
+      case "arenaPactListResponse":
+        ArenaPactListResponse.encode(message.payload.value, writer.uint32(842).fork()).join();
+        break;
+      case "streamBroadcastState":
+        StreamBroadcastState.encode(message.payload.value, writer.uint32(850).fork()).join();
         break;
     }
     return writer;
@@ -5954,6 +13890,428 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           message.payload = { $case: "logoutCancelled", value: LogoutCancelled.decode(reader, reader.uint32()) };
           continue;
         }
+        case 64: {
+          if (tag !== 514) {
+            break;
+          }
+
+          message.payload = { $case: "progressionState", value: ProgressionState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 65: {
+          if (tag !== 522) {
+            break;
+          }
+
+          message.payload = { $case: "progressionUpdated", value: ProgressionUpdated.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 66: {
+          if (tag !== 530) {
+            break;
+          }
+
+          message.payload = {
+            $case: "monsterKillsUpdated",
+            value: MonsterKillsUpdated.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 67: {
+          if (tag !== 538) {
+            break;
+          }
+
+          message.payload = {
+            $case: "killMilestoneClaimResult",
+            value: KillMilestoneClaimResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 68: {
+          if (tag !== 546) {
+            break;
+          }
+
+          message.payload = {
+            $case: "characterListResponse",
+            value: CharacterListResponse.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 69: {
+          if (tag !== 554) {
+            break;
+          }
+
+          message.payload = { $case: "buyShopItemResult", value: BuyShopItemResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 70: {
+          if (tag !== 562) {
+            break;
+          }
+
+          message.payload = { $case: "beginnerPathState", value: BeginnerPathState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 71: {
+          if (tag !== 570) {
+            break;
+          }
+
+          message.payload = {
+            $case: "trainingPresetApplied",
+            value: TrainingPresetApplied.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 72: {
+          if (tag !== 578) {
+            break;
+          }
+
+          message.payload = { $case: "warehouseState", value: WarehouseState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 73: {
+          if (tag !== 586) {
+            break;
+          }
+
+          message.payload = {
+            $case: "warehouseMutationResult",
+            value: WarehouseMutationResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 74: {
+          if (tag !== 594) {
+            break;
+          }
+
+          message.payload = { $case: "repairItemResult", value: RepairItemResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 75: {
+          if (tag !== 602) {
+            break;
+          }
+
+          message.payload = {
+            $case: "itemLifeSpanUpdated",
+            value: ItemLifeSpanUpdated.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 76: {
+          if (tag !== 610) {
+            break;
+          }
+
+          message.payload = {
+            $case: "cityNpcServiceResult",
+            value: CityNpcServiceResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 77: {
+          if (tag !== 618) {
+            break;
+          }
+
+          message.payload = { $case: "partyState", value: PartyState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 78: {
+          if (tag !== 626) {
+            break;
+          }
+
+          message.payload = { $case: "antiBotToolsState", value: AntiBotToolsState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 79: {
+          if (tag !== 634) {
+            break;
+          }
+
+          message.payload = {
+            $case: "setAntiBotToolsResult",
+            value: SetAntiBotToolsResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 80: {
+          if (tag !== 642) {
+            break;
+          }
+
+          message.payload = {
+            $case: "timedChallengeState",
+            value: TimedChallengeState.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 81: {
+          if (tag !== 650) {
+            break;
+          }
+
+          message.payload = {
+            $case: "timedChallengeFinished",
+            value: TimedChallengeFinished.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 82: {
+          if (tag !== 658) {
+            break;
+          }
+
+          message.payload = {
+            $case: "timedChallengeLeaderboard",
+            value: TimedChallengeLeaderboard.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 83: {
+          if (tag !== 666) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardSnapshot",
+            value: AuctionBoardSnapshot.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 84: {
+          if (tag !== 674) {
+            break;
+          }
+
+          message.payload = {
+            $case: "auctionBoardActionResult",
+            value: AuctionBoardActionResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 85: {
+          if (tag !== 682) {
+            break;
+          }
+
+          message.payload = { $case: "sellBagItemResult", value: SellBagItemResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 86: {
+          if (tag !== 690) {
+            break;
+          }
+
+          message.payload = { $case: "enemyKillAwarded", value: EnemyKillAwarded.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 87: {
+          if (tag !== 698) {
+            break;
+          }
+
+          message.payload = {
+            $case: "levelUpSettingsApplied",
+            value: LevelUpSettingsApplied.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 88: {
+          if (tag !== 706) {
+            break;
+          }
+
+          message.payload = {
+            $case: "playerSafeAttackModeChanged",
+            value: PlayerSafeAttackModeChanged.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 89: {
+          if (tag !== 714) {
+            break;
+          }
+
+          message.payload = { $case: "hellMiningStatus", value: HellMiningStatus.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 90: {
+          if (tag !== 722) {
+            break;
+          }
+
+          message.payload = {
+            $case: "hellMiningClaimResult",
+            value: HellMiningClaimResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 91: {
+          if (tag !== 730) {
+            break;
+          }
+
+          message.payload = {
+            $case: "majesticUpgradeResult",
+            value: MajesticUpgradeResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 92: {
+          if (tag !== 738) {
+            break;
+          }
+
+          message.payload = { $case: "itemBindResult", value: ItemBindResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 93: {
+          if (tag !== 746) {
+            break;
+          }
+
+          message.payload = {
+            $case: "buyCashShopItemResult",
+            value: BuyCashShopItemResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 94: {
+          if (tag !== 754) {
+            break;
+          }
+
+          message.payload = {
+            $case: "characterNameCheckResponse",
+            value: CharacterNameCheckResponse.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 95: {
+          if (tag !== 762) {
+            break;
+          }
+
+          message.payload = {
+            $case: "stoneItemUpgradeResult",
+            value: StoneItemUpgradeResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 96: {
+          if (tag !== 770) {
+            break;
+          }
+
+          message.payload = { $case: "skillGatherResult", value: SkillGatherResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 97: {
+          if (tag !== 778) {
+            break;
+          }
+
+          message.payload = { $case: "skillsState", value: SkillsState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 98: {
+          if (tag !== 786) {
+            break;
+          }
+
+          message.payload = {
+            $case: "enchantMaterialsState",
+            value: EnchantMaterialsState.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 99: {
+          if (tag !== 794) {
+            break;
+          }
+
+          message.payload = { $case: "enchantResult", value: EnchantResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 100: {
+          if (tag !== 802) {
+            break;
+          }
+
+          message.payload = {
+            $case: "majesticStatRespecResult",
+            value: MajesticStatRespecResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 101: {
+          if (tag !== 810) {
+            break;
+          }
+
+          message.payload = { $case: "cicItemMergeResult", value: CicItemMergeResult.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 102: {
+          if (tag !== 818) {
+            break;
+          }
+
+          message.payload = {
+            $case: "siphonGemUpgradeResult",
+            value: SiphonGemUpgradeResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 103: {
+          if (tag !== 826) {
+            break;
+          }
+
+          message.payload = {
+            $case: "specialAbilityStatus",
+            value: SpecialAbilityStatus.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 104: {
+          if (tag !== 834) {
+            break;
+          }
+
+          message.payload = { $case: "arenaPactState", value: ArenaPactState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 105: {
+          if (tag !== 842) {
+            break;
+          }
+
+          message.payload = {
+            $case: "arenaPactListResponse",
+            value: ArenaPactListResponse.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 106: {
+          if (tag !== 850) {
+            break;
+          }
+
+          message.payload = {
+            $case: "streamBroadcastState",
+            value: StreamBroadcastState.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6416,7 +14774,7108 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "progressionState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "progressionState", value: ProgressionState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "progressionUpdated": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "progressionUpdated",
+            value: ProgressionUpdated.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "monsterKillsUpdated": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "monsterKillsUpdated",
+            value: MonsterKillsUpdated.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "killMilestoneClaimResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "killMilestoneClaimResult",
+            value: KillMilestoneClaimResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "characterListResponse": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "characterListResponse",
+            value: CharacterListResponse.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "buyShopItemResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "buyShopItemResult", value: BuyShopItemResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "beginnerPathState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "beginnerPathState", value: BeginnerPathState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "trainingPresetApplied": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "trainingPresetApplied",
+            value: TrainingPresetApplied.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "warehouseState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "warehouseState", value: WarehouseState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "warehouseMutationResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "warehouseMutationResult",
+            value: WarehouseMutationResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "repairItemResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "repairItemResult", value: RepairItemResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "itemLifeSpanUpdated": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "itemLifeSpanUpdated",
+            value: ItemLifeSpanUpdated.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "cityNpcServiceResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "cityNpcServiceResult",
+            value: CityNpcServiceResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "partyState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "partyState", value: PartyState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "antiBotToolsState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "antiBotToolsState", value: AntiBotToolsState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "setAntiBotToolsResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "setAntiBotToolsResult",
+            value: SetAntiBotToolsResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "timedChallengeState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "timedChallengeState",
+            value: TimedChallengeState.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "timedChallengeFinished": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "timedChallengeFinished",
+            value: TimedChallengeFinished.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "timedChallengeLeaderboard": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "timedChallengeLeaderboard",
+            value: TimedChallengeLeaderboard.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardSnapshot": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardSnapshot",
+            value: AuctionBoardSnapshot.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionBoardActionResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionBoardActionResult",
+            value: AuctionBoardActionResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "sellBagItemResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "sellBagItemResult", value: SellBagItemResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "enemyKillAwarded": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "enemyKillAwarded", value: EnemyKillAwarded.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "levelUpSettingsApplied": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "levelUpSettingsApplied",
+            value: LevelUpSettingsApplied.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "playerSafeAttackModeChanged": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "playerSafeAttackModeChanged",
+            value: PlayerSafeAttackModeChanged.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "hellMiningStatus": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "hellMiningStatus", value: HellMiningStatus.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "hellMiningClaimResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "hellMiningClaimResult",
+            value: HellMiningClaimResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "majesticUpgradeResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "majesticUpgradeResult",
+            value: MajesticUpgradeResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "itemBindResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "itemBindResult", value: ItemBindResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "buyCashShopItemResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "buyCashShopItemResult",
+            value: BuyCashShopItemResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "characterNameCheckResponse": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "characterNameCheckResponse",
+            value: CharacterNameCheckResponse.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "stoneItemUpgradeResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "stoneItemUpgradeResult",
+            value: StoneItemUpgradeResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "skillGatherResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "skillGatherResult", value: SkillGatherResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "skillsState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "skillsState", value: SkillsState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "enchantMaterialsState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "enchantMaterialsState",
+            value: EnchantMaterialsState.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "enchantResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "enchantResult", value: EnchantResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "majesticStatRespecResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "majesticStatRespecResult",
+            value: MajesticStatRespecResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "cicItemMergeResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "cicItemMergeResult",
+            value: CicItemMergeResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "siphonGemUpgradeResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "siphonGemUpgradeResult",
+            value: SiphonGemUpgradeResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "specialAbilityStatus": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "specialAbilityStatus",
+            value: SpecialAbilityStatus.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "arenaPactState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "arenaPactState", value: ArenaPactState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "arenaPactListResponse": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "arenaPactListResponse",
+            value: ArenaPactListResponse.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "streamBroadcastState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "streamBroadcastState",
+            value: StreamBroadcastState.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBaseArenaPactPrizePledgeRequest(): ArenaPactPrizePledgeRequest {
+  return { matchId: "", assetId: "", amount: 0n, instanceId: undefined };
+}
+
+export const ArenaPactPrizePledgeRequest: MessageFns<ArenaPactPrizePledgeRequest> = {
+  encode(message: ArenaPactPrizePledgeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.assetId !== "") {
+      writer.uint32(18).string(message.assetId);
+    }
+    if (message.amount !== 0n) {
+      if (BigInt.asIntN(64, message.amount) !== message.amount) {
+        throw new globalThis.Error("value provided for field message.amount of type int64 too large");
+      }
+      writer.uint32(24).int64(message.amount);
+    }
+    if (message.instanceId !== undefined) {
+      writer.uint32(34).string(message.instanceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactPrizePledgeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactPrizePledgeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.assetId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.amount = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.instanceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactPrizePledgeRequest>, I>>(base?: I): ArenaPactPrizePledgeRequest {
+    return ArenaPactPrizePledgeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactPrizePledgeRequest>, I>>(object: I): ArenaPactPrizePledgeRequest {
+    const message = createBaseArenaPactPrizePledgeRequest();
+    message.matchId = object.matchId ?? "";
+    message.assetId = object.assetId ?? "";
+    message.amount = object.amount ?? 0n;
+    message.instanceId = object.instanceId ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactPrizeConfirmRequest(): ArenaPactPrizeConfirmRequest {
+  return { matchId: "" };
+}
+
+export const ArenaPactPrizeConfirmRequest: MessageFns<ArenaPactPrizeConfirmRequest> = {
+  encode(message: ArenaPactPrizeConfirmRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactPrizeConfirmRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactPrizeConfirmRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactPrizeConfirmRequest>, I>>(base?: I): ArenaPactPrizeConfirmRequest {
+    return ArenaPactPrizeConfirmRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactPrizeConfirmRequest>, I>>(object: I): ArenaPactPrizeConfirmRequest {
+    const message = createBaseArenaPactPrizeConfirmRequest();
+    message.matchId = object.matchId ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaPactSignLossRequest(): ArenaPactSignLossRequest {
+  return { matchId: "" };
+}
+
+export const ArenaPactSignLossRequest: MessageFns<ArenaPactSignLossRequest> = {
+  encode(message: ArenaPactSignLossRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactSignLossRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactSignLossRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactSignLossRequest>, I>>(base?: I): ArenaPactSignLossRequest {
+    return ArenaPactSignLossRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactSignLossRequest>, I>>(object: I): ArenaPactSignLossRequest {
+    const message = createBaseArenaPactSignLossRequest();
+    message.matchId = object.matchId ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaPactCreateRequest(): ArenaPactCreateRequest {
+  return {
+    mapId: "",
+    stakeAssetId: undefined,
+    stakeAmount: undefined,
+    arenaKitJson: undefined,
+    opensAtMs: 0n,
+    readyWindowSec: 0,
+    isPublic: false,
+    title: undefined,
+    hostStreamUrl: undefined,
+    globalStreamUrl: undefined,
+  };
+}
+
+export const ArenaPactCreateRequest: MessageFns<ArenaPactCreateRequest> = {
+  encode(message: ArenaPactCreateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mapId !== "") {
+      writer.uint32(10).string(message.mapId);
+    }
+    if (message.stakeAssetId !== undefined) {
+      writer.uint32(18).string(message.stakeAssetId);
+    }
+    if (message.stakeAmount !== undefined) {
+      if (BigInt.asIntN(64, message.stakeAmount) !== message.stakeAmount) {
+        throw new globalThis.Error("value provided for field message.stakeAmount of type int64 too large");
+      }
+      writer.uint32(24).int64(message.stakeAmount);
+    }
+    if (message.arenaKitJson !== undefined) {
+      writer.uint32(34).string(message.arenaKitJson);
+    }
+    if (message.opensAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.opensAtMs) !== message.opensAtMs) {
+        throw new globalThis.Error("value provided for field message.opensAtMs of type int64 too large");
+      }
+      writer.uint32(40).int64(message.opensAtMs);
+    }
+    if (message.readyWindowSec !== 0) {
+      writer.uint32(48).int32(message.readyWindowSec);
+    }
+    if (message.isPublic !== false) {
+      writer.uint32(56).bool(message.isPublic);
+    }
+    if (message.title !== undefined) {
+      writer.uint32(66).string(message.title);
+    }
+    if (message.hostStreamUrl !== undefined) {
+      writer.uint32(74).string(message.hostStreamUrl);
+    }
+    if (message.globalStreamUrl !== undefined) {
+      writer.uint32(82).string(message.globalStreamUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactCreateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactCreateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.mapId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.stakeAssetId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.stakeAmount = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.arenaKitJson = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.opensAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.readyWindowSec = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.isPublic = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.title = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.hostStreamUrl = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.globalStreamUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactCreateRequest>, I>>(base?: I): ArenaPactCreateRequest {
+    return ArenaPactCreateRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactCreateRequest>, I>>(object: I): ArenaPactCreateRequest {
+    const message = createBaseArenaPactCreateRequest();
+    message.mapId = object.mapId ?? "";
+    message.stakeAssetId = object.stakeAssetId ?? undefined;
+    message.stakeAmount = object.stakeAmount ?? undefined;
+    message.arenaKitJson = object.arenaKitJson ?? undefined;
+    message.opensAtMs = object.opensAtMs ?? 0n;
+    message.readyWindowSec = object.readyWindowSec ?? 0;
+    message.isPublic = object.isPublic ?? false;
+    message.title = object.title ?? undefined;
+    message.hostStreamUrl = object.hostStreamUrl ?? undefined;
+    message.globalStreamUrl = object.globalStreamUrl ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactInviteRequest(): ArenaPactInviteRequest {
+  return { matchId: "", targetCharacterName: "" };
+}
+
+export const ArenaPactInviteRequest: MessageFns<ArenaPactInviteRequest> = {
+  encode(message: ArenaPactInviteRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.targetCharacterName !== "") {
+      writer.uint32(18).string(message.targetCharacterName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactInviteRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactInviteRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.targetCharacterName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactInviteRequest>, I>>(base?: I): ArenaPactInviteRequest {
+    return ArenaPactInviteRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactInviteRequest>, I>>(object: I): ArenaPactInviteRequest {
+    const message = createBaseArenaPactInviteRequest();
+    message.matchId = object.matchId ?? "";
+    message.targetCharacterName = object.targetCharacterName ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaPactRespondRequest(): ArenaPactRespondRequest {
+  return { matchId: "", accept: false, arenaKitJson: undefined, responseMode: undefined, streamUrl: undefined };
+}
+
+export const ArenaPactRespondRequest: MessageFns<ArenaPactRespondRequest> = {
+  encode(message: ArenaPactRespondRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.accept !== false) {
+      writer.uint32(16).bool(message.accept);
+    }
+    if (message.arenaKitJson !== undefined) {
+      writer.uint32(26).string(message.arenaKitJson);
+    }
+    if (message.responseMode !== undefined) {
+      writer.uint32(34).string(message.responseMode);
+    }
+    if (message.streamUrl !== undefined) {
+      writer.uint32(42).string(message.streamUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactRespondRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactRespondRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.accept = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.arenaKitJson = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.responseMode = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.streamUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactRespondRequest>, I>>(base?: I): ArenaPactRespondRequest {
+    return ArenaPactRespondRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactRespondRequest>, I>>(object: I): ArenaPactRespondRequest {
+    const message = createBaseArenaPactRespondRequest();
+    message.matchId = object.matchId ?? "";
+    message.accept = object.accept ?? false;
+    message.arenaKitJson = object.arenaKitJson ?? undefined;
+    message.responseMode = object.responseMode ?? undefined;
+    message.streamUrl = object.streamUrl ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactReadyRequest(): ArenaPactReadyRequest {
+  return {
+    matchId: "",
+    ready: false,
+    arenaKitJson: undefined,
+    reportPingMs: undefined,
+    reportPingVarianceMs: undefined,
+    reportFps: undefined,
+  };
+}
+
+export const ArenaPactReadyRequest: MessageFns<ArenaPactReadyRequest> = {
+  encode(message: ArenaPactReadyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.ready !== false) {
+      writer.uint32(16).bool(message.ready);
+    }
+    if (message.arenaKitJson !== undefined) {
+      writer.uint32(26).string(message.arenaKitJson);
+    }
+    if (message.reportPingMs !== undefined) {
+      writer.uint32(32).int32(message.reportPingMs);
+    }
+    if (message.reportPingVarianceMs !== undefined) {
+      writer.uint32(40).int32(message.reportPingVarianceMs);
+    }
+    if (message.reportFps !== undefined) {
+      writer.uint32(48).int32(message.reportFps);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactReadyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactReadyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.ready = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.arenaKitJson = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.reportPingMs = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.reportPingVarianceMs = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.reportFps = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactReadyRequest>, I>>(base?: I): ArenaPactReadyRequest {
+    return ArenaPactReadyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactReadyRequest>, I>>(object: I): ArenaPactReadyRequest {
+    const message = createBaseArenaPactReadyRequest();
+    message.matchId = object.matchId ?? "";
+    message.ready = object.ready ?? false;
+    message.arenaKitJson = object.arenaKitJson ?? undefined;
+    message.reportPingMs = object.reportPingMs ?? undefined;
+    message.reportPingVarianceMs = object.reportPingVarianceMs ?? undefined;
+    message.reportFps = object.reportFps ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactCancelRequest(): ArenaPactCancelRequest {
+  return { matchId: "" };
+}
+
+export const ArenaPactCancelRequest: MessageFns<ArenaPactCancelRequest> = {
+  encode(message: ArenaPactCancelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactCancelRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactCancelRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactCancelRequest>, I>>(base?: I): ArenaPactCancelRequest {
+    return ArenaPactCancelRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactCancelRequest>, I>>(object: I): ArenaPactCancelRequest {
+    const message = createBaseArenaPactCancelRequest();
+    message.matchId = object.matchId ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaPactListRequest(): ArenaPactListRequest {
+  return { id: undefined, authToken: undefined, filterNames: [] };
+}
+
+export const ArenaPactListRequest: MessageFns<ArenaPactListRequest> = {
+  encode(message: ArenaPactListRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== undefined) {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.authToken !== undefined) {
+      writer.uint32(18).string(message.authToken);
+    }
+    for (const v of message.filterNames) {
+      writer.uint32(26).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactListRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactListRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.authToken = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.filterNames.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactListRequest>, I>>(base?: I): ArenaPactListRequest {
+    return ArenaPactListRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactListRequest>, I>>(object: I): ArenaPactListRequest {
+    const message = createBaseArenaPactListRequest();
+    message.id = object.id ?? undefined;
+    message.authToken = object.authToken ?? undefined;
+    message.filterNames = object.filterNames?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseArenaPactTechProposeRequest(): ArenaPactTechProposeRequest {
+  return { matchId: "", mode: "", paramMinMs: 0, paramMaxMs: 0, fpsFloor: 0, applyToMovement: false };
+}
+
+export const ArenaPactTechProposeRequest: MessageFns<ArenaPactTechProposeRequest> = {
+  encode(message: ArenaPactTechProposeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.mode !== "") {
+      writer.uint32(18).string(message.mode);
+    }
+    if (message.paramMinMs !== 0) {
+      writer.uint32(24).int32(message.paramMinMs);
+    }
+    if (message.paramMaxMs !== 0) {
+      writer.uint32(32).int32(message.paramMaxMs);
+    }
+    if (message.fpsFloor !== 0) {
+      writer.uint32(40).int32(message.fpsFloor);
+    }
+    if (message.applyToMovement !== false) {
+      writer.uint32(48).bool(message.applyToMovement);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactTechProposeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactTechProposeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.mode = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.paramMinMs = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.paramMaxMs = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.fpsFloor = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.applyToMovement = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactTechProposeRequest>, I>>(base?: I): ArenaPactTechProposeRequest {
+    return ArenaPactTechProposeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactTechProposeRequest>, I>>(object: I): ArenaPactTechProposeRequest {
+    const message = createBaseArenaPactTechProposeRequest();
+    message.matchId = object.matchId ?? "";
+    message.mode = object.mode ?? "";
+    message.paramMinMs = object.paramMinMs ?? 0;
+    message.paramMaxMs = object.paramMaxMs ?? 0;
+    message.fpsFloor = object.fpsFloor ?? 0;
+    message.applyToMovement = object.applyToMovement ?? false;
+    return message;
+  },
+};
+
+function createBaseArenaPactTechVoteRequest(): ArenaPactTechVoteRequest {
+  return { matchId: "", accept: false };
+}
+
+export const ArenaPactTechVoteRequest: MessageFns<ArenaPactTechVoteRequest> = {
+  encode(message: ArenaPactTechVoteRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.accept !== false) {
+      writer.uint32(16).bool(message.accept);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactTechVoteRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactTechVoteRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.accept = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactTechVoteRequest>, I>>(base?: I): ArenaPactTechVoteRequest {
+    return ArenaPactTechVoteRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactTechVoteRequest>, I>>(object: I): ArenaPactTechVoteRequest {
+    const message = createBaseArenaPactTechVoteRequest();
+    message.matchId = object.matchId ?? "";
+    message.accept = object.accept ?? false;
+    return message;
+  },
+};
+
+function createBaseArenaPactTechReportRequest(): ArenaPactTechReportRequest {
+  return { matchId: "", pingMs: 0, pingVarianceMs: 0, fps: 0 };
+}
+
+export const ArenaPactTechReportRequest: MessageFns<ArenaPactTechReportRequest> = {
+  encode(message: ArenaPactTechReportRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.pingMs !== 0) {
+      writer.uint32(16).int32(message.pingMs);
+    }
+    if (message.pingVarianceMs !== 0) {
+      writer.uint32(24).int32(message.pingVarianceMs);
+    }
+    if (message.fps !== 0) {
+      writer.uint32(32).int32(message.fps);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactTechReportRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactTechReportRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pingMs = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.pingVarianceMs = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.fps = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactTechReportRequest>, I>>(base?: I): ArenaPactTechReportRequest {
+    return ArenaPactTechReportRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactTechReportRequest>, I>>(object: I): ArenaPactTechReportRequest {
+    const message = createBaseArenaPactTechReportRequest();
+    message.matchId = object.matchId ?? "";
+    message.pingMs = object.pingMs ?? 0;
+    message.pingVarianceMs = object.pingVarianceMs ?? 0;
+    message.fps = object.fps ?? 0;
+    return message;
+  },
+};
+
+function createBaseArenaPactFighter(): ArenaPactFighter {
+  return {
+    characterName: "",
+    wallet: "",
+    ready: false,
+    team: 0,
+    pingMs: undefined,
+    pingVarianceMs: undefined,
+    fps: undefined,
+    techAccepted: false,
+    invitePending: false,
+    streamUrl: undefined,
+    streamPlatform: undefined,
+  };
+}
+
+export const ArenaPactFighter: MessageFns<ArenaPactFighter> = {
+  encode(message: ArenaPactFighter, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.characterName !== "") {
+      writer.uint32(10).string(message.characterName);
+    }
+    if (message.wallet !== "") {
+      writer.uint32(18).string(message.wallet);
+    }
+    if (message.ready !== false) {
+      writer.uint32(24).bool(message.ready);
+    }
+    if (message.team !== 0) {
+      writer.uint32(32).int32(message.team);
+    }
+    if (message.pingMs !== undefined) {
+      writer.uint32(40).int32(message.pingMs);
+    }
+    if (message.pingVarianceMs !== undefined) {
+      writer.uint32(48).int32(message.pingVarianceMs);
+    }
+    if (message.fps !== undefined) {
+      writer.uint32(56).int32(message.fps);
+    }
+    if (message.techAccepted !== false) {
+      writer.uint32(64).bool(message.techAccepted);
+    }
+    if (message.invitePending !== false) {
+      writer.uint32(72).bool(message.invitePending);
+    }
+    if (message.streamUrl !== undefined) {
+      writer.uint32(82).string(message.streamUrl);
+    }
+    if (message.streamPlatform !== undefined) {
+      writer.uint32(90).string(message.streamPlatform);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactFighter {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactFighter();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.wallet = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.ready = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.team = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.pingMs = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.pingVarianceMs = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.fps = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.techAccepted = reader.bool();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.invitePending = reader.bool();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.streamUrl = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.streamPlatform = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactFighter>, I>>(base?: I): ArenaPactFighter {
+    return ArenaPactFighter.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactFighter>, I>>(object: I): ArenaPactFighter {
+    const message = createBaseArenaPactFighter();
+    message.characterName = object.characterName ?? "";
+    message.wallet = object.wallet ?? "";
+    message.ready = object.ready ?? false;
+    message.team = object.team ?? 0;
+    message.pingMs = object.pingMs ?? undefined;
+    message.pingVarianceMs = object.pingVarianceMs ?? undefined;
+    message.fps = object.fps ?? undefined;
+    message.techAccepted = object.techAccepted ?? false;
+    message.invitePending = object.invitePending ?? false;
+    message.streamUrl = object.streamUrl ?? undefined;
+    message.streamPlatform = object.streamPlatform ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactPrizeLine(): ArenaPactPrizeLine {
+  return { assetId: "", amount: 0n, captainName: "", team: 0, instanceId: undefined };
+}
+
+export const ArenaPactPrizeLine: MessageFns<ArenaPactPrizeLine> = {
+  encode(message: ArenaPactPrizeLine, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.assetId !== "") {
+      writer.uint32(10).string(message.assetId);
+    }
+    if (message.amount !== 0n) {
+      if (BigInt.asIntN(64, message.amount) !== message.amount) {
+        throw new globalThis.Error("value provided for field message.amount of type int64 too large");
+      }
+      writer.uint32(16).int64(message.amount);
+    }
+    if (message.captainName !== "") {
+      writer.uint32(26).string(message.captainName);
+    }
+    if (message.team !== 0) {
+      writer.uint32(32).int32(message.team);
+    }
+    if (message.instanceId !== undefined) {
+      writer.uint32(42).string(message.instanceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactPrizeLine {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactPrizeLine();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.assetId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.amount = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.captainName = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.team = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.instanceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactPrizeLine>, I>>(base?: I): ArenaPactPrizeLine {
+    return ArenaPactPrizeLine.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactPrizeLine>, I>>(object: I): ArenaPactPrizeLine {
+    const message = createBaseArenaPactPrizeLine();
+    message.assetId = object.assetId ?? "";
+    message.amount = object.amount ?? 0n;
+    message.captainName = object.captainName ?? "";
+    message.team = object.team ?? 0;
+    message.instanceId = object.instanceId ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactState(): ArenaPactState {
+  return {
+    matchId: "",
+    status: "",
+    mapId: "",
+    hostName: "",
+    fighters: [],
+    secondsLeft: 0,
+    message: "",
+    stakeAssetId: undefined,
+    stakeAmount: undefined,
+    expiresAtMs: 0n,
+    opensAtMs: 0n,
+    readyEndsAtMs: 0n,
+    readyWindowSec: 0,
+    techMode: undefined,
+    techParamMinMs: undefined,
+    techParamMaxMs: undefined,
+    techFpsFloor: undefined,
+    techProposedBy: undefined,
+    techWorstPingMs: undefined,
+    techLowestFps: undefined,
+    techApplyToMovement: false,
+    yourDelayMs: undefined,
+    isPublic: false,
+    title: undefined,
+    globalStreamUrl: undefined,
+    globalStreamPlatform: undefined,
+    watchUrl: undefined,
+    prizeBagState: undefined,
+    prizeLines: [],
+    prizePendingConfirm: [],
+    prizeSummary: undefined,
+    dcCharacterName: undefined,
+    dcGraceEndsAtMs: undefined,
+  };
+}
+
+export const ArenaPactState: MessageFns<ArenaPactState> = {
+  encode(message: ArenaPactState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.matchId !== "") {
+      writer.uint32(10).string(message.matchId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.mapId !== "") {
+      writer.uint32(26).string(message.mapId);
+    }
+    if (message.hostName !== "") {
+      writer.uint32(34).string(message.hostName);
+    }
+    for (const v of message.fighters) {
+      ArenaPactFighter.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.secondsLeft !== 0) {
+      writer.uint32(48).int32(message.secondsLeft);
+    }
+    if (message.message !== "") {
+      writer.uint32(58).string(message.message);
+    }
+    if (message.stakeAssetId !== undefined) {
+      writer.uint32(66).string(message.stakeAssetId);
+    }
+    if (message.stakeAmount !== undefined) {
+      if (BigInt.asIntN(64, message.stakeAmount) !== message.stakeAmount) {
+        throw new globalThis.Error("value provided for field message.stakeAmount of type int64 too large");
+      }
+      writer.uint32(72).int64(message.stakeAmount);
+    }
+    if (message.expiresAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresAtMs) !== message.expiresAtMs) {
+        throw new globalThis.Error("value provided for field message.expiresAtMs of type int64 too large");
+      }
+      writer.uint32(80).int64(message.expiresAtMs);
+    }
+    if (message.opensAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.opensAtMs) !== message.opensAtMs) {
+        throw new globalThis.Error("value provided for field message.opensAtMs of type int64 too large");
+      }
+      writer.uint32(88).int64(message.opensAtMs);
+    }
+    if (message.readyEndsAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.readyEndsAtMs) !== message.readyEndsAtMs) {
+        throw new globalThis.Error("value provided for field message.readyEndsAtMs of type int64 too large");
+      }
+      writer.uint32(96).int64(message.readyEndsAtMs);
+    }
+    if (message.readyWindowSec !== 0) {
+      writer.uint32(104).int32(message.readyWindowSec);
+    }
+    if (message.techMode !== undefined) {
+      writer.uint32(114).string(message.techMode);
+    }
+    if (message.techParamMinMs !== undefined) {
+      writer.uint32(120).int32(message.techParamMinMs);
+    }
+    if (message.techParamMaxMs !== undefined) {
+      writer.uint32(128).int32(message.techParamMaxMs);
+    }
+    if (message.techFpsFloor !== undefined) {
+      writer.uint32(136).int32(message.techFpsFloor);
+    }
+    if (message.techProposedBy !== undefined) {
+      writer.uint32(146).string(message.techProposedBy);
+    }
+    if (message.techWorstPingMs !== undefined) {
+      writer.uint32(152).int32(message.techWorstPingMs);
+    }
+    if (message.techLowestFps !== undefined) {
+      writer.uint32(160).int32(message.techLowestFps);
+    }
+    if (message.techApplyToMovement !== false) {
+      writer.uint32(168).bool(message.techApplyToMovement);
+    }
+    if (message.yourDelayMs !== undefined) {
+      writer.uint32(176).int32(message.yourDelayMs);
+    }
+    if (message.isPublic !== false) {
+      writer.uint32(184).bool(message.isPublic);
+    }
+    if (message.title !== undefined) {
+      writer.uint32(194).string(message.title);
+    }
+    if (message.globalStreamUrl !== undefined) {
+      writer.uint32(202).string(message.globalStreamUrl);
+    }
+    if (message.globalStreamPlatform !== undefined) {
+      writer.uint32(210).string(message.globalStreamPlatform);
+    }
+    if (message.watchUrl !== undefined) {
+      writer.uint32(218).string(message.watchUrl);
+    }
+    if (message.prizeBagState !== undefined) {
+      writer.uint32(226).string(message.prizeBagState);
+    }
+    for (const v of message.prizeLines) {
+      ArenaPactPrizeLine.encode(v!, writer.uint32(234).fork()).join();
+    }
+    for (const v of message.prizePendingConfirm) {
+      writer.uint32(242).string(v!);
+    }
+    if (message.prizeSummary !== undefined) {
+      writer.uint32(250).string(message.prizeSummary);
+    }
+    if (message.dcCharacterName !== undefined) {
+      writer.uint32(258).string(message.dcCharacterName);
+    }
+    if (message.dcGraceEndsAtMs !== undefined) {
+      if (BigInt.asIntN(64, message.dcGraceEndsAtMs) !== message.dcGraceEndsAtMs) {
+        throw new globalThis.Error("value provided for field message.dcGraceEndsAtMs of type int64 too large");
+      }
+      writer.uint32(264).int64(message.dcGraceEndsAtMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matchId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.mapId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.hostName = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.fighters.push(ArenaPactFighter.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.secondsLeft = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.stakeAssetId = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.stakeAmount = reader.int64() as bigint;
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.expiresAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.opensAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.readyEndsAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.readyWindowSec = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.techMode = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.techParamMinMs = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.techParamMaxMs = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.techFpsFloor = reader.int32();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.techProposedBy = reader.string();
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.techWorstPingMs = reader.int32();
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.techLowestFps = reader.int32();
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.techApplyToMovement = reader.bool();
+          continue;
+        }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.yourDelayMs = reader.int32();
+          continue;
+        }
+        case 23: {
+          if (tag !== 184) {
+            break;
+          }
+
+          message.isPublic = reader.bool();
+          continue;
+        }
+        case 24: {
+          if (tag !== 194) {
+            break;
+          }
+
+          message.title = reader.string();
+          continue;
+        }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.globalStreamUrl = reader.string();
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.globalStreamPlatform = reader.string();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.watchUrl = reader.string();
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.prizeBagState = reader.string();
+          continue;
+        }
+        case 29: {
+          if (tag !== 234) {
+            break;
+          }
+
+          message.prizeLines.push(ArenaPactPrizeLine.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 30: {
+          if (tag !== 242) {
+            break;
+          }
+
+          message.prizePendingConfirm.push(reader.string());
+          continue;
+        }
+        case 31: {
+          if (tag !== 250) {
+            break;
+          }
+
+          message.prizeSummary = reader.string();
+          continue;
+        }
+        case 32: {
+          if (tag !== 258) {
+            break;
+          }
+
+          message.dcCharacterName = reader.string();
+          continue;
+        }
+        case 33: {
+          if (tag !== 264) {
+            break;
+          }
+
+          message.dcGraceEndsAtMs = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactState>, I>>(base?: I): ArenaPactState {
+    return ArenaPactState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactState>, I>>(object: I): ArenaPactState {
+    const message = createBaseArenaPactState();
+    message.matchId = object.matchId ?? "";
+    message.status = object.status ?? "";
+    message.mapId = object.mapId ?? "";
+    message.hostName = object.hostName ?? "";
+    message.fighters = object.fighters?.map((e) => ArenaPactFighter.fromPartial(e)) || [];
+    message.secondsLeft = object.secondsLeft ?? 0;
+    message.message = object.message ?? "";
+    message.stakeAssetId = object.stakeAssetId ?? undefined;
+    message.stakeAmount = object.stakeAmount ?? undefined;
+    message.expiresAtMs = object.expiresAtMs ?? 0n;
+    message.opensAtMs = object.opensAtMs ?? 0n;
+    message.readyEndsAtMs = object.readyEndsAtMs ?? 0n;
+    message.readyWindowSec = object.readyWindowSec ?? 0;
+    message.techMode = object.techMode ?? undefined;
+    message.techParamMinMs = object.techParamMinMs ?? undefined;
+    message.techParamMaxMs = object.techParamMaxMs ?? undefined;
+    message.techFpsFloor = object.techFpsFloor ?? undefined;
+    message.techProposedBy = object.techProposedBy ?? undefined;
+    message.techWorstPingMs = object.techWorstPingMs ?? undefined;
+    message.techLowestFps = object.techLowestFps ?? undefined;
+    message.techApplyToMovement = object.techApplyToMovement ?? false;
+    message.yourDelayMs = object.yourDelayMs ?? undefined;
+    message.isPublic = object.isPublic ?? false;
+    message.title = object.title ?? undefined;
+    message.globalStreamUrl = object.globalStreamUrl ?? undefined;
+    message.globalStreamPlatform = object.globalStreamPlatform ?? undefined;
+    message.watchUrl = object.watchUrl ?? undefined;
+    message.prizeBagState = object.prizeBagState ?? undefined;
+    message.prizeLines = object.prizeLines?.map((e) => ArenaPactPrizeLine.fromPartial(e)) || [];
+    message.prizePendingConfirm = object.prizePendingConfirm?.map((e) => e) || [];
+    message.prizeSummary = object.prizeSummary ?? undefined;
+    message.dcCharacterName = object.dcCharacterName ?? undefined;
+    message.dcGraceEndsAtMs = object.dcGraceEndsAtMs ?? undefined;
+    return message;
+  },
+};
+
+function createBaseArenaPactListResponse(): ArenaPactListResponse {
+  return { matches: [] };
+}
+
+export const ArenaPactListResponse: MessageFns<ArenaPactListResponse> = {
+  encode(message: ArenaPactListResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.matches) {
+      ArenaPactState.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaPactListResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseArenaPactListResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.matches.push(ArenaPactState.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ArenaPactListResponse>, I>>(base?: I): ArenaPactListResponse {
+    return ArenaPactListResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaPactListResponse>, I>>(object: I): ArenaPactListResponse {
+    const message = createBaseArenaPactListResponse();
+    message.matches = object.matches?.map((e) => ArenaPactState.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseCicItemMergeResult(): CicItemMergeResult {
+  return { success: false, message: "", itemUid: 0n, itemId: 0, cicLevel: 0, cicStatKind: 0, cicStatValue: 0 };
+}
+
+export const CicItemMergeResult: MessageFns<CicItemMergeResult> = {
+  encode(message: CicItemMergeResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(32).int32(message.itemId);
+    }
+    if (message.cicLevel !== 0) {
+      writer.uint32(40).int32(message.cicLevel);
+    }
+    if (message.cicStatKind !== 0) {
+      writer.uint32(48).int32(message.cicStatKind);
+    }
+    if (message.cicStatValue !== 0) {
+      writer.uint32(56).int32(message.cicStatValue);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CicItemMergeResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCicItemMergeResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.cicLevel = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.cicStatKind = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.cicStatValue = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CicItemMergeResult>, I>>(base?: I): CicItemMergeResult {
+    return CicItemMergeResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CicItemMergeResult>, I>>(object: I): CicItemMergeResult {
+    const message = createBaseCicItemMergeResult();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.cicLevel = object.cicLevel ?? 0;
+    message.cicStatKind = object.cicStatKind ?? 0;
+    message.cicStatValue = object.cicStatValue ?? 0;
+    return message;
+  },
+};
+
+function createBaseSiphonGemUpgradeResult(): SiphonGemUpgradeResult {
+  return { success: false, message: "", itemUid: 0n, itemId: 0, siphonLevel: 0 };
+}
+
+export const SiphonGemUpgradeResult: MessageFns<SiphonGemUpgradeResult> = {
+  encode(message: SiphonGemUpgradeResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(32).int32(message.itemId);
+    }
+    if (message.siphonLevel !== 0) {
+      writer.uint32(40).int32(message.siphonLevel);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SiphonGemUpgradeResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSiphonGemUpgradeResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.siphonLevel = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SiphonGemUpgradeResult>, I>>(base?: I): SiphonGemUpgradeResult {
+    return SiphonGemUpgradeResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SiphonGemUpgradeResult>, I>>(object: I): SiphonGemUpgradeResult {
+    const message = createBaseSiphonGemUpgradeResult();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.siphonLevel = object.siphonLevel ?? 0;
+    return message;
+  },
+};
+
+function createBaseEnchantMaterialEntry(): EnchantMaterialEntry {
+  return { isShard: false, type: 0, level: 0, count: 0, name: "" };
+}
+
+export const EnchantMaterialEntry: MessageFns<EnchantMaterialEntry> = {
+  encode(message: EnchantMaterialEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.isShard !== false) {
+      writer.uint32(8).bool(message.isShard);
+    }
+    if (message.type !== 0) {
+      writer.uint32(16).int32(message.type);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.count !== 0) {
+      writer.uint32(32).int32(message.count);
+    }
+    if (message.name !== "") {
+      writer.uint32(42).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EnchantMaterialEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEnchantMaterialEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.isShard = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.type = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.count = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<EnchantMaterialEntry>, I>>(base?: I): EnchantMaterialEntry {
+    return EnchantMaterialEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EnchantMaterialEntry>, I>>(object: I): EnchantMaterialEntry {
+    const message = createBaseEnchantMaterialEntry();
+    message.isShard = object.isShard ?? false;
+    message.type = object.type ?? 0;
+    message.level = object.level ?? 0;
+    message.count = object.count ?? 0;
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
+function createBaseEnchantMaterialsState(): EnchantMaterialsState {
+  return { materials: [] };
+}
+
+export const EnchantMaterialsState: MessageFns<EnchantMaterialsState> = {
+  encode(message: EnchantMaterialsState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.materials) {
+      EnchantMaterialEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EnchantMaterialsState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEnchantMaterialsState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.materials.push(EnchantMaterialEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<EnchantMaterialsState>, I>>(base?: I): EnchantMaterialsState {
+    return EnchantMaterialsState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EnchantMaterialsState>, I>>(object: I): EnchantMaterialsState {
+    const message = createBaseEnchantMaterialsState();
+    message.materials = object.materials?.map((e) => EnchantMaterialEntry.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseEnchantResult(): EnchantResult {
+  return { success: false, message: "", itemUid: 0n, itemId: 0, itemAttribute: 0, materialType: 0, materialLevel: 0 };
+}
+
+export const EnchantResult: MessageFns<EnchantResult> = {
+  encode(message: EnchantResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(32).int32(message.itemId);
+    }
+    if (message.itemAttribute !== 0) {
+      writer.uint32(40).uint32(message.itemAttribute);
+    }
+    if (message.materialType !== 0) {
+      writer.uint32(48).int32(message.materialType);
+    }
+    if (message.materialLevel !== 0) {
+      writer.uint32(56).int32(message.materialLevel);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EnchantResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEnchantResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.materialType = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.materialLevel = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<EnchantResult>, I>>(base?: I): EnchantResult {
+    return EnchantResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EnchantResult>, I>>(object: I): EnchantResult {
+    const message = createBaseEnchantResult();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.itemAttribute = object.itemAttribute ?? 0;
+    message.materialType = object.materialType ?? 0;
+    message.materialLevel = object.materialLevel ?? 0;
+    return message;
+  },
+};
+
+function createBaseMajesticStatRespecResult(): MajesticStatRespecResult {
+  return {
+    success: false,
+    message: "",
+    str: 0,
+    vit: 0,
+    dex: 0,
+    intel: 0,
+    mag: 0,
+    chr: 0,
+    majesticPoints: 0,
+    luPoints: 0,
+    talentsSummary: "",
+  };
+}
+
+export const MajesticStatRespecResult: MessageFns<MajesticStatRespecResult> = {
+  encode(message: MajesticStatRespecResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.str !== 0) {
+      writer.uint32(24).int32(message.str);
+    }
+    if (message.vit !== 0) {
+      writer.uint32(32).int32(message.vit);
+    }
+    if (message.dex !== 0) {
+      writer.uint32(40).int32(message.dex);
+    }
+    if (message.intel !== 0) {
+      writer.uint32(48).int32(message.intel);
+    }
+    if (message.mag !== 0) {
+      writer.uint32(56).int32(message.mag);
+    }
+    if (message.chr !== 0) {
+      writer.uint32(64).int32(message.chr);
+    }
+    if (message.majesticPoints !== 0) {
+      writer.uint32(72).int32(message.majesticPoints);
+    }
+    if (message.luPoints !== 0) {
+      writer.uint32(80).int32(message.luPoints);
+    }
+    if (message.talentsSummary !== "") {
+      writer.uint32(90).string(message.talentsSummary);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MajesticStatRespecResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMajesticStatRespecResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.majesticPoints = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.luPoints = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.talentsSummary = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MajesticStatRespecResult>, I>>(base?: I): MajesticStatRespecResult {
+    return MajesticStatRespecResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MajesticStatRespecResult>, I>>(object: I): MajesticStatRespecResult {
+    const message = createBaseMajesticStatRespecResult();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    message.str = object.str ?? 0;
+    message.vit = object.vit ?? 0;
+    message.dex = object.dex ?? 0;
+    message.intel = object.intel ?? 0;
+    message.mag = object.mag ?? 0;
+    message.chr = object.chr ?? 0;
+    message.majesticPoints = object.majesticPoints ?? 0;
+    message.luPoints = object.luPoints ?? 0;
+    message.talentsSummary = object.talentsSummary ?? "";
+    return message;
+  },
+};
+
+function createBaseSkillGatherResult(): SkillGatherResult {
+  return { ok: false, message: "", skillId: 0, skillLevel: 0, itemId: 0, itemName: "", rareLoot: false };
+}
+
+export const SkillGatherResult: MessageFns<SkillGatherResult> = {
+  encode(message: SkillGatherResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.skillId !== 0) {
+      writer.uint32(24).int32(message.skillId);
+    }
+    if (message.skillLevel !== 0) {
+      writer.uint32(32).int32(message.skillLevel);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(40).int32(message.itemId);
+    }
+    if (message.itemName !== "") {
+      writer.uint32(50).string(message.itemName);
+    }
+    if (message.rareLoot !== false) {
+      writer.uint32(56).bool(message.rareLoot);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillGatherResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSkillGatherResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.skillId = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.skillLevel = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.itemName = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.rareLoot = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SkillGatherResult>, I>>(base?: I): SkillGatherResult {
+    return SkillGatherResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillGatherResult>, I>>(object: I): SkillGatherResult {
+    const message = createBaseSkillGatherResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.skillId = object.skillId ?? 0;
+    message.skillLevel = object.skillLevel ?? 0;
+    message.itemId = object.itemId ?? 0;
+    message.itemName = object.itemName ?? "";
+    message.rareLoot = object.rareLoot ?? false;
+    return message;
+  },
+};
+
+function createBaseSkillEntry(): SkillEntry {
+  return { skillId: 0, name: "", level: 0, maxed: false };
+}
+
+export const SkillEntry: MessageFns<SkillEntry> = {
+  encode(message: SkillEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== 0) {
+      writer.uint32(8).int32(message.skillId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.maxed !== false) {
+      writer.uint32(32).bool(message.maxed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSkillEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.skillId = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.maxed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SkillEntry>, I>>(base?: I): SkillEntry {
+    return SkillEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillEntry>, I>>(object: I): SkillEntry {
+    const message = createBaseSkillEntry();
+    message.skillId = object.skillId ?? 0;
+    message.name = object.name ?? "";
+    message.level = object.level ?? 0;
+    message.maxed = object.maxed ?? false;
+    return message;
+  },
+};
+
+function createBaseSkillsState(): SkillsState {
+  return { skills: [] };
+}
+
+export const SkillsState: MessageFns<SkillsState> = {
+  encode(message: SkillsState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.skills) {
+      SkillEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillsState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSkillsState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.skills.push(SkillEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SkillsState>, I>>(base?: I): SkillsState {
+    return SkillsState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillsState>, I>>(object: I): SkillsState {
+    const message = createBaseSkillsState();
+    message.skills = object.skills?.map((e) => SkillEntry.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseStoneItemUpgradeResult(): StoneItemUpgradeResult {
+  return { success: false, message: "", itemUid: 0n, itemId: 0, itemAttribute: 0, burned: false, downgraded: false };
+}
+
+export const StoneItemUpgradeResult: MessageFns<StoneItemUpgradeResult> = {
+  encode(message: StoneItemUpgradeResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(32).int32(message.itemId);
+    }
+    if (message.itemAttribute !== 0) {
+      writer.uint32(40).uint32(message.itemAttribute);
+    }
+    if (message.burned !== false) {
+      writer.uint32(48).bool(message.burned);
+    }
+    if (message.downgraded !== false) {
+      writer.uint32(56).bool(message.downgraded);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StoneItemUpgradeResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseStoneItemUpgradeResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.burned = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.downgraded = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<StoneItemUpgradeResult>, I>>(base?: I): StoneItemUpgradeResult {
+    return StoneItemUpgradeResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StoneItemUpgradeResult>, I>>(object: I): StoneItemUpgradeResult {
+    const message = createBaseStoneItemUpgradeResult();
+    message.success = object.success ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.itemAttribute = object.itemAttribute ?? 0;
+    message.burned = object.burned ?? false;
+    message.downgraded = object.downgraded ?? false;
+    return message;
+  },
+};
+
+function createBaseBuyCashShopItemRequest(): BuyCashShopItemRequest {
+  return {
+    gameWorldId: "",
+    npcId: 0n,
+    skuId: "",
+    quantity: 0,
+    currency: 0,
+    stablecoinMint: "",
+    paymentTxSignature: "",
+  };
+}
+
+export const BuyCashShopItemRequest: MessageFns<BuyCashShopItemRequest> = {
+  encode(message: BuyCashShopItemRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.skuId !== "") {
+      writer.uint32(26).string(message.skuId);
+    }
+    if (message.quantity !== 0) {
+      writer.uint32(32).int32(message.quantity);
+    }
+    if (message.currency !== 0) {
+      writer.uint32(40).int32(message.currency);
+    }
+    if (message.stablecoinMint !== "") {
+      writer.uint32(50).string(message.stablecoinMint);
+    }
+    if (message.paymentTxSignature !== "") {
+      writer.uint32(58).string(message.paymentTxSignature);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BuyCashShopItemRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBuyCashShopItemRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.skuId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.quantity = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.currency = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.stablecoinMint = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.paymentTxSignature = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BuyCashShopItemRequest>, I>>(base?: I): BuyCashShopItemRequest {
+    return BuyCashShopItemRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BuyCashShopItemRequest>, I>>(object: I): BuyCashShopItemRequest {
+    const message = createBaseBuyCashShopItemRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.skuId = object.skuId ?? "";
+    message.quantity = object.quantity ?? 0;
+    message.currency = object.currency ?? 0;
+    message.stablecoinMint = object.stablecoinMint ?? "";
+    message.paymentTxSignature = object.paymentTxSignature ?? "";
+    return message;
+  },
+};
+
+function createBaseBuyCashShopItemResult(): BuyCashShopItemResult {
+  return { ok: false, message: "" };
+}
+
+export const BuyCashShopItemResult: MessageFns<BuyCashShopItemResult> = {
+  encode(message: BuyCashShopItemResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BuyCashShopItemResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBuyCashShopItemResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BuyCashShopItemResult>, I>>(base?: I): BuyCashShopItemResult {
+    return BuyCashShopItemResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BuyCashShopItemResult>, I>>(object: I): BuyCashShopItemResult {
+    const message = createBaseBuyCashShopItemResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseItemBindRequest(): ItemBindRequest {
+  return { itemUid: 0n, action: 0 };
+}
+
+export const ItemBindRequest: MessageFns<ItemBindRequest> = {
+  encode(message: ItemBindRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    if (message.action !== 0) {
+      writer.uint32(16).int32(message.action);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ItemBindRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseItemBindRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.action = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ItemBindRequest>, I>>(base?: I): ItemBindRequest {
+    return ItemBindRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ItemBindRequest>, I>>(object: I): ItemBindRequest {
+    const message = createBaseItemBindRequest();
+    message.itemUid = object.itemUid ?? 0n;
+    message.action = object.action ?? 0;
+    return message;
+  },
+};
+
+function createBaseItemBindResult(): ItemBindResult {
+  return { ok: false, message: "", itemUid: 0n, bindState: 0, boundGuildId: "" };
+}
+
+export const ItemBindResult: MessageFns<ItemBindResult> = {
+  encode(message: ItemBindResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.bindState !== 0) {
+      writer.uint32(32).int32(message.bindState);
+    }
+    if (message.boundGuildId !== "") {
+      writer.uint32(42).string(message.boundGuildId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ItemBindResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseItemBindResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.bindState = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.boundGuildId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ItemBindResult>, I>>(base?: I): ItemBindResult {
+    return ItemBindResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ItemBindResult>, I>>(object: I): ItemBindResult {
+    const message = createBaseItemBindResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? 0n;
+    message.bindState = object.bindState ?? 0;
+    message.boundGuildId = object.boundGuildId ?? "";
+    return message;
+  },
+};
+
+function createBaseTimedChallengeState(): TimedChallengeState {
+  return {
+    active: false,
+    mode: 0,
+    targetsTotal: 0,
+    targetsCompleted: 0,
+    startedAtMs: 0n,
+    message: "",
+    freeMana: false,
+    waveIndex: undefined,
+    waveCount: undefined,
+    phase: undefined,
+  };
+}
+
+export const TimedChallengeState: MessageFns<TimedChallengeState> = {
+  encode(message: TimedChallengeState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.active !== false) {
+      writer.uint32(8).bool(message.active);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(16).int32(message.mode);
+    }
+    if (message.targetsTotal !== 0) {
+      writer.uint32(24).int32(message.targetsTotal);
+    }
+    if (message.targetsCompleted !== 0) {
+      writer.uint32(32).int32(message.targetsCompleted);
+    }
+    if (message.startedAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.startedAtMs) !== message.startedAtMs) {
+        throw new globalThis.Error("value provided for field message.startedAtMs of type int64 too large");
+      }
+      writer.uint32(40).int64(message.startedAtMs);
+    }
+    if (message.message !== "") {
+      writer.uint32(50).string(message.message);
+    }
+    if (message.freeMana !== false) {
+      writer.uint32(56).bool(message.freeMana);
+    }
+    if (message.waveIndex !== undefined) {
+      writer.uint32(64).int32(message.waveIndex);
+    }
+    if (message.waveCount !== undefined) {
+      writer.uint32(72).int32(message.waveCount);
+    }
+    if (message.phase !== undefined) {
+      writer.uint32(80).int32(message.phase);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TimedChallengeState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTimedChallengeState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.active = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.targetsTotal = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.targetsCompleted = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.startedAtMs = reader.int64() as bigint;
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.freeMana = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.waveIndex = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.waveCount = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.phase = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<TimedChallengeState>, I>>(base?: I): TimedChallengeState {
+    return TimedChallengeState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TimedChallengeState>, I>>(object: I): TimedChallengeState {
+    const message = createBaseTimedChallengeState();
+    message.active = object.active ?? false;
+    message.mode = object.mode ?? 0;
+    message.targetsTotal = object.targetsTotal ?? 0;
+    message.targetsCompleted = object.targetsCompleted ?? 0;
+    message.startedAtMs = object.startedAtMs ?? 0n;
+    message.message = object.message ?? "";
+    message.freeMana = object.freeMana ?? false;
+    message.waveIndex = object.waveIndex ?? undefined;
+    message.waveCount = object.waveCount ?? undefined;
+    message.phase = object.phase ?? undefined;
+    return message;
+  },
+};
+
+function createBaseTimedChallengeFinished(): TimedChallengeFinished {
+  return {
+    ok: false,
+    message: "",
+    mode: 0,
+    elapsedMs: 0,
+    hardThresholdMet: false,
+    expBoostGranted: false,
+    stoneGranted: false,
+    isDailyBest: false,
+    dailyRank: 0,
+  };
+}
+
+export const TimedChallengeFinished: MessageFns<TimedChallengeFinished> = {
+  encode(message: TimedChallengeFinished, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.mode !== 0) {
+      writer.uint32(24).int32(message.mode);
+    }
+    if (message.elapsedMs !== 0) {
+      writer.uint32(32).int32(message.elapsedMs);
+    }
+    if (message.hardThresholdMet !== false) {
+      writer.uint32(40).bool(message.hardThresholdMet);
+    }
+    if (message.expBoostGranted !== false) {
+      writer.uint32(48).bool(message.expBoostGranted);
+    }
+    if (message.stoneGranted !== false) {
+      writer.uint32(56).bool(message.stoneGranted);
+    }
+    if (message.isDailyBest !== false) {
+      writer.uint32(64).bool(message.isDailyBest);
+    }
+    if (message.dailyRank !== 0) {
+      writer.uint32(72).int32(message.dailyRank);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TimedChallengeFinished {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTimedChallengeFinished();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.elapsedMs = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.hardThresholdMet = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.expBoostGranted = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.stoneGranted = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.isDailyBest = reader.bool();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.dailyRank = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<TimedChallengeFinished>, I>>(base?: I): TimedChallengeFinished {
+    return TimedChallengeFinished.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TimedChallengeFinished>, I>>(object: I): TimedChallengeFinished {
+    const message = createBaseTimedChallengeFinished();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.mode = object.mode ?? 0;
+    message.elapsedMs = object.elapsedMs ?? 0;
+    message.hardThresholdMet = object.hardThresholdMet ?? false;
+    message.expBoostGranted = object.expBoostGranted ?? false;
+    message.stoneGranted = object.stoneGranted ?? false;
+    message.isDailyBest = object.isDailyBest ?? false;
+    message.dailyRank = object.dailyRank ?? 0;
+    return message;
+  },
+};
+
+function createBaseTimedChallengeLeaderboardEntry(): TimedChallengeLeaderboardEntry {
+  return { characterName: "", walletSuffix: "", elapsedMs: 0 };
+}
+
+export const TimedChallengeLeaderboardEntry: MessageFns<TimedChallengeLeaderboardEntry> = {
+  encode(message: TimedChallengeLeaderboardEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.characterName !== "") {
+      writer.uint32(10).string(message.characterName);
+    }
+    if (message.walletSuffix !== "") {
+      writer.uint32(18).string(message.walletSuffix);
+    }
+    if (message.elapsedMs !== 0) {
+      writer.uint32(24).int32(message.elapsedMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TimedChallengeLeaderboardEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTimedChallengeLeaderboardEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.walletSuffix = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.elapsedMs = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<TimedChallengeLeaderboardEntry>, I>>(base?: I): TimedChallengeLeaderboardEntry {
+    return TimedChallengeLeaderboardEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TimedChallengeLeaderboardEntry>, I>>(
+    object: I,
+  ): TimedChallengeLeaderboardEntry {
+    const message = createBaseTimedChallengeLeaderboardEntry();
+    message.characterName = object.characterName ?? "";
+    message.walletSuffix = object.walletSuffix ?? "";
+    message.elapsedMs = object.elapsedMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseTimedChallengeLeaderboard(): TimedChallengeLeaderboard {
+  return { mode: 0, utcDay: "", entries: [], yourBestMs: undefined };
+}
+
+export const TimedChallengeLeaderboard: MessageFns<TimedChallengeLeaderboard> = {
+  encode(message: TimedChallengeLeaderboard, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mode !== 0) {
+      writer.uint32(8).int32(message.mode);
+    }
+    if (message.utcDay !== "") {
+      writer.uint32(18).string(message.utcDay);
+    }
+    for (const v of message.entries) {
+      TimedChallengeLeaderboardEntry.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.yourBestMs !== undefined) {
+      writer.uint32(32).int32(message.yourBestMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TimedChallengeLeaderboard {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTimedChallengeLeaderboard();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.mode = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.utcDay = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.entries.push(TimedChallengeLeaderboardEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.yourBestMs = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<TimedChallengeLeaderboard>, I>>(base?: I): TimedChallengeLeaderboard {
+    return TimedChallengeLeaderboard.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TimedChallengeLeaderboard>, I>>(object: I): TimedChallengeLeaderboard {
+    const message = createBaseTimedChallengeLeaderboard();
+    message.mode = object.mode ?? 0;
+    message.utcDay = object.utcDay ?? "";
+    message.entries = object.entries?.map((e) => TimedChallengeLeaderboardEntry.fromPartial(e)) || [];
+    message.yourBestMs = object.yourBestMs ?? undefined;
+    return message;
+  },
+};
+
+function createBaseGetAntiBotToolsRequest(): GetAntiBotToolsRequest {
+  return {};
+}
+
+export const GetAntiBotToolsRequest: MessageFns<GetAntiBotToolsRequest> = {
+  encode(_: GetAntiBotToolsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetAntiBotToolsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetAntiBotToolsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<GetAntiBotToolsRequest>, I>>(base?: I): GetAntiBotToolsRequest {
+    return GetAntiBotToolsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetAntiBotToolsRequest>, I>>(_: I): GetAntiBotToolsRequest {
+    const message = createBaseGetAntiBotToolsRequest();
+    return message;
+  },
+};
+
+function createBaseSetAntiBotToolsRequest(): SetAntiBotToolsRequest {
+  return { flags: undefined };
+}
+
+export const SetAntiBotToolsRequest: MessageFns<SetAntiBotToolsRequest> = {
+  encode(message: SetAntiBotToolsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.flags !== undefined) {
+      AntiBotToolsFlags.encode(message.flags, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SetAntiBotToolsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetAntiBotToolsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.flags = AntiBotToolsFlags.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SetAntiBotToolsRequest>, I>>(base?: I): SetAntiBotToolsRequest {
+    return SetAntiBotToolsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetAntiBotToolsRequest>, I>>(object: I): SetAntiBotToolsRequest {
+    const message = createBaseSetAntiBotToolsRequest();
+    message.flags = (object.flags !== undefined && object.flags !== null)
+      ? AntiBotToolsFlags.fromPartial(object.flags)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseAntiBotToolsFlags(): AntiBotToolsFlags {
+  return {
+    guildPriorityIngress: false,
+    newPlayerSegment: false,
+    claimTimeSybilGate: false,
+    industrialMultiBoxLimits: false,
+    afkOnMapAllowed: false,
+    tournamentInhumanPlayTelemetry: false,
+    tournamentHighStakesMode: false,
+    softOfflineProgression: false,
+  };
+}
+
+export const AntiBotToolsFlags: MessageFns<AntiBotToolsFlags> = {
+  encode(message: AntiBotToolsFlags, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.guildPriorityIngress !== false) {
+      writer.uint32(8).bool(message.guildPriorityIngress);
+    }
+    if (message.newPlayerSegment !== false) {
+      writer.uint32(16).bool(message.newPlayerSegment);
+    }
+    if (message.claimTimeSybilGate !== false) {
+      writer.uint32(24).bool(message.claimTimeSybilGate);
+    }
+    if (message.industrialMultiBoxLimits !== false) {
+      writer.uint32(32).bool(message.industrialMultiBoxLimits);
+    }
+    if (message.afkOnMapAllowed !== false) {
+      writer.uint32(40).bool(message.afkOnMapAllowed);
+    }
+    if (message.tournamentInhumanPlayTelemetry !== false) {
+      writer.uint32(48).bool(message.tournamentInhumanPlayTelemetry);
+    }
+    if (message.tournamentHighStakesMode !== false) {
+      writer.uint32(56).bool(message.tournamentHighStakesMode);
+    }
+    if (message.softOfflineProgression !== false) {
+      writer.uint32(64).bool(message.softOfflineProgression);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AntiBotToolsFlags {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAntiBotToolsFlags();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.guildPriorityIngress = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.newPlayerSegment = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.claimTimeSybilGate = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.industrialMultiBoxLimits = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.afkOnMapAllowed = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.tournamentInhumanPlayTelemetry = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.tournamentHighStakesMode = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.softOfflineProgression = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AntiBotToolsFlags>, I>>(base?: I): AntiBotToolsFlags {
+    return AntiBotToolsFlags.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AntiBotToolsFlags>, I>>(object: I): AntiBotToolsFlags {
+    const message = createBaseAntiBotToolsFlags();
+    message.guildPriorityIngress = object.guildPriorityIngress ?? false;
+    message.newPlayerSegment = object.newPlayerSegment ?? false;
+    message.claimTimeSybilGate = object.claimTimeSybilGate ?? false;
+    message.industrialMultiBoxLimits = object.industrialMultiBoxLimits ?? false;
+    message.afkOnMapAllowed = object.afkOnMapAllowed ?? false;
+    message.tournamentInhumanPlayTelemetry = object.tournamentInhumanPlayTelemetry ?? false;
+    message.tournamentHighStakesMode = object.tournamentHighStakesMode ?? false;
+    message.softOfflineProgression = object.softOfflineProgression ?? false;
+    return message;
+  },
+};
+
+function createBaseAntiBotToolsState(): AntiBotToolsState {
+  return {
+    flags: undefined,
+    maxConcurrentSessions: 0,
+    actionRateCeilingPerMin: 0,
+    afkWarnAfterMs: 0,
+    afkKickAfterMs: 0,
+    updatedBy: "",
+    updatedAtMs: 0n,
+  };
+}
+
+export const AntiBotToolsState: MessageFns<AntiBotToolsState> = {
+  encode(message: AntiBotToolsState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.flags !== undefined) {
+      AntiBotToolsFlags.encode(message.flags, writer.uint32(10).fork()).join();
+    }
+    if (message.maxConcurrentSessions !== 0) {
+      writer.uint32(16).int32(message.maxConcurrentSessions);
+    }
+    if (message.actionRateCeilingPerMin !== 0) {
+      writer.uint32(24).int32(message.actionRateCeilingPerMin);
+    }
+    if (message.afkWarnAfterMs !== 0) {
+      writer.uint32(32).int32(message.afkWarnAfterMs);
+    }
+    if (message.afkKickAfterMs !== 0) {
+      writer.uint32(40).int32(message.afkKickAfterMs);
+    }
+    if (message.updatedBy !== "") {
+      writer.uint32(50).string(message.updatedBy);
+    }
+    if (message.updatedAtMs !== 0n) {
+      if (BigInt.asIntN(64, message.updatedAtMs) !== message.updatedAtMs) {
+        throw new globalThis.Error("value provided for field message.updatedAtMs of type int64 too large");
+      }
+      writer.uint32(56).int64(message.updatedAtMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AntiBotToolsState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAntiBotToolsState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.flags = AntiBotToolsFlags.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.maxConcurrentSessions = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.actionRateCeilingPerMin = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.afkWarnAfterMs = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.afkKickAfterMs = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.updatedBy = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.updatedAtMs = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AntiBotToolsState>, I>>(base?: I): AntiBotToolsState {
+    return AntiBotToolsState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AntiBotToolsState>, I>>(object: I): AntiBotToolsState {
+    const message = createBaseAntiBotToolsState();
+    message.flags = (object.flags !== undefined && object.flags !== null)
+      ? AntiBotToolsFlags.fromPartial(object.flags)
+      : undefined;
+    message.maxConcurrentSessions = object.maxConcurrentSessions ?? 0;
+    message.actionRateCeilingPerMin = object.actionRateCeilingPerMin ?? 0;
+    message.afkWarnAfterMs = object.afkWarnAfterMs ?? 0;
+    message.afkKickAfterMs = object.afkKickAfterMs ?? 0;
+    message.updatedBy = object.updatedBy ?? "";
+    message.updatedAtMs = object.updatedAtMs ?? 0n;
+    return message;
+  },
+};
+
+function createBaseSetAntiBotToolsResult(): SetAntiBotToolsResult {
+  return { ok: false, message: "", state: undefined };
+}
+
+export const SetAntiBotToolsResult: MessageFns<SetAntiBotToolsResult> = {
+  encode(message: SetAntiBotToolsResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.state !== undefined) {
+      AntiBotToolsState.encode(message.state, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SetAntiBotToolsResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetAntiBotToolsResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.state = AntiBotToolsState.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<SetAntiBotToolsResult>, I>>(base?: I): SetAntiBotToolsResult {
+    return SetAntiBotToolsResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetAntiBotToolsResult>, I>>(object: I): SetAntiBotToolsResult {
+    const message = createBaseSetAntiBotToolsResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.state = (object.state !== undefined && object.state !== null)
+      ? AntiBotToolsState.fromPartial(object.state)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseCreatePartyRequest(): CreatePartyRequest {
+  return {};
+}
+
+export const CreatePartyRequest: MessageFns<CreatePartyRequest> = {
+  encode(_: CreatePartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CreatePartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCreatePartyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CreatePartyRequest>, I>>(base?: I): CreatePartyRequest {
+    return CreatePartyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CreatePartyRequest>, I>>(_: I): CreatePartyRequest {
+    const message = createBaseCreatePartyRequest();
+    return message;
+  },
+};
+
+function createBaseJoinPartyRequest(): JoinPartyRequest {
+  return { partyCode: "" };
+}
+
+export const JoinPartyRequest: MessageFns<JoinPartyRequest> = {
+  encode(message: JoinPartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.partyCode !== "") {
+      writer.uint32(10).string(message.partyCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): JoinPartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseJoinPartyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.partyCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<JoinPartyRequest>, I>>(base?: I): JoinPartyRequest {
+    return JoinPartyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<JoinPartyRequest>, I>>(object: I): JoinPartyRequest {
+    const message = createBaseJoinPartyRequest();
+    message.partyCode = object.partyCode ?? "";
+    return message;
+  },
+};
+
+function createBaseLeavePartyRequest(): LeavePartyRequest {
+  return {};
+}
+
+export const LeavePartyRequest: MessageFns<LeavePartyRequest> = {
+  encode(_: LeavePartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): LeavePartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseLeavePartyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<LeavePartyRequest>, I>>(base?: I): LeavePartyRequest {
+    return LeavePartyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<LeavePartyRequest>, I>>(_: I): LeavePartyRequest {
+    const message = createBaseLeavePartyRequest();
+    return message;
+  },
+};
+
+function createBasePartyMember(): PartyMember {
+  return { name: "", hp: 0, maxHp: 0, isLeader: false };
+}
+
+export const PartyMember: MessageFns<PartyMember> = {
+  encode(message: PartyMember, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(16).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(24).int32(message.maxHp);
+    }
+    if (message.isLeader !== false) {
+      writer.uint32(32).bool(message.isLeader);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyMember {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePartyMember();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.hp = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.maxHp = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.isLeader = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PartyMember>, I>>(base?: I): PartyMember {
+    return PartyMember.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyMember>, I>>(object: I): PartyMember {
+    const message = createBasePartyMember();
+    message.name = object.name ?? "";
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.isLeader = object.isLeader ?? false;
+    return message;
+  },
+};
+
+function createBasePartyState(): PartyState {
+  return { inParty: false, partyCode: "", memberNames: [], isLeader: false, message: "", members: [] };
+}
+
+export const PartyState: MessageFns<PartyState> = {
+  encode(message: PartyState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.inParty !== false) {
+      writer.uint32(8).bool(message.inParty);
+    }
+    if (message.partyCode !== "") {
+      writer.uint32(18).string(message.partyCode);
+    }
+    for (const v of message.memberNames) {
+      writer.uint32(26).string(v!);
+    }
+    if (message.isLeader !== false) {
+      writer.uint32(32).bool(message.isLeader);
+    }
+    if (message.message !== "") {
+      writer.uint32(42).string(message.message);
+    }
+    for (const v of message.members) {
+      PartyMember.encode(v!, writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePartyState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.inParty = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.partyCode = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.memberNames.push(reader.string());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.isLeader = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.members.push(PartyMember.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PartyState>, I>>(base?: I): PartyState {
+    return PartyState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyState>, I>>(object: I): PartyState {
+    const message = createBasePartyState();
+    message.inParty = object.inParty ?? false;
+    message.partyCode = object.partyCode ?? "";
+    message.memberNames = object.memberNames?.map((e) => e) || [];
+    message.isLeader = object.isLeader ?? false;
+    message.message = object.message ?? "";
+    message.members = object.members?.map((e) => PartyMember.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseTrainingPresetApplied(): TrainingPresetApplied {
+  return { ok: false, message: "", presetId: "", spawnedCount: 0 };
+}
+
+export const TrainingPresetApplied: MessageFns<TrainingPresetApplied> = {
+  encode(message: TrainingPresetApplied, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.presetId !== "") {
+      writer.uint32(26).string(message.presetId);
+    }
+    if (message.spawnedCount !== 0) {
+      writer.uint32(32).int32(message.spawnedCount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TrainingPresetApplied {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTrainingPresetApplied();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.presetId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.spawnedCount = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<TrainingPresetApplied>, I>>(base?: I): TrainingPresetApplied {
+    return TrainingPresetApplied.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TrainingPresetApplied>, I>>(object: I): TrainingPresetApplied {
+    const message = createBaseTrainingPresetApplied();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.presetId = object.presetId ?? "";
+    message.spawnedCount = object.spawnedCount ?? 0;
+    return message;
+  },
+};
+
+function createBaseBeginnerPathState(): BeginnerPathState {
+  return {
+    enrolled: false,
+    abandoned: false,
+    activeQuestId: undefined,
+    activeQuestTitle: "",
+    activeQuestHint: "",
+    progress: 0,
+    required: 0,
+    objectiveKind: "",
+    completedQuestIds: [],
+    canEnroll: false,
+    statusMessage: "",
+    nextStubTitle: "",
+    uiActionId: "",
+  };
+}
+
+export const BeginnerPathState: MessageFns<BeginnerPathState> = {
+  encode(message: BeginnerPathState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.enrolled !== false) {
+      writer.uint32(8).bool(message.enrolled);
+    }
+    if (message.abandoned !== false) {
+      writer.uint32(16).bool(message.abandoned);
+    }
+    if (message.activeQuestId !== undefined) {
+      writer.uint32(26).string(message.activeQuestId);
+    }
+    if (message.activeQuestTitle !== "") {
+      writer.uint32(34).string(message.activeQuestTitle);
+    }
+    if (message.activeQuestHint !== "") {
+      writer.uint32(42).string(message.activeQuestHint);
+    }
+    if (message.progress !== 0) {
+      writer.uint32(48).int32(message.progress);
+    }
+    if (message.required !== 0) {
+      writer.uint32(56).int32(message.required);
+    }
+    if (message.objectiveKind !== "") {
+      writer.uint32(66).string(message.objectiveKind);
+    }
+    for (const v of message.completedQuestIds) {
+      writer.uint32(74).string(v!);
+    }
+    if (message.canEnroll !== false) {
+      writer.uint32(80).bool(message.canEnroll);
+    }
+    if (message.statusMessage !== "") {
+      writer.uint32(90).string(message.statusMessage);
+    }
+    if (message.nextStubTitle !== "") {
+      writer.uint32(98).string(message.nextStubTitle);
+    }
+    if (message.uiActionId !== "") {
+      writer.uint32(106).string(message.uiActionId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BeginnerPathState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBeginnerPathState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.enrolled = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.abandoned = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.activeQuestId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.activeQuestTitle = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.activeQuestHint = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.progress = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.required = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.objectiveKind = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.completedQuestIds.push(reader.string());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.canEnroll = reader.bool();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.statusMessage = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.nextStubTitle = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.uiActionId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BeginnerPathState>, I>>(base?: I): BeginnerPathState {
+    return BeginnerPathState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BeginnerPathState>, I>>(object: I): BeginnerPathState {
+    const message = createBaseBeginnerPathState();
+    message.enrolled = object.enrolled ?? false;
+    message.abandoned = object.abandoned ?? false;
+    message.activeQuestId = object.activeQuestId ?? undefined;
+    message.activeQuestTitle = object.activeQuestTitle ?? "";
+    message.activeQuestHint = object.activeQuestHint ?? "";
+    message.progress = object.progress ?? 0;
+    message.required = object.required ?? 0;
+    message.objectiveKind = object.objectiveKind ?? "";
+    message.completedQuestIds = object.completedQuestIds?.map((e) => e) || [];
+    message.canEnroll = object.canEnroll ?? false;
+    message.statusMessage = object.statusMessage ?? "";
+    message.nextStubTitle = object.nextStubTitle ?? "";
+    message.uiActionId = object.uiActionId ?? "";
+    return message;
+  },
+};
+
+function createBaseBuyShopItemResult(): BuyShopItemResult {
+  return { ok: false, message: "" };
+}
+
+export const BuyShopItemResult: MessageFns<BuyShopItemResult> = {
+  encode(message: BuyShopItemResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BuyShopItemResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBuyShopItemResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<BuyShopItemResult>, I>>(base?: I): BuyShopItemResult {
+    return BuyShopItemResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BuyShopItemResult>, I>>(object: I): BuyShopItemResult {
+    const message = createBaseBuyShopItemResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseRepairItemResult(): RepairItemResult {
+  return {
+    ok: false,
+    message: "",
+    itemUid: undefined,
+    curLifeSpan: undefined,
+    maxLifeSpan: undefined,
+    pricePaid: undefined,
+  };
+}
+
+export const RepairItemResult: MessageFns<RepairItemResult> = {
+  encode(message: RepairItemResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.itemUid !== undefined) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    if (message.curLifeSpan !== undefined) {
+      writer.uint32(32).int32(message.curLifeSpan);
+    }
+    if (message.maxLifeSpan !== undefined) {
+      writer.uint32(40).int32(message.maxLifeSpan);
+    }
+    if (message.pricePaid !== undefined) {
+      writer.uint32(48).int32(message.pricePaid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RepairItemResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRepairItemResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.curLifeSpan = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.maxLifeSpan = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.pricePaid = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<RepairItemResult>, I>>(base?: I): RepairItemResult {
+    return RepairItemResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RepairItemResult>, I>>(object: I): RepairItemResult {
+    const message = createBaseRepairItemResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    message.itemUid = object.itemUid ?? undefined;
+    message.curLifeSpan = object.curLifeSpan ?? undefined;
+    message.maxLifeSpan = object.maxLifeSpan ?? undefined;
+    message.pricePaid = object.pricePaid ?? undefined;
+    return message;
+  },
+};
+
+function createBaseItemLifeSpanUpdated(): ItemLifeSpanUpdated {
+  return { itemUid: 0n, curLifeSpan: 0, maxLifeSpan: 0 };
+}
+
+export const ItemLifeSpanUpdated: MessageFns<ItemLifeSpanUpdated> = {
+  encode(message: ItemLifeSpanUpdated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(8).int64(message.itemUid);
+    }
+    if (message.curLifeSpan !== 0) {
+      writer.uint32(16).int32(message.curLifeSpan);
+    }
+    if (message.maxLifeSpan !== 0) {
+      writer.uint32(24).int32(message.maxLifeSpan);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ItemLifeSpanUpdated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseItemLifeSpanUpdated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.curLifeSpan = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.maxLifeSpan = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ItemLifeSpanUpdated>, I>>(base?: I): ItemLifeSpanUpdated {
+    return ItemLifeSpanUpdated.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ItemLifeSpanUpdated>, I>>(object: I): ItemLifeSpanUpdated {
+    const message = createBaseItemLifeSpanUpdated();
+    message.itemUid = object.itemUid ?? 0n;
+    message.curLifeSpan = object.curLifeSpan ?? 0;
+    message.maxLifeSpan = object.maxLifeSpan ?? 0;
+    return message;
+  },
+};
+
+function createBaseOpenWarehouseRequest(): OpenWarehouseRequest {
+  return { gameWorldId: "", npcId: 0n };
+}
+
+export const OpenWarehouseRequest: MessageFns<OpenWarehouseRequest> = {
+  encode(message: OpenWarehouseRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OpenWarehouseRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOpenWarehouseRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<OpenWarehouseRequest>, I>>(base?: I): OpenWarehouseRequest {
+    return OpenWarehouseRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<OpenWarehouseRequest>, I>>(object: I): OpenWarehouseRequest {
+    const message = createBaseOpenWarehouseRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    return message;
+  },
+};
+
+function createBaseWarehouseDepositRequest(): WarehouseDepositRequest {
+  return { gameWorldId: "", npcId: 0n, itemUid: 0n };
+}
+
+export const WarehouseDepositRequest: MessageFns<WarehouseDepositRequest> = {
+  encode(message: WarehouseDepositRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WarehouseDepositRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWarehouseDepositRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<WarehouseDepositRequest>, I>>(base?: I): WarehouseDepositRequest {
+    return WarehouseDepositRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WarehouseDepositRequest>, I>>(object: I): WarehouseDepositRequest {
+    const message = createBaseWarehouseDepositRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseWarehouseWithdrawRequest(): WarehouseWithdrawRequest {
+  return { gameWorldId: "", npcId: 0n, itemUid: 0n };
+}
+
+export const WarehouseWithdrawRequest: MessageFns<WarehouseWithdrawRequest> = {
+  encode(message: WarehouseWithdrawRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gameWorldId !== "") {
+      writer.uint32(10).string(message.gameWorldId);
+    }
+    if (message.npcId !== 0n) {
+      if (BigInt.asIntN(64, message.npcId) !== message.npcId) {
+        throw new globalThis.Error("value provided for field message.npcId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.npcId);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(24).int64(message.itemUid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WarehouseWithdrawRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWarehouseWithdrawRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.gameWorldId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.npcId = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<WarehouseWithdrawRequest>, I>>(base?: I): WarehouseWithdrawRequest {
+    return WarehouseWithdrawRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WarehouseWithdrawRequest>, I>>(object: I): WarehouseWithdrawRequest {
+    const message = createBaseWarehouseWithdrawRequest();
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.npcId = object.npcId ?? 0n;
+    message.itemUid = object.itemUid ?? 0n;
+    return message;
+  },
+};
+
+function createBaseWarehouseState(): WarehouseState {
+  return { items: [], maxSlots: 0, message: "" };
+}
+
+export const WarehouseState: MessageFns<WarehouseState> = {
+  encode(message: WarehouseState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.items) {
+      InventoryItemEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.maxSlots !== 0) {
+      writer.uint32(16).int32(message.maxSlots);
+    }
+    if (message.message !== "") {
+      writer.uint32(26).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WarehouseState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWarehouseState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.items.push(InventoryItemEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.maxSlots = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<WarehouseState>, I>>(base?: I): WarehouseState {
+    return WarehouseState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WarehouseState>, I>>(object: I): WarehouseState {
+    const message = createBaseWarehouseState();
+    message.items = object.items?.map((e) => InventoryItemEntry.fromPartial(e)) || [];
+    message.maxSlots = object.maxSlots ?? 0;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseWarehouseMutationResult(): WarehouseMutationResult {
+  return { ok: false, message: "" };
+}
+
+export const WarehouseMutationResult: MessageFns<WarehouseMutationResult> = {
+  encode(message: WarehouseMutationResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WarehouseMutationResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWarehouseMutationResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<WarehouseMutationResult>, I>>(base?: I): WarehouseMutationResult {
+    return WarehouseMutationResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WarehouseMutationResult>, I>>(object: I): WarehouseMutationResult {
+    const message = createBaseWarehouseMutationResult();
+    message.ok = object.ok ?? false;
+    message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseMonsterKillEntry(): MonsterKillEntry {
+  return {
+    monsterId: 0,
+    monsterName: "",
+    kills: 0n,
+    specialtyLevel: 0,
+    effectiveLevel: 0,
+    nextKills: 0n,
+    stakeBonusLevels: 0,
+    bonusSummary: "",
+  };
+}
+
+export const MonsterKillEntry: MessageFns<MonsterKillEntry> = {
+  encode(message: MonsterKillEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.monsterId !== 0) {
+      writer.uint32(8).int32(message.monsterId);
+    }
+    if (message.monsterName !== "") {
+      writer.uint32(18).string(message.monsterName);
+    }
+    if (message.kills !== 0n) {
+      if (BigInt.asIntN(64, message.kills) !== message.kills) {
+        throw new globalThis.Error("value provided for field message.kills of type int64 too large");
+      }
+      writer.uint32(24).int64(message.kills);
+    }
+    if (message.specialtyLevel !== 0) {
+      writer.uint32(32).int32(message.specialtyLevel);
+    }
+    if (message.effectiveLevel !== 0) {
+      writer.uint32(40).int32(message.effectiveLevel);
+    }
+    if (message.nextKills !== 0n) {
+      if (BigInt.asIntN(64, message.nextKills) !== message.nextKills) {
+        throw new globalThis.Error("value provided for field message.nextKills of type int64 too large");
+      }
+      writer.uint32(48).int64(message.nextKills);
+    }
+    if (message.stakeBonusLevels !== 0) {
+      writer.uint32(56).int32(message.stakeBonusLevels);
+    }
+    if (message.bonusSummary !== "") {
+      writer.uint32(66).string(message.bonusSummary);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MonsterKillEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMonsterKillEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.monsterId = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.monsterName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.kills = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.specialtyLevel = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.effectiveLevel = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.nextKills = reader.int64() as bigint;
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.stakeBonusLevels = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.bonusSummary = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MonsterKillEntry>, I>>(base?: I): MonsterKillEntry {
+    return MonsterKillEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MonsterKillEntry>, I>>(object: I): MonsterKillEntry {
+    const message = createBaseMonsterKillEntry();
+    message.monsterId = object.monsterId ?? 0;
+    message.monsterName = object.monsterName ?? "";
+    message.kills = object.kills ?? 0n;
+    message.specialtyLevel = object.specialtyLevel ?? 0;
+    message.effectiveLevel = object.effectiveLevel ?? 0;
+    message.nextKills = object.nextKills ?? 0n;
+    message.stakeBonusLevels = object.stakeBonusLevels ?? 0;
+    message.bonusSummary = object.bonusSummary ?? "";
+    return message;
+  },
+};
+
+function createBaseKillMilestoneEntry(): KillMilestoneEntry {
+  return {
+    milestoneId: "",
+    kind: 0,
+    monsterId: undefined,
+    monsterName: undefined,
+    required: 0n,
+    progress: 0n,
+    claimed: false,
+    rewardItemIds: [],
+  };
+}
+
+export const KillMilestoneEntry: MessageFns<KillMilestoneEntry> = {
+  encode(message: KillMilestoneEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.milestoneId !== "") {
+      writer.uint32(10).string(message.milestoneId);
+    }
+    if (message.kind !== 0) {
+      writer.uint32(16).int32(message.kind);
+    }
+    if (message.monsterId !== undefined) {
+      writer.uint32(24).int32(message.monsterId);
+    }
+    if (message.monsterName !== undefined) {
+      writer.uint32(34).string(message.monsterName);
+    }
+    if (message.required !== 0n) {
+      if (BigInt.asIntN(64, message.required) !== message.required) {
+        throw new globalThis.Error("value provided for field message.required of type int64 too large");
+      }
+      writer.uint32(40).int64(message.required);
+    }
+    if (message.progress !== 0n) {
+      if (BigInt.asIntN(64, message.progress) !== message.progress) {
+        throw new globalThis.Error("value provided for field message.progress of type int64 too large");
+      }
+      writer.uint32(48).int64(message.progress);
+    }
+    if (message.claimed !== false) {
+      writer.uint32(56).bool(message.claimed);
+    }
+    writer.uint32(66).fork();
+    for (const v of message.rewardItemIds) {
+      writer.int32(v);
+    }
+    writer.join();
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): KillMilestoneEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseKillMilestoneEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.milestoneId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.kind = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.monsterId = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.monsterName = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.required = reader.int64() as bigint;
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.progress = reader.int64() as bigint;
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.claimed = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag === 64) {
+            message.rewardItemIds.push(reader.int32());
+
+            continue;
+          }
+
+          if (tag === 66) {
+            const end2 = reader.uint32() + reader.pos;
+            while (reader.pos < end2) {
+              message.rewardItemIds.push(reader.int32());
+            }
+
+            continue;
+          }
+
+          break;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<KillMilestoneEntry>, I>>(base?: I): KillMilestoneEntry {
+    return KillMilestoneEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<KillMilestoneEntry>, I>>(object: I): KillMilestoneEntry {
+    const message = createBaseKillMilestoneEntry();
+    message.milestoneId = object.milestoneId ?? "";
+    message.kind = object.kind ?? 0;
+    message.monsterId = object.monsterId ?? undefined;
+    message.monsterName = object.monsterName ?? undefined;
+    message.required = object.required ?? 0n;
+    message.progress = object.progress ?? 0n;
+    message.claimed = object.claimed ?? false;
+    message.rewardItemIds = object.rewardItemIds?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseProgressionState(): ProgressionState {
+  return {
+    exp: 0n,
+    level: 0,
+    rebirth: 0,
+    expForNextLevel: 0n,
+    maxLevel: 0,
+    maxRebirth: 0,
+    monsterKills: [],
+    milestones: [],
+    luPoints: 0,
+    mp: 0,
+    maxMp: 0,
+    sp: 0,
+    maxSp: 0,
+    expForCurrentLevel: 0n,
+    majesticPoints: 0,
+    levelBlocked: false,
+    stakedHell: 0n,
+    hunger: 0,
+    enemyKills: 0,
+    superAttackLeft: 0,
+    maxSuperAttack: 0,
+    superAttackArmed: false,
+  };
+}
+
+export const ProgressionState: MessageFns<ProgressionState> = {
+  encode(message: ProgressionState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.exp !== 0n) {
+      if (BigInt.asIntN(64, message.exp) !== message.exp) {
+        throw new globalThis.Error("value provided for field message.exp of type int64 too large");
+      }
+      writer.uint32(8).int64(message.exp);
+    }
+    if (message.level !== 0) {
+      writer.uint32(16).int32(message.level);
+    }
+    if (message.rebirth !== 0) {
+      writer.uint32(24).int32(message.rebirth);
+    }
+    if (message.expForNextLevel !== 0n) {
+      if (BigInt.asIntN(64, message.expForNextLevel) !== message.expForNextLevel) {
+        throw new globalThis.Error("value provided for field message.expForNextLevel of type int64 too large");
+      }
+      writer.uint32(32).int64(message.expForNextLevel);
+    }
+    if (message.maxLevel !== 0) {
+      writer.uint32(40).int32(message.maxLevel);
+    }
+    if (message.maxRebirth !== 0) {
+      writer.uint32(48).int32(message.maxRebirth);
+    }
+    for (const v of message.monsterKills) {
+      MonsterKillEntry.encode(v!, writer.uint32(58).fork()).join();
+    }
+    for (const v of message.milestones) {
+      KillMilestoneEntry.encode(v!, writer.uint32(66).fork()).join();
+    }
+    if (message.luPoints !== 0) {
+      writer.uint32(72).int32(message.luPoints);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(80).int32(message.mp);
+    }
+    if (message.maxMp !== 0) {
+      writer.uint32(88).int32(message.maxMp);
+    }
+    if (message.sp !== 0) {
+      writer.uint32(96).int32(message.sp);
+    }
+    if (message.maxSp !== 0) {
+      writer.uint32(104).int32(message.maxSp);
+    }
+    if (message.expForCurrentLevel !== 0n) {
+      if (BigInt.asIntN(64, message.expForCurrentLevel) !== message.expForCurrentLevel) {
+        throw new globalThis.Error("value provided for field message.expForCurrentLevel of type int64 too large");
+      }
+      writer.uint32(112).int64(message.expForCurrentLevel);
+    }
+    if (message.majesticPoints !== 0) {
+      writer.uint32(120).int32(message.majesticPoints);
+    }
+    if (message.levelBlocked !== false) {
+      writer.uint32(128).bool(message.levelBlocked);
+    }
+    if (message.stakedHell !== 0n) {
+      if (BigInt.asIntN(64, message.stakedHell) !== message.stakedHell) {
+        throw new globalThis.Error("value provided for field message.stakedHell of type int64 too large");
+      }
+      writer.uint32(136).int64(message.stakedHell);
+    }
+    if (message.hunger !== 0) {
+      writer.uint32(144).int32(message.hunger);
+    }
+    if (message.enemyKills !== 0) {
+      writer.uint32(152).int32(message.enemyKills);
+    }
+    if (message.superAttackLeft !== 0) {
+      writer.uint32(160).int32(message.superAttackLeft);
+    }
+    if (message.maxSuperAttack !== 0) {
+      writer.uint32(168).int32(message.maxSuperAttack);
+    }
+    if (message.superAttackArmed !== false) {
+      writer.uint32(176).bool(message.superAttackArmed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ProgressionState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseProgressionState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.exp = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.rebirth = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.expForNextLevel = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.maxLevel = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.maxRebirth = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.monsterKills.push(MonsterKillEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.milestones.push(KillMilestoneEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.luPoints = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.mp = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.maxMp = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.sp = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.maxSp = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.expForCurrentLevel = reader.int64() as bigint;
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.majesticPoints = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.levelBlocked = reader.bool();
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.stakedHell = reader.int64() as bigint;
+          continue;
+        }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.hunger = reader.int32();
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.enemyKills = reader.int32();
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.superAttackLeft = reader.int32();
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.maxSuperAttack = reader.int32();
+          continue;
+        }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.superAttackArmed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ProgressionState>, I>>(base?: I): ProgressionState {
+    return ProgressionState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ProgressionState>, I>>(object: I): ProgressionState {
+    const message = createBaseProgressionState();
+    message.exp = object.exp ?? 0n;
+    message.level = object.level ?? 0;
+    message.rebirth = object.rebirth ?? 0;
+    message.expForNextLevel = object.expForNextLevel ?? 0n;
+    message.maxLevel = object.maxLevel ?? 0;
+    message.maxRebirth = object.maxRebirth ?? 0;
+    message.monsterKills = object.monsterKills?.map((e) => MonsterKillEntry.fromPartial(e)) || [];
+    message.milestones = object.milestones?.map((e) => KillMilestoneEntry.fromPartial(e)) || [];
+    message.luPoints = object.luPoints ?? 0;
+    message.mp = object.mp ?? 0;
+    message.maxMp = object.maxMp ?? 0;
+    message.sp = object.sp ?? 0;
+    message.maxSp = object.maxSp ?? 0;
+    message.expForCurrentLevel = object.expForCurrentLevel ?? 0n;
+    message.majesticPoints = object.majesticPoints ?? 0;
+    message.levelBlocked = object.levelBlocked ?? false;
+    message.stakedHell = object.stakedHell ?? 0n;
+    message.hunger = object.hunger ?? 0;
+    message.enemyKills = object.enemyKills ?? 0;
+    message.superAttackLeft = object.superAttackLeft ?? 0;
+    message.maxSuperAttack = object.maxSuperAttack ?? 0;
+    message.superAttackArmed = object.superAttackArmed ?? false;
+    return message;
+  },
+};
+
+function createBaseProgressionUpdated(): ProgressionUpdated {
+  return {
+    exp: 0n,
+    level: 0,
+    rebirth: 0,
+    expForNextLevel: 0n,
+    leveledUp: false,
+    luPoints: 0,
+    hp: 0,
+    maxHp: 0,
+    mp: 0,
+    maxMp: 0,
+    sp: 0,
+    maxSp: 0,
+    expForCurrentLevel: 0n,
+    majesticPoints: 0,
+    levelBlocked: false,
+    hunger: 0,
+    superAttackLeft: 0,
+    maxSuperAttack: 0,
+    superAttackArmed: false,
+  };
+}
+
+export const ProgressionUpdated: MessageFns<ProgressionUpdated> = {
+  encode(message: ProgressionUpdated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.exp !== 0n) {
+      if (BigInt.asIntN(64, message.exp) !== message.exp) {
+        throw new globalThis.Error("value provided for field message.exp of type int64 too large");
+      }
+      writer.uint32(8).int64(message.exp);
+    }
+    if (message.level !== 0) {
+      writer.uint32(16).int32(message.level);
+    }
+    if (message.rebirth !== 0) {
+      writer.uint32(24).int32(message.rebirth);
+    }
+    if (message.expForNextLevel !== 0n) {
+      if (BigInt.asIntN(64, message.expForNextLevel) !== message.expForNextLevel) {
+        throw new globalThis.Error("value provided for field message.expForNextLevel of type int64 too large");
+      }
+      writer.uint32(32).int64(message.expForNextLevel);
+    }
+    if (message.leveledUp !== false) {
+      writer.uint32(40).bool(message.leveledUp);
+    }
+    if (message.luPoints !== 0) {
+      writer.uint32(48).int32(message.luPoints);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(56).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(64).int32(message.maxHp);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(72).int32(message.mp);
+    }
+    if (message.maxMp !== 0) {
+      writer.uint32(80).int32(message.maxMp);
+    }
+    if (message.sp !== 0) {
+      writer.uint32(88).int32(message.sp);
+    }
+    if (message.maxSp !== 0) {
+      writer.uint32(96).int32(message.maxSp);
+    }
+    if (message.expForCurrentLevel !== 0n) {
+      if (BigInt.asIntN(64, message.expForCurrentLevel) !== message.expForCurrentLevel) {
+        throw new globalThis.Error("value provided for field message.expForCurrentLevel of type int64 too large");
+      }
+      writer.uint32(104).int64(message.expForCurrentLevel);
+    }
+    if (message.majesticPoints !== 0) {
+      writer.uint32(112).int32(message.majesticPoints);
+    }
+    if (message.levelBlocked !== false) {
+      writer.uint32(120).bool(message.levelBlocked);
+    }
+    if (message.hunger !== 0) {
+      writer.uint32(128).int32(message.hunger);
+    }
+    if (message.superAttackLeft !== 0) {
+      writer.uint32(136).int32(message.superAttackLeft);
+    }
+    if (message.maxSuperAttack !== 0) {
+      writer.uint32(144).int32(message.maxSuperAttack);
+    }
+    if (message.superAttackArmed !== false) {
+      writer.uint32(152).bool(message.superAttackArmed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ProgressionUpdated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseProgressionUpdated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.exp = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.rebirth = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.expForNextLevel = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.leveledUp = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.luPoints = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.hp = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.maxHp = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.mp = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.maxMp = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.sp = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.maxSp = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.expForCurrentLevel = reader.int64() as bigint;
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.majesticPoints = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.levelBlocked = reader.bool();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.hunger = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.superAttackLeft = reader.int32();
+          continue;
+        }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.maxSuperAttack = reader.int32();
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.superAttackArmed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<ProgressionUpdated>, I>>(base?: I): ProgressionUpdated {
+    return ProgressionUpdated.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ProgressionUpdated>, I>>(object: I): ProgressionUpdated {
+    const message = createBaseProgressionUpdated();
+    message.exp = object.exp ?? 0n;
+    message.level = object.level ?? 0;
+    message.rebirth = object.rebirth ?? 0;
+    message.expForNextLevel = object.expForNextLevel ?? 0n;
+    message.leveledUp = object.leveledUp ?? false;
+    message.luPoints = object.luPoints ?? 0;
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.mp = object.mp ?? 0;
+    message.maxMp = object.maxMp ?? 0;
+    message.sp = object.sp ?? 0;
+    message.maxSp = object.maxSp ?? 0;
+    message.expForCurrentLevel = object.expForCurrentLevel ?? 0n;
+    message.majesticPoints = object.majesticPoints ?? 0;
+    message.levelBlocked = object.levelBlocked ?? false;
+    message.hunger = object.hunger ?? 0;
+    message.superAttackLeft = object.superAttackLeft ?? 0;
+    message.maxSuperAttack = object.maxSuperAttack ?? 0;
+    message.superAttackArmed = object.superAttackArmed ?? false;
+    return message;
+  },
+};
+
+function createBaseMajesticUpgradeResult(): MajesticUpgradeResult {
+  return {
+    success: false,
+    error: undefined,
+    majesticPoints: 0,
+    itemUid: 0n,
+    itemId: 0,
+    itemAttribute: 0,
+    itemTransformed: false,
+  };
+}
+
+export const MajesticUpgradeResult: MessageFns<MajesticUpgradeResult> = {
+  encode(message: MajesticUpgradeResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.error !== undefined) {
+      writer.uint32(18).string(message.error);
+    }
+    if (message.majesticPoints !== 0) {
+      writer.uint32(24).int32(message.majesticPoints);
+    }
+    if (message.itemUid !== 0n) {
+      if (BigInt.asIntN(64, message.itemUid) !== message.itemUid) {
+        throw new globalThis.Error("value provided for field message.itemUid of type int64 too large");
+      }
+      writer.uint32(32).int64(message.itemUid);
+    }
+    if (message.itemId !== 0) {
+      writer.uint32(40).int32(message.itemId);
+    }
+    if (message.itemAttribute !== 0) {
+      writer.uint32(48).uint32(message.itemAttribute);
+    }
+    if (message.itemTransformed !== false) {
+      writer.uint32(56).bool(message.itemTransformed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MajesticUpgradeResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMajesticUpgradeResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.error = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.majesticPoints = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.itemUid = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.itemId = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.itemAttribute = reader.uint32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.itemTransformed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MajesticUpgradeResult>, I>>(base?: I): MajesticUpgradeResult {
+    return MajesticUpgradeResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MajesticUpgradeResult>, I>>(object: I): MajesticUpgradeResult {
+    const message = createBaseMajesticUpgradeResult();
+    message.success = object.success ?? false;
+    message.error = object.error ?? undefined;
+    message.majesticPoints = object.majesticPoints ?? 0;
+    message.itemUid = object.itemUid ?? 0n;
+    message.itemId = object.itemId ?? 0;
+    message.itemAttribute = object.itemAttribute ?? 0;
+    message.itemTransformed = object.itemTransformed ?? false;
+    return message;
+  },
+};
+
+function createBaseLevelUpSettingsApplied(): LevelUpSettingsApplied {
+  return {
+    success: false,
+    error: undefined,
+    level: 0,
+    str: 0,
+    vit: 0,
+    dex: 0,
+    intel: 0,
+    mag: 0,
+    chr: 0,
+    luPoints: 0,
+    hp: 0,
+    maxHp: 0,
+    mp: 0,
+    maxMp: 0,
+    sp: 0,
+    maxSp: 0,
+  };
+}
+
+export const LevelUpSettingsApplied: MessageFns<LevelUpSettingsApplied> = {
+  encode(message: LevelUpSettingsApplied, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.error !== undefined) {
+      writer.uint32(18).string(message.error);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.str !== 0) {
+      writer.uint32(32).int32(message.str);
+    }
+    if (message.vit !== 0) {
+      writer.uint32(40).int32(message.vit);
+    }
+    if (message.dex !== 0) {
+      writer.uint32(48).int32(message.dex);
+    }
+    if (message.intel !== 0) {
+      writer.uint32(56).int32(message.intel);
+    }
+    if (message.mag !== 0) {
+      writer.uint32(64).int32(message.mag);
+    }
+    if (message.chr !== 0) {
+      writer.uint32(72).int32(message.chr);
+    }
+    if (message.luPoints !== 0) {
+      writer.uint32(80).int32(message.luPoints);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(88).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(96).int32(message.maxHp);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(104).int32(message.mp);
+    }
+    if (message.maxMp !== 0) {
+      writer.uint32(112).int32(message.maxMp);
+    }
+    if (message.sp !== 0) {
+      writer.uint32(120).int32(message.sp);
+    }
+    if (message.maxSp !== 0) {
+      writer.uint32(128).int32(message.maxSp);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): LevelUpSettingsApplied {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseLevelUpSettingsApplied();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.error = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.luPoints = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.hp = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.maxHp = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.mp = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.maxMp = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.sp = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.maxSp = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<LevelUpSettingsApplied>, I>>(base?: I): LevelUpSettingsApplied {
+    return LevelUpSettingsApplied.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<LevelUpSettingsApplied>, I>>(object: I): LevelUpSettingsApplied {
+    const message = createBaseLevelUpSettingsApplied();
+    message.success = object.success ?? false;
+    message.error = object.error ?? undefined;
+    message.level = object.level ?? 0;
+    message.str = object.str ?? 0;
+    message.vit = object.vit ?? 0;
+    message.dex = object.dex ?? 0;
+    message.intel = object.intel ?? 0;
+    message.mag = object.mag ?? 0;
+    message.chr = object.chr ?? 0;
+    message.luPoints = object.luPoints ?? 0;
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.mp = object.mp ?? 0;
+    message.maxMp = object.maxMp ?? 0;
+    message.sp = object.sp ?? 0;
+    message.maxSp = object.maxSp ?? 0;
+    return message;
+  },
+};
+
+function createBaseMonsterKillsUpdated(): MonsterKillsUpdated {
+  return {
+    monsterId: 0,
+    monsterName: "",
+    kills: 0n,
+    totalKills: 0n,
+    specialtyLevel: 0,
+    effectiveLevel: 0,
+    nextKills: 0n,
+    stakeBonusLevels: 0,
+    bonusSummary: "",
+  };
+}
+
+export const MonsterKillsUpdated: MessageFns<MonsterKillsUpdated> = {
+  encode(message: MonsterKillsUpdated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.monsterId !== 0) {
+      writer.uint32(8).int32(message.monsterId);
+    }
+    if (message.monsterName !== "") {
+      writer.uint32(18).string(message.monsterName);
+    }
+    if (message.kills !== 0n) {
+      if (BigInt.asIntN(64, message.kills) !== message.kills) {
+        throw new globalThis.Error("value provided for field message.kills of type int64 too large");
+      }
+      writer.uint32(24).int64(message.kills);
+    }
+    if (message.totalKills !== 0n) {
+      if (BigInt.asIntN(64, message.totalKills) !== message.totalKills) {
+        throw new globalThis.Error("value provided for field message.totalKills of type int64 too large");
+      }
+      writer.uint32(32).int64(message.totalKills);
+    }
+    if (message.specialtyLevel !== 0) {
+      writer.uint32(40).int32(message.specialtyLevel);
+    }
+    if (message.effectiveLevel !== 0) {
+      writer.uint32(48).int32(message.effectiveLevel);
+    }
+    if (message.nextKills !== 0n) {
+      if (BigInt.asIntN(64, message.nextKills) !== message.nextKills) {
+        throw new globalThis.Error("value provided for field message.nextKills of type int64 too large");
+      }
+      writer.uint32(56).int64(message.nextKills);
+    }
+    if (message.stakeBonusLevels !== 0) {
+      writer.uint32(64).int32(message.stakeBonusLevels);
+    }
+    if (message.bonusSummary !== "") {
+      writer.uint32(74).string(message.bonusSummary);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MonsterKillsUpdated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMonsterKillsUpdated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.monsterId = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.monsterName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.kills = reader.int64() as bigint;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.totalKills = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.specialtyLevel = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.effectiveLevel = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.nextKills = reader.int64() as bigint;
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.stakeBonusLevels = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.bonusSummary = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<MonsterKillsUpdated>, I>>(base?: I): MonsterKillsUpdated {
+    return MonsterKillsUpdated.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MonsterKillsUpdated>, I>>(object: I): MonsterKillsUpdated {
+    const message = createBaseMonsterKillsUpdated();
+    message.monsterId = object.monsterId ?? 0;
+    message.monsterName = object.monsterName ?? "";
+    message.kills = object.kills ?? 0n;
+    message.totalKills = object.totalKills ?? 0n;
+    message.specialtyLevel = object.specialtyLevel ?? 0;
+    message.effectiveLevel = object.effectiveLevel ?? 0;
+    message.nextKills = object.nextKills ?? 0n;
+    message.stakeBonusLevels = object.stakeBonusLevels ?? 0;
+    message.bonusSummary = object.bonusSummary ?? "";
+    return message;
+  },
+};
+
+function createBaseKillMilestoneClaimResult(): KillMilestoneClaimResult {
+  return { milestoneId: "", success: false, grantedItemId: undefined, error: undefined };
+}
+
+export const KillMilestoneClaimResult: MessageFns<KillMilestoneClaimResult> = {
+  encode(message: KillMilestoneClaimResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.milestoneId !== "") {
+      writer.uint32(10).string(message.milestoneId);
+    }
+    if (message.success !== false) {
+      writer.uint32(16).bool(message.success);
+    }
+    if (message.grantedItemId !== undefined) {
+      writer.uint32(24).int32(message.grantedItemId);
+    }
+    if (message.error !== undefined) {
+      writer.uint32(34).string(message.error);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): KillMilestoneClaimResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseKillMilestoneClaimResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.milestoneId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.grantedItemId = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.error = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<KillMilestoneClaimResult>, I>>(base?: I): KillMilestoneClaimResult {
+    return KillMilestoneClaimResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<KillMilestoneClaimResult>, I>>(object: I): KillMilestoneClaimResult {
+    const message = createBaseKillMilestoneClaimResult();
+    message.milestoneId = object.milestoneId ?? "";
+    message.success = object.success ?? false;
+    message.grantedItemId = object.grantedItemId ?? undefined;
+    message.error = object.error ?? undefined;
     return message;
   },
 };
@@ -6935,6 +22394,14 @@ function createBaseInventoryItemEntry(): InventoryItemEntry {
     bagZIndex: undefined,
     itemAttribute: undefined,
     itemColor: undefined,
+    curLifeSpan: undefined,
+    maxLifeSpan: undefined,
+    bindState: undefined,
+    boundGuildId: undefined,
+    cicLevel: undefined,
+    cicStatKind: undefined,
+    cicStatValue: undefined,
+    siphonLevel: undefined,
   };
 }
 
@@ -6969,6 +22436,30 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
     }
     if (message.itemColor !== undefined) {
       writer.uint32(72).int32(message.itemColor);
+    }
+    if (message.curLifeSpan !== undefined) {
+      writer.uint32(80).int32(message.curLifeSpan);
+    }
+    if (message.maxLifeSpan !== undefined) {
+      writer.uint32(88).int32(message.maxLifeSpan);
+    }
+    if (message.bindState !== undefined) {
+      writer.uint32(96).int32(message.bindState);
+    }
+    if (message.boundGuildId !== undefined) {
+      writer.uint32(106).string(message.boundGuildId);
+    }
+    if (message.cicLevel !== undefined) {
+      writer.uint32(112).int32(message.cicLevel);
+    }
+    if (message.cicStatKind !== undefined) {
+      writer.uint32(120).int32(message.cicStatKind);
+    }
+    if (message.cicStatValue !== undefined) {
+      writer.uint32(128).int32(message.cicStatValue);
+    }
+    if (message.siphonLevel !== undefined) {
+      writer.uint32(136).int32(message.siphonLevel);
     }
     return writer;
   },
@@ -7052,6 +22543,70 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
           message.itemColor = reader.int32();
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.curLifeSpan = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.maxLifeSpan = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.bindState = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.boundGuildId = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.cicLevel = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.cicStatKind = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.cicStatValue = reader.int32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.siphonLevel = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7075,6 +22630,14 @@ export const InventoryItemEntry: MessageFns<InventoryItemEntry> = {
     message.bagZIndex = object.bagZIndex ?? undefined;
     message.itemAttribute = object.itemAttribute ?? undefined;
     message.itemColor = object.itemColor ?? undefined;
+    message.curLifeSpan = object.curLifeSpan ?? undefined;
+    message.maxLifeSpan = object.maxLifeSpan ?? undefined;
+    message.bindState = object.bindState ?? undefined;
+    message.boundGuildId = object.boundGuildId ?? undefined;
+    message.cicLevel = object.cicLevel ?? undefined;
+    message.cicStatKind = object.cicStatKind ?? undefined;
+    message.cicStatValue = object.cicStatValue ?? undefined;
+    message.siphonLevel = object.siphonLevel ?? undefined;
     return message;
   },
 };
@@ -7744,6 +23307,19 @@ function createBaseInitialState(): InitialState {
     hairStyleIndex: 0,
     underwearColorIndex: 0,
     npcDirectory: [],
+    str: 0,
+    vit: 0,
+    dex: 0,
+    intel: 0,
+    mag: 0,
+    chr: 0,
+    luPoints: 0,
+    mp: 0,
+    maxMp: 0,
+    sp: 0,
+    maxSp: 0,
+    safeAttackMode: false,
+    citizenshipSide: "",
   };
 }
 
@@ -7832,6 +23408,45 @@ export const InitialState: MessageFns<InitialState> = {
     }
     for (const v of message.npcDirectory) {
       NpcDirectoryEntry.encode(v!, writer.uint32(218).fork()).join();
+    }
+    if (message.str !== 0) {
+      writer.uint32(224).int32(message.str);
+    }
+    if (message.vit !== 0) {
+      writer.uint32(232).int32(message.vit);
+    }
+    if (message.dex !== 0) {
+      writer.uint32(240).int32(message.dex);
+    }
+    if (message.intel !== 0) {
+      writer.uint32(248).int32(message.intel);
+    }
+    if (message.mag !== 0) {
+      writer.uint32(256).int32(message.mag);
+    }
+    if (message.chr !== 0) {
+      writer.uint32(264).int32(message.chr);
+    }
+    if (message.luPoints !== 0) {
+      writer.uint32(272).int32(message.luPoints);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(280).int32(message.mp);
+    }
+    if (message.maxMp !== 0) {
+      writer.uint32(288).int32(message.maxMp);
+    }
+    if (message.sp !== 0) {
+      writer.uint32(296).int32(message.sp);
+    }
+    if (message.maxSp !== 0) {
+      writer.uint32(304).int32(message.maxSp);
+    }
+    if (message.safeAttackMode !== false) {
+      writer.uint32(312).bool(message.safeAttackMode);
+    }
+    if (message.citizenshipSide !== "") {
+      writer.uint32(322).string(message.citizenshipSide);
     }
     return writer;
   },
@@ -8059,6 +23674,110 @@ export const InitialState: MessageFns<InitialState> = {
           message.npcDirectory.push(NpcDirectoryEntry.decode(reader, reader.uint32()));
           continue;
         }
+        case 28: {
+          if (tag !== 224) {
+            break;
+          }
+
+          message.str = reader.int32();
+          continue;
+        }
+        case 29: {
+          if (tag !== 232) {
+            break;
+          }
+
+          message.vit = reader.int32();
+          continue;
+        }
+        case 30: {
+          if (tag !== 240) {
+            break;
+          }
+
+          message.dex = reader.int32();
+          continue;
+        }
+        case 31: {
+          if (tag !== 248) {
+            break;
+          }
+
+          message.intel = reader.int32();
+          continue;
+        }
+        case 32: {
+          if (tag !== 256) {
+            break;
+          }
+
+          message.mag = reader.int32();
+          continue;
+        }
+        case 33: {
+          if (tag !== 264) {
+            break;
+          }
+
+          message.chr = reader.int32();
+          continue;
+        }
+        case 34: {
+          if (tag !== 272) {
+            break;
+          }
+
+          message.luPoints = reader.int32();
+          continue;
+        }
+        case 35: {
+          if (tag !== 280) {
+            break;
+          }
+
+          message.mp = reader.int32();
+          continue;
+        }
+        case 36: {
+          if (tag !== 288) {
+            break;
+          }
+
+          message.maxMp = reader.int32();
+          continue;
+        }
+        case 37: {
+          if (tag !== 296) {
+            break;
+          }
+
+          message.sp = reader.int32();
+          continue;
+        }
+        case 38: {
+          if (tag !== 304) {
+            break;
+          }
+
+          message.maxSp = reader.int32();
+          continue;
+        }
+        case 39: {
+          if (tag !== 312) {
+            break;
+          }
+
+          message.safeAttackMode = reader.bool();
+          continue;
+        }
+        case 40: {
+          if (tag !== 322) {
+            break;
+          }
+
+          message.citizenshipSide = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -8100,6 +23819,19 @@ export const InitialState: MessageFns<InitialState> = {
     message.hairStyleIndex = object.hairStyleIndex ?? 0;
     message.underwearColorIndex = object.underwearColorIndex ?? 0;
     message.npcDirectory = object.npcDirectory?.map((e) => NpcDirectoryEntry.fromPartial(e)) || [];
+    message.str = object.str ?? 0;
+    message.vit = object.vit ?? 0;
+    message.dex = object.dex ?? 0;
+    message.intel = object.intel ?? 0;
+    message.mag = object.mag ?? 0;
+    message.chr = object.chr ?? 0;
+    message.luPoints = object.luPoints ?? 0;
+    message.mp = object.mp ?? 0;
+    message.maxMp = object.maxMp ?? 0;
+    message.sp = object.sp ?? 0;
+    message.maxSp = object.maxSp ?? 0;
+    message.safeAttackMode = object.safeAttackMode ?? false;
+    message.citizenshipSide = object.citizenshipSide ?? "";
     return message;
   },
 };
@@ -9141,8 +24873,150 @@ export const PlayerPickupPerformed: MessageFns<PlayerPickupPerformed> = {
   },
 };
 
+function createBaseEnemyKillAwarded(): EnemyKillAwarded {
+  return {
+    victimPlayerId: 0n,
+    victimName: "",
+    victimLevel: 0,
+    killerLevel: 0,
+    victimCityKillerRank: undefined,
+    rarity: 0,
+    mapName: "",
+    killerEkCount: 0,
+  };
+}
+
+export const EnemyKillAwarded: MessageFns<EnemyKillAwarded> = {
+  encode(message: EnemyKillAwarded, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.victimPlayerId !== 0n) {
+      if (BigInt.asIntN(64, message.victimPlayerId) !== message.victimPlayerId) {
+        throw new globalThis.Error("value provided for field message.victimPlayerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.victimPlayerId);
+    }
+    if (message.victimName !== "") {
+      writer.uint32(18).string(message.victimName);
+    }
+    if (message.victimLevel !== 0) {
+      writer.uint32(24).int32(message.victimLevel);
+    }
+    if (message.killerLevel !== 0) {
+      writer.uint32(32).int32(message.killerLevel);
+    }
+    if (message.victimCityKillerRank !== undefined) {
+      writer.uint32(40).int32(message.victimCityKillerRank);
+    }
+    if (message.rarity !== 0) {
+      writer.uint32(48).int32(message.rarity);
+    }
+    if (message.mapName !== "") {
+      writer.uint32(58).string(message.mapName);
+    }
+    if (message.killerEkCount !== 0) {
+      writer.uint32(64).int32(message.killerEkCount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EnemyKillAwarded {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEnemyKillAwarded();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.victimPlayerId = reader.int64() as bigint;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.victimName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.victimLevel = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.killerLevel = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.victimCityKillerRank = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.rarity = reader.int32() as any;
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.mapName = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.killerEkCount = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<EnemyKillAwarded>, I>>(base?: I): EnemyKillAwarded {
+    return EnemyKillAwarded.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EnemyKillAwarded>, I>>(object: I): EnemyKillAwarded {
+    const message = createBaseEnemyKillAwarded();
+    message.victimPlayerId = object.victimPlayerId ?? 0n;
+    message.victimName = object.victimName ?? "";
+    message.victimLevel = object.victimLevel ?? 0;
+    message.killerLevel = object.killerLevel ?? 0;
+    message.victimCityKillerRank = object.victimCityKillerRank ?? undefined;
+    message.rarity = object.rarity ?? 0;
+    message.mapName = object.mapName ?? "";
+    message.killerEkCount = object.killerEkCount ?? 0;
+    return message;
+  },
+};
+
 function createBasePlayerDied(): PlayerDied {
-  return { playerId: 0n, x: 0, y: 0 };
+  return { playerId: 0n, x: 0, y: 0, killerPlayerId: undefined, killerName: undefined };
 }
 
 export const PlayerDied: MessageFns<PlayerDied> = {
@@ -9158,6 +25032,15 @@ export const PlayerDied: MessageFns<PlayerDied> = {
     }
     if (message.y !== 0) {
       writer.uint32(24).int32(message.y);
+    }
+    if (message.killerPlayerId !== undefined) {
+      if (BigInt.asIntN(64, message.killerPlayerId) !== message.killerPlayerId) {
+        throw new globalThis.Error("value provided for field message.killerPlayerId of type int64 too large");
+      }
+      writer.uint32(32).int64(message.killerPlayerId);
+    }
+    if (message.killerName !== undefined) {
+      writer.uint32(42).string(message.killerName);
     }
     return writer;
   },
@@ -9193,6 +25076,22 @@ export const PlayerDied: MessageFns<PlayerDied> = {
           message.y = reader.int32();
           continue;
         }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.killerPlayerId = reader.int64() as bigint;
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.killerName = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -9210,6 +25109,8 @@ export const PlayerDied: MessageFns<PlayerDied> = {
     message.playerId = object.playerId ?? 0n;
     message.x = object.x ?? 0;
     message.y = object.y ?? 0;
+    message.killerPlayerId = object.killerPlayerId ?? undefined;
+    message.killerName = object.killerName ?? undefined;
     return message;
   },
 };
@@ -11271,13 +27172,22 @@ export const SendMessage: MessageFns<SendMessage> = {
 };
 
 function createBaseChatMessageSendRequest(): ChatMessageSendRequest {
-  return { message: "" };
+  return { message: "", sourceLanguageTag: undefined, channel: undefined, whisperTargetCharacterName: undefined };
 }
 
 export const ChatMessageSendRequest: MessageFns<ChatMessageSendRequest> = {
   encode(message: ChatMessageSendRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.message !== "") {
       writer.uint32(10).string(message.message);
+    }
+    if (message.sourceLanguageTag !== undefined) {
+      writer.uint32(18).string(message.sourceLanguageTag);
+    }
+    if (message.channel !== undefined) {
+      writer.uint32(24).int32(message.channel);
+    }
+    if (message.whisperTargetCharacterName !== undefined) {
+      writer.uint32(34).string(message.whisperTargetCharacterName);
     }
     return writer;
   },
@@ -11297,6 +27207,30 @@ export const ChatMessageSendRequest: MessageFns<ChatMessageSendRequest> = {
           message.message = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sourceLanguageTag = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.channel = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.whisperTargetCharacterName = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11312,12 +27246,22 @@ export const ChatMessageSendRequest: MessageFns<ChatMessageSendRequest> = {
   fromPartial<I extends Exact<DeepPartial<ChatMessageSendRequest>, I>>(object: I): ChatMessageSendRequest {
     const message = createBaseChatMessageSendRequest();
     message.message = object.message ?? "";
+    message.sourceLanguageTag = object.sourceLanguageTag ?? undefined;
+    message.channel = object.channel ?? undefined;
+    message.whisperTargetCharacterName = object.whisperTargetCharacterName ?? undefined;
     return message;
   },
 };
 
 function createBaseChatMessageReceived(): ChatMessageReceived {
-  return { senderCharacterName: "", timestampMs: 0n, message: "" };
+  return {
+    senderCharacterName: "",
+    timestampMs: 0n,
+    message: "",
+    sourceLanguageTag: undefined,
+    channel: undefined,
+    whisperTargetCharacterName: undefined,
+  };
 }
 
 export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
@@ -11333,6 +27277,15 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
     }
     if (message.message !== "") {
       writer.uint32(26).string(message.message);
+    }
+    if (message.sourceLanguageTag !== undefined) {
+      writer.uint32(34).string(message.sourceLanguageTag);
+    }
+    if (message.channel !== undefined) {
+      writer.uint32(40).int32(message.channel);
+    }
+    if (message.whisperTargetCharacterName !== undefined) {
+      writer.uint32(50).string(message.whisperTargetCharacterName);
     }
     return writer;
   },
@@ -11368,6 +27321,30 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
           message.message = reader.string();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.sourceLanguageTag = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.channel = reader.int32() as any;
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.whisperTargetCharacterName = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11385,6 +27362,9 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
     message.senderCharacterName = object.senderCharacterName ?? "";
     message.timestampMs = object.timestampMs ?? 0n;
     message.message = object.message ?? "";
+    message.sourceLanguageTag = object.sourceLanguageTag ?? undefined;
+    message.channel = object.channel ?? undefined;
+    message.whisperTargetCharacterName = object.whisperTargetCharacterName ?? undefined;
     return message;
   },
 };
@@ -11409,6 +27389,7 @@ function createBasePlayerEnteredRange(): PlayerEnteredRange {
     activeTemporaryEffects: [],
     attackSpeedMs: undefined,
     castSpeedMs: undefined,
+    citizenshipSide: "",
   };
 }
 
@@ -11472,6 +27453,9 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
     }
     if (message.castSpeedMs !== undefined) {
       writer.uint32(144).int32(message.castSpeedMs);
+    }
+    if (message.citizenshipSide !== "") {
+      writer.uint32(154).string(message.citizenshipSide);
     }
     return writer;
   },
@@ -11637,6 +27621,14 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
           message.castSpeedMs = reader.int32();
           continue;
         }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.citizenshipSide = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11670,6 +27662,7 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
     message.activeTemporaryEffects = object.activeTemporaryEffects?.map((e) => e) || [];
     message.attackSpeedMs = object.attackSpeedMs ?? undefined;
     message.castSpeedMs = object.castSpeedMs ?? undefined;
+    message.citizenshipSide = object.citizenshipSide ?? "";
     return message;
   },
 };

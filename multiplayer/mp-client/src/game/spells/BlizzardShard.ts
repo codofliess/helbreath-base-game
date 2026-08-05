@@ -2,7 +2,7 @@ import type { Scene } from 'phaser';
 import { GameAsset } from '../objects/GameAsset';
 import { getEffectByKey } from '../../constants/Effects';
 import { EFFECT_BLIZZARD_SHARD_1, EFFECT_BLIZZARD_SHARD_2, EFFECT_BLIZZARD_SHARD_3, EFFECT_BLIZZARD_SHARD_IMPACT } from '../../constants/Effects';
-import { DEPTH_MULTIPLIER } from '../../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../utils/EffectUtils';
@@ -107,7 +107,7 @@ export class BlizzardShard {
             });
 
             const worldY = convertPixelPosToWorldPos(this.destPixelY);
-            this.shardAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+            this.shardAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
             if (texture && frameCount > 0) {
                 this.groundShadowSprite = this.scene.add.sprite(
@@ -117,7 +117,8 @@ export class BlizzardShard {
                     0
                 );
                 this.groundShadowSprite.setOrigin(0.5, 0.5);
-                this.groundShadowSprite.setDepth(worldY * DEPTH_MULTIPLIER - 50);
+                // Shadow under the shard VFX, still above multi-row ground clip.
+                this.groundShadowSprite.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS - 50);
                 this.groundShadowSprite.setBlendMode(Phaser.BlendModes.MULTIPLY);
                 this.groundShadowSprite.setAlpha(0.9);
                 this.groundShadowSprite.setTint(0x000000);
@@ -210,7 +211,7 @@ export class BlizzardShard {
             });
 
             const worldY = convertPixelPosToWorldPos(this.destPixelY);
-            this.impactAsset.setDepth(worldY * DEPTH_MULTIPLIER);
+            this.impactAsset.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS);
 
             this.impactAsset.sprite.anims.stop();
             this.impactAsset.sprite.play(impactAnimKey);

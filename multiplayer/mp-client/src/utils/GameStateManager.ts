@@ -11,6 +11,10 @@ import {
 interface GameStateStorage {
     /** Stable client identity used for reconnect authentication */
     networkId?: string;
+    /** Wallet auth token from middleware (Sign-In With Solana) */
+    authToken?: string;
+    /** Unix ms when authToken expires */
+    authExpiresAt?: number;
     /** Last-used character display name from the connect dialog; persisted after a successful login */
     characterName?: string;
     /** Camera zoom level as percentage (20-200, where 100 = zoom 1.0) */
@@ -28,6 +32,10 @@ interface GameStateStorage {
 export class GameStateManager {
     /** Stable client identity used for reconnect authentication */
     private networkId = GameStateManager.createNetworkId();
+    /** Wallet auth token from middleware (Sign-In With Solana); persisted with wallet sessions. */
+    private authToken = '';
+    /** Unix ms when authToken expires; 0 means no expiry tracked. */
+    private authExpiresAt = 0;
     /** Last-used character display name from the connect dialog */
     private characterName: string | undefined;
     /** Camera zoom level as percentage (20-200, where 100 = zoom 1.0) */
@@ -65,6 +73,17 @@ export class GameStateManager {
                     ? gameState.networkId
                     : this.networkId;
                 shouldPersist = gameState.networkId !== this.networkId;
+                if (typeof gameState.authToken === 'string') {
+                    this.authToken = gameState.authToken;
+                }
+                if (typeof gameState.authExpiresAt === 'number' && Number.isFinite(gameState.authExpiresAt)) {
+                    this.authExpiresAt = gameState.authExpiresAt;
+                }
+                if (this.authExpiresAt > 0 && this.authExpiresAt <= Date.now()) {
+                    this.authToken = '';
+                    this.authExpiresAt = 0;
+                    shouldPersist = true;
+                }
                 if (typeof gameState.characterName === 'string' && gameState.characterName.trim().length > 0) {
                     this.characterName = gameState.characterName.trim();
                 }
@@ -125,6 +144,12 @@ export class GameStateManager {
                 musicVolume: this.musicVolume,
                 soundVolume: this.soundVolume,
             };
+            if (this.authToken.length > 0) {
+                gameState.authToken = this.authToken;
+            }
+            if (this.authExpiresAt > 0) {
+                gameState.authExpiresAt = this.authExpiresAt;
+            }
             if (this.characterName !== undefined && this.characterName.length > 0) {
                 gameState.characterName = this.characterName;
             }
@@ -153,6 +178,27 @@ export class GameStateManager {
 
     public getNetworkId(): string {
         return this.networkId;
+    }
+
+    public getAuthToken(): string {
+        if (this.authExpiresAt > 0 && this.authExpiresAt <= Date.now()) {
+            this.authToken = '';
+            this.authExpiresAt = 0;
+            this.saveGameState();
+            return '';
+        }
+        return this.authToken;
+    }
+
+    /** Binds the stable account id to a verified Solana wallet for this session. */
+    public setWalletSession(walletPubkey: string, authToken: string, expiresAt?: number): void {
+        if (walletPubkey.trim().length === 0) {
+            return;
+        }
+        this.networkId = walletPubkey.trim();
+        this.authToken = authToken;
+        this.authExpiresAt = expiresAt ?? 0;
+        this.saveGameState();
     }
 
     /** Returns the last persisted character name from the connect dialog, if any. */

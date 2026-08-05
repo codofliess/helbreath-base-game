@@ -1,0 +1,83 @@
+{
+  "ok": true,
+  "mode": "hub-dom-no-world",
+  "url": "http://localhost:8081/?cb=1784084131607&hub=p2",
+  "storeUrls": {
+    "charUrl": "/src/ui/store/CharacterDialog.store.ts?t=1784082106605",
+    "invUrl": "/src/ui/store/InventoryDialog.store.ts?t=1784083018681",
+    "deathUrl": "/src/ui/store/DeathDialog.store.ts?t=1784083018681"
+  },
+  "screenshots": [
+    "hub-01-f5.png",
+    "hub-02-f6.png",
+    "hub-03-death.png"
+  ],
+  "checks": [
+    {
+      "id": "f5-root",
+      "ok": true,
+      "detail": "visible"
+    },
+    {
+      "id": "f5-text-Talents",
+      "ok": true,
+      "detail": "found \"Talents\""
+    },
+    {
+      "id": "f5-text-Majestics",
+      "ok": true,
+      "detail": "found \"Majestics\""
+    },
+    {
+      "id": "f5-text-Hunger",
+      "ok": true,
+      "detail": "found \"Hunger\""
+    },
+    {
+      "id": "f5-text-Contribution",
+      "ok": true,
+      "detail": "found \"Contribution\""
+    },
+    {
+      "id": "f5-text-Title",
+      "ok": true,
+      "detail": "found \"Title\""
+    },
+    {
+      "id": "f6-open",
+      "ok": true,
+      "detail": "inventory dialog present"
+    },
+    {
+      "id": "f6-bag-footer-weight",
+      "ok": true,
+      "detail": "0/500 (0/50)"
+    },
+    {
+      "id": "f6-bag-footer-gold",
+      "ok": true,
+      "detail": "0"
+    },
+    {
+      "id": "f6-sort",
+      "ok": true,
+      "detail": "found Sort"
+    },
+    {
+      "id": "f6-drops-paren",
+      "ok": true,
+      "detail": "found Drops ("
+    },
+    {
+      "id": "death-restart-btn",
+      "ok": true,
+      "detail": "text=\"Restart!\""
+    },
+    {
+      "id": "death-restart-killer",
+      "ok": true,
+      "detail": "text=\"Killed by TestKiller\""
+    }
+  ],
+  "blockers": []
+}

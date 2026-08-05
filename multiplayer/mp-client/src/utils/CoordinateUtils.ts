@@ -19,8 +19,9 @@ export function canvasToScreenPosition(
 ): { screenX: number; screenY: number } {
     const canvas = game.canvas;
     const rect = canvas.getBoundingClientRect();
-    const baseWidth = Number(game.config.width);
-    const baseHeight = Number(game.config.height);
+    // Prefer live scale size (expanded fullscreen FOV) over fixed config 1024×576.
+    const baseWidth = game.scale.width || Number(game.config.width) || 1;
+    const baseHeight = game.scale.height || Number(game.config.height) || 1;
 
     return {
         screenX: rect.left + (canvasX / baseWidth) * rect.width,
@@ -285,7 +286,7 @@ export function findMovableLocation(
 ): { x: number; y: number } | undefined {
     // First check if the starting position is movable and not occupied
     const startTile = map.getTile(startX, startY);
-    if (startTile && startTile.isMoveAllowed && !startTile.occupiedByGameObject) {
+    if (startTile && startTile.isMoveAllowed && !startTile.isWater && !startTile.occupiedByGameObject) {
         return { x: startX, y: startY };
     }
 
@@ -298,7 +299,7 @@ export function findMovableLocation(
             const y = startY - radius;
             if (y >= 0 && y < map.sizeY && x >= 0 && x < map.sizeX) {
                 const tile = map.getTile(x, y);
-                if (tile && tile.isMoveAllowed && !tile.occupiedByGameObject) {
+                if (tile && tile.isMoveAllowed && !tile.isWater && !tile.occupiedByGameObject) {
                     return { x, y };
                 }
             }
@@ -309,7 +310,7 @@ export function findMovableLocation(
             const x = startX + radius;
             if (y >= 0 && y < map.sizeY && x >= 0 && x < map.sizeX) {
                 const tile = map.getTile(x, y);
-                if (tile && tile.isMoveAllowed && !tile.occupiedByGameObject) {
+                if (tile && tile.isMoveAllowed && !tile.isWater && !tile.occupiedByGameObject) {
                     return { x, y };
                 }
             }
@@ -320,7 +321,7 @@ export function findMovableLocation(
             const y = startY + radius;
             if (y >= 0 && y < map.sizeY && x >= 0 && x < map.sizeX) {
                 const tile = map.getTile(x, y);
-                if (tile && tile.isMoveAllowed && !tile.occupiedByGameObject) {
+                if (tile && tile.isMoveAllowed && !tile.isWater && !tile.occupiedByGameObject) {
                     return { x, y };
                 }
             }
@@ -331,7 +332,7 @@ export function findMovableLocation(
             const x = startX - radius;
             if (y >= 0 && y < map.sizeY && x >= 0 && x < map.sizeX) {
                 const tile = map.getTile(x, y);
-                if (tile && tile.isMoveAllowed && !tile.occupiedByGameObject) {
+                if (tile && tile.isMoveAllowed && !tile.isWater && !tile.occupiedByGameObject) {
                     return { x, y };
                 }
             }
@@ -353,6 +354,51 @@ export function findMovableLocation(
 export function isCellMovable(map: HBMap, x: number, y: number): boolean {
     const tile = map.getTile(x, y);
     return !!(tile && tile.isMoveAllowed && !tile.occupiedByGameObject);
+}
+
+/**
+ * Finds the nearest walkable cell within Chebyshev `maxRange` of a target (e.g. NPC),
+ * preferring cells closer to the seeker. Skips the target cell itself and teleport pads
+ * when possible so pathfinding does not chase an occupied stand or door warp.
+ */
+export function findApproachCellNearTarget(
+    map: HBMap,
+    seekerX: number,
+    seekerY: number,
+    targetX: number,
+    targetY: number,
+    maxRange = 2,
+): { x: number; y: number } | undefined {
+    const candidates: { x: number; y: number; seekerDist: number; isTeleport: boolean }[] = [];
+    for (let dy = -maxRange; dy <= maxRange; dy++) {
+        for (let dx = -maxRange; dx <= maxRange; dx++) {
+            if (dx === 0 && dy === 0) {
+                continue;
+            }
+            const x = targetX + dx;
+            const y = targetY + dy;
+            if (!isCellMovable(map, x, y)) {
+                continue;
+            }
+            const tile = map.getTile(x, y);
+            candidates.push({
+                x,
+                y,
+                seekerDist: getDistance(seekerX, seekerY, x, y),
+                isTeleport: Boolean(tile?.isTeleport),
+            });
+        }
+    }
+    if (candidates.length === 0) {
+        return undefined;
+    }
+    candidates.sort((a, b) => {
+        if (a.isTeleport !== b.isTeleport) {
+            return a.isTeleport ? 1 : -1;
+        }
+        return a.seekerDist - b.seekerDist;
+    });
+    return { x: candidates[0].x, y: candidates[0].y };
 }
 
 /**

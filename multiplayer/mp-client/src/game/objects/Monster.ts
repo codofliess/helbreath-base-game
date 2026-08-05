@@ -10,7 +10,14 @@ import { ShadowManager } from '../../utils/ShadowManager';
 import type { SoundManager, SpatialConfig } from '../../utils/SoundManager';
 import type { MonsterStatesConfig, StateAnimationConfig } from '../../constants/Monsters';
 import { getSpriteFrameHeight } from '../../utils/SpriteUtils';
-import { KNOCKBACK_DURATION_MS, MONSTER_CORPSE_FADE_ALPHA_STEP, DEFAULT_ANIMATION_FRAME_RATE, MONSTER_INTERRUPT_HIT_DURATION_MS, MONSTER_STUNLOCK_DURATION_MS } from '../../Config';
+import {
+    KNOCKBACK_DURATION_MS,
+    MONSTER_CORPSE_FADE_ALPHA_STEP,
+    DEFAULT_ANIMATION_FRAME_RATE,
+    MONSTER_INTERRUPT_HIT_DURATION_MS,
+    MONSTER_STUNLOCK_DURATION_MS,
+    WORLD_ENTITY_SCALE_X,
+} from '../../Config';
 import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import { EventBus } from '../EventBus';
 import { MONSTER_DEAD } from '../../constants/EventNames';
@@ -135,6 +142,12 @@ type MonsterConfig = {
     /** Opacity/transparency of the monster sprite (defaults to 1.0, range 0.0-1.0) */
     opacity?: number;
 
+    /**
+     * When true, hide body/shadow until {@link Monster.applyLoadedMonsterAssets}
+     * (avoids flashing the shared purple `ghk` ninja placeholder during lazy load).
+     */
+    assetsPendingLoad?: boolean;
+
     /** Transparency slider value 0-100 (0 = opaque, 100 = transparent). Applied at summon time only. Overrides opacity when provided. */
     transparency?: number;
 
@@ -235,8 +248,11 @@ export class Monster extends GameObject {
 
     /** Defers switching from Move to Idle after a grid step so brief gaps between server steps do not flash idle (same idea as remote players). */
     private pendingRemoteIdleSwitchMs: number | undefined;
+    /** Last Move animation sheet index (8–15); used to skip redundant forceUpdate rebinds. */
+    private lastMoveSpriteSheetIndex: number | undefined;
 
-    private remoteIdleContinuationGraceMs = 100;
+    /** Keep Move anim briefly after each cell so the next server step does not flash Idle. */
+    private remoteIdleContinuationGraceMs = 220;
     
     /** Whether the monster is marked for killing */
     private shouldKill: boolean = false;
@@ -252,6 +268,12 @@ export class Monster extends GameObject {
     
     /** Current alpha/opacity value for fade out (0-255 range) */
     private currentAlpha: number = 255;
+
+    /**
+     * True while lazy `.spr` is still loading — body/shadow stay fully hidden so we never flash
+     * the shared placeholder sprite (`ghk` / purple ninja look) over real mobs.
+     */
+    private assetsPendingLoad = false;
     
     /** Unique monster ID */
     private monsterId: string;
@@ -280,6 +302,7 @@ export class Monster extends GameObject {
         const idleFrameRate = DEFAULT_ANIMATION_FRAME_RATE * (idleAnimationFrames / 8) * temporalCoefficient;
         
         // Build the GameAsset configuration for the monster
+        // Slight horizontal stretch (Olympia-wide FOV feel) — see WORLD_ENTITY_SCALE_X.
         const assetConfigs: Omit<GameAssetConfig, 'x' | 'y'>[] = [
             {
                 spriteName: config.spriteName,
@@ -291,6 +314,9 @@ export class Monster extends GameObject {
                 frameRate: idleFrameRate,
                 // Apply opacity/transparency to the sprite
                 alpha,
+                ...(WORLD_ENTITY_SCALE_X !== 1
+                    ? { scaleX: WORLD_ENTITY_SCALE_X, scaleY: 1 }
+                    : {}),
                 onAnimationFrameChange: (relativeFrameIndex: number) => {
                     if ((this.currentState === MonsterState.TakeDamage || this.currentState === MonsterState.TakeDamageOnMove || this.currentState === MonsterState.TakeDamageWithKnockback) && relativeFrameIndex === 4) {
                         const spatialConfig = this.calculateSpatialConfig();
@@ -329,6 +355,16 @@ export class Monster extends GameObject {
         this.spawnChilledVisual = config.chilledEffect ?? false;
         this.spawnBerserkVisual = config.berserkedEffect ?? false;
         this.shadowOption = config.shadow ?? MonsterShadow.BodyShadow;
+
+        // Gold goblin reuses orc sprites with a mid-gold skin tint.
+        if (/goblin/i.test(config.displayName)) {
+            this.applyGoldGoblinTint();
+        }
+
+        if (config.assetsPendingLoad) {
+            this.assetsPendingLoad = true;
+            this.hideWhileAssetsPending();
+        }
 
         if (config.dead) {
             this.enterSpawnedCorpseState();
@@ -650,7 +686,10 @@ export class Monster extends GameObject {
         }
 
         const offsetY = this.height ?? 2 * TILE_SIZE;
-        this.createDamageFloatingText(damage, this.getAnimatedPixelY() - offsetY);
+        this.createDamageFloatingText(damage, this.getAnimatedPixelY() - offsetY, {
+            kind: 'dealt',
+            critical: resolved === AttackType.Knockback,
+        });
 
         if (this.hp < 1) {
             return;
@@ -806,7 +845,7 @@ export class Monster extends GameObject {
 
     /** Switches a placeholder monster to its real sprite/sound config after lazy assets are registered. */
     public applyLoadedMonsterAssets(config: LoadedMonsterAssetsConfig): void {
-        if (this.monsterSpriteName === config.spriteName && this.states === config.states) {
+        if (this.monsterSpriteName === config.spriteName && this.states === config.states && !this.assetsPendingLoad) {
             return;
         }
 
@@ -836,7 +875,32 @@ export class Monster extends GameObject {
         } else {
             this.switchMonsterState(this.currentState, true);
         }
+        if (/goblin/i.test(this.displayName)) {
+            this.applyGoldGoblinTint();
+        }
+        // Reveal after real textures exist (was fully hidden while pending).
+        this.assetsPendingLoad = false;
         this.onTemporaryEffectsChanged();
+    }
+
+    /** Fully hide body + shadow while the shared placeholder would otherwise show. */
+    private hideWhileAssetsPending(): void {
+        for (const asset of this.assets) {
+            asset.setAlpha(0);
+            asset.setVisible(false);
+        }
+        if (this.shadowManager) {
+            this.shadowManager.setAlpha(0);
+        }
+    }
+
+    /** Mid-gold skin tint over orc body for Chain Lords gold goblin. */
+    private applyGoldGoblinTint(): void {
+        // Warm gold / bronze — readable as “golden skin”, not full yellow.
+        const goldTint = 0xd4a84a;
+        for (const asset of this.assets) {
+            asset.sprite.setTint(goldTint);
+        }
     }
 
     /**
@@ -869,6 +933,11 @@ export class Monster extends GameObject {
         return this.allegiance;
     }
 
+    /** Spawn berserk flag or server Berserk temporary effect. */
+    public isBerserked(): boolean {
+        return this.spawnBerserkVisual || this.hasTemporaryEffect(TemporaryEffectType.Berserk);
+    }
+
     public hasInvisibilityBuff(): boolean {
         return this.hasTemporaryEffect(TemporaryEffectType.Invisibility);
     }
@@ -886,6 +955,10 @@ export class Monster extends GameObject {
     }
 
     private applyInvisibilityBuffIfPresent(): void {
+        if (this.assetsPendingLoad) {
+            this.hideWhileAssetsPending();
+            return;
+        }
         const inv = this.hasInvisibilityBuff();
         if (!inv) {
             for (let i = 0; i < this.assets.length; i++) {
@@ -944,11 +1017,13 @@ export class Monster extends GameObject {
             return;
         }
 
-        if (this.worldX !== curX || this.worldY !== curY) {
-            this.snapMonsterToWorldCell(curX, curY);
+        const direction = toDirection(facingDirection);
+        if (direction === Direction.None) {
+            return;
         }
 
         this.pendingSnapshotMoveIdleMs = undefined;
+        // New step incoming — cancel deferred Idle so we stay on Move animation between cells.
         this.pendingRemoteIdleSwitchMs = undefined;
         this.movementSpeedMs = movementSpeedMs;
         const movementDurationSeconds = this.movementSpeedMs / 1000;
@@ -959,15 +1034,27 @@ export class Monster extends GameObject {
         const currentPixelX = this.getAnimatedPixelX();
         const currentPixelY = this.getAnimatedPixelY();
         const pixelDelta = Phaser.Math.Distance.Between(currentPixelX, currentPixelY, startPixelX, startPixelY);
-        if (pixelDelta > TILE_SIZE) {
-            this.snapMonsterToWorldCell(curX, curY);
-        } else if (this.moving || !this.moveReady) {
-            this.snapMonsterToWorldCell(curX, curY);
-        }
+        const logicalDesync = this.worldX !== curX || this.worldY !== curY;
+        const largeVisualDesync = pixelDelta > TILE_SIZE * 1.25;
 
-        const direction = toDirection(facingDirection);
-        if (direction === Direction.None) {
-            return;
+        if (logicalDesync || largeVisualDesync) {
+            // Hard resync position only — do NOT force Idle (that caused Move→Idle→Move flicker).
+            this.alignMonsterToWorldCell(curX, curY, /*keepMoveAnim*/ true);
+        } else if (this.moving || !this.moveReady) {
+            // Mid-step retarget: snap to packet origin without tearing the Move animation
+            // (cancelMovement + re-switch used to flash wrong body frames / "missing limbs").
+            this.cancelMovement();
+            this.moving = false;
+            this.moveReady = true;
+            this.offsetX = 0;
+            this.offsetY = 0;
+            this.worldX = curX;
+            this.worldY = curY;
+            this.updatePixelPosition();
+            // Stay on Move sheet if already walking; only enter Move if we weren't.
+            if (this.currentState !== MonsterState.Move) {
+                this.switchMonsterState(MonsterState.Move, true);
+            }
         }
 
         this.destinationX = destX;
@@ -1006,7 +1093,11 @@ export class Monster extends GameObject {
         }
     }
 
-    private snapMonsterToWorldCell(x: number, y: number): void {
+    /**
+     * Snaps logical + visual position to a cell.
+     * @param keepMoveAnim when true, stays in Move state (used when a new step follows immediately).
+     */
+    private alignMonsterToWorldCell(x: number, y: number, keepMoveAnim = false): void {
         this.destinationX = -1;
         this.destinationY = -1;
         this.moving = false;
@@ -1018,8 +1109,15 @@ export class Monster extends GameObject {
         this.worldY = y;
         this.markCurrentTileOccupied();
         this.pendingRemoteIdleSwitchMs = undefined;
-        this.switchMonsterState(MonsterState.Idle, true);
+        this.pendingSnapshotMoveIdleMs = undefined;
+        if (!keepMoveAnim) {
+            this.switchMonsterState(MonsterState.Idle, true);
+        }
         this.updatePixelPosition();
+    }
+
+    private snapMonsterToWorldCell(x: number, y: number): void {
+        this.alignMonsterToWorldCell(x, y, false);
     }
 
     /**
@@ -1159,7 +1257,8 @@ export class Monster extends GameObject {
      * Updates the idle continuation grace period in ms after a movement step ends (matches remote player setting).
      */
     public setRemoteIdleContinuationGraceMs(ms: number): void {
-        this.remoteIdleContinuationGraceMs = Math.max(0, Math.min(500, Math.round(ms)));
+        // Allow a slightly longer grace so slow tick gaps don't flash Idle between walk packets.
+        this.remoteIdleContinuationGraceMs = Math.max(0, Math.min(800, Math.round(ms)));
     }
     
     /**
@@ -1265,20 +1364,32 @@ export class Monster extends GameObject {
             }
         }
         
+        // Get animation configuration for this state
+        const animConfig = this.getStateAnimationConfig(newState);
+        const spriteName = animConfig.spriteName;
+        const monsterSpriteSheetIndex = animConfig.startSpriteSheet + this.direction;
+
+        // Already on the same Move sheet: only refresh rate/shadow (avoids mid-walk texture rebind flicker).
+        // If direction (sheet index) changed, fall through and rebind with preserved relative frame.
+        if (
+            forceUpdate &&
+            newState === MonsterState.Move &&
+            this.currentState === MonsterState.Move &&
+            this.assets.length > 0 &&
+            this.lastMoveSpriteSheetIndex === monsterSpriteSheetIndex
+        ) {
+            this.updateShadow();
+            return;
+        }
+
         this.currentState = newState;
         if (newState !== MonsterState.Move || this.moving) {
             this.pendingSnapshotMoveIdleMs = undefined;
             this.pendingRemoteIdleSwitchMs = undefined;
         }
-        
-        // Get animation configuration for this state
-        const animConfig = this.getStateAnimationConfig(newState);
-        
-        // Use sprite name from config (allows for sprite overrides per state)
-        const spriteName = animConfig.spriteName;
-        
-        // Calculate spriteSheetIndex for monster sprite using config
-        const monsterSpriteSheetIndex = animConfig.startSpriteSheet + this.direction;
+        if (newState === MonsterState.Move) {
+            this.lastMoveSpriteSheetIndex = monsterSpriteSheetIndex;
+        }
         
         // Switch animation for the monster asset
         if (this.assets.length > 0) {
@@ -1300,6 +1411,7 @@ export class Monster extends GameObject {
             
             // Play the animation with the correct frame rate and preserve relative frame position
             const animationFrameRate = this.getAnimationFrameRate(newState);
+
             
             // For attack, death, and take damage animations, play once (repeat: 0). For other states, use default (loop)
             const repeat = (newState === MonsterState.Attack || newState === MonsterState.Dead ||

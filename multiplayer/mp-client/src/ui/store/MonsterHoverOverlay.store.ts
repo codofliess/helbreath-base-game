@@ -9,6 +9,7 @@ import {
     OUT_UI_CAST_REMOVED,
     IN_UI_CHANGE_ATTACK_MODE,
     OUT_UI_SET_ATTACK_MODE,
+    OUT_UI_SET_SAFE_ATTACK_MODE,
 } from '../../constants/EventNames';
 import { CURSOR_ATTACK, CURSOR_CASTING, CURSOR_CAST_READY, CURSOR_GRAB_1, CURSOR_POINTER } from '../../constants/SpriteKeys';
 import type { MonsterHoverInfo } from '../../Types';
@@ -116,15 +117,19 @@ EventBus.on(OUT_UI_HOVER_GROUND_ITEM, (hovering: boolean) => {
 
 EventBus.on(IN_UI_CHANGE_ATTACK_MODE, () => updateCursorFromState());
 EventBus.on(OUT_UI_SET_ATTACK_MODE, () => updateCursorFromState());
+// Safe mode toggle also re-applies cast tint (App.tsx subscribes to playerDialogStore).
+EventBus.on(OUT_UI_SET_SAFE_ATTACK_MODE, () => updateCursorFromState());
 
 EventBus.on(OUT_UI_CAST_STARTED, () => {
     cancelLeaveGroundTimeout();
+    // Cast-prep cursor (interface frame 4): App.tsx tints by Peace/Attack/Safe mode color.
     monsterHoverOverlayStore.setState((state) => ({ ...state, casting: true }));
     setCursorSpriteKey(CURSOR_CASTING);
 });
 
 EventBus.on(OUT_UI_CAST_READY, () => {
     cancelLeaveGroundTimeout();
+    // Cast-ready cursor (frame 5): same mode tint pipeline as casting ritual.
     monsterHoverOverlayStore.setState((state) => ({ ...state, casting: false, castReady: true }));
     setCursorSpriteKey(CURSOR_CAST_READY);
 });

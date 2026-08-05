@@ -1,0 +1,13 @@
+{
+  "note": "PO 2026-07-21: multi-mob bestiary deprioritized. Endurance = Ettins only. Academy focus = Guards learning + Challenge tiers (see PvpAcademy.json / docs/PVP-ACADEMY.md).",
+  "waveSeconds": 60,
+  "maxConcurrent": 8,
+  "finalWave": 5,
+  "waves": [
+    { "wave": 1, "key": "ettin", "name": "ETTINS", "sub": "Pressure pack — same family, rising count", "catalogId": 0, "quota": 3, "baseHp": 500, "damage": 18 },
+    { "wave": 2, "key": "ettin", "name": "ETTINS", "sub": "More bodies", "catalogId": 0, "quota": 4, "baseHp": 550, "damage": 20 },
+    { "wave": 3, "key": "ettin", "name": "ETTINS", "sub": "Spacing matters", "catalogId": 0, "quota": 5, "baseHp": 600, "damage": 22 },
+    { "wave": 4, "key": "ettin", "name": "ETTINS", "sub": "Hold the line", "catalogId": 0, "quota": 6, "baseHp": 650, "damage": 24 },
+    { "wave": 5, "key": "ettin", "name": "ETTINS", "sub": "Final pack", "catalogId": 0, "quota": 8, "baseHp": 700, "damage": 26 }
+  ]
+}

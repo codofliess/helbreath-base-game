@@ -19,6 +19,37 @@ enum TemporaryEffectType {
   TEMPORARY_EFFECT_TYPE_INVISIBILITY = 0;
   TEMPORARY_EFFECT_TYPE_CHILL = 1;
   TEMPORARY_EFFECT_TYPE_BERSERK = 2;
+  // Olympia HOLDOBJECT (Hold Person / Paralyze): blocks movement; monsters also skip attack AI.
+  TEMPORARY_EFFECT_TYPE_PARALYZE = 3;
+  // Olympia MAGICTYPE_POISON status DoT (Poison / Mass Poison); Cure removes.
+  TEMPORARY_EFFECT_TYPE_POISON = 4;
+  // Olympia MAGICTYPE_CONFUSE value 1 — Confuse Language (chat garble).
+  TEMPORARY_EFFECT_TYPE_CONFUSE_LANGUAGE = 5;
+  // Olympia MAGICTYPE_CONFUSE value 2 — Confusion / Mass Confusion.
+  TEMPORARY_EFFECT_TYPE_CONFUSION = 6;
+  // Olympia MAGICTYPE_CONFUSE value 3 — Illusion / Mass Illusion.
+  TEMPORARY_EFFECT_TYPE_ILLUSION = 7;
+  // Olympia MAGICTYPE_CONFUSE value 4 — Illusion Movement (when typed as CONFUSE).
+  TEMPORARY_EFFECT_TYPE_ILLUSION_MOVEMENT = 8;
+  // Olympia MAGICTYPE_INHIBITION — blocks spell casting.
+  TEMPORARY_EFFECT_TYPE_INHIBITION = 9;
+  // Olympia MAGICTYPE_PROTECT value 1 — Protection From Arrow.
+  TEMPORARY_EFFECT_TYPE_PROTECT_FROM_ARROW = 10;
+  // Olympia MAGICTYPE_PROTECT value 2 — Protection From Magic.
+  TEMPORARY_EFFECT_TYPE_PROTECT_FROM_MAGIC = 11;
+  // Olympia MAGICTYPE_PROTECT value 3 — Defense Shield.
+  TEMPORARY_EFFECT_TYPE_DEFENSE_SHIELD = 12;
+  // Olympia MAGICTYPE_PROTECT value 4 — Great Defense Shield.
+  TEMPORARY_EFFECT_TYPE_GREAT_DEFENSE_SHIELD = 13;
+  // Olympia MAGICTYPE_PROTECT value 5 — Absolute Magic Protection.
+  TEMPORARY_EFFECT_TYPE_ABSOLUTE_MAGIC_PROTECT = 14;
+  // Olympia Haste — run speed only; allies of same city (never self).
+  TEMPORARY_EFFECT_TYPE_HASTE = 15;
+  // Sleep (Nemesis / Helbreath Cursed lineage): blocks action; first damaging hit wakes with +100% damage.
+  // Multi-hit spells (Blizzard etc.) also gain +1 guaranteed hit that ignores MR.
+  TEMPORARY_EFFECT_TYPE_SLEEP = 16;
+  // Cash-shop Exp Tablet: +200% EXP; underfoot aura only (no movement change).
+  TEMPORARY_EFFECT_TYPE_EXP_BOOST = 17;
 }
 
 enum TemporaryEffectEntityKind {
@@ -48,6 +79,18 @@ enum WeatherMode {
   WEATHER_MODE_SNOW_LIGHT = 4;
   WEATHER_MODE_SNOW_MEDIUM = 5;
   WEATHER_MODE_SNOW_HEAVY = 6;
+}
+
+// Olympia chat log tabs (DrawDialogBox chat). Client filters; whisper is routed privately.
+enum ChatChannel {
+  CHAT_CHANNEL_GLOBAL = 0;
+  CHAT_CHANNEL_TRADE = 1;
+  CHAT_CHANNEL_TOWN = 2;
+  CHAT_CHANNEL_NEARBY = 3;
+  CHAT_CHANNEL_GUILD = 4;
+  CHAT_CHANNEL_PARTY = 5;
+  CHAT_CHANNEL_WHISPER = 6;
+  CHAT_CHANNEL_MISC = 7;
 }
 
 message ClientMessage {
@@ -93,7 +136,481 @@ message ClientMessage {
     WeatherChangeRequest weather_change_request = 39;
     SummonNpcRequest summon_npc_request = 40;
     KillAllNpcsRequest kill_all_npcs_request = 41;
+    ClaimKillMilestoneRequest claim_kill_milestone_request = 42;
+    RebirthRequest rebirth_request = 43;
+    // Cancel last rebirth → L max of previous RB (snapshot). Field 103 (92+ taken by arena pact).
+    RebirthRollbackRequest rebirth_rollback_request = 103;
+    // Pre-world: list up to 4 character slots for a wallet after Phantom auth (SELECTCHAR desk).
+    CharacterListRequest character_list_request = 44;
+    // Buy a consumable (or listed shop item) from a nearby Shop Keeper NPC.
+    BuyShopItemRequest buy_shop_item_request = 45;
+    // Optional beginner path 1→80: enroll / re-enroll (no penalty to abandon).
+    BeginnerPathEnrollRequest beginner_path_enroll_request = 46;
+    BeginnerPathAbandonRequest beginner_path_abandon_request = 47;
+    // Talk to a beginner-path NPC (Enzu / Drillmaster / Merc Captain) for talk objectives.
+    BeginnerPathTalkRequest beginner_path_talk_request = 48;
+    // Training Arena: apply a chase-dummy preset (world `training` only).
+    ApplyTrainingPresetRequest apply_training_preset_request = 49;
+    // Soft UI objectives (open Party/Guild, read EK hint, select Training Arena preset).
+    BeginnerPathUiActionRequest beginner_path_ui_action_request = 50;
+    // William warehouse: open snapshot / deposit bag stack / withdraw warehouse stack (proximity-checked).
+    OpenWarehouseRequest open_warehouse_request = 51;
+    WarehouseDepositRequest warehouse_deposit_request = 52;
+    WarehouseWithdrawRequest warehouse_withdraw_request = 53;
+    // Tom blacksmith: repair a bag/equipped weapon (Olympia durability).
+    RepairItemRequest repair_item_request = 54;
+    // Minimal party MVP: create / join by code / leave (Beginner Path + F5 Party).
+    CreatePartyRequest create_party_request = 55;
+    JoinPartyRequest join_party_request = 56;
+    LeavePartyRequest leave_party_request = 57;
+    // City NPC desk (Howard / Kennedy / Gail / Perry) — proximity-checked actions.
+    CityNpcServiceRequest city_npc_service_request = 58;
+    // GM ops: read / mutate anti-bot tool flags (rejected for traveler sessions).
+    GetAntiBotToolsRequest get_anti_bot_tools_request = 59;
+    SetAntiBotToolsRequest set_anti_bot_tools_request = 60;
+    // Timed Challenges Mode 1 (Skills): start / abort / daily leaderboard.
+    StartTimedChallengeRequest start_timed_challenge_request = 61;
+    AbortTimedChallengeRequest abort_timed_challenge_request = 62;
+    GetTimedChallengeLeaderboardRequest get_timed_challenge_leaderboard_request = 63;
+    // Trade / auction board MVP (timed bid + limit sell, access rules, 5% fee debt).
+    AuctionBoardBrowseRequest auction_board_browse_request = 64;
+    AuctionBoardCreateRequest auction_board_create_request = 65;
+    AuctionBoardBidRequest auction_board_bid_request = 66;
+    AuctionBoardBuyRequest auction_board_buy_request = 67;
+    AuctionBoardCancelRequest auction_board_cancel_request = 68;
+    AuctionBoardSettleDebtRequest auction_board_settle_debt_request = 69;
+    // Item Drops tab: sell a bag item for gold (Olympia list-price / 2).
+    SellBagItemRequest sell_bag_item_request = 70;
+    // F5 Level Set: spend unspent LU points into STR/VIT/DEX/INT/MAG/CHR (Olympia MSGID_LEVELUPSETTINGS).
+    LevelUpSettingsRequest level_up_settings_request = 71;
+    // Olympia Home / DEF_COMMONTYPE_TOGGLESAFEATTACKMODE — blocks non-enemy PvP hits while armed.
+    PlayerSafeAttackModeChangeRequest player_safe_attack_mode_change_request = 72;
+    // Play-mine $HELL: status / claim pending balance (C1 · off-chain credits until mint).
+    HellMiningStatusRequest hell_mining_status_request = 73;
+    HellMiningClaimRequest hell_mining_claim_request = 74;
+    // Olympia majestic / gizon upgrade for Angelic pendants and Dark Knight weapons.
+    MajesticUpgradeRequest majestic_upgrade_request = 75;
+    // Soul / Guild / Unbind seals (~USD 5): bind_state on item instance.
+    ItemBindRequest item_bind_request = 76;
+    // Cashier cash shop (stablecoin USDC/USDT or pending $HELL).
+    BuyCashShopItemRequest buy_cash_shop_item_request = 77;
+    // Pre-world: check if a display name is free before Create Character confirms.
+    CharacterNameCheckRequest character_name_check_request = 78;
+    // Chain Lords: freeze level (exp → majestic) or unfreeze (exp → levels again).
+    SetLevelBlockRequest set_level_block_request = 79;
+    // Xelima / Merien stone upgrade (Olympia + CL fail rules). Optional Integrity anti-burn.
+    StoneItemUpgradeRequest stone_item_upgrade_request = 80;
+    // Mining (0) / Fishing (1) gather attempt (rod near water / pickaxe near node).
+    SkillGatherRequest skill_gather_request = 81;
+    // Snapshot skill masteries (0–100) for F8 Skill dialog.
+    GetSkillsStateRequest get_skills_state_request = 82;
+    // Olympia disenchant / enchant / combine shards+fragments (armor specs).
+    ItemDisenchantRequest item_disenchant_request = 83;
+    ItemEnchantRequest item_enchant_request = 84;
+    EnchantMaterialUpgradeRequest enchant_material_upgrade_request = 85;
+    GetEnchantMaterialsRequest get_enchant_materials_request = 86;
+    // Olympia MSGID_STATECHANGEPOINT: spend 1 majestic to drop 3 stat points (respec sink).
+    MajesticStatRespecRequest majestic_stat_respec_request = 87;
+    // Merge 2 same-CIC same-stat-kind gear → next CIC (min HP/SP/MP value).
+    CicItemMergeRequest cic_item_merge_request = 88;
+    // Upgrade Mana/HP Siphon gem by spending matching siphon shards.
+    SiphonGemUpgradeRequest siphon_gem_upgrade_request = 89;
+    // Olympia DEF_COMMONTYPE_REQUEST_ACTIVATESPECABLTY — Page Up activates Merien/Xelima SA.
+    ActivateSpecialAbilityRequest activate_special_ability_request = 90;
+    // Arm/disarm Super Attack (crit) — charges only spent while armed.
+    SetSuperAttackArmedRequest set_super_attack_armed_request = 91;
+    // Arena pact duel: create / invite / ready / cancel / list open invites.
+    ArenaPactCreateRequest arena_pact_create_request = 92;
+    ArenaPactInviteRequest arena_pact_invite_request = 93;
+    ArenaPactRespondRequest arena_pact_respond_request = 94;
+    ArenaPactReadyRequest arena_pact_ready_request = 95;
+    ArenaPactCancelRequest arena_pact_cancel_request = 96;
+    ArenaPactListRequest arena_pact_list_request = 97;
+    // Pre-countdown: captains propose / accept tech equalization.
+    ArenaPactTechProposeRequest arena_pact_tech_propose_request = 98;
+    ArenaPactTechVoteRequest arena_pact_tech_vote_request = 99;
+    // During tech_sample on map: continuous self-report until photo freezes.
+    ArenaPactTechReportRequest arena_pact_tech_report_request = 100;
+    // Fighter or host sets/updates POV or global stream URL for Watch multi-cam.
+    ArenaPactSetStreamRequest arena_pact_set_stream_request = 101;
+    // World / tournament Go-Live on public cartelera (not a pact duel).
+    StreamBroadcastRequest stream_broadcast_request = 102;
+    // (103 = rebirth_rollback_request, declared near rebirth_request)
+    // Arena prize bag (captain pledges / re-OK / signed loss).
+    ArenaPactPrizePledgeRequest arena_pact_prize_pledge_request = 104;
+    ArenaPactPrizeConfirmRequest arena_pact_prize_confirm_request = 105;
+    ArenaPactSignLossRequest arena_pact_sign_loss_request = 106;
   }
+}
+
+// Attach / update a live stream for cartelera multi-cam (Twitch, YouTube, Discord Go Live link).
+message ArenaPactSetStreamRequest {
+  string match_id = 1;
+  // Full URL (https://twitch.tv/…, youtube, discord.gg/…, etc.).
+  string stream_url = 2;
+  // Host only: when true, sets match-level global cam (not personal POV).
+  bool is_global = 3;
+}
+
+// Announce or stop a public stream on the global cartelera (World hunt / raid / tournament desk).
+message StreamBroadcastRequest {
+  // world | tournament | other
+  string kind = 1;
+  string title = 2;
+  string stream_url = 3;
+  // false = remove from cartelera
+  bool active = 4;
+}
+
+message StreamBroadcastState {
+  string broadcast_id = 1;
+  string kind = 2;
+  string title = 3;
+  string character_name = 4;
+  string stream_url = 5;
+  string stream_platform = 6;
+  string world_id = 7;
+  int64 started_at_ms = 8;
+  int64 expires_at_ms = 9;
+  bool active = 10;
+}
+
+// Two bag item UIDs (same base id for shields; same cic level + cic_stat_kind for all).
+message CicItemMergeRequest {
+  int64 item_uid_a = 1;
+  int64 item_uid_b = 2;
+}
+
+// Spend siphon shards of current gem level to raise siphon_level +1.
+message SiphonGemUpgradeRequest {
+  int64 item_uid = 1;
+}
+
+// Empty: activate equipped Merien/Xelima special ability (cooldown-gated).
+message ActivateSpecialAbilityRequest {}
+
+// When armed=true and SuperAttackLeft>0, melee crits consume charges until disarmed or empty.
+message SetSuperAttackArmedRequest {
+  bool armed = 1;
+}
+
+// Special ability lifecycle (Olympia sV1 status codes).
+// status: 1=activated, 2=set on equip, 3=expired, 4=released, 5=cooldown ready
+message SpecialAbilityStatus {
+  int32 status = 1;
+  int32 ability_type = 2;
+  // Activated: remaining active seconds. Equip/ready: cooldown remaining seconds.
+  int32 duration_or_cooldown_sec = 3;
+  // When status=1 (activated), nearby clients can play VFX on this player.
+  int64 player_id = 4;
+}
+
+// Break magic item → shards (primary) + fragments (secondary); item destroyed.
+message ItemDisenchantRequest {
+  int64 item_uid = 1;
+}
+
+// kind: 0 = apply matching shard (primary +1), 1 = apply matching fragment (secondary +1).
+message ItemEnchantRequest {
+  int64 item_uid = 1;
+  int32 kind = 2;
+}
+
+// Combine materials: kind 0 shard / 1 fragment; mode 0 one / 2 all-shard / 1 one-frag / 3 all-frag.
+// level = current material level (1-based); crafts level+1.
+message EnchantMaterialUpgradeRequest {
+  int32 kind = 1;
+  int32 type = 2;
+  int32 level = 3;
+  int32 mode = 4;
+}
+
+message GetEnchantMaterialsRequest {}
+
+// stat_a/b/c: 0=Str 1=Vit 2=Dex 3=Int 4=Mag 5=Chr — three points removed (1 majestic).
+message MajesticStatRespecRequest {
+  int32 stat_a = 1;
+  int32 stat_b = 2;
+  int32 stat_c = 3;
+}
+
+// skill_id: 0 = Mining, 1 = Fishing (Olympia SKILLCFG order).
+message SkillGatherRequest {
+  int32 skill_id = 1;
+}
+
+message GetSkillsStateRequest {}
+
+// Upgrade bag/equipped weapon (Xelima) or armor/shield (Merien). Optionally spend Integrity to prevent burn past +7.
+message StoneItemUpgradeRequest {
+  int64 item_uid = 1;
+  // When true, consume Stone of Integrity (1112) on fail in the burn zone (+7 and up) instead of destroying the item.
+  bool use_integrity_stone = 2;
+}
+
+// Toggle Block Level: while blocked, kill exp converts to majestic points instead of levels.
+message SetLevelBlockRequest {
+  bool blocked = 1;
+}
+
+// Spend majestic (gizon) points to upgrade a bag item (angels / DK weapons).
+message MajesticUpgradeRequest {
+  int64 item_uid = 1;
+}
+
+// Client confirms Level Set allocations (deltas spent from current LU pool).
+message LevelUpSettingsRequest {
+  int32 str = 1;
+  int32 vit = 2;
+  int32 dex = 3;
+  int32 intel = 4;
+  int32 mag = 5;
+  int32 chr = 6;
+}
+
+// Client asks to start a timed challenge run (Mode 1 Skills CC / Mode 2–3 PVP Skills).
+message StartTimedChallengeRequest {
+  string game_world_id = 1;
+  // 1 = Skills CC protocol, 2 = PVP Guards (wave kills), 3 = PVP Dark Elves (invis pot + PFA then wave kills).
+  int32 mode = 2;
+}
+
+// Client aborts the active timed challenge (no reward / no board entry).
+message AbortTimedChallengeRequest {
+  string game_world_id = 1;
+}
+
+// Client asks for today's Mode leaderboard (best times).
+message GetTimedChallengeLeaderboardRequest {
+  int32 mode = 1;
+}
+
+// --- Trade / auction board MVP (C6 · ~5% fee · server-authoritative gold for now) ---
+
+enum AuctionListingMode {
+  AUCTION_LISTING_MODE_UNSPECIFIED = 0;
+  // Timed bidding until expires_at_ms; highest bid wins.
+  AUCTION_LISTING_MODE_TIME = 1;
+  // Limit sell: settles when a buyer pays list_price_gold (buy-at-list).
+  AUCTION_LISTING_MODE_LIMIT = 2;
+}
+
+// Per-listing seller access controls (deny rules + optional gates; combinable).
+message AuctionAccessRules {
+  bool only_own_city = 1;
+  bool only_own_guild = 2;
+  repeated string blocked_guild_ids = 3;
+  repeated string blocked_player_names = 4;
+  // Anti-alt: buyer must be full level (server threshold) and reputation >= 100.
+  bool require_full_level_and_rep100 = 5;
+}
+
+message AuctionListing {
+  string listing_id = 1;
+  string seller_wallet = 2;
+  string seller_name = 3;
+  string seller_city = 4;
+  string seller_guild_id = 5;
+  AuctionListingMode mode = 6;
+  int32 item_id = 7;
+  int64 item_uid = 8;
+  int32 quantity = 9;
+  uint32 item_attribute = 10;
+  int32 item_color = 11;
+  int32 cur_life_span = 12;
+  int32 max_life_span = 13;
+  // Limit buy-now / list price (gold). Also used as reserve context for timed auctions.
+  int32 list_price_gold = 14;
+  int32 min_bid_gold = 15;
+  int32 current_bid_gold = 16;
+  string current_bidder_name = 17;
+  int64 created_at_ms = 18;
+  int64 expires_at_ms = 19;
+  AuctionAccessRules access = 20;
+  // active | sold | expired | cancelled
+  string status = 21;
+  string item_name = 22;
+}
+
+message AuctionBoardBrowseRequest {
+  string game_world_id = 1;
+}
+
+message AuctionBoardCreateRequest {
+  string game_world_id = 1;
+  int64 item_uid = 2;
+  AuctionListingMode mode = 3;
+  int32 list_price_gold = 4;
+  int32 min_bid_gold = 5;
+  // Timed auction duration; clamped server-side (1–168 hours). Ignored for limit sells (use default shelf life).
+  int32 duration_hours = 6;
+  AuctionAccessRules access = 7;
+}
+
+message AuctionBoardBidRequest {
+  string game_world_id = 1;
+  string listing_id = 2;
+  int32 bid_gold = 3;
+}
+
+message AuctionBoardBuyRequest {
+  string game_world_id = 1;
+  string listing_id = 2;
+}
+
+message AuctionBoardCancelRequest {
+  string game_world_id = 1;
+  string listing_id = 2;
+}
+
+message AuctionBoardSettleDebtRequest {
+  string game_world_id = 1;
+}
+
+message AuctionBoardSnapshot {
+  repeated AuctionListing listings = 1;
+  string message = 2;
+  int32 my_debt_gold = 3;
+  int64 my_debt_due_ms = 4;
+  bool my_trade_blocked = 5;
+  // Mock vs real: MVP settles gold in bag (item 90); on-chain $HELL wallet not wired.
+  string settlement_note = 6;
+}
+
+message AuctionBoardActionResult {
+  bool ok = 1;
+  string message = 2;
+  optional AuctionListing listing = 3;
+  int32 my_debt_gold = 4;
+  int64 my_debt_due_ms = 5;
+  bool my_trade_blocked = 6;
+}
+
+// --- Play-mine $HELL (C1 · server-authoritative credits → pending; claim when mint exists) ---
+
+message HellMiningStatusRequest {
+  string game_world_id = 1;
+}
+
+// amount 0 = claim all pending. Without HELL_MINT env, server refuses and keeps pending.
+message HellMiningClaimRequest {
+  string game_world_id = 1;
+  int64 amount = 2;
+}
+
+message HellMiningStatus {
+  int64 pending_hell = 1;
+  int64 claimed_hell = 2;
+  int64 remaining_pool = 3;
+  string utc_day = 4;
+  int32 today_credits = 5;
+  int32 today_monster_kills = 6;
+  bool today_monster_credit_granted = 7;
+  int64 today_direct_tokens = 8;
+  bool today_settled = 9;
+  bool claim_available = 10;
+  // Utility/mining copy only — never salary/APY/ROI.
+  string note = 11;
+}
+
+message HellMiningClaimResult {
+  bool ok = 1;
+  string message = 2;
+  int64 pending_hell = 3;
+  int64 claimed_amount = 4;
+}
+
+// Client asks the training arena world to spawn War/Mage chase dummies for a preset id.
+message ApplyTrainingPresetRequest {
+  string preset_id = 1;
+  string game_world_id = 2;
+}
+
+// Start or resume the optional beginner training path.
+message BeginnerPathEnrollRequest {
+}
+
+// Leave the beginner path with no gameplay penalty (XP/worlds/items unaffected).
+message BeginnerPathAbandonRequest {
+}
+
+// Credit a talk objective when interacting with a farm training NPC.
+message BeginnerPathTalkRequest {
+  int32 catalog_npc_id = 1;
+}
+
+// Credit a soft UI objective (action_id must match BeginnerPath.json uiActionId).
+message BeginnerPathUiActionRequest {
+  string action_id = 1;
+}
+
+// Client asks Tom to repair one weapon by item uid (bag or equipped).
+message RepairItemRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  int64 item_uid = 3;
+}
+
+// Sell one bag stack for gold (Item Drops / bag quick-sell). Uses Olympia NPC buy-back ≈ list price / 2.
+message SellBagItemRequest {
+  string game_world_id = 1;
+  int64 item_uid = 2;
+}
+
+message SellBagItemResult {
+  bool ok = 1;
+  string message = 2;
+  optional int32 gold_gained = 3;
+  optional int64 item_uid = 4;
+}
+
+// City NPC desk action (Howard guild registry, Kennedy city hall, Gail cathedral, Perry command).
+// action: open | register_guild_interest | city_brief | heal | bless | donate | crusade_brief
+message CityNpcServiceRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  string action = 3;
+  // Gold amount for donate (ignored for other actions).
+  optional int32 donate_gold = 4;
+}
+
+// Authoritative reply for city NPC desk UIs (status + role-specific snapshot fields).
+message CityNpcServiceResult {
+  bool ok = 1;
+  string message = 2;
+  string role = 3;
+  string npc_name = 4;
+  bool guild_interest_registered = 5;
+  string citizenship_side = 6;
+  string city_services_summary = 7;
+  int32 hp = 8;
+  int32 max_hp = 9;
+  int32 gold_spent = 10;
+  string crusade_status = 11;
+  bool blessed = 12;
+}
+
+// Client buys quantity of an item from a shop NPC (validated server-side: proximity + catalog; grants one stack/request).
+message BuyShopItemRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  int32 item_id = 3;
+  // Units to purchase in this request (server clamps to 1..50).
+  int32 quantity = 4;
+}
+
+// Claim a completed kill/rebirth milestone reward, choosing one item from the milestone's reward list.
+message ClaimKillMilestoneRequest {
+  string milestone_id = 1;
+  int32 chosen_item_id = 2;
+}
+
+// Request a rebirth: requires max level; resets exp/level and increments rebirth count.
+message RebirthRequest {
+}
+
+// Undo last rebirth: restore pre-rebirth snapshot (L max of previous RB + stats/maj); progress kept via snapshot.
+message RebirthRollbackRequest {
 }
 
 message WeatherChangeRequest {
@@ -145,6 +662,8 @@ message PlayerItemDropRequested {
 }
 
 message PlayerItemPickupRequested {
+  // Max ground-stack items to take this request (1 = normal click; up to 9 with Ctrl).
+  int32 max_items = 1;
 }
 
 message ChangePlayerAttackTypeRequest {
@@ -261,6 +780,103 @@ message LogoutCancelledRequest {
 message AuthenticateRequest {
   string id = 1;
   string character_name = 2;
+  // HMAC token from middleware-node after Sign-In With Solana (optional until wallet auth enabled).
+  string auth_token = 3;
+  // When set (e.g. "traveler"), overrides Settings.initialMap for this login if the world exists.
+  optional string preferred_initial_world_id = 4;
+  // Desk slot 0–3 when creating or claiming a character; used for SELECTCHAR ordering.
+  optional int32 slot_index = 5;
+  // Optional create-character appearance (applied only when no persisted character exists).
+  optional PlayerGender gender = 6;
+  optional PlayerSkinColor skin_color = 7;
+  optional int32 hair_style_index = 8;
+  optional int32 underwear_color_index = 9;
+  // Client play mode: "gm" (sandbox tooling) or "traveler" (real-player). Traveler sessions
+  // use soft combat defaults, limited spells, and a separate save namespace so GM OP kits do not leak.
+  optional string player_mode = 10;
+  // Optional create-character point-buy (classic Helbreath: base 10 each, max 14, sum must be 70).
+  // Applied only when no persisted character exists; omitted fields keep server defaults.
+  optional int32 str = 11;
+  optional int32 vit = 12;
+  optional int32 dex = 13;
+  optional int32 intel = 14;
+  optional int32 mag = 15;
+  optional int32 chr = 16;
+  // Optional referral code from ?ref= (first login only; server ignores if already attributed).
+  optional string referral_code = 17;
+  // Arena Pre-Ready kit JSON (validated against ArenaKitCatalog.json on tournament-arena entry).
+  optional string arena_kit_json = 18;
+}
+
+/** Pre-world request: wallet + auth token → up to 4 character slot summaries for the SELECTCHAR desk. */
+message CharacterListRequest {
+  string id = 1;
+  string auth_token = 2;
+  // Same semantics as AuthenticateRequest.player_mode — traveler lists only traveler saves.
+  optional string player_mode = 3;
+}
+
+/**
+ * Pre-world: is this character name free for a new create?
+ * Available = not used by another account (case-insensitive). Same wallet may re-use its own name.
+ */
+message CharacterNameCheckRequest {
+  string id = 1;
+  string auth_token = 2;
+  string character_name = 3;
+}
+
+message CharacterNameCheckResponse {
+  bool available = 1;
+  // Human-readable status for Create Character desk (empty when available).
+  string message = 2;
+  string character_name = 3;
+}
+
+/**
+ * Visible equipment row for SELECTCHAR walk preview (Olympia DrawObject_OnMove_ForMenu).
+ * Slot names match persistence: weapon, shield, armor, hauberk, leggings, boots, helmet, cape, accessory.
+ */
+message CharacterEquipPreview {
+  string slot = 1;
+  int32 item_id = 2;
+}
+
+/** One occupied SELECTCHAR desk slot (empty slots are omitted; client fills 0–3). */
+message CharacterSlotSummary {
+  int32 slot_index = 1;
+  string name = 2;
+  int32 level = 3;
+  int64 exp = 4;
+  int32 rebirth = 5;
+  double hours_played = 6;
+  int32 str = 7;
+  int32 vit = 8;
+  int32 dex = 9;
+  int32 intel = 10;
+  int32 mag = 11;
+  int32 chr = 12;
+  // Appearance for ND_SELECTCHAR layered preview (same enums as AuthenticateRequest).
+  PlayerGender gender = 13;
+  PlayerSkinColor skin_color = 14;
+  int32 hair_style_index = 15;
+  int32 underwear_color_index = 16;
+  // Equipped gear for menu walk/rotate preview (from state_json EquippedItems).
+  repeated CharacterEquipPreview equipped = 17;
+  // Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler).
+  string citizenship_side = 18;
+}
+
+message CharacterListResponse {
+  repeated CharacterSlotSummary characters = 1;
+  // Wallet referral code (Name-XXXX). Stable once issued.
+  optional string referral_code = 2;
+  // True if this wallet already consumed a referral benefit (lifetime once).
+  optional bool referral_already_attributed = 3;
+  // Full share URL when server knows public play host.
+  optional string referral_share_url = 4;
+  // Open PVP duel invites for any world character name on this wallet (hub inbox seed).
+  repeated ArenaPactState arena_pact_invites = 5;
 }
 
 message LogoutRequest {
@@ -286,6 +902,11 @@ message PlayerAttackModeChangeRequest {
   bool attack_mode = 1;
 }
 
+// Client toggles Safe Attack (Olympia Home key); only meaningful while Attack/Combat mode is on.
+message PlayerSafeAttackModeChangeRequest {
+  bool safe_attack_mode = 1;
+}
+
 message PlayerMovementStateChanged {
   int64 player_id = 1;
   bool running_mode = 2;
@@ -295,6 +916,11 @@ message PlayerMovementStateChanged {
 message PlayerAttackModeChanged {
   int64 player_id = 1;
   bool attack_mode = 2;
+}
+
+// Echo of Safe Attack to the requesting client (not broadcast to observers).
+message PlayerSafeAttackModeChanged {
+  bool safe_attack_mode = 1;
 }
 
 message PlayerDisconnected {
@@ -358,6 +984,8 @@ message GroundItemEntry {
   optional uint32 item_attribute = 5;
   // Olympia item name color tier (1–8); 0 = default.
   optional int32 item_color = 6;
+  optional int32 cur_life_span = 7;
+  optional int32 max_life_span = 8;
 }
 
 message GroundStateCell {
@@ -446,7 +1074,746 @@ message ServerMessage {
     NpcsEnteredRange npcs_entered_range = 61;
     NpcsLeftRange npcs_left_range = 62;
     LogoutCancelled logout_cancelled = 63;
+    ProgressionState progression_state = 64;
+    ProgressionUpdated progression_updated = 65;
+    MonsterKillsUpdated monster_kills_updated = 66;
+    KillMilestoneClaimResult kill_milestone_claim_result = 67;
+    // Pre-world response to CharacterListRequest (SELECTCHAR desk metadata).
+    CharacterListResponse character_list_response = 68;
+    BuyShopItemResult buy_shop_item_result = 69;
+    // Optional beginner path 1→80 snapshot (join + after enroll/abandon/progress).
+    BeginnerPathState beginner_path_state = 70;
+    // Training Arena ApplyPreset result (ok + spawned count + status text).
+    TrainingPresetApplied training_preset_applied = 71;
+    WarehouseState warehouse_state = 72;
+    WarehouseMutationResult warehouse_mutation_result = 73;
+    RepairItemResult repair_item_result = 74;
+    ItemLifeSpanUpdated item_life_span_updated = 75;
+    CityNpcServiceResult city_npc_service_result = 76;
+    // Minimal party snapshot after create / join / leave (self + members).
+    PartyState party_state = 77;
+    // GM ops: current anti-bot tool flags + tunables (reply to get / after set).
+    AntiBotToolsState anti_bot_tools_state = 78;
+    SetAntiBotToolsResult set_anti_bot_tools_result = 79;
+    // Timed Challenges Mode 1: live run state / finish / daily board.
+    TimedChallengeState timed_challenge_state = 80;
+    TimedChallengeFinished timed_challenge_finished = 81;
+    TimedChallengeLeaderboard timed_challenge_leaderboard = 82;
+    // Trade / auction board MVP: board snapshot + action ack.
+    AuctionBoardSnapshot auction_board_snapshot = 83;
+    AuctionBoardActionResult auction_board_action_result = 84;
+    // Item Drops / bag quick-sell result.
+    SellBagItemResult sell_bag_item_result = 85;
+    // Self only (killer): open-world eligible Enemy Kill — triggers Olympia-style auto screenshot.
+    EnemyKillAwarded enemy_kill_awarded = 86;
+    // Self only: result of LevelUpSettingsRequest (updated stats + LU pool + vitals).
+    LevelUpSettingsApplied level_up_settings_applied = 87;
+    // Self only: Safe Attack mode after PlayerSafeAttackModeChangeRequest (Olympia DEF_NOTIFY_SAFEATTACKMODE).
+    PlayerSafeAttackModeChanged player_safe_attack_mode_changed = 88;
+    // Play-mine $HELL: pending balance + today's credits (C1).
+    HellMiningStatus hell_mining_status = 89;
+    HellMiningClaimResult hell_mining_claim_result = 90;
+    // Majestic / gizon item upgrade result (angels + DK weapons).
+    MajesticUpgradeResult majestic_upgrade_result = 91;
+    // Soul / Guild / Unbind seal result + optional inventory row refresh.
+    ItemBindResult item_bind_result = 92;
+    BuyCashShopItemResult buy_cash_shop_item_result = 93;
+    // Pre-world reply to CharacterNameCheckRequest (Create Character live validation).
+    CharacterNameCheckResponse character_name_check_response = 94;
+    // Result of StoneItemUpgradeRequest (Xelima/Merien).
+    StoneItemUpgradeResult stone_item_upgrade_result = 95;
+    // Mining / Fishing gather result (+ skill level after attempt).
+    SkillGatherResult skill_gather_result = 96;
+    // Full skill mastery list for F8 (0–100; 100 = Super / rare gather unlocks / cNFT-eligible).
+    SkillsState skills_state = 97;
+    // Olympia enchant materials + result of disenchant/enchant/combine.
+    EnchantMaterialsState enchant_materials_state = 98;
+    EnchantResult enchant_result = 99;
+    MajesticStatRespecResult majestic_stat_respec_result = 100;
+    CicItemMergeResult cic_item_merge_result = 101;
+    SiphonGemUpgradeResult siphon_gem_upgrade_result = 102;
+    // Olympia DEF_NOTIFY_SPECIALABILITYSTATUS / ENABLED.
+    SpecialAbilityStatus special_ability_status = 103;
+    // Arena pact duel match snapshot (create / invite / ready / countdown / live).
+    ArenaPactState arena_pact_state = 104;
+    ArenaPactListResponse arena_pact_list_response = 105;
+    // World / tournament Go-Live ack for cartelera.
+    StreamBroadcastState stream_broadcast_state = 106;
   }
+}
+
+// --- Arena pact duel (1v1 MVP; prize bag escrow phase 1) ---
+
+// Captain pledges a whitelist asset into the prize bag (drafting/editing).
+message ArenaPactPrizePledgeRequest {
+  string match_id = 1;
+  // Whitelist asset id: HELL | USDC | USDT | SOL | CNFT_DROP (no BTC/ETH).
+  string asset_id = 2;
+  // Amount in asset base units (SPL decimals / whole HELL).
+  int64 amount = 3;
+  // Optional on-chain instance id for cNFT/NFT.
+  optional string instance_id = 4;
+}
+
+// Captain re-OK after bag edit (or confirm draft → lock).
+message ArenaPactPrizeConfirmRequest {
+  string match_id = 1;
+}
+
+// DC / mid-duel: fighter signs LOSS so opponent receives the prize bag immediately.
+message ArenaPactSignLossRequest {
+  string match_id = 1;
+}
+
+message ArenaPactCreateRequest {
+  // Arena world id (colosseum, arena-duel-s, …).
+  string map_id = 1;
+  // Optional stake asset id from ArenaStakeAllowlist.json (ignored until escrow ships).
+  optional string stake_asset_id = 2;
+  optional int64 stake_amount = 3;
+  // Pre-Ready kit JSON for the host (same shape as AuthenticateRequest.arena_kit_json).
+  optional string arena_kit_json = 4;
+  // Unix ms when the Ready window opens (date + hour + minute set by host). 0 = open Ready now.
+  int64 opens_at_ms = 5;
+  // Ready window length in seconds (default 900 = 15 minutes). All must Ready before countdown.
+  int32 ready_window_sec = 6;
+  // Publish on chainlords.net cartelera + Discord Events.
+  bool is_public = 7;
+  // Optional public title (e.g. "Blood Friday 1v1").
+  optional string title = 8;
+  // Host first-person stream (Twitch / YouTube / Discord Go Live URL).
+  optional string host_stream_url = 9;
+  // Optional "global" production cam (wide shot / cast). Side cams = fighter POVs.
+  optional string global_stream_url = 10;
+}
+
+message ArenaPactInviteRequest {
+  string match_id = 1;
+  // Invitee character / kit name (online preferred; offline invites still queue for hub inbox).
+  string target_character_name = 2;
+}
+
+message ArenaPactRespondRequest {
+  string match_id = 1;
+  // true = accept invite into roster; false = decline.
+  bool accept = 2;
+  optional string arena_kit_json = 3;
+  // "accept" | "decline" | "honor" — honor accepts but clears stake (play for honor, no $).
+  // When set, overrides accept bool: honor→accept+clear stake, decline→reject, accept→accept with stake.
+  optional string response_mode = 4;
+  // Invitee POV stream URL when accepting (optional).
+  optional string stream_url = 5;
+}
+
+message ArenaPactReadyRequest {
+  string match_id = 1;
+  bool ready = 2;
+  // Optional kit refresh at ready time.
+  optional string arena_kit_json = 3;
+  // Client self-report for duel fairness transparency (not used for anti-cheat alone).
+  optional int32 report_ping_ms = 4;
+  optional int32 report_ping_variance_ms = 5;
+  optional int32 report_fps = 6;
+}
+
+message ArenaPactCancelRequest {
+  string match_id = 1;
+}
+
+message ArenaPactListRequest {
+  // Pre-world hub inbox (wallet-auth): list invites for these character/kit names.
+  optional string id = 1;
+  optional string auth_token = 2;
+  repeated string filter_names = 3;
+}
+
+// Pre-countdown tech agreement (captains / all fighters vote).
+// mode: "as_is" | "equalize_ping" | "fixed_delay"
+message ArenaPactTechProposeRequest {
+  string match_id = 1;
+  string mode = 2;
+  // equalize_ping: min/max artificial delay ms (floor toward worst ping).
+  // fixed_delay: min ignored; max = fixed delay applied to everyone (clamped).
+  int32 param_min_ms = 3;
+  int32 param_max_ms = 4;
+  // Soft quality floor (warn / record only in v1). 0 = none.
+  int32 fps_floor = 5;
+  // When true, equalizer also delays movement packets (easy on/off for testing).
+  bool apply_to_movement = 6;
+}
+
+message ArenaPactTechVoteRequest {
+  string match_id = 1;
+  // true = accept current proposal; false = reject (clears accepts, stays in tech_agree).
+  bool accept = 2;
+}
+
+// Heartbeat while on map during tech_sample (server freezes a "photo" after a few seconds).
+message ArenaPactTechReportRequest {
+  string match_id = 1;
+  int32 ping_ms = 2;
+  int32 ping_variance_ms = 3;
+  int32 fps = 4;
+}
+
+message ArenaPactFighter {
+  string character_name = 1;
+  string wallet = 2;
+  bool ready = 3;
+  // 0 = team A (host side), 1 = team B.
+  int32 team = 4;
+  // Last self-reported tech snapshot (shown to all fighters for transparency).
+  optional int32 ping_ms = 5;
+  optional int32 ping_variance_ms = 6;
+  optional int32 fps = 7;
+  // Accepted current tech proposal (pre-countdown).
+  bool tech_accepted = 8;
+  // True when invited but has not yet Accept / 4Honor / Decline.
+  bool invite_pending = 9;
+  // First-person stream URL for multi-cam Watch (Twitch / YT / Discord).
+  optional string stream_url = 10;
+  // twitch | youtube | discord | other
+  optional string stream_platform = 11;
+}
+
+message ArenaPactPrizeLine {
+  string asset_id = 1;
+  int64 amount = 2;
+  string captain_name = 3;
+  int32 team = 4;
+  optional string instance_id = 5;
+}
+
+message ArenaPactState {
+  string match_id = 1;
+  // scheduled | ready_window | tech_sample | tech_agree | countdown | live | dc_grace | done | cancelled | expired
+  string status = 2;
+  string map_id = 3;
+  string host_name = 4;
+  repeated ArenaPactFighter fighters = 5;
+  // Seconds left: until open (scheduled), Ready window, countdown, live, or DC grace.
+  int32 seconds_left = 6;
+  string message = 7;
+  optional string stake_asset_id = 8;
+  optional int64 stake_amount = 9;
+  // Hard cancel / invite TTL (unix ms).
+  int64 expires_at_ms = 10;
+  // When Ready window opens (unix ms).
+  int64 opens_at_ms = 11;
+  // When Ready window ends (unix ms); 0 before open.
+  int64 ready_ends_at_ms = 12;
+  // Ready window length configured at create (seconds).
+  int32 ready_window_sec = 13;
+  // Agreed / proposed tech profile (valid in tech_agree and later).
+  optional string tech_mode = 14;
+  optional int32 tech_param_min_ms = 15;
+  optional int32 tech_param_max_ms = 16;
+  optional int32 tech_fps_floor = 17;
+  optional string tech_proposed_by = 18;
+  // Snapshot: worst ping / lowest fps among reporters (server computed).
+  optional int32 tech_worst_ping_ms = 19;
+  optional int32 tech_lowest_fps = 20;
+  // Equalizer applies to movement when true (toggleable in tech propose).
+  bool tech_apply_to_movement = 21;
+  // Private to team captains only (server fills per recipient): your personal input delay ms.
+  optional int32 your_delay_ms = 22;
+  // Cartelera / Discord public listing.
+  bool is_public = 23;
+  optional string title = 24;
+  // Wide / cast "global cam" (Discord-style main share).
+  optional string global_stream_url = 25;
+  optional string global_stream_platform = 26;
+  // Public watch page hint (https://play.chainlords.net/?watch=…).
+  optional string watch_url = 27;
+  // Prize bag state: drafting | locked | editing | live_frozen | dc_grace | settled | refunded
+  optional string prize_bag_state = 28;
+  repeated ArenaPactPrizeLine prize_lines = 29;
+  repeated string prize_pending_confirm = 30;
+  optional string prize_summary = 31;
+  // DC grace: who disconnected + unix ms grace ends.
+  optional string dc_character_name = 32;
+  optional int64 dc_grace_ends_at_ms = 33;
+}
+
+message ArenaPactListResponse {
+  repeated ArenaPactState matches = 1;
+}
+
+message CicItemMergeResult {
+  bool success = 1;
+  string message = 2;
+  int64 item_uid = 3;
+  int32 item_id = 4;
+  int32 cic_level = 5;
+  int32 cic_stat_kind = 6;
+  int32 cic_stat_value = 7;
+}
+
+message SiphonGemUpgradeResult {
+  bool success = 1;
+  string message = 2;
+  int64 item_uid = 3;
+  int32 item_id = 4;
+  int32 siphon_level = 5;
+}
+
+message EnchantMaterialEntry {
+  bool is_shard = 1;
+  int32 type = 2;
+  int32 level = 3;
+  int32 count = 4;
+  string name = 5;
+}
+
+message EnchantMaterialsState {
+  repeated EnchantMaterialEntry materials = 1;
+}
+
+message EnchantResult {
+  bool success = 1;
+  string message = 2;
+  int64 item_uid = 3;
+  int32 item_id = 4;
+  uint32 item_attribute = 5;
+  int32 material_type = 6;
+  int32 material_level = 7;
+}
+
+message MajesticStatRespecResult {
+  bool success = 1;
+  string message = 2;
+  int32 str = 3;
+  int32 vit = 4;
+  int32 dex = 5;
+  int32 intel = 6;
+  int32 mag = 7;
+  int32 chr = 8;
+  int32 majestic_points = 9;
+  int32 lu_points = 10;
+  string talents_summary = 11;
+}
+
+message SkillGatherResult {
+  bool ok = 1;
+  string message = 2;
+  int32 skill_id = 3;
+  int32 skill_level = 4;
+  // 0 when nothing was granted (fail / empty cast).
+  int32 item_id = 5;
+  string item_name = 6;
+  // When true, item was a rare 100%-skill loot (stones / zems / mid rings / gear).
+  bool rare_loot = 7;
+}
+
+message SkillEntry {
+  int32 skill_id = 1;
+  string name = 2;
+  int32 level = 3;
+  // True when level >= 100 — Super Attack / rare gather / skill-cNFT eligible (mint post-test).
+  bool maxed = 4;
+}
+
+message SkillsState {
+  repeated SkillEntry skills = 1;
+}
+
+message StoneItemUpgradeResult {
+  bool success = 1;
+  string message = 2;
+  int64 item_uid = 3;
+  int32 item_id = 4;
+  uint32 item_attribute = 5;
+  bool burned = 6;
+  bool downgraded = 7;
+}
+
+// currency: 1=stablecoin (USDC/USDT allowlisted mint), 2=pending $HELL credits.
+message BuyCashShopItemRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  string sku_id = 3;
+  int32 quantity = 4;
+  int32 currency = 5;
+  // Required for stablecoin: genuine mint address (allowlisted).
+  string stablecoin_mint = 6;
+  // Optional SPL transfer signature; required when not Development dev-grant.
+  string payment_tx_signature = 7;
+}
+
+message BuyCashShopItemResult {
+  bool ok = 1;
+  string message = 2;
+}
+
+// Item bind_state: 0=unbound, 1=soulbound, 2=guildbound (server authoritative).
+message ItemBindRequest {
+  int64 item_uid = 1;
+  // 1 = soul bind, 2 = guild bind, 3 = unbind.
+  int32 action = 2;
+}
+
+message ItemBindResult {
+  bool ok = 1;
+  string message = 2;
+  int64 item_uid = 3;
+  int32 bind_state = 4;
+  string bound_guild_id = 5;
+}
+
+// Authoritative live state while a timed challenge run is active (or cleared on abort).
+message TimedChallengeState {
+  bool active = 1;
+  int32 mode = 2;
+  int32 targets_total = 3;
+  int32 targets_completed = 4;
+  int64 started_at_ms = 5;
+  string message = 6;
+  // Client may treat mana as free / refill while true (also unlocks practice spells for traveler).
+  bool free_mana = 7;
+  // 1-based wave index for PVP Skills modes; omitted/0 when N/A (Mode 1).
+  optional int32 wave_index = 8;
+  optional int32 wave_count = 9;
+  // 0 = combat waves, 1 = setup (drink invis pot + cast PFA before first Dark Elf wave).
+  optional int32 phase = 10;
+}
+
+// Result when a run completes (all targets protocol-cleared) or fails to start.
+message TimedChallengeFinished {
+  bool ok = 1;
+  string message = 2;
+  int32 mode = 3;
+  int32 elapsed_ms = 4;
+  bool hard_threshold_met = 5;
+  bool exp_boost_granted = 6;
+  bool stone_granted = 7;
+  bool is_daily_best = 8;
+  int32 daily_rank = 9;
+}
+
+message TimedChallengeLeaderboardEntry {
+  string character_name = 1;
+  // Truncated wallet for display (anti-sybil key stays server-side).
+  string wallet_suffix = 2;
+  int32 elapsed_ms = 3;
+}
+
+message TimedChallengeLeaderboard {
+  int32 mode = 1;
+  string utc_day = 2;
+  repeated TimedChallengeLeaderboardEntry entries = 3;
+  optional int32 your_best_ms = 4;
+}
+
+// GM client asks for the current anti-bot / AFK / tournament-AI tool flags.
+message GetAntiBotToolsRequest {
+}
+
+// GM client asks to replace all tool flags (partial updates are not supported — send full snapshot).
+message SetAntiBotToolsRequest {
+  AntiBotToolsFlags flags = 1;
+}
+
+// Toggleable anti-bot / capacity / tournament-AI controls (docs/ANTIBOT-AIRDROP.md).
+message AntiBotToolsFlags {
+  // Prefer proven guild members near capacity.
+  bool guild_priority_ingress = 1;
+  // Overflow / queue / delayed-claim path for ultra-new accounts.
+  bool new_player_segment = 2;
+  // Passport / score gate on Helvet / airdrop claim (middleware stub).
+  bool claim_time_sybil_gate = 3;
+  // Max concurrent sessions / action-rate ceilings / wallet clustering hooks.
+  bool industrial_multi_box_limits = 4;
+  // When true, long AFK on map is allowed (product default). When false, warn/kick after idle.
+  bool afk_on_map_allowed = 5;
+  // Log cast/move anomaly signals in rated / coliseum arenas.
+  bool tournament_inhuman_play_telemetry = 6;
+  // Require stream / identity stubs before prize (flag + UI note only).
+  bool tournament_high_stakes_mode = 7;
+  // Optional worker-friendly XP drip while AFK / soft offline.
+  bool soft_offline_progression = 8;
+}
+
+// Authoritative anti-bot tools snapshot for the GM control panel.
+message AntiBotToolsState {
+  AntiBotToolsFlags flags = 1;
+  int32 max_concurrent_sessions = 2;
+  int32 action_rate_ceiling_per_min = 3;
+  int32 afk_warn_after_ms = 4;
+  int32 afk_kick_after_ms = 5;
+  string updated_by = 6;
+  int64 updated_at_ms = 7;
+}
+
+// Result of SetAntiBotToolsRequest (ok + echo state, or rejection reason).
+message SetAntiBotToolsResult {
+  bool ok = 1;
+  string message = 2;
+  AntiBotToolsState state = 3;
+}
+
+// Create a new party (solo leader). Credits beginner-path create_or_join_party when active.
+message CreatePartyRequest {
+}
+
+// Join an existing party by short code from the leader's Party panel.
+message JoinPartyRequest {
+  string party_code = 1;
+}
+
+// Leave the current party (or dismiss if last member).
+message LeavePartyRequest {
+}
+
+// One party member with vitals for the F5 Party panel (Olympia parity P2.9).
+message PartyMember {
+  string name = 1;
+  int32 hp = 2;
+  int32 max_hp = 3;
+  bool is_leader = 4;
+}
+
+// Authoritative party membership for the requesting player (and members on membership change).
+message PartyState {
+  bool in_party = 1;
+  string party_code = 2;
+  repeated string member_names = 3;
+  bool is_leader = 4;
+  string message = 5;
+  repeated PartyMember members = 6;
+}
+
+// Result of ApplyTrainingPresetRequest (spawn/despawn chase dummies in world `training`).
+message TrainingPresetApplied {
+  bool ok = 1;
+  string message = 2;
+  string preset_id = 3;
+  int32 spawned_count = 4;
+}
+
+// Full beginner-path snapshot for the Quest panel and UI hints.
+message BeginnerPathState {
+  bool enrolled = 1;
+  bool abandoned = 2;
+  optional string active_quest_id = 3;
+  string active_quest_title = 4;
+  string active_quest_hint = 5;
+  int32 progress = 6;
+  int32 required = 7;
+  string objective_kind = 8;
+  repeated string completed_quest_ids = 9;
+  bool can_enroll = 10;
+  string status_message = 11;
+  // Next stub quest title when live path is exhausted (empty if none).
+  string next_stub_title = 12;
+  // When objective_kind is ui_action, the expected client action id.
+  string ui_action_id = 13;
+}
+
+// Result of BuyShopItemRequest (ok + human-readable status for the shop UI).
+message BuyShopItemResult {
+  bool ok = 1;
+  string message = 2;
+}
+
+// Result of RepairItemRequest at Tom the blacksmith.
+message RepairItemResult {
+  bool ok = 1;
+  string message = 2;
+  optional int64 item_uid = 3;
+  optional int32 cur_life_span = 4;
+  optional int32 max_life_span = 5;
+  optional int32 price_paid = 6;
+}
+
+// Self-only durability update after combat wear (or similar).
+message ItemLifeSpanUpdated {
+  int64 item_uid = 1;
+  int32 cur_life_span = 2;
+  int32 max_life_span = 3;
+}
+
+// Client asks William for the current warehouse snapshot (must be near catalog npc 4).
+message OpenWarehouseRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+}
+
+// Move one bag stack (full quantity) into warehouse storage.
+message WarehouseDepositRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  int64 item_uid = 3;
+}
+
+// Move one warehouse stack (full quantity) back into the bag.
+message WarehouseWithdrawRequest {
+  string game_world_id = 1;
+  int64 npc_id = 2;
+  int64 item_uid = 3;
+}
+
+// Authoritative warehouse contents after open / deposit / withdraw.
+message WarehouseState {
+  repeated InventoryItemEntry items = 1;
+  int32 max_slots = 2;
+  string message = 3;
+}
+
+// Result of a warehouse deposit/withdraw that failed before state could change (success uses WarehouseState).
+message WarehouseMutationResult {
+  bool ok = 1;
+  string message = 2;
+}
+
+// One lifetime kill counter row keyed by catalog monster id.
+message MonsterKillEntry {
+  int32 monster_id = 1;
+  string monster_name = 2;
+  int64 kills = 3;
+  // Olympia specialty: level from kills only (150*L^2 or species base_kills*L^2).
+  int32 specialty_level = 4;
+  // specialty_level + stake bonus levels (floor(staked/100k)*10).
+  int32 effective_level = 5;
+  // Kills required to reach specialty_level+1 (from kill base only).
+  int64 next_kills = 6;
+  // Wallet stake contribution to effective_level.
+  int32 stake_bonus_levels = 7;
+  // Compact bonus summary at effective_level (e.g. "+1 dmg, -1 taken, +11.4% drop").
+  string bonus_summary = 8;
+}
+
+// Milestone directory row plus this character's progress and claim state.
+message KillMilestoneEntry {
+  string milestone_id = 1;
+  // 0 = monster kill count milestone; 1 = rebirth milestone.
+  int32 kind = 2;
+  optional int32 monster_id = 3;
+  optional string monster_name = 4;
+  int64 required = 5;
+  int64 progress = 6;
+  bool claimed = 7;
+  repeated int32 reward_item_ids = 8;
+}
+
+// Full progression snapshot sent on join (after InitialState).
+message ProgressionState {
+  int64 exp = 1;
+  int32 level = 2;
+  int32 rebirth = 3;
+  int64 exp_for_next_level = 4;
+  int32 max_level = 5;
+  int32 max_rebirth = 6;
+  repeated MonsterKillEntry monster_kills = 7;
+  repeated KillMilestoneEntry milestones = 8;
+  // Olympia unspent level-up attribute points: level*3 - (sumStats-70) - 3.
+  int32 lu_points = 9;
+  int32 mp = 10;
+  int32 max_mp = 11;
+  int32 sp = 12;
+  int32 max_sp = 13;
+  // Cumulative exp required to reach the current level (0 at level 1). HUD bar uses
+  // (exp - exp_for_current_level) / (exp_for_next_level - exp_for_current_level).
+  int64 exp_for_current_level = 14;
+  // Olympia majestic / gizon points (angel + DK upgrades).
+  int32 majestic_points = 15;
+  // Chain Lords Block Level: when true, new exp → majestic instead of leveling.
+  bool level_blocked = 16;
+  // Mock / ledger $HELL staked on this wallet (utility; no yield). Specialty uses floor(staked/100k)*10.
+  int64 staked_hell = 17;
+  // Olympia m_iHungerStatus 0–100 (100 = full).
+  int32 hunger = 18;
+  // Lifetime open-world Enemy Kill (PvP) count for this wallet (PvpAcademy ledger).
+  int32 enemy_kills = 19;
+  // Super Attack charges on join (same fields as ProgressionUpdated).
+  int32 super_attack_left = 20;
+  int32 max_super_attack = 21;
+  bool super_attack_armed = 22;
+}
+
+// Incremental exp/level/rebirth change for the local player.
+message ProgressionUpdated {
+  int64 exp = 1;
+  int32 level = 2;
+  int32 rebirth = 3;
+  int64 exp_for_next_level = 4;
+  bool leveled_up = 5;
+  // Olympia unspent LU points after this update.
+  int32 lu_points = 6;
+  // Authoritative vitals after level change (Olympia HP/MP/SP formulas).
+  int32 hp = 7;
+  int32 max_hp = 8;
+  int32 mp = 9;
+  int32 max_mp = 10;
+  int32 sp = 11;
+  int32 max_sp = 12;
+  // Cumulative exp required to reach the current level (0 at level 1).
+  int64 exp_for_current_level = 13;
+  // Olympia majestic / gizon points (angel + DK upgrades).
+  int32 majestic_points = 14;
+  // Chain Lords Block Level flag after this update.
+  bool level_blocked = 15;
+  // Olympia m_iHungerStatus 0–100 (100 = full).
+  int32 hunger = 16;
+  // Olympia m_iSuperAttackLeft — critical / super-attack charges remaining.
+  int32 super_attack_left = 17;
+  // Cap = Level/10 (min 1).
+  int32 max_super_attack = 18;
+  // True when player armed Super Attack (crit will fire on next melee hits).
+  bool super_attack_armed = 19;
+}
+
+// Result of a majestic (gizon) item upgrade attempt.
+message MajesticUpgradeResult {
+  bool success = 1;
+  optional string error = 2;
+  int32 majestic_points = 3;
+  int64 item_uid = 4;
+  int32 item_id = 5;
+  uint32 item_attribute = 6;
+  // True when DK form transformed (e.g. Sang Ah Flameberge → Dark Knight Flameberge).
+  bool item_transformed = 7;
+}
+
+// Result of applying Level Set (F5) attribute point spends.
+message LevelUpSettingsApplied {
+  bool success = 1;
+  optional string error = 2;
+  int32 level = 3;
+  int32 str = 4;
+  int32 vit = 5;
+  int32 dex = 6;
+  int32 intel = 7;
+  int32 mag = 8;
+  int32 chr = 9;
+  int32 lu_points = 10;
+  int32 hp = 11;
+  int32 max_hp = 12;
+  int32 mp = 13;
+  int32 max_mp = 14;
+  int32 sp = 15;
+  int32 max_sp = 16;
+}
+
+// Incremental kill counter change for the local player after a credited monster death.
+message MonsterKillsUpdated {
+  int32 monster_id = 1;
+  string monster_name = 2;
+  int64 kills = 3;
+  int64 total_kills = 4;
+  // Specialty snapshot for this species after the kill (same fields as MonsterKillEntry).
+  int32 specialty_level = 5;
+  int32 effective_level = 6;
+  int64 next_kills = 7;
+  int32 stake_bonus_levels = 8;
+  string bonus_summary = 9;
+}
+
+// Result of a ClaimKillMilestoneRequest.
+message KillMilestoneClaimResult {
+  string milestone_id = 1;
+  bool success = 2;
+  optional int32 granted_item_id = 3;
+  optional string error = 4;
 }
 
 message TemporaryEffectApplied {
@@ -503,6 +1870,19 @@ message InventoryItemEntry {
   optional int32 bag_z_index = 7;
   optional uint32 item_attribute = 8;
   optional int32 item_color = 9;
+  optional int32 cur_life_span = 10;
+  optional int32 max_life_span = 11;
+  // 0=unbound, 1=soulbound, 2=guildbound.
+  optional int32 bind_state = 12;
+  optional string bound_guild_id = 13;
+  // CIC craft tier 0=none, 3–7 = CIC3…CIC7 (capes/shields/armor merge).
+  optional int32 cic_level = 14;
+  // 0=none, 1=HP, 2=SP, 3=MP (must match when merging).
+  optional int32 cic_stat_kind = 15;
+  // e.g. 35 for "HP35" — merge result uses min of both donors.
+  optional int32 cic_stat_value = 16;
+  // Siphon gem power level 0–15 (Mana/HP Siphoning gems).
+  optional int32 siphon_level = 17;
 }
 
 message EquippedInventoryItemEntry {
@@ -598,6 +1978,23 @@ message InitialState {
   int32 hair_style_index = 25;
   int32 underwear_color_index = 26;
   repeated NpcDirectoryEntry npc_directory = 27;
+  // Classic STR/VIT/DEX/INT/MAG/CHR (create-char point-buy + persistence).
+  int32 str = 28;
+  int32 vit = 29;
+  int32 dex = 30;
+  int32 intel = 31;
+  int32 mag = 32;
+  int32 chr = 33;
+  // Olympia unspent LU points + MP/SP pools (HP already above).
+  int32 lu_points = 34;
+  int32 mp = 35;
+  int32 max_mp = 36;
+  int32 sp = 37;
+  int32 max_sp = 38;
+  // Olympia Safe Attack (Home): when true with attack_mode, PvP hits non-enemies are rejected.
+  bool safe_attack_mode = 39;
+  // Citizenship for hover affiliation / FOE: "aresden" | "elvine" | "traveler" (empty = traveler).
+  string citizenship_side = 40;
 }
 
 message ItemAddedToBag {
@@ -687,10 +2084,36 @@ message PlayerPickupPerformed {
   int32 animation_time_ms = 3;
 }
 
+
+// Gallery rarity from opposing-city killer rank (PO 2026-07-13): legendary 1-10, rare 11-50, common 51-200.
+enum EkScreenshotRarity {
+  EK_SCREENSHOT_RARITY_UNSPECIFIED = 0;
+  EK_SCREENSHOT_RARITY_COMMON = 1;
+  EK_SCREENSHOT_RARITY_RARE = 2;
+  EK_SCREENSHOT_RARITY_LEGENDARY = 3;
+}
+
+// Self-only to the killer when an open-world PvP kill qualifies as an Enemy Kill (level rule).
+message EnemyKillAwarded {
+  int64 victim_player_id = 1;
+  string victim_name = 2;
+  int32 victim_level = 3;
+  int32 killer_level = 4;
+  // Snapshot rank of the victim on the opposing city's killer ladder (1-based); omit when unknown.
+  optional int32 victim_city_killer_rank = 5;
+  EkScreenshotRarity rarity = 6;
+  string map_name = 7;
+  // Killer's lifetime EK count after this award (PvpAcademy ledger).
+  int32 killer_ek_count = 8;
+}
+
 message PlayerDied {
   int64 player_id = 1;
   int32 x = 2;
   int32 y = 3;
+  // Set when another player landed the killing blow (PvP kill attribution for death screen and ledger).
+  optional int64 killer_player_id = 4;
+  optional string killer_name = 5;
 }
 
 message PlayerResurrected {
@@ -875,12 +2298,23 @@ message SendMessage {
 
 message ChatMessageSendRequest {
   string message = 1;
+  // Speaker's preferred chat language tag for Holy Spirit-style display (e.g. eng, arg, bra).
+  optional string source_language_tag = 2;
+  // Channel tab for this line; omitted/unspecified treated as Global.
+  optional ChatChannel channel = 3;
+  // Required when channel is Whisper — destination character name (case-insensitive match).
+  optional string whisper_target_character_name = 4;
 }
 
 message ChatMessageReceived {
   string sender_character_name = 1;
   int64 timestamp_ms = 2;
   string message = 3;
+  // Echo of the sender's source_language_tag when provided on send.
+  optional string source_language_tag = 4;
+  optional ChatChannel channel = 5;
+  // Present on whisper lines so UI can show "to X" / filter Whisper tab.
+  optional string whisper_target_character_name = 6;
 }
 
 message PlayerEnteredRange {
@@ -903,6 +2337,8 @@ message PlayerEnteredRange {
   repeated TemporaryEffectType active_temporary_effects = 16;
   optional int32 attack_speed_ms = 17;
   optional int32 cast_speed_ms = 18;
+  // Citizenship for DrawObjectName-style hover: "aresden" | "elvine" | "traveler".
+  string citizenship_side = 19;
 }
 
 message MonsterInRange {

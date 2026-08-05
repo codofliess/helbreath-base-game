@@ -1,6 +1,6 @@
 import type { Scene, Game } from 'phaser';
 import { getPivotData } from './RegistryUtils';
-import { DEPTH_MULTIPLIER } from '../Config';
+import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../Config';
 import { convertPixelPosToWorldPos } from './CoordinateUtils';
 import { getItemPackSpriteSheets, getItemPackEmittedTintKeys } from './RegistryUtils';
 
@@ -27,7 +27,8 @@ export function createLightRadiusOverlay(
     );
     overlay.setOrigin(0.5, 0.5);
     const worldY = convertPixelPosToWorldPos(pixelY);
-    overlay.setDepth(worldY * DEPTH_MULTIPLIER - 10);
+    // Slightly under main cast VFX, still above multi-row ground (avoids clipped chill/fire glows).
+    overlay.setDepth(worldY * DEPTH_MULTIPLIER + MAGIC_VFX_DEPTH_BIAS - 10);
     return overlay;
 }
 
@@ -63,6 +64,119 @@ export function getSpriteFrameHeight(
  */
 export function isTreeSpriteIndex(spriteIndex: number): boolean {
     return spriteIndex >= 100 && spriteIndex <= 145;
+}
+
+/** Max edge for minimap pit icons (CSS scales further). */
+const MINIMAP_MOB_THUMB_MAX_PX = 48;
+
+/**
+ * Extracts a south-facing idle frame as a PNG data URL for minimap hunt-pit icons.
+ * Texture keys from HBSprite: `sprite-{name}-{sheetIndex}` (asset key is `sprite-{name}`).
+ * Idle South ≈ sheet 4; we scan all sheets that exist.
+ *
+ * Works with canvas AND ImageBitmap texture sources (monster packs use ImageBitmap).
+ */
+export function extractMonsterMinimapThumbDataUrl(
+    scene: Scene,
+    spriteName: string,
+): string | undefined {
+    if (!spriteName) {
+        return undefined;
+    }
+
+    // Prefer south idle (4), then any sheet that actually exists.
+    const preferred = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11];
+    const textureKeys: string[] = [];
+    for (const sheet of preferred) {
+        const key = `sprite-${spriteName}-${sheet}`;
+        if (scene.textures.exists(key)) {
+            textureKeys.push(key);
+        }
+    }
+    // Fallback: any texture matching prefix (covers odd sheet counts).
+    if (textureKeys.length === 0) {
+        const prefix = `sprite-${spriteName}-`;
+        for (const key of scene.textures.getTextureKeys()) {
+            if (key.startsWith(prefix) && key !== `${prefix}__BASE`) {
+                textureKeys.push(key);
+            }
+        }
+    }
+
+    for (const textureKey of textureKeys) {
+        const texture = scene.textures.get(textureKey);
+        const frameNames = texture.getFrameNames().filter((n) => n !== '__BASE');
+        if (frameNames.length === 0) {
+            continue;
+        }
+        const frameName = frameNames.includes('0')
+            ? '0'
+            : frameNames.sort((a, b) => Number(a) - Number(b))[0];
+        const frame = texture.get(frameName);
+        if (!frame || frame.cutWidth <= 0 || frame.cutHeight <= 0) {
+            continue;
+        }
+
+        try {
+            const srcW = frame.cutWidth;
+            const srcH = frame.cutHeight;
+            const scale = Math.min(1, MINIMAP_MOB_THUMB_MAX_PX / Math.max(srcW, srcH));
+            const outW = Math.max(1, Math.round(srcW * scale));
+            const outH = Math.max(1, Math.round(srcH * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = outW;
+            canvas.height = outH;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) {
+                continue;
+            }
+            ctx.imageSmoothingEnabled = false;
+            ctx.clearRect(0, 0, outW, outH);
+
+            const source = texture.getSourceImage(0) as CanvasImageSource | HTMLImageElement | ImageBitmap | HTMLCanvasElement;
+            if (!source) {
+                continue;
+            }
+
+            // Crop frame from sheet (works for canvas + ImageBitmap sources).
+            ctx.drawImage(
+                source as CanvasImageSource,
+                frame.cutX,
+                frame.cutY,
+                srcW,
+                srcH,
+                0,
+                0,
+                outW,
+                outH,
+            );
+
+            // Soft empty check — do not reject small/translucent sprites (slime etc.).
+            try {
+                const sample = ctx.getImageData(0, 0, outW, outH).data;
+                let opaque = 0;
+                for (let i = 3; i < sample.length; i += 4) {
+                    if (sample[i] > 8) {
+                        opaque += 1;
+                        if (opaque > 2) {
+                            break;
+                        }
+                    }
+                }
+                if (opaque <= 2) {
+                    continue;
+                }
+            } catch {
+                // Some environments block getImageData; still ship the PNG.
+            }
+
+            return canvas.toDataURL('image/png');
+        } catch {
+            continue;
+        }
+    }
+    return undefined;
 }
 
 /**

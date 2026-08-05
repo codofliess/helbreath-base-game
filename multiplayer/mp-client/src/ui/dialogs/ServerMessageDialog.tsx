@@ -47,8 +47,8 @@ export function ServerMessageDialog({
                 <div
                     style={{
                         color: "var(--rpg-parchment)",
-                        fontFamily: "Georgia, serif",
-                        fontSize: "16px",
+                        fontFamily: "Tahoma, MS Sans Serif, Segoe UI, sans-serif",
+                        fontSize: "12px",
                         lineHeight: "1.6",
                         marginBottom: "16px",
                         overflowY: "auto",

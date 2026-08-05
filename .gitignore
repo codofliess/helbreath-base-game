@@ -1,8 +1,38 @@
 node_modules
 .DS_Store
 .pnpm-store
+.firecrawl/
 # Build artifacts (stash rescue)
 middleware/target/
 **/bin/
 **/obj/
 **/Chars/
+middleware-node/.game-authority.json
+middleware-node/.helbreath-devnet-collection.json
+middleware-node/.hell-token.json
+middleware-node/.env
+
+# social-bot secrets (belt + suspenders)
+social-bot/.env
+social-bot/.env.*
+!social-bot/.env.example
+social-bot/*.bak
+social-bot/*.bak-*
+
+# Heavy local artifacts (Drive backup / never GitHub)
+**/publish-*/
+**/dist/
+tmp-*/
+tmp_*
+**/*.tgz
+**/_deploy_*.tgz
+**/*-err.txt
+**/*-out.txt
+**/server-run.*.log
+**/startup-*.log
+**/build-out.txt
+multiplayer/mp-client/build-out.txt
+multiplayer/server/_build_check_out/
+multiplayer/server/Chars/
+**/.env
+!**/.env.example

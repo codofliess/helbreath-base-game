@@ -35,6 +35,34 @@ public static class Config {
     public static Task<NpcConfig[]> LoadNpcsConfig() =>
         LoadJsonAsync<NpcConfig[]>("NPCs.json", "npcs");
 
+    public static Task<ProgressionConfig> LoadProgressionConfig() =>
+        LoadJsonAsync<ProgressionConfig>("Progression.json", "progression");
+
+    public static Task<BeginnerPathConfig> LoadBeginnerPathConfig() =>
+        LoadJsonAsync<BeginnerPathConfig>("BeginnerPath.json", "beginner path");
+
+    public static Task<TournamentConfig> LoadTournamentConfig() =>
+        LoadJsonAsync<TournamentConfig>("Tournament.json", "tournament");
+
+    /// <summary>Arena Pre-Ready kit catalog (starter + credit shop + maps).</summary>
+    public static Task<ArenaKitCatalogConfig> LoadArenaKitCatalogConfig() =>
+        LoadJsonAsync<ArenaKitCatalogConfig>("ArenaKitCatalog.json", "arena kit catalog");
+
+    /// <summary>Loads mutable GM anti-bot / AFK / tournament-AI tool flags from <c>AntiBotTools.json</c>.</summary>
+    public static Task<AntiBotToolsConfig> LoadAntiBotToolsConfig() =>
+        LoadJsonAsync<AntiBotToolsConfig>("AntiBotTools.json", "anti-bot tools");
+
+    /// <summary>Writes <paramref name="config"/> back to <c>Config/AntiBotTools.json</c> so GM toggles survive restart.</summary>
+    public static async Task SaveAntiBotToolsConfigAsync(AntiBotToolsConfig config, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(config);
+        var path = Path.Combine(Directory.GetCurrentDirectory(), "Config", "AntiBotTools.json");
+        var json = JsonSerializer.Serialize(config, new JsonSerializerOptions {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        });
+        await File.WriteAllTextAsync(path, json, cancellationToken);
+    }
+
     /// <summary>Validates NPC catalog entries and builds id lookup for summon and <see cref="Mmorpg.Network.InitialState"/> directory.</summary>
     public static IReadOnlyDictionary<int, NpcConfig> BuildNpcCatalog(NpcConfig[] npcs) {
         ArgumentNullException.ThrowIfNull(npcs);
@@ -139,6 +167,9 @@ public static class Config {
             if (m.RespawnTime is int rt && rt < 0) {
                 throw new InvalidOperationException($"Monsters.json entry at index {i} has negative respawnTime ({rt}).");
             }
+            if (m.HitsToAggro is int hta && hta < 1) {
+                throw new InvalidOperationException($"Monsters.json entry at index {i} has non-positive hitsToAggro ({hta}).");
+            }
             if (m.Spells is { Length: > 0 } spellList) {
                 for (var s = 0; s < spellList.Length; s++) {
                     var e = spellList[s];
@@ -150,12 +181,8 @@ public static class Config {
             }
         }
 
-        for (var i = 0; i < monsters.Length; i++) {
-            if (!idSet.Contains(i)) {
-                throw new InvalidOperationException(
-                    $"Monsters.json ids must be the contiguous range 0..{monsters.Length - 1} (missing id {i}).");
-            }
-        }
+        // Ids need only be unique (not contiguous 0..N-1). Academy/specials may use 100+.
+        // Spawns and lookups use ById; gaps are allowed.
 
         var byId = monsters.ToDictionary(m => m.Id);
         var bySprite = monsters
@@ -182,16 +209,39 @@ public static class Config {
                 }
 
                 if (!spell.DamageType.HasValue) {
-                    throw new InvalidOperationException(
-                        $"Monsters.json entry id {m.Id} spells[{s}] uses buff spell {e.SpellId} ({spell.Name}); monster spells cannot use buff spells.");
-                }
-
-                if (spell.DamageType == (int)DamageType.GroundEffect) {
+                    // Allow hostile debuffs (Paralyze, etc.) for academy / elite mobs; reject self-buffs (PFM/DS).
+                    if (!IsHostileDebuffSpellConfig(spell)) {
+                        throw new InvalidOperationException(
+                            $"Monsters.json entry id {m.Id} spells[{s}] uses buff/self spell {e.SpellId} ({spell.Name}); monsters may only cast damage spells or hostile debuffs (e.g. Paralyze).");
+                    }
+                } else if (spell.DamageType == (int)DamageType.GroundEffect) {
                     throw new InvalidOperationException(
                         $"Monsters.json entry id {m.Id} spells[{s}] uses spellId {e.SpellId} ({spell.Name}) with GroundEffect; monster spells cannot use ground-effect spells.");
                 }
             }
         }
+    }
+
+    /// <summary>Paralyze / poison / chill-style status spells monsters may cast on players (not self PFM/DS).</summary>
+    public static bool IsHostileDebuffSpellConfig(SpellConfig spell) {
+        if (spell.TemporaryEffects is not { Length: > 0 } rows) {
+            return false;
+        }
+        foreach (var row in rows) {
+            var t = row.Type;
+            if (t is (int)TemporaryEffectType.Poison
+                or (int)TemporaryEffectType.ConfuseLanguage
+                or (int)TemporaryEffectType.Confusion
+                or (int)TemporaryEffectType.Illusion
+                or (int)TemporaryEffectType.IllusionMovement
+                or (int)TemporaryEffectType.Inhibition
+                or (int)TemporaryEffectType.Paralyze
+                or (int)TemporaryEffectType.Chill
+                or (int)TemporaryEffectType.Sleep) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>Validates optional <c>movementSpeedModifier</c> / <c>attackSpeedModifier</c> / <c>castSpeedModifier</c> on a spell temporary-effect row.</summary>
@@ -235,25 +285,53 @@ public static class Config {
                 throw new InvalidOperationException($"Duplicate spell id {spell.Id} in Spells.json.");
             }
             if (!spell.DamageType.HasValue) {
-                if (spell.TemporaryEffects is not { Length: > 0 } buffRows) {
-                    throw new InvalidOperationException(
-                        $"Spells.json entry at index {i} (id {spell.Id}) has no damageType and must define temporaryEffects.");
-                }
-                foreach (var row in buffRows) {
-                    ValidateSpellTimedEffectSpeedModifiers(i, spell.Id, row);
-                    if (row.Group < 0) {
+                if (spell.PickupGroundItem == true) {
+                    if (spell.TemporaryEffects is not null) {
                         throw new InvalidOperationException(
-                            $"Spells.json entry at index {i} (id {spell.Id}) has negative group ({row.Group}).");
+                            $"Spells.json entry at index {i} (id {spell.Id}) is a ground-item pickup spell and must not define temporaryEffects.");
                     }
-                    if (row.Duration <= 0) {
+                    if (spell.AoeRadius is not null) {
                         throw new InvalidOperationException(
-                            $"Spells.json entry at index {i} (id {spell.Id}) temporary effect must define positive duration (ms).");
+                            $"Spells.json entry at index {i} (id {spell.Id}) is a ground-item pickup spell and must not define aoeRadius.");
+                    }
+                } else if (spell.HealDiceCount is not null) {
+                    if (spell.HealDiceCount <= 0 || spell.HealDiceSides is not int sides || sides <= 0) {
+                        throw new InvalidOperationException(
+                            $"Spells.json entry at index {i} (id {spell.Id}) heal dice must be positive (count/sides).");
+                    }
+                    if (spell.TemporaryEffects is not null) {
+                        throw new InvalidOperationException(
+                            $"Spells.json entry at index {i} (id {spell.Id}) heal spell must not define temporaryEffects.");
+                    }
+                } else if (spell.CreateFood == true || spell.CurePoison == true || spell.ClearTemporaryEffects == true ||
+                           spell.SummonCreature == true || spell.Recall == true) {
+                    if (spell.TemporaryEffects is not null) {
+                        throw new InvalidOperationException(
+                            $"Spells.json entry at index {i} (id {spell.Id}) utility spell must not define temporaryEffects.");
+                    }
+                } else if (spell.TemporaryEffects is not { Length: > 0 } buffRows) {
+                    throw new InvalidOperationException(
+                        $"Spells.json entry at index {i} (id {spell.Id}) has no damageType and must define temporaryEffects or a utility flag.");
+                } else {
+                    foreach (var row in buffRows) {
+                        ValidateSpellTimedEffectSpeedModifiers(i, spell.Id, row);
+                        if (row.Group < 0) {
+                            throw new InvalidOperationException(
+                                $"Spells.json entry at index {i} (id {spell.Id}) has negative group ({row.Group}).");
+                        }
+                        if (row.Duration <= 0) {
+                            throw new InvalidOperationException(
+                                $"Spells.json entry at index {i} (id {spell.Id}) temporary effect must define positive duration (ms).");
+                        }
+                        if (row.Type == (int)TemporaryEffectType.Poison && (spell.PoisonLevel is not int pl || pl <= 0)) {
+                            throw new InvalidOperationException(
+                                $"Spells.json entry at index {i} (id {spell.Id}) Poison temporary effect requires positive poisonLevel.");
+                        }
                     }
                 }
-                if (spell.AoeRadius is not null) {
-                    throw new InvalidOperationException(
-                        $"Spells.json entry at index {i} is a buff spell and must not define aoeRadius.");
-                }
+            } else if (spell.PickupGroundItem == true) {
+                throw new InvalidOperationException(
+                    $"Spells.json entry at index {i} (id {spell.Id}) defines pickupGroundItem but also has damageType.");
             } else if (spell.DamageType != (int)DamageType.RectangleAoe &&
                 spell.DamageType != (int)DamageType.ConeAoe &&
                 spell.DamageType != (int)DamageType.LinearAoe &&
@@ -269,9 +347,14 @@ public static class Config {
                         throw new InvalidOperationException(
                             $"Spells.json entry at index {i} (id {spell.Id}) must not define Invisibility in temporaryEffects on a damage spell.");
                     }
-                    if (row.Type != (int)TemporaryEffectType.Chill) {
+                    if (row.Type != (int)TemporaryEffectType.Chill &&
+                        row.Type != (int)TemporaryEffectType.Poison) {
                         throw new InvalidOperationException(
                             $"Spells.json entry at index {i} (id {spell.Id}) has unsupported on-hit temporary effect type {row.Type}.");
+                    }
+                    if (row.Type == (int)TemporaryEffectType.Poison && (spell.PoisonLevel is not int plHit || plHit <= 0)) {
+                        throw new InvalidOperationException(
+                            $"Spells.json entry at index {i} (id {spell.Id}) Poison on-hit requires positive poisonLevel.");
                     }
                     if (row.Group < 0) {
                         throw new InvalidOperationException(
@@ -285,6 +368,19 @@ public static class Config {
             }
             if (spell.AoeRadius is int aoeRadius && aoeRadius < 0) {
                 throw new InvalidOperationException($"Spells.json entry at index {i} has negative aoeRadius ({aoeRadius}).");
+            }
+            if (spell.ArmorLifeDecrement is int armorLifeDecrement && armorLifeDecrement < 0) {
+                throw new InvalidOperationException($"Spells.json entry at index {i} has negative armorLifeDecrement ({armorLifeDecrement}).");
+            }
+            if (spell.MaxHitsPerTarget is int maxHitsPerTarget && maxHitsPerTarget < 1) {
+                throw new InvalidOperationException($"Spells.json entry at index {i} has non-positive maxHitsPerTarget ({maxHitsPerTarget}).");
+            }
+            if (spell.MaxHitsPerTarget is not null &&
+                spell.DamageType is int multiHitDt &&
+                multiHitDt != (int)DamageType.ConeAoe &&
+                multiHitDt != (int)DamageType.LinearAoe) {
+                throw new InvalidOperationException(
+                    $"Spells.json entry at index {i} (id {spell.Id}) maxHitsPerTarget is only valid for ConeAoe or LinearAoe.");
             }
             if (spell.Group is int group && group < 0) {
                 throw new InvalidOperationException($"Spells.json entry at index {i} has negative group ({group}).");
@@ -693,7 +789,11 @@ public record NpcConfig(int Id, string Name);
 /// <summary>Optional spell cast entry for <see cref="MonsterConfig.Spells"/>: <c>spellId</c> matches <c>Spells.json</c>; <c>castProbability</c> is an independent roll each AI tick (0–1).</summary>
 public record MonsterSpellEntry(int SpellId, double CastProbability);
 
-/// <summary>One loot row for <see cref="MonsterConfig.Loot"/>: independent roll on death using <c>chance</c> (0–1).</summary>
+/// <summary>
+/// One loot row for <see cref="MonsterConfig.Loot"/>: <c>chance</c> is 0–1.
+/// Gold and multi-drop bosses (Wyvern/Abaddon) still roll each row independently;
+/// normal monsters cap accepted non-gold rows to one primary + one rare (see <c>MonsterLoot</c>).
+/// </summary>
 public record MonsterLootEntry(int ItemId, double Chance, int MinQuantity = 1, int MaxQuantity = 1);
 
 /// <summary>Server-authoritative monster catalog entry: stable id for world dwell config, display name, client sprite id, default step duration in ms (0 = no movement; melee when a player is in range still applies), optional chase distance in Chebyshev cells (default at spawn when omitted), optional max chase follow distance in cells, optional melee attack range in cells (default 1 when omitted), optional attack animation duration in ms, optional damage roll bounds (defaults from settings when omitted), optional post-hit AI idle gate extension in ms (defaults from settings when omitted), optional wander rest duration bounds in ms (defaults from settings when omitted), optional hit mode (<see cref="AttackType"/>, default <see cref="AttackType.NoInterrupt"/>), optional auto-aggro allegiance (<see cref="MonsterAllegiance"/>, default <see cref="MonsterAllegiance.Hostile"/>), optional player stunlock duration in ms after a <see cref="AttackType.Stun"/> hit only (ignored for <see cref="AttackType.Interrupt"/>; default 100 when omitted; JSON <c>attackStunDuration</c>), optional ranged attacks (JSON <c>rangedAttack</c>) using <c>arrowSpeed</c> for damage delay, optional <see cref="Spells"/> for AI spell casts.</summary>
@@ -724,10 +824,81 @@ public record MonsterConfig(
     int? RespawnTime = null,
     /// <summary>Optional AI spell list; each entry references <c>Spells.json</c> by id (ground-effect spells are rejected at startup).</summary>
     MonsterSpellEntry[]? Spells = null,
-    /// <summary>Optional death loot table; each entry rolls independently when the monster dies.</summary>
+    /// <summary>Optional death loot table; see <see cref="MonsterLootEntry"/> / <c>MonsterLoot</c> for roll caps.</summary>
     MonsterLootEntry[]? Loot = null,
     /// <summary>Olympia loot gen tier (1–10); caps magic attribute values on drops. Ettin=10.</summary>
-    int? GenLevel = null);
+    int? GenLevel = null,
+    /// <summary>Olympia <c>Npc.cfg</c> magic level (ML). Positive = offensive ladder; negative = guard ladder; 0 = no magic AI.</summary>
+    int? MagicLevel = null,
+    /// <summary>Olympia max mana pool for NPC casts; regen ticks when |ML| &gt; 0.</summary>
+    int? MaxMana = null,
+    /// <summary>Olympia magic hit ratio (MHR) used as spell accuracy seed (stored for parity / future resist rolls).</summary>
+    int? MagicHitRatio = null,
+    /// <summary>
+    /// Player damage hits required before this monster retaliates (damage aggro). Default 1.
+    /// Unicorns use 2: stay passive on the first hit, chase only after the second hit from that player.
+    /// Only meaningful for <see cref="MonsterAllegiance.Neutral"/> (hostiles auto-aggro on sight).
+    /// </summary>
+    int? HitsToAggro = null);
+
+/// <summary>One guaranteed-reward milestone row in <c>Progression.json</c>: kill-count (<c>kind</c> 0, uses <c>monsterId</c>) or rebirth (<c>kind</c> 1). The player picks one item from <c>rewardItemIds</c> when claiming.</summary>
+public record KillMilestoneConfig(
+    string Id,
+    int Kind,
+    int? MonsterId,
+    long Required,
+    int[] RewardItemIds);
+
+/// <summary>Olympia-style progression tunables from <c>Progression.json</c>: exp curve caps, rebirth pacing, and guaranteed-reward milestones.</summary>
+public record ProgressionConfig(
+    int MaxLevel,
+    int MaxRebirth,
+    /// <summary>
+    /// Live Olympia scale after NpcExpCatalog base (capped ExpDice×HD + rare overrides).
+    /// Calibrated L33 RB0: Slime≈1140, Ant≈3400, Orc≈3500, Scorpion≈5940, Cyclops≈17000. Factor 65.
+    /// </summary>
+    double MonsterExpFactor,
+    /// <summary>
+    /// Extra scale on required exp curve per rebirth: required *= (1 + step × rebirth).
+    /// Olympia live uses 0 (curve unchanged); exp rate is reduced via <see cref="RebirthExpObtainRate"/> instead.
+    /// </summary>
+    double RebirthExpMultiplierStep,
+    KillMilestoneConfig[] Milestones,
+    /// <summary>Unspent LU points granted per rebirth (6 × 10 RB ≈ +20 effective levels → L150 ≈ L170 stats).</summary>
+    int RebirthLuPoints = 6,
+    /// <summary>
+    /// Olympia wiki: exp obtained *= rate^rebirth (default 0.8 → RB1=80%, RB2=64%, …).
+    /// At <see cref="FullExpObtainFromLevel"/> and above, obtained rate is forced to 100%.
+    /// </summary>
+    double RebirthExpObtainRate = 0.8,
+    /// <summary>Olympia wiki: “Experience is 100% at 140 regardless of rebirth.”</summary>
+    int FullExpObtainFromLevel = 140,
+    /// <summary>
+    /// Chain Lords: level after rebirth (not Olympia L1). Default 79 — mid bracket before PL caps.
+    /// </summary>
+    int RebirthResetLevel = 79);
+
+/// <summary>One beginner-path quest row from <c>BeginnerPath.json</c> (optional guided 1→80 training).</summary>
+public record BeginnerQuestConfig(
+    string Id,
+    string Tier,
+    string Status,
+    int LevelGuideMin,
+    int LevelGuideMax,
+    string Title,
+    string Hint,
+    string ObjectiveKind,
+    int Required,
+    int? MonsterId = null,
+    string[]? WorldIds = null,
+    int? CatalogNpcId = null,
+    /// <summary>Shop item catalog ids that credit a <c>buy_item</c> objective (any match).</summary>
+    int[]? ItemIds = null,
+    /// <summary>Client UI action id for <c>ui_action</c> objectives (e.g. <c>open_party</c>).</summary>
+    string? UiActionId = null);
+
+/// <summary>Catalog root for the optional beginner training path.</summary>
+public record BeginnerPathConfig(BeginnerQuestConfig[] Quests);
 
 /// <summary>Ranged vs melee for catalog <c>weaponType</c> (JSON and <see cref="Mmorpg.Network.ItemDirectoryEntry"/>).</summary>
 public enum ItemWeaponType {
@@ -752,7 +923,13 @@ public record ItemConfig(
     /// <summary>When set, only this gender may equip the item; 0 = male, 1 = female (matches <see cref="Mmorpg.Network.PlayerGender"/>).</summary>
     int? Gender = null,
     /// <summary>Olympia <c>Item.cfg</c> effect type for magic rolls (1=attack, 2=defense, 13=mana-save wand). Inferred from <c>itemType</c> when omitted.</summary>
-    int? OlympiaEffectType = null);
+    int? OlympiaEffectType = null,
+    /// <summary>Olympia <c>m_wMaxLifeSpan</c>; durable gear uses values &gt; 1.</summary>
+    int? MaxLifeSpan = null,
+    /// <summary>Olympia list price (gold) used for Tom repair cost.</summary>
+    int? Price = null,
+    /// <summary>Olympia item category (1–10 = Tom weapons/shields/armor; 46 = rings Shop Keeper repairs).</summary>
+    int? Category = null);
 
 /// <summary>One timed effect row from <c>Spells.json</c> <c>temporaryEffects</c>; <c>duration</c> is ms. Optional modifiers are additive to 1 for speed: effective duration ms = base / (1 + sum(modifiers)); see <see cref="TemporaryEffectSpeedModifierMath"/>.</summary>
 public record SpellTimedEffectSpec(
@@ -764,7 +941,7 @@ public record SpellTimedEffectSpec(
     double? CastSpeedModifier = null);
 
 /// <summary>Server-authoritative spell catalog entry loaded from <c>Spells.json</c>.</summary>
-/// <remarks>For <see cref="DamageType.LinearAoe"/>, <c>projectileSpeed</c> is optional (omitted when the server does not need travel-time delay for damage; clients may use it for visuals when set). For <see cref="DamageType.SingleCell"/>, omit <c>aoeRadius</c> and <c>duration</c>; damage resolves immediately on cast. For <see cref="DamageType.GroundEffect"/>, define <c>group</c> and <c>duration</c>; <c>tickRate</c> is optional and, when set, makes the effect deal periodic damage. When <c>tickRate</c> is omitted, the effect is step-on-only until expiry. <c>aoeRadius</c> is optional and expands placement around the target cell. For <see cref="DamageType.RectangleAoe"/> with projectile-delayed damage, when <c>projectileDistance</c> is set, travel time uses that fixed pixel distance instead of caster-to-target distance. Optional <c>attackType</c> matches <see cref="AttackType"/> (default <see cref="AttackType.Interrupt"/> when omitted). <see cref="DamageType.GroundEffect"/> with <see cref="AttackType.Knockback"/> is applied as <see cref="AttackType.Stun"/> using the caster&apos;s <c>attackStunDuration</c>. Buff-only spells omit <c>damageType</c> and use <c>temporaryEffects</c> (Invisibility). Damage spells may list <c>temporaryEffects</c> for on-hit debuffs (e.g. Chill). For <see cref="DamageType.GroundEffect"/>, those debuffs apply each time damage is delivered (each periodic tick or step-on hit), subject to group stacking rules.</remarks>
+/// <remarks>For <see cref="DamageType.LinearAoe"/>, <c>projectileSpeed</c> is optional (omitted when the server does not need travel-time delay for damage; clients may use it for visuals when set). For <see cref="DamageType.SingleCell"/>, omit <c>aoeRadius</c> and <c>duration</c>; damage resolves immediately on cast. For <see cref="DamageType.GroundEffect"/>, define <c>group</c> and <c>duration</c>; <c>tickRate</c> is optional and, when set, makes the effect deal periodic damage. When <c>tickRate</c> is omitted, the effect is step-on-only until expiry. <c>aoeRadius</c> is optional and expands placement around the target cell. For <see cref="DamageType.RectangleAoe"/> with projectile-delayed damage, when <c>projectileDistance</c> is set, travel time uses that fixed pixel distance instead of caster-to-target distance. Optional <c>attackType</c> matches <see cref="AttackType"/> (default <see cref="AttackType.Interrupt"/> when omitted). <see cref="DamageType.GroundEffect"/> with <see cref="AttackType.Knockback"/> is applied as <see cref="AttackType.Stun"/> using the caster&apos;s <c>attackStunDuration</c>. Buff-only spells omit <c>damageType</c> and use <c>temporaryEffects</c>, heal dice, create-food, cure, cancellation, or summon flags. Damage spells may list <c>temporaryEffects</c> for on-hit debuffs (e.g. Chill). For <see cref="DamageType.GroundEffect"/>, those debuffs apply each time damage is delivered (each periodic tick or step-on hit), subject to group stacking rules.</remarks>
 public record SpellConfig(
     int Id,
     string Name,
@@ -788,7 +965,45 @@ public record SpellConfig(
     /// <summary>When true, clients may send optional aim-assist target ids on <c>SpellCastRequest</c> to snap the cast cell to that entity.</summary>
     bool? AimAssist = null,
     /// <summary>Buff-only and/or on-hit timed effects; JSON <c>temporaryEffects</c>; each <c>duration</c> is ms.</summary>
-    SpellTimedEffectSpec[]? TemporaryEffects = null);
+    SpellTimedEffectSpec[]? TemporaryEffects = null,
+    /// <summary>When true, cast resolves by picking up the top-most ground item on the target cell (Possession).</summary>
+    bool? PickupGroundItem = null,
+    /// <summary>Olympia Magic.cfg effect4/5/6: <c>iDice(count, sides) + bonus</c> before Mag scaling.</summary>
+    int? DamageDiceCount = null,
+    int? DamageDiceSides = null,
+    int? DamageDiceBonus = null,
+    /// <summary>Olympia HPUP_SPOT heal: <c>iDice(healDiceCount, healDiceSides) + healBonus</c>.</summary>
+    int? HealDiceCount = null,
+    int? HealDiceSides = null,
+    int? HealBonus = null,
+    /// <summary>When true, drops Meat or Baguette on the target cell (Olympia CREATE food).</summary>
+    bool? CreateFood = null,
+    /// <summary>When true, removes Poison temporary effect from the target (Olympia Cure).</summary>
+    bool? CurePoison = null,
+    /// <summary>When true, clears all temporary effects on the target (Olympia Cancellation).</summary>
+    bool? ClearTemporaryEffects = null,
+    /// <summary>When true, spawns a friendly follower near the caster (Olympia Summon-Creature; tier from caster level).</summary>
+    bool? SummonCreature = null,
+    /// <summary>When true, recalls the caster to the guarded farm (L&lt;80) or city (L≥80) teleporter pad.</summary>
+    bool? Recall = null,
+    /// <summary>Olympia poison level for <see cref="TemporaryEffectType.Poison"/> DoT ticks (<c>iDice(1, poisonLevel)</c>).</summary>
+    int? PoisonLevel = null,
+    /// <summary>Olympia <c>ArmorLifeDecrement</c> amount (Magic.cfg value10); Armor Break uses 15.</summary>
+    int? ArmorLifeDecrement = null,
+    /// <summary>
+    /// Olympia ICE_LINEAR / DAMAGE_LINEAR multi-hit cap per target (path samples + end area; each hit re-rolls MR).
+    /// Blizzard ~5, Bloody Shock Wave / FOT-like ~4, Earth Shock Wave ~6. Omit for single-hit unique targets.
+    /// </summary>
+    int? MaxHitsPerTarget = null,
+    /// <summary>Flat +N to magic hit chance (e.g. Mass Blizzard +10).</summary>
+    int? HitChanceBonus = null,
+    /// <summary>Post-dice damage scale (e.g. Mass Blizzard 1.05 = +5% vs normal Blizzard).</summary>
+    double? DamageMultiplier = null,
+    /// <summary>
+    /// Minimum effective INT (angel + gear) required to cast. e.g. Cancellation / Inhibition Casting = 215
+    /// so the mage needs Angel +15 INT active.
+    /// </summary>
+    int? RequiredInt = null);
 
 /// <summary>Optional axis-aligned dwell rectangle in map tiles; when omitted, worlds use full map bounds for that dwell entry.</summary>
 public record GameWorldDwellAreaBoundsConfig(int X1, int Y1, int X2, int Y2);
@@ -799,6 +1014,13 @@ public record GameWorldDwellAreaConfig(int MonsterId, int Count, GameWorldDwellA
 /// <summary>One catalog NPC placed at world creation; <see cref="Direction"/> is grid facing 0–7 (matches client direction indices).</summary>
 public record GameWorldNpcPlacementConfig(int NpcId, int X, int Y, int Direction);
 
+/// <summary>Static pickaxe/mining node placement (Promise Land Dungeons coal/crystal). Server may enforce interact later.</summary>
+public record GameWorldMiningNodeConfig(
+    /// <summary>0 = coal / common ore, 1 = crystal (rare).</summary>
+    int Kind,
+    int X,
+    int Y);
+
 /// <summary>Static definition of one playable world instance (id, display name, map asset, optional fixed worker, optional teleports, optional monster dwell spawns, optional fixed NPC placements).</summary>
 public record GameWorldConfig(
     string Id,
@@ -808,7 +1030,148 @@ public record GameWorldConfig(
     int? WorkerThread = null,
     GameWorldTeleportConfig[]? TeleportLocs = null,
     GameWorldDwellAreaConfig[]? DwellAreas = null,
-    GameWorldNpcPlacementConfig[]? Npcs = null);
+    GameWorldNpcPlacementConfig[]? Npcs = null,
+    /// <summary>When true this world is a tournament arena: entrants get the standardized max-level loadout from <c>Tournament.json</c> and their real character state is stashed and restored on exit.</summary>
+    bool? TournamentArena = null,
+    /// <summary>When true this world is the skill-practice training arena (dummies / tip protocols). Does not apply tournament loadout or rated Elo — see <c>docs/TRAINING-ARENA.md</c>.</summary>
+    bool? TrainingArena = null,
+    /// <summary>Optional map default weather string matching client modes (<c>dry</c>, <c>rain-light</c>, … <c>snow-heavy</c>). Applied at world construction.</summary>
+    string? DefaultWeather = null,
+    /// <summary>Max character level allowed to enter / stay (inclusive). Null = no cap. PL outdoor 110, PL Dungeons 120.</summary>
+    int? MaxPlayerLevel = null,
+    /// <summary>Min character level allowed to enter (inclusive). Null = no floor.</summary>
+    int? MinPlayerLevel = null,
+    /// <summary>Optional mining node placements (coal / crystal) for dungeon maps.</summary>
+    GameWorldMiningNodeConfig[]? MiningNodes = null);
+
+/// <summary>One equipped slot of the standardized tournament loadout; exactly one of <see cref="Any"/> or the gender pair should be set.</summary>
+public record TournamentLoadoutEquipEntry(int? Any = null, int? Male = null, int? Female = null);
+
+/// <summary>One bag stack granted with the tournament loadout (e.g. potions).</summary>
+public record TournamentLoadoutBagEntry(int ItemId, int Quantity);
+
+/// <summary>Standardized equal-footing loadout applied to every player entering a tournament arena world (<c>Tournament.json</c>).</summary>
+public record TournamentLoadoutConfig(TournamentLoadoutEquipEntry[] Equipped, TournamentLoadoutBagEntry[]? BagItems = null);
+
+/// <summary>Tournament arena tunables from <c>Tournament.json</c>: the equal-footing loadout every entrant receives.</summary>
+public record TournamentConfig(TournamentLoadoutConfig Loadout);
+
+/// <summary>Arena crit regen override (e.g. +5 every 30s, cap 15).</summary>
+public record ArenaCritRegenConfig(int ChargesPerTick = 5, int IntervalMs = 30000, int MaxCharges = 15);
+
+/// <summary>One starter equip piece (hero set / fixed jewelry).</summary>
+public record ArenaStarterEquipConfig(int ItemId, string? Slot = null, string? Name = null, string? Note = null, int? MaxLifeSpan = null);
+
+/// <summary>
+/// Free bag cape. Prefer CIC (Charge Critical, Olympia cap total 20) and/or MC + MP regen.
+/// Plain capes with no magic must not be granted. CIC free cape may also carry HP regen 50%.
+/// </summary>
+public record ArenaFreeCapeConfig(
+    int ItemId,
+    string? Name = null,
+    int ManaConvertPct = 0,
+    int HpRegenPct = 0,
+    int MpRegenPct = 0,
+    /// <summary>Critical Increase / Charge Critical nibble (1–15; total equip CIC soft-capped at 20).</summary>
+    int CriticalIncrease = 0);
+
+/// <summary>One piece inside a free armor set (gender-resolved item ids).</summary>
+public record ArenaFreeArmorPieceConfig(
+    string? Slot = null,
+    int ItemIdMale = 0,
+    int ItemIdFemale = 0,
+    string? Name = null);
+
+/// <summary>
+/// Free armor set granted in bag for every arena fighter (HP50 / MP50 mage+war layouts).
+/// Not purchased with credits.
+/// </summary>
+public record ArenaFreeArmorSetConfig(
+    string? Id = null,
+    string? Label = null,
+    /// <summary>hp50 | mp50</summary>
+    string? Magic = null,
+    ArenaFreeArmorPieceConfig[]? Pieces = null);
+
+/// <summary>Free angelic pendant granted in bag at +MajesticPlus.</summary>
+public record ArenaAngelConfig(int ItemId, string? Name = null, int MajesticPlus = 15);
+
+/// <summary>Potion choice for the free pool (red/blue/candy).</summary>
+public record ArenaPotionChoiceConfig(int ItemId, string? Sku = null, string? Name = null, int? SpRestorePct = null);
+
+/// <summary>Starter block of <c>ArenaKitCatalog.json</c>.</summary>
+public record ArenaStarterConfig(
+    ArenaStarterEquipConfig[]? HeroSetMale = null,
+    ArenaStarterEquipConfig[]? HeroSetFemale = null,
+    /// <summary>Olympia war Hero: Helm + Armor (high DR/PA). Prefer over legacy heroSet* when path=war.</summary>
+    ArenaStarterEquipConfig[]? HeroSetWarMale = null,
+    ArenaStarterEquipConfig[]? HeroSetWarFemale = null,
+    /// <summary>Olympia mage Hero: Cap + Robe. Prefer when path=mage.</summary>
+    ArenaStarterEquipConfig[]? HeroSetMageMale = null,
+    ArenaStarterEquipConfig[]? HeroSetMageFemale = null,
+    ArenaStarterEquipConfig[]? FixedEquipped = null,
+    ArenaFreeCapeConfig[]? FreeCapesInBag = null,
+    /// <summary>Free HP50/MP50 armor sets (both mage + war layouts) in bag for everyone.</summary>
+    ArenaFreeArmorSetConfig[]? FreeArmorInBag = null,
+    ArenaAngelConfig[]? AngelsInBag = null,
+    ArenaPotionChoiceConfig[]? PotionChoices = null);
+
+/// <summary>One credit-shop SKU.</summary>
+public record ArenaCatalogSkuConfig(
+    string Sku,
+    string? Label = null,
+    int Cost = 0,
+    string[]? Tags = null,
+    int? ItemId = null,
+    int? Plus = null,
+    bool? PerUse = null,
+    bool? Stackable = null,
+    int? DurationMs = null,
+    int? SaDurationMs = null,
+    int? SaCooldownMs = null,
+    int? ArenaUsesPerRound = null,
+    string[]? BundleSkus = null,
+    string? Note = null,
+    string? SpellName = null);
+
+/// <summary>Full <c>ArenaKitCatalog.json</c> root.</summary>
+public record ArenaKitCatalogConfig(
+    int Version = 1,
+    int StarterCredits = 1000,
+    int StatTotalPoints = 517,
+    int StatMinPer = 10,
+    int Level = 150,
+    ArenaCritRegenConfig? CritRegen = null,
+    int PotionPool = 30,
+    int SkillsPick100 = 4,
+    int SkillsPick50 = 4,
+    int[]? PvpSkillIds = null,
+    int[]? GatheringSkillIdsExcluded = null,
+    ArenaStarterConfig? Starter = null,
+    ArenaCatalogSkuConfig[]? Catalog = null);
+
+/// <summary>
+/// Mutable GM anti-bot / capacity / tournament-AI tool flags and tunables (<c>AntiBotTools.json</c>).
+/// Defaults match product philosophy: AFK on map allowed; other gates off until ops enable them.
+/// </summary>
+public record AntiBotToolsConfig(
+    bool GuildPriorityIngress = false,
+    bool NewPlayerSegment = false,
+    bool ClaimTimeSybilGate = false,
+    bool IndustrialMultiBoxLimits = false,
+    bool AfkOnMapAllowed = true,
+    bool TournamentInhumanPlayTelemetry = false,
+    bool TournamentHighStakesMode = false,
+    bool SoftOfflineProgression = false,
+    int MaxConcurrentSessions = 8,
+    int ActionRateCeilingPerMin = 600,
+    int AfkWarnAfterMs = 300_000,
+    int AfkKickAfterMs = 600_000,
+    int SoftOfflineXpPerTick = 1,
+    int SoftOfflineTickMs = 60_000,
+    int NearCapacityOnline = 3500,
+    string UpdatedBy = "bootstrap",
+    long UpdatedAtMs = 0);
 
 /// <summary>Thresholds for detecting impossibly fast movement and applying server-side paralysis.</summary>
 public record MovementSpeedViolationCheckConfig(bool Verbose, int Limit, int Window, int SegmentsPerWindow, int ParalysisDuration, int MaxPingVariance);
@@ -880,4 +1243,9 @@ public record SettingsConfig(
     /// <summary>When true, serialize outbound protobuf with <c>MessageExtensions.WriteTo(Span&lt;byte&gt;)</c> instead of <see cref="System.IO.MemoryStream"/> + <see cref="Google.Protobuf.CodedOutputStream"/>; JSON <c>enableZeroCopyProtobufTransfer</c> in <c>Settings.json</c>. Produces less garbage, but in benchmarks reduces throughput versus the stream path.</summary>
     bool EnableZeroCopyProtobufTransfer = false,
     /// <summary>After this many consecutive outbound encode/send failures (excluding cancellation), cancel the connection receive loop. Zero disables the circuit breaker. JSON <c>maxConsecutiveOutboundSendFailures</c>.</summary>
-    int MaxConsecutiveOutboundSendFailures = 10);
+    int MaxConsecutiveOutboundSendFailures = 10,
+    /// <summary>
+    /// Single WebSocket dual outbound queues: combat/movement/vitals before chat/auction/warehouse.
+    /// Rollback: set <c>enableMessagePriorityQueue</c> false in Settings.json and restart.
+    /// </summary>
+    bool EnableMessagePriorityQueue = true);

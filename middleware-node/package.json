@@ -1,9 +1,15 @@
 {
   "name": "middleware-node",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Helbreath Chain Lords middleware — auth, market side door, hell, tournaments",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.18.0"
+  },
   "scripts": {
+    "start": "node server.js",
+    "init-devnet-collection": "node scripts/init-devnet-collection.js",
+    "init-hell-token": "node scripts/init-hell-token.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,9 +17,18 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@metaplex-foundation/mpl-bubblegum": "^5.0.2",
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@metaplex-foundation/umi": "^1.5.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
+    "@metaplex-foundation/umi-eddsa-web3js": "^1.5.1",
+    "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.98.4",
     "body-parser": "^2.2.2",
+    "bs58": "^6.0.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.16.0",
+    "tweetnacl": "^1.0.3"
   }
 }

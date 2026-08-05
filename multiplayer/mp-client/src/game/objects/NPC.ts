@@ -20,6 +20,8 @@ type NPCConfig = {
     soundManager: SoundManager;
     map: HBMap;
     npcId: string;
+    /** Server NPC catalog id (Shop Keeper=0, Gandalf=1, …). */
+    catalogNpcId: number;
 };
 
 /**
@@ -33,6 +35,9 @@ export class NPC extends GameObject {
 
     /** Unique NPC instance id from server (int64 as string on the wire). */
     private npcId: string;
+
+    /** Server catalog id for role/interaction routing. */
+    private catalogNpcId: number;
 
     /** Whether the NPC is destroyed */
     private dead: boolean = false;
@@ -68,6 +73,7 @@ export class NPC extends GameObject {
 
         this.displayName = config.displayName;
         this.npcId = config.npcId;
+        this.catalogNpcId = config.catalogNpcId;
         const dir = toDirection(config.direction);
         this.direction = dir === Direction.None ? Direction.South : dir;
 
@@ -116,6 +122,10 @@ export class NPC extends GameObject {
 
     public getNPCId(): string {
         return this.npcId;
+    }
+
+    public getCatalogNpcId(): number {
+        return this.catalogNpcId;
     }
 
     public destroy(): void {

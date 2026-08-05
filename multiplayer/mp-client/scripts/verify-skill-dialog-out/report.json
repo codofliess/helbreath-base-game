@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "blockers": [
+    "world entry failed — forcing helbreath-game-active for F8"
+  ],
+  "checks": [
+    {
+      "name": "skill-dialog-visible",
+      "pass": true
+    },
+    {
+      "name": "max-shows-description",
+      "pass": true,
+      "detail": "Mining\nProgress\n100% / 100%\n\nGather ore and minerals from deposits. Higher mastery improves yield and success chance."
+    },
+    {
+      "name": "max-shows-progress",
+      "pass": true
+    },
+    {
+      "name": "click-fishing-progress",
+      "pass": true,
+      "detail": "Fishing\nProgress\n42% / 100%\n\nReach 100% to unlock what this skill does."
+    },
+    {
+      "name": "non-max-hides-description",
+      "pass": true
+    },
+    {
+      "name": "wheel-reaches-last-skills",
+      "pass": true
+    },
+    {
+      "name": "scrollbar-buttons",
+      "pass": true,
+      "count": 2
+    }
+  ]
+}

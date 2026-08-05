@@ -32,6 +32,11 @@ export interface EffectConfig {
     drawLightRadius?: boolean;
     offsetX?: number;
     offsetY?: number;
+    /**
+     * Uniform sprite scale (default 1). Ground-field VFX (poison cloud / fire) need ~1.5–2×
+     * so native frames match Olympia tile coverage (classic 32px tiles, large effect frames).
+     */
+    scale?: number;
 }
 
 export const EFFECT_RESURRECTION = 'resurrection';
@@ -218,7 +223,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect3',
         spriteSheetIndex: 4,
         frameRate: 10,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Fire Ball Explosion',
@@ -313,6 +318,8 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect',
         spriteSheetIndex: 9,
         frameRate: 10,
+        // Olympia fire field uses effect.spr sheet9 (~40×90) per tile; 1.75× fills the cell like classic.
+        scale: 1.75,
     },
     {
         name: 'Positional Fire 2',
@@ -320,6 +327,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect11',
         spriteSheetIndex: 0,
         frameRate: 10,
+        scale: 1.75,
     },
     {
         name: 'Positional Fire 3',
@@ -327,6 +335,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect11',
         spriteSheetIndex: 4,
         frameRate: 10,
+        scale: 1.75,
     },
     {
         name: 'Positional Crimson Fire',
@@ -421,6 +430,9 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect4',
         spriteSheetIndex: 4,
         frameRate: 10,
+        // Olympia PutTransSprite50 on m_pEffectSpr[23] (effect4 sheet4) covers ~2+ tiles at native size.
+        // Our FOV/zoom made the same 73×43 frame read tiny — 2× matches classic field coverage.
+        scale: 2,
     },
     {
         name: 'Earth Worm Attack Jaws',
@@ -613,7 +625,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 1,
         animationFrames: [28, 32],
         frameRate: 10,
-        depthOffset: -1,
+        depthOffset: 70
     },
     {
         name: 'Wet splash',
@@ -622,7 +634,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 1,
         animationFrames: [20, 23],
         frameRate: 10,
-        depthOffset: -1,
+        depthOffset: 70
     },
     {
         name: 'Vortex (bugged)',
@@ -745,7 +757,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 1,
         frameRate: 15,
         sound: EFFECT_CAST,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Weapon Special Power Activation 1',
@@ -753,7 +765,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect5',
         spriteSheetIndex: 3,
         frameRate: 15,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Weapon Special Power Activation 2 (bugged)',
@@ -783,7 +795,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect5',
         spriteSheetIndex: 7,
         frameRate: 10,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Stamina Drain',
@@ -832,7 +844,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 1,
         frameRate: 10,
         sound: EFFECT_CAST,
-        depthOffset: -1,
+        depthOffset: 70
     },
     {
         name: 'Illusion Movement Base',
@@ -841,7 +853,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 2,
         frameRate: 10,
         sound: EFFECT_CAST,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Illusion Movement Torrent',
@@ -857,7 +869,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 5,
         frameRate: 10,
         sound: EFFECT_CAST,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Mass Illusion Movement Torrent',
@@ -873,7 +885,7 @@ export const EFFECTS: EffectConfig[] = [
         spriteSheetIndex: 6,
         frameRate: 10,
         sound: EFFECT_CAST,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Protection From Arrows Buff',
@@ -881,7 +893,8 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect9',
         spriteSheetIndex: 6,
         frameRate: 15,
-        depthOffset: -11
+        // Under feet (Olympia continuous status shadow).
+        depthOffset: 40
     },
     {
         name: 'Unknown Debuff 1',
@@ -896,6 +909,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect9',
         spriteSheetIndex: 13,
         frameRate: 15,
+        depthOffset: 40
     },
     {
         name: 'Defense Shield Buff',
@@ -903,6 +917,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect9',
         spriteSheetIndex: 14,
         frameRate: 15,
+        depthOffset: 40
     },
     {
         name: 'Poison Debuff',
@@ -941,7 +956,7 @@ export const EFFECTS: EffectConfig[] = [
         sprite: 'effect10',
         spriteSheetIndex: 0,
         frameRate: 15,
-        depthOffset: -1
+        depthOffset: 70
     },
     {
         name: 'Warrior Hero Set',

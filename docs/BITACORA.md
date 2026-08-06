@@ -1,5 +1,61 @@
-﻿# Bitácora de sesión — Helbreath Chain Lord
+# Bitácora de sesión — Helbreath Chain Lord
 
+## 2026-08-06 — Ops prod + digresión TMS/logística + memoria/skills (antes de volver a CL)
+
+**Contexto:** sesión post PC-reset. Stack real = **Hetzner game** + **Railway middleware** + client `play.chainlords.net`. No asumir localhost como prod.
+
+### Chain Lords / helbreath (código + ops)
+
+- **GitGuardian:** leak `REALM_STATS_SECRET` en commit histórico `landing-api/.env.local.secret` → **rotado** (Railway `chainlords-stats` + VPS `server.env`); secret viejo rechazado 401.
+- **Regen vitals Olympia:** `Game.h` clásico — **SP 10s / HP 15s / MP 20s** (relojes independientes + hunger iPlusTime). No “todo 20s con offset inventado”. World **y** Arena (mismo `RunPlayerVitalRegenTick` por `GameWorld`).
+- **Bag layout sagrado:** `ConsolidateStackableBagItems` = **no-op** automático; solo merge intencional Shift+click. Autosave 15s. Posiciones BagX/BagY persisten (stash arena restaura char real).
+- **Fire Field:** footprint server ya 3×3 (`aoeRadius: 1` Chebyshev); client scale 1.0 + depth under feet (no velo total).
+- **Mobs invisibles (Ettin/Stalker):** lazy-load ocultaba body (`alpha 0`) esperando `.spr` → pelean sin sprite. Fix: placeholder **ninja `ghk` visible**; load de **sonidos no bloquea** sprites; emergency texture; retry lazy-load. Deploy client `index-DUW_NWDY.js`.
+
+### Digresión producto (NO es Chain Lords core) — TMS / logística CV
+
+Ideación (guardar para spin-off / skills, no bloquear CL):
+
+1. **Depósitos altos:** 2 drones (redundancia) con lector QR + óptica morfología/conteo de cajas; límites indoor (SLAM, batería, film).
+2. **Pallets valor USD 2k–10k enfilmados:** BLE beacon / RFID UHF (no solo cámara).
+3. **Mejora de input inventario (80% del valor):** fábrica pega QR o serial+QR en caja; recepción vs remito barata.
+4. **Remito repensado:** por línea — imagen **familia** + imagen/glyph **serial**; thumbs en recepción.
+5. **Glyph geométrico B/N** = ID visual offline (no requiere chain).
+6. **cNFT Solana** de remitos/glyphs = **opcional premium**, no base WMS.
+7. Tech ya existe (visión warehouse, drones inventory, RFID); competir en **nicho pyme / un flujo IN-OUT**, híbrido etiqueta+visión.
+
+Docs satélite: [`LOGISTICS-TMS-VISION.md`](./LOGISTICS-TMS-VISION.md).  
+Skill: `logistics-vision-tms` (local `~\.grok\skills` + espejo Drive).
+
+### Memoria / skills de agente (post X @N01ennn · PlugMem Microsoft)
+
+**Insight a internalizar:** los agentes no necesitan “más historial crudo en contexto”; necesitan **hechos + skills reutilizables** compilados desde la experiencia (graph / docs / skills), no logs enteros. Hasta ~100× menos tokens de contexto si se alimenta solo lo decision-ready.
+
+**Política PO de dispersión de aprendizajes:**
+
+| Qué | Dónde |
+|-----|--------|
+| Código producto CL | GitHub `codofliess/helbreath-base-game` branch `consolidacion` |
+| Docs densos CL (MASTERPLAN, BITACORA, satélites) | Repo git **+** Google Drive espejo |
+| Skills reutilizables multi-proyecto | `~\.grok\skills\*` ahora; monorepo privado futuro `agent-skills` |
+| Secrets / SSH / .env | Nunca git / nunca Drive público |
+| Handoffs de sesión | `docs/SESSION-HANDOFF-*.md` + Drive |
+
+Skill: `agent-memory-skills` (compilar experiencia → skill/doc, no re-inyectar transcripts).
+
+### Camino personal (video → CV → físico → robots)
+
+- **SportSignature** = ancla 100% video.  
+- CV detección/clasificación como proyectos.  
+- Toolings físicos (cámaras, latencia).  
+- Robótica con o sin socio, después de pipeline video+QC estable.
+
+### Verify
+
+- Play: Ctrl+F5 → mobs ninja o real; bag layout tras relog; regen SP más frecuente que MP.  
+- Drive + git actualizados este pass (docs; skills en path local + Drive).
+
+---
 ## 2026-08-05 — Arena: landing, incentivos $HELL, kit catalog, heroes/sprites, cast/mana, spell gates + PC-reset backup
 
 **PO (sesión larga):** cerrar Arena playable + economía free vs credits; fix visual mage hero; cast/mana Olympia-like; backup pre-reset PC.

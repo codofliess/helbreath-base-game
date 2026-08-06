@@ -3,7 +3,7 @@
 > Documento vivo, **canónico** (changelog denso + roadmap), accionable, en español.  
 > Sesión legible: [`BITACORA.md`](./BITACORA.md).  
 > Versión: **borrador v0.9** (completo para críticas; no es la versión final de producto).  
-> Última actualización de contenido: **2026-08-05**.  
+> Última actualización de contenido: **2026-08-06**.  
 > Producto: **Helbreath Chain Lord** (marca corta: **Chain Lords** / Chain Lord).  
 > Repo: `C:\Users\54116\helbreath-base-game`  
 > Reglas: § Decisiones y § Evaluaciones son **append-only**. Coordinación de modelos: [`FRAMEWORK-MULTIMODELO.md`](./FRAMEWORK-MULTIMODELO.md).
@@ -22,7 +22,8 @@
 7. [Guía de rollback](#7-guía-de-rollback)  
 8. [Cómo trabajar con este doc](#8-cómo-trabajar-con-este-doc)  
 9. [Referencias rápidas](#9-referencias-rápidas-en-repo)  
-10. [Cola de críticas para Fable 5](#10-cola-de-críticas-para-fable-5)
+10. [Cola de críticas para Fable 5](#10-cola-de-críticas-para-fable-5)  
+11. [Spin-offs y meta-ops (2026-08-06)](#11-spin-offs-y-meta-ops-2026-08-06) — TMS/logística · memoria/skills · no-core CL  
 
 ### Docs satélite
 
@@ -45,6 +46,8 @@
 | [`REFERENCE-HELBREATH-ARGENTINA.md`](./REFERENCE-HELBREATH-ARGENTINA.md) | Notas IG HB Argentina (UI/eventos/branding → hub Chain Lord) |
 | [`HUMAN-TECH-WAAP.md`](./HUMAN-TECH-WAAP.md) | WaaP / human.tech / Passport: wallet embed vs sybil — **SKIP WaaP MVP · WATCH Passport** |
 | [`CRYPTO-LOOT-AND-NFT-SWAPS.md`](./CRYPTO-LOOT-AND-NFT-SWAPS.md) | Research AGLD/Loot + NFT↔stable swaps — **DIY Solana**; no integrar Lootverse |
+| [`LOGISTICS-TMS-VISION.md`](./LOGISTICS-TMS-VISION.md) | **Spin-off:** depósitos altos, drones, QR origen, remito visual, RFID/BLE pallets valor — **no core CL** |
+| [`AGENT-MEMORY-AND-SKILLS.md`](./AGENT-MEMORY-AND-SKILLS.md) | Memoria de agentes (PlugMem-style): hechos+skills; dispersión git/Drive/local |
 | Canvas gov staking (Cursor) | `helbreath-gov-staking-rep.canvas.tsx` — stake → R → luck/drop + descuentos soulbound (§ 1.7 cerrado); **TBD reconcile** caps combate vs estudio 1.6 |
 | Canvas tokenomics legal-econ | `helbreath-hell-tokenomics-legal-econ.canvas.tsx` — stress-test + callout decisiones cerradas stake/mine/mercado |
 | Canvas DEX liq + RH/Base | `helbreath-dex-liquidity-robinhood-base.canvas.tsx` — launch pump ~20% + Phase-2 Meteora earmark + fees + **C13** cash-out/black-swan; Base #1 constelación |
@@ -1040,6 +1043,17 @@ helbreath-base-game/
 > Al cerrar trabajo: agregar línea fechada aquí (append) y marcar checkboxes en § 4.  
 > Sesión legible: [`BITACORA.md`](./BITACORA.md).  
 > Handoff PC-reset: [`SESSION-HANDOFF-2026-08-05.md`](./SESSION-HANDOFF-2026-08-05.md).
+
+### 2026-08-06 — Prod ops + bag/regen/mobs + spin-off TMS + agent memory skills
+
+- [x] GitGuardian: rotar `REALM_STATS_SECRET` (Railway stats + VPS); no reusar secret del historial git
+- [x] Regen vitals Olympia `Game.h`: SP **10s** / HP **15s** / MP **20s** (world **y** arena); hunger iPlusTime
+- [x] Bag: **no** auto-consolidate/sort; layout BagX/BagY sagrado; autosave 15s
+- [x] Fire Field client: scale 1.0 + depth under feet (server 3×3 ya ok)
+- [x] Mobs lazy-load: ninja `ghk` **visible**; sonidos no bloquean sprites; emergency texture; retry; deploy `index-DUW_NWDY.js`
+- [x] Docs satélite: [`LOGISTICS-TMS-VISION.md`](./LOGISTICS-TMS-VISION.md), [`AGENT-MEMORY-AND-SKILLS.md`](./AGENT-MEMORY-AND-SKILLS.md)
+- [x] Skills locales: `agent-memory-skills`, `logistics-vision-tms` (`~\.grok\skills`)
+- [x] BITACORA 2026-08-06 + § 11 spin-offs; espejo Drive (este pass)
 
 ### 2026-08-05 — Arena desk + $HELL incentives + kit free/credits + cast/mana + spell gates
 
@@ -2131,3 +2145,33 @@ Otros LLMs / revisores humanos pueden **solo agregar** entradas al final. No ree
 ---
 
 *Fin del borrador v0.9. Próxima edición mayor: tras batch-review Fable 5 (§ 10) o al cerrar payout on-chain de Fase C.*
+
+
+---
+
+## 11. Spin-offs y meta-ops (2026-08-06)
+
+> **No son fases A–H de Chain Lords.** Viven aquí solo para no perder el hilo en la misma mente/repo de docs. Implementación = repos/skills aparte.
+
+### 11.1 TMS / logística (visión + etiquetas)
+
+- Documento: [`LOGISTICS-TMS-VISION.md`](./LOGISTICS-TMS-VISION.md).
+- Skill: `logistics-vision-tms`.
+- Resumen: híbrido QR/RFID/BLE + cámaras + (futuro) 2 drones en racks altos; mejora de **input** (fábrica QR, remito con imagen familia+serial); glyph B/N offline; cNFT Solana solo premium.
+- Prioridad de producto: **detrás** de CL mes de test / SportSignature video; no robar sprints de Arena.
+
+### 11.2 Memoria de agentes y skills multi-proyecto
+
+- Documento: [`AGENT-MEMORY-AND-SKILLS.md`](./AGENT-MEMORY-AND-SKILLS.md).
+- Skill: `agent-memory-skills`.
+- Insight (PlugMem / post X): compilar **hechos + skills**, no reinyectar historial crudo al contexto.
+- Dispersión: código → GitHub; docs densos → git + Drive; skills → `~\.grok\skills` (+ monorepo privado `agent-skills` TBD); secrets → nunca git/Drive público.
+
+### 11.3 Camino aprendizaje PO (video → CV → físico → robots)
+
+1. SportSignature (video).  
+2. Detección/clasificación.  
+3. Toolings físicos (cámaras, latencia).  
+4. Robótica (con o sin socio).  
+5. TMS/logística como spin-off comercial de CV+video.
+

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3v3 Inscription — Sunday Coliseum | Helbreath Chain Lords</title>
+    <meta
+      name="description"
+      content="Inscribe your 3v3 team for Sunday Coliseum. Wallet sign-in, tennis-style seeding, live field."
+    />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="theme-color" content="#1a0a12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&display=swap" rel="stylesheet" />
+    <link href="./arena-inscription.css" rel="stylesheet" />
+    <script>
+      window.__ARENA_FORMAT__ = "team";
+      window.__CHAINLORDS_MIDDLEWARE_URL__ =
+        window.__CHAINLORDS_MIDDLEWARE_URL__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:3001"
+          : "http://127.0.0.1:3001");
+    </script>
+  </head>
+  <body>
+    <div class="ar-wrap">
+      <div class="ar-top">
+        <a class="ar-back" href="./index.html">← Back to Chain Lords</a>
+        <a class="ar-back" href="./arena-1v1.html">Switch to 1v1 →</a>
+      </div>
+
+      <header class="ar-hero">
+        <p class="ar-kicker">Helbreath Arena · The Coliseum</p>
+        <h1 class="ar-title">3 vs 3 Inscription</h1>
+        <p class="ar-sub" id="ar-event-name">Sunday Coliseum 3v3</p>
+        <p class="ar-sub">
+          The best teams in the world — coordinated fights, players only. No stable open-world
+          roster required: build maxed kits with credits, pick your three, and sign with the
+          <strong>captain wallet</strong>. Seeding uses historical team/captain Elo like tennis
+          preclassifieds — top seeds are kept apart until late rounds.
+        </p>
+        <div class="ar-meta">
+          <span id="ar-starts">Starts: next Sunday</span>
+          <span id="ar-count">0 / 32 entries</span>
+          <span id="ar-open">REGISTRATION</span>
+        </div>
+      </header>
+
+      <div class="ar-grid">
+        <section class="ar-card">
+          <h2>Team Sign &amp; Inscribe</h2>
+          <form id="ar-form" class="ar-form" onsubmit="return false;">
+            <label for="ar-team">Team name</label>
+            <input id="ar-team" type="text" maxlength="40" placeholder="e.g. Blood Oath" required />
+
+            <label for="ar-char">Captain fighter name</label>
+            <input id="ar-char" type="text" maxlength="32" placeholder="Captain character" />
+
+            <label for="ar-m2">Teammate 2</label>
+            <input id="ar-m2" type="text" maxlength="32" placeholder="Second fighter" required />
+
+            <label for="ar-m3">Teammate 3</label>
+            <input id="ar-m3" type="text" maxlength="32" placeholder="Third fighter" required />
+
+            <p class="hint">
+              Captain connects <strong>Phantom</strong> and signs (login only). Balance credits —
+              all attack and zero defense will not survive the Coliseum. Prizes in
+              <strong>USDT</strong>.
+            </p>
+            <button type="button" class="ar-btn" id="ar-register-btn">
+              Connect Captain Wallet &amp; Inscribe Team
+            </button>
+            <p id="ar-status" class="ar-status" aria-live="polite"></p>
+          </form>
+          <div class="ar-prizes">Prizes in USDT + Coliseum glory</div>
+        </section>
+
+        <section class="ar-card">
+          <h2>Teams · Preclassifieds</h2>
+          <p id="ar-seed-note" class="ar-seed-note">
+            Tennis-style seeding by captain/historical rating. #1 and #2 live in opposite halves of
+            the draw so they cannot meet before the final.
+          </p>
+          <div class="ar-table-wrap">
+            <table class="ar-table">
+              <thead>
+                <tr>
+                  <th>Seed</th>
+                  <th>Team</th>
+                  <th>Captain</th>
+                  <th>Elo</th>
+                  <th>W–L</th>
+                </tr>
+              </thead>
+              <tbody id="ar-entries-body"></tbody>
+            </table>
+            <p id="ar-empty" class="ar-empty" style="display: none">
+              No teams inscribed yet — claim seed #1 for your squad.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <section class="ar-card ar-bracket">
+        <h2>Projected Round of 1 (tennis draw)</h2>
+        <p class="ar-seed-note" style="margin-top: 0">
+          R1 pairings from current seeds. Same protection as Grand Slam draws: top preclassifieds
+          stay in separate quarters/halves.
+        </p>
+        <div id="ar-r1" class="ar-r1"></div>
+      </section>
+    </div>
+    <script src="./arena-inscription.js"></script>
+  </body>
+</html>

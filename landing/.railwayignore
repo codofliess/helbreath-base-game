@@ -1,0 +1,5 @@
+olympia-assets/
+README.md
+.git/
+node_modules/
+*.md

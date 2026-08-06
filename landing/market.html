@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Market · Auction House | Helbreath Chain Lords</title>
+    <meta
+      name="description"
+      content="Browse live auction offers on mobile. Ask Grok to buy Merien stones, pay with USDC from your wallet, claim at the AH delivery desk in-game."
+    />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="theme-color" content="#1a0a12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&display=swap" rel="stylesheet" />
+    <link href="./market.css" rel="stylesheet" />
+    <script>
+      window.__CHAINLORDS_MIDDLEWARE_URL__ =
+        window.__CHAINLORDS_MIDDLEWARE_URL__ ||
+        (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+          ? 'http://127.0.0.1:3001'
+          : 'https://chainlords-middleware-production.up.railway.app');
+      window.__CHAINLORDS_PLAY_URL__ =
+        window.__CHAINLORDS_PLAY_URL__ ||
+        (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+          ? 'http://127.0.0.1:8081'
+          : 'https://play.chainlords.net');
+    </script>
+  </head>
+  <body>
+    <div class="mk-wrap">
+      <div class="mk-top">
+        <a class="mk-back" href="./index.html">← Chain Lords</a>
+        <a class="mk-back" href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer">Discord</a>
+      </div>
+
+      <header class="mk-hero">
+        <p class="mk-kicker">Auction House · Side door</p>
+        <h1 class="mk-title">Market</h1>
+        <p class="mk-sub">
+          Browse live stocks from your phone. Ask <strong>Grok</strong> to fill an order, pay with
+          <strong>USDC</strong> (dev: confirm without chain), then
+          <strong>claim at the delivery desk</strong> when you enter the game.
+        </p>
+        <div class="mk-meta">
+          <span id="mk-health">Connecting…</span>
+          <span id="mk-fee">Fee —</span>
+          <span id="mk-pay-mode">Pay —</span>
+        </div>
+      </header>
+
+      <div class="mk-grid">
+        <section class="mk-card">
+          <h2>Search stock</h2>
+          <form id="mk-search-form" class="mk-form" onsubmit="return false;">
+            <label for="mk-q">Item</label>
+            <input id="mk-q" type="search" placeholder="merien stones, xelima, shield…" autocomplete="off" />
+            <button type="button" class="mk-btn" id="mk-search-btn">Search</button>
+          </form>
+          <div id="mk-results" class="mk-results" aria-live="polite"></div>
+        </section>
+
+        <section class="mk-card">
+          <h2>Grok order</h2>
+          <p class="mk-hint">
+            Example: <code>buy 10 merien stones at 0.6</code> ·
+            <code>buscame ofertas de merien stones</code>
+          </p>
+          <label for="mk-advisor">Message</label>
+          <textarea id="mk-advisor" rows="3" placeholder="Grok, find all Merien stone offers…"></textarea>
+          <button type="button" class="mk-btn" id="mk-advisor-btn">Ask Grok</button>
+          <pre id="mk-advisor-out" class="mk-out" aria-live="polite"></pre>
+
+          <hr class="mk-hr" />
+
+          <h3>Checkout</h3>
+          <label for="mk-wallet">Wallet (Solana)</label>
+          <div class="mk-row">
+            <input id="mk-wallet" type="text" placeholder="Paste or Connect Phantom" autocomplete="off" />
+            <button type="button" class="mk-btn mk-btn-secondary" id="mk-connect">Connect</button>
+          </div>
+          <label for="mk-buy-q">Buy query</label>
+          <input id="mk-buy-q" type="text" placeholder="merien stone" />
+          <div class="mk-row2">
+            <div>
+              <label for="mk-qty">Qty</label>
+              <input id="mk-qty" type="number" min="1" max="500" value="10" />
+            </div>
+            <div>
+              <label for="mk-max">Max USDC / unit</label>
+              <input id="mk-max" type="number" min="0" step="0.01" value="0.6" />
+            </div>
+          </div>
+          <button type="button" class="mk-btn" id="mk-quote-btn">Quote</button>
+          <button type="button" class="mk-btn mk-btn-gold" id="mk-order-btn">Create order &amp; pay (dev)</button>
+          <pre id="mk-checkout-out" class="mk-out" aria-live="polite"></pre>
+        </section>
+
+        <section class="mk-card mk-card-wide">
+          <h2>Delivery desk (your claims)</h2>
+          <p class="mk-hint">
+            After payment, items wait here linked to your wallet. Enter the game — the server delivers
+            them to your bag (or warehouse path when configured).
+          </p>
+          <button type="button" class="mk-btn mk-btn-secondary" id="mk-desk-btn">Refresh desk</button>
+          <div id="mk-desk" class="mk-results"></div>
+          <p class="mk-cta">
+            <a id="mk-play" class="mk-btn mk-btn-gold" href="#">Play Now — claim in World</a>
+          </p>
+        </section>
+      </div>
+
+      <footer class="mk-foot">
+        No combat bots. Staff never asks for seeds. Official Discord:
+        <a href="https://discord.gg/F4NwwbfKtj">invite</a>
+      </footer>
+    </div>
+    <script src="./market.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "appName": "Chain Lords Arena",
+  "version": "0.1.0-m0",
+  "websocketUrl": "ws://127.0.0.1:5080/ws",
+  "middlewareAuthUrl": "http://127.0.0.1:3099",
+  "defaultWorldId": "colosseum",
+  "assetsRoot": "assets",
+  "vfxRoot": "assets/vfx",
+  "enablePrizeBag": true,
+  "logLevel": "info"
+}

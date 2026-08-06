@@ -1,0 +1,13 @@
+{
+  "_comment": "Only these worlds may be entered by the Arena C++ client.",
+  "defaultWorldId": "colosseum",
+  "worlds": [
+    { "id": "colosseum", "map": "fightzone1", "size": "medium", "pactArena": true },
+    { "id": "arena-duel-s", "map": "fightzone4", "size": "small", "pactArena": true },
+    { "id": "arena-duel-m", "map": "fightzone1", "size": "medium", "pactArena": true },
+    { "id": "arena-duel-l", "map": "fightzone5", "size": "large", "pactArena": true },
+    { "id": "arena-tourney", "map": "fightzone8", "size": "large", "pactArena": true },
+    { "id": "arena-btfield", "map": "btfield", "size": "xlarge", "pactArena": true }
+  ],
+  "blockedWorldPrefixes": ["are", "elv", "middle", "2nd", "druncn", "ice", "toh", "hell"]
+}

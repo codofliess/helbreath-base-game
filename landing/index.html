@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Helbreath Chain Lords</title>
+    <meta
+      name="description"
+      content="Helbreath Chain Lords — old-school medieval fantasy MMORPG with open PvP, PvM, Arena, and Solana-native progression."
+    />
+    <meta name="keywords" content="Helbreath, Chain Lords, MMORPG, PVP, Arena, Solana, Aresden, Elendiel" />
+    <link rel="canonical" href="https://chainlords.net/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://chainlords.net/" />
+    <meta property="og:title" content="Helbreath Chain Lords" />
+    <meta
+      property="og:description"
+      content="Two nations. One realm. Open PvP, PvM, Arena — bind your seal and enter the chain."
+    />
+    <meta property="og:image" content="https://chainlords.net/img/wallpaper.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Helbreath Chain Lords" />
+    <meta
+      name="twitter:description"
+      content="Two nations. One realm. Open PvP, PvM, Arena — bind your seal and enter the chain."
+    />
+    <meta name="twitter:image" content="https://chainlords.net/img/wallpaper.jpg" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="theme-color" content="#1a0a12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&display=swap" rel="stylesheet" />
+    <link href="./styles.css" media="all" rel="stylesheet" type="text/css" />
+    <link href="./chainlord-extras.css" media="all" rel="stylesheet" type="text/css" />
+    <script>
+      /* Override for your stack; landing uses these for Play Now + live stats. */
+      /* Prod play = Cloudflare HTTPS → Hetzner traveler. */
+      window.__CHAINLORDS_PLAY_URL__ =
+        window.__CHAINLORDS_PLAY_URL__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8081"
+          : "https://play.chainlords.net");
+      window.__CHAINLORDS_MIDDLEWARE_URL__ =
+        window.__CHAINLORDS_MIDDLEWARE_URL__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:3001"
+          : "https://chainlords-middleware-production.up.railway.app");
+      window.__CHAINLORDS_STATS_API__ =
+        window.__CHAINLORDS_STATS_API__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:1337"
+          : "https://chainlords-stats-production.up.railway.app");
+      /* Public PVP/World/Tournament cartelera (game server CORS). */
+      window.__CHAINLORDS_STREAMS_API__ =
+        window.__CHAINLORDS_STREAMS_API__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:1337"
+          : "https://play.chainlords.net");
+    </script>
+  </head>
+  <body>
+    <header id="header" class="cl-header">
+      <div class="cl-lang-bar" role="navigation" aria-label="Language">
+        <label for="site-lang" class="cl-lang-label">Lang</label>
+        <select id="site-lang" class="langselect" aria-label="Choose language">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="pt">Português</option>
+        </select>
+      </div>
+      <a href="#top" class="cl-seal" aria-label="Helbreath Chain Lords home">
+        <span class="cl-seal-kicker">Helbreath</span>
+        <span class="cl-seal-title">Chain Lords</span>
+        <span class="cl-seal-line" aria-hidden="true"></span>
+        <span class="cl-seal-tag">Aresden | Elendiel | The Coliseum</span>
+        <span class="cl-seal-note" data-i18n="sealNote">Two nations. One realm. Your seal on the chain.</span>
+      </a>
+    </header>
+
+    <div class="landing-stage">
+      <div id="container">
+        <div class="shell-frame-top" aria-hidden="true"></div>
+
+        <!-- LEFT GRAY: Helbreath World entry + live counters -->
+        <div id="menuleft" class="realm-panel realm-panel--world" aria-labelledby="world-title">
+          <div class="realm-entry">
+            <p class="realm-kicker" data-i18n="worldKicker">Under the goddess</p>
+            <h2 id="world-title" class="realm-title">Helbreath<br /><span data-i18n="worldTitle">World</span></h2>
+
+            <button
+              type="button"
+              id="play-now-world"
+              class="play-now-btn"
+              title="Play Helbreath World — connect Phantom wallet"
+              aria-label="Play now — Helbreath World"
+              data-i18n-title="playTitle"
+              data-i18n-aria="playAria"
+            >
+              <span class="play-now-btn-label" data-i18n="playNow">Play Now</span>
+            </button>
+            <p id="play-now-status" class="play-now-status" aria-live="polite"></p>
+
+            <div class="realm-stats" aria-live="polite">
+              <p class="online-count"><span data-i18n="statPlayers4h">Players ON in last 4hs</span>: <span id="stat-online-4h">0</span></p>
+              <p class="realm-stat"><span data-i18n="statEks4h">EKs in last 4hs</span>: <span id="stat-eks-4h">0</span></p>
+            </div>
+
+            <!-- EK Gallery sits under live World counters -->
+            <section class="side-ek" id="ek-gallery" aria-labelledby="side-ek-title">
+              <h3 id="side-ek-title" class="side-ek-title">EK Gallery</h3>
+              <div class="side-ek-copy">
+                <p>
+                  An <strong>Enemy Kill (EK)</strong> is a scored open-world PvP kill — not every
+                  death counts. Only kills within the level window count (victim up to
+                  <strong>~10 levels below</strong> you, or higher). Farming lowbies does not pad
+                  your EK score.
+                </p>
+                <p>
+                  <strong>Not all EKs are equal.</strong> Beyond a raw global EK count, rarity
+                  follows how dangerous the <em>victim</em> was on the <strong>enemy nation’s
+                  killer ladder</strong> at the moment of the kill:
+                </p>
+                <ul class="side-ek-rarity-list">
+                  <li>
+                    <span class="ek-badge ek-badge-legendary">Legendary</span> — victim was
+                    <strong>Top 1–10</strong> killers of the other city
+                  </li>
+                  <li>
+                    <span class="ek-badge ek-badge-rare">Rare</span> — victim was
+                    <strong>Top 11–50</strong>
+                  </li>
+                  <li>
+                    <span class="ek-badge ek-badge-common">Common</span> — victim was
+                    <strong>Top 51–200</strong>
+                  </li>
+                </ul>
+                <p>
+                  Hunting a legend is worth more prestige than farming the same rank over and over.
+                  The hall of fame below is the public screenshot wall of those kills.
+                </p>
+                <p class="side-ek-ranks">
+                  <strong>Rankings we track (beyond total EKs):</strong> most
+                  <em>Legendary</em> EKs · most <em>Rare</em> EKs · most total EKs · and nation
+                  rivalry boards (Aresden vs Elendiel). Climb the global count <em>and</em> the
+                  rarity ladders — different glory for different hunters.
+                </p>
+              </div>
+              <div class="ek-rarity-legend" aria-label="Rarity rules">
+                <span class="ek-badge ek-badge-legendary">Legendary · top 10</span>
+                <span class="ek-badge ek-badge-rare">Rare · 11–50</span>
+                <span class="ek-badge ek-badge-common">Common · 51–200</span>
+              </div>
+              <div class="ek-filters" role="group" aria-label="Filter by rarity">
+                <button type="button" class="ek-filter is-active" data-rarity="all">All</button>
+                <button type="button" class="ek-filter" data-rarity="legendary">Legendary</button>
+                <button type="button" class="ek-filter" data-rarity="rare">Rare</button>
+                <button type="button" class="ek-filter" data-rarity="common">Common</button>
+              </div>
+              <div id="ek-gallery-grid" class="ek-gallery-grid" aria-live="polite"></div>
+              <p id="ek-gallery-status" class="ek-gallery-status">Loading gallery…</p>
+            </section>
+          </div>
+        </div>
+
+        <!-- CENTER: content -->
+        <div id="content">
+          <!-- CHAIN LORDS TV first (high center) — above loop video / future live embeds -->
+          <section class="cl-tv cl-tv--hero" id="cl-tv" aria-labelledby="cl-tv-title">
+            <header class="cl-tv-head">
+              <div>
+                <p class="cl-tv-kicker">Live schedule</p>
+                <h2 id="cl-tv-title" class="cl-tv-title">CHAIN LORDS TV</h2>
+                <p class="cl-tv-tagline">
+                  Weekly programming · EN VIVO · scheduled duels · World streamers — like a sports grid.
+                </p>
+              </div>
+              <div class="cl-tv-head-actions">
+                <button type="button" class="cl-tv-refresh" id="cl-tv-refresh" title="Refresh schedule">
+                  Refresh
+                </button>
+                <a
+                  class="cl-tv-watch-link"
+                  id="cl-tv-watch-link"
+                  href="https://play.chainlords.net/?watch=streams"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Open multi-cam →</a
+                >
+              </div>
+            </header>
+
+            <div class="cl-tv-live" id="cl-tv-live" aria-live="polite">
+              <div class="cl-tv-section-label cl-tv-section-label--live">🔴 LIVE NOW</div>
+              <div class="cl-tv-live-list" id="cl-tv-live-list">
+                <p class="cl-tv-empty">Stage ready — waiting for live streams &amp; public duels…</p>
+              </div>
+            </div>
+
+            <div class="cl-tv-body">
+              <div class="cl-tv-col">
+                <div class="cl-tv-section-label">📋 Scheduled duels (week)</div>
+                <div class="cl-tv-list" id="cl-tv-scheduled">
+                  <p class="cl-tv-empty">No public duels on the board yet.</p>
+                </div>
+              </div>
+              <div class="cl-tv-col">
+                <div class="cl-tv-section-label">🗓️ This week by day</div>
+                <div class="cl-tv-week" id="cl-tv-week"></div>
+              </div>
+            </div>
+            <p class="cl-tv-status" id="cl-tv-status" aria-live="polite"></p>
+          </section>
+
+          <div id="top" class="hero-manifesto hero-manifesto--compact">
+            <p class="hero-lead">
+              <strong>Helbreath Chain Lords</strong> — open PvP, PvE, Arena, and Solana-native
+              ownership. Two nations. One realm.
+            </p>
+          </div>
+
+          <!-- Loop teaser (later: our films + live stream embeds) -->
+          <div class="video-solana-row">
+            <div class="teaser-wrap teaser-wrap--below-tv">
+              <video
+                id="gameplay-teaser"
+                autoplay
+                loop
+                playsinline
+                muted
+                poster="./img/wallpaper.jpg"
+              >
+                <source src="./gameplay-teaser.mp4" type="video/mp4" />
+                Your browser does not support HTML5 video.
+              </video>
+              <p class="teaser-caption">
+                Gameplay reel — soon: our films &amp; live streams from the cartelera above.
+              </p>
+            </div>
+            <aside class="why-solana" aria-labelledby="why-solana-title">
+              <h3 id="why-solana-title" class="why-solana-title">Why Solana Blockchain</h3>
+              <ul class="hero-points why-solana-points">
+                <li>True ownership — heroes &amp; key gear bound to your wallet seal</li>
+                <li>Open-world PvP between Aresden and Elendiel, plus deep PvE</li>
+                <li>On-chain $HELL economy, cash shop, and progression that follows you</li>
+                <li>Community voice on rules, seasons, and the path of the realm</li>
+              </ul>
+            </aside>
+          </div>
+
+          <div class="post" id="play">
+            <div class="postheadborder">
+              <div class="postheader">
+                <h3><span style="padding: 10px 0 0 10px">Play — Wallet Login</span></h3>
+              </div>
+            </div>
+            <div class="postcontent">
+              <p class="play-intro">
+                Click <strong>Play Now</strong> (left panel or below), connect
+                <strong>Phantom</strong>, and enter the character list — up to four heroes under
+                Aresden and Elendiel.
+              </p>
+              <p class="cta-row">
+                <button type="button" class="cta-primary" id="play-now-world-secondary">
+                  Play Now — Wallet Login
+                </button>
+              </p>
+
+              <div class="wallet-guide" id="wallet-guide">
+                <h4 class="wallet-guide-title">How to install your wallet &amp; play safely</h4>
+                <ol class="wallet-steps">
+                  <li>
+                    <strong>Install Phantom</strong> (official only):
+                    <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer"
+                      >phantom.app/download</a
+                    >
+                    — browser extension for Chrome / Brave / Edge / Firefox, or the mobile app.
+                    Never install from random ads or DMs.
+                  </li>
+                  <li>
+                    <strong>Create a new wallet</strong> (or restore one you already control). Phantom
+                    will show a <strong>seed phrase</strong> (12 or 24 words). That phrase
+                    <em>is</em> your account — anyone with it can take everything.
+                  </li>
+                  <li>
+                    <strong>Write the seed words on paper with a pen or pencil</strong> — at least
+                    <strong>two separate copies</strong>, stored in different safe places (home safe,
+                    family vault, etc.). Do <strong>not</strong> screenshot, cloud-save, email, or
+                    type the phrase into any website or chat.
+                  </li>
+                  <li>
+                    <strong>Never share your seed phrase or private keys</strong> — not with
+                    “support”, not with admins, not with friends. Helbreath Chain Lords staff will
+                    <strong>never</strong> ask for them.
+                  </li>
+                  <li>
+                    <strong>Unlock Phantom → Play Now</strong> on this site → approve the signature
+                    (login only; no spend until you choose to). You land on the character list.
+                  </li>
+                  <li>
+                    Optional: pin Phantom, use a strong device password / hardware wallet for larger
+                    holdings, and keep a small “play” wallet separate from long-term storage.
+                  </li>
+                </ol>
+                <p class="wallet-warn">
+                  ⚠ If you lose every paper copy of your seed words, the wallet cannot be recovered.
+                  If someone else gets the words, they own the wallet. Treat paper backups like cash
+                  and keys to a vault.
+                </p>
+                <p class="wallet-links">
+                  <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer"
+                    >Download Phantom</a
+                  >
+                  ·
+                  <a href="https://phantom.app/" target="_blank" rel="noopener noreferrer"
+                    >phantom.app</a
+                  >
+                  ·
+                  <a
+                    href="https://discord.gg/F4NwwbfKtj"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Discord support</a
+                  >
+                  (never seed phrases there either)
+                </p>
+              </div>
+            </div>
+            <div class="postfooter"></div>
+          </div>
+
+          <div class="post" id="market">
+            <div class="postheadborder">
+              <div class="postheader">
+                <h3><span style="padding: 10px 0 0 10px">Market — Auction (mobile)</span></h3>
+              </div>
+            </div>
+            <div class="postcontent">
+              <p>
+                Browse live auction stock from your phone, ask Grok to fill a buy order, pay with
+                USDC from your wallet, then claim at the
+                <strong>Auction House delivery desk</strong> when you enter World.
+              </p>
+              <p class="cta-row">
+                <a class="cta-primary" href="./market.html" style="display: inline-block; text-decoration: none; padding: 10px 16px"
+                  >Open Market →</a
+                >
+              </p>
+            </div>
+            <div class="postfooter"></div>
+          </div>
+
+          <div class="post" id="news">
+            <div class="postheadborder">
+              <div class="postheader">
+                <h3><span style="padding: 10px 0 0 10px">News</span></h3>
+              </div>
+            </div>
+            <div class="postcontent">
+              <article class="news-announcement" style="margin-bottom: 1.25rem">
+                <p style="margin: 0 0 0.35rem; color: #e0b45a; font-weight: 700; letter-spacing: 0.04em">
+                  ANNOUNCEMENT · Testing Week 1
+                </p>
+                <h4 style="margin: 0 0 0.6rem; color: #f0e0c0; font-size: 1.15rem">
+                  Play-mine credits · $HELL at TGE / airdrop
+                </h4>
+                <p>
+                  During this first public testing week, every action that earns
+                  <strong>mining credits</strong> feeds a daily pool. At the end of each UTC day,
+                  credits are tallied and converted into
+                  <strong>pending $HELL</strong> for that wallet. Redeemable at the
+                  <strong>Token Generation Event (TGE) / airdrop</strong> — not a salary, not ROI.
+                </p>
+                <p><strong>Credit rules (UTC day):</strong></p>
+                <ul>
+                  <li><strong>Login</strong> — +1 credit (first join of the day).</li>
+                  <li><strong>Online / AFK</strong> — +10 credits every <strong>4 hours</strong> connected (max 6 blocks / day = +60).</li>
+                  <li><strong>Monsters</strong> — every <strong>100 kills</strong> → +10 credits, up to <strong>50 credits</strong> from farming (500 kills for the full farm cap).</li>
+                  <li><strong>Diversity</strong> — kill at least <strong>10 different monster classes</strong> in the day →
+                    <strong>all your credits that day are doubled</strong>.</li>
+                  <li><strong>Enemy Kills (EK)</strong> — +10 credits per eligible EK, max <strong>10 EKs / day</strong> (+100).
+                    Testing-week EKs <strong>do not</strong> count toward post-TGE ladders / future EK rewards; credits only.</li>
+                </ul>
+                <p>
+                  At day settle, the daily token budget is shared by credit weight among players who were active.
+                  If only a few characters play, they still split that day's allocation. Totals roll into pending for TGE.
+                </p>
+                <p>
+                  Full patch notes and live status also on
+                  <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer">Discord</a>
+                  · play at
+                  <a href="https://play.chainlords.net" target="_blank" rel="noopener noreferrer">play.chainlords.net</a>.
+                </p>
+                <p style="margin-bottom: 0; opacity: 0.95">
+                  <strong>Official X:</strong>
+                  <a href="https://x.com/ChainLordsHQ" target="_blank" rel="noopener noreferrer"
+                    >@ChainLordsHQ</a
+                  >
+                  — follow for news and planned
+                  <em>utility airdrop eligibility</em> at claim time (not required to play).
+                  Discord roles for Guild Master / Captain / Veteran / Guildsman and per-guild rooms
+                  for guilds that meet a $HELL stake utility threshold (feature unlock, not yield).
+                </p>
+              </article>
+              <p style="opacity: 0.85; margin: 0">
+                Other announcements land first on
+                <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer">Discord</a>.
+              </p>
+            </div>
+            <div class="postfooter"></div>
+          </div>
+
+          <div class="post" id="features">
+            <div class="postheadborder">
+              <div class="postheader">
+                <h3><span style="padding: 10px 0 0 10px">Features</span></h3>
+              </div>
+            </div>
+            <div class="postcontent">
+              <ul id="featurelist">
+                <li>Large-scale open PvP between Aresden and Elendiel</li>
+                <li>Relaxing PvM, farming, crafting, and enchanting</li>
+                <li>Seasonal events — Crusade, Heldenian, Apocalypse, and more</li>
+                <li>Deep character builds, skills, and spell books</li>
+                <li>Enemy Kill ladder, guild wars, and nation rivalry</li>
+                <li>Cash shop and progression with on-chain $HELL economy</li>
+              </ul>
+            </div>
+            <div class="postfooter"></div>
+          </div>
+
+          <div class="post" id="contact">
+            <div class="postheadborder">
+              <div class="postheader">
+                <h3><span style="padding: 10px 0 0 10px">Contact</span></h3>
+              </div>
+            </div>
+            <div class="postcontent">
+              Reach the Chain Lords team on
+              <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer"
+                >Discord</a
+              >.
+            </div>
+            <div class="postfooter"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT GRAY: Helbreath Arena + Sunday tournaments -->
+        <div id="menuright" class="realm-panel realm-panel--arena" aria-labelledby="arena-title">
+          <div class="realm-entry">
+            <p class="realm-kicker">The Coliseum</p>
+            <h2 id="arena-title" class="realm-title">Helbreath<br />Arena</h2>
+            <p class="realm-lead">Fair trials at Lv 160 &amp; 90.</p>
+
+            <section class="arena-sunday" aria-labelledby="arena-sunday-title">
+              <h3 id="arena-sunday-title" class="arena-sunday-title">Sunday PvP Events</h3>
+              <p class="arena-sunday-lead">
+                Every <strong>Sunday</strong>, the best PvP teams in the world clash in the
+                Coliseum — <strong>players only</strong>, pure skill, no open-world grind required
+                to show up and compete.
+              </p>
+              <ul class="arena-sunday-modes">
+                <li>
+                  <a class="arena-mode-link" href="./arena-3v3.html"
+                    ><strong>3 vs 3</strong> — coordinated team fights · Inscribe →</a
+                  >
+                </li>
+                <li>
+                  <a class="arena-mode-link" href="./arena-1v1.html"
+                    ><strong>1 vs 1</strong> — pure duelist glory · Inscribe →</a
+                  >
+                </li>
+              </ul>
+              <p class="arena-sunday-body">
+                <strong>No stable roster on the server needed.</strong> You build already
+                <strong>maxed tournament characters</strong> to your taste: spend
+                <strong>credits</strong> to kit out gear, stats, and loadouts for that week’s
+                bracket. Drop in, fight, climb the ladder — even if you don’t live in Helbreath
+                World every day.
+              </p>
+              <p class="arena-sunday-warn">
+                ⚠ Spend credits carefully. Dump too much into a few heavy
+                <strong>attack</strong> items and you will stand
+                <strong>naked on defense</strong> — glass cannons die first under real PvP
+                pressure. Balance offense and survival, or the Coliseum will humble you.
+              </p>
+              <p class="arena-sunday-prizes">
+                <strong>Prizes in USDT</strong> + seasonal glory, ladder rankings, and Coliseum
+                bragging rights.
+              </p>
+            </section>
+
+            <p class="right-stub">Cash Shop — opens with public beta.</p>
+            <p class="right-stub">
+              <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer"
+                >Discord</a
+              >
+            </p>
+          </div>
+        </div>
+
+        <div class="clear"></div>
+        <div class="shell-frame-bottom" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div id="footer">
+      <p class="footer-disclaimer">
+        © Helbreath Chain Lords. All rights reserved. chainlords.net
+      </p>
+      <p class="footer-meta">
+        <a href="#play">Play</a>
+        |
+        <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer">Discord</a>
+        |
+        <a href="https://x.com/ChainLordsHQ" target="_blank" rel="noopener noreferrer">X @ChainLordsHQ</a>
+        |
+        <a href="https://chainlords.net/">chainlords.net</a>
+      </p>
+    </div>
+
+    <script src="./main.js?v=play-https-20260724"></script>
+  </body>
+</html>

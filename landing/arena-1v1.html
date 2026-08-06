@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>1v1 Inscription — Sunday Coliseum | Helbreath Chain Lords</title>
+    <meta
+      name="description"
+      content="Inscribe for Sunday 1v1 PvP at the Coliseum. Wallet sign-in, tennis-style seeding, live field."
+    />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="theme-color" content="#1a0a12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&display=swap" rel="stylesheet" />
+    <link href="./arena-inscription.css" rel="stylesheet" />
+    <script>
+      window.__ARENA_FORMAT__ = "solo";
+      window.__CHAINLORDS_MIDDLEWARE_URL__ =
+        window.__CHAINLORDS_MIDDLEWARE_URL__ ||
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:3001"
+          : "http://127.0.0.1:3001");
+    </script>
+  </head>
+  <body>
+    <div class="ar-wrap">
+      <div class="ar-top">
+        <a class="ar-back" href="./index.html">← Back to Chain Lords</a>
+        <a class="ar-back" href="./arena-3v3.html">Switch to 3v3 →</a>
+      </div>
+
+      <header class="ar-hero">
+        <p class="ar-kicker">Helbreath Arena · The Coliseum</p>
+        <h1 class="ar-title">1 vs 1 Inscription</h1>
+        <p class="ar-sub" id="ar-event-name">Sunday Coliseum 1v1</p>
+        <p class="ar-sub">
+          Pure duelist glory. Build a maxed tournament kit with credits, sign with your wallet, and
+          enter the draw. Seeding follows historical Elo — like tennis preclassifieds — so
+          <strong>#1 and #2 never meet before the final</strong> if both win their halves.
+        </p>
+        <div class="ar-meta">
+          <span id="ar-starts">Starts: next Sunday</span>
+          <span id="ar-count">0 / 64 entries</span>
+          <span id="ar-open">REGISTRATION</span>
+        </div>
+      </header>
+
+      <div class="ar-grid">
+        <section class="ar-card">
+          <h2>Sign &amp; Inscribe</h2>
+          <form id="ar-form" class="ar-form" onsubmit="return false;">
+            <label for="ar-char">Fighter name</label>
+            <input id="ar-char" type="text" maxlength="32" placeholder="Your duelist name" required />
+            <p class="hint">
+              Phantom will ask you to sign a login message (no funds move). Your wallet is your
+              identity for prizes in <strong>USDT</strong>.
+            </p>
+            <button type="button" class="ar-btn" id="ar-register-btn">Connect Wallet &amp; Inscribe</button>
+            <p id="ar-status" class="ar-status" aria-live="polite"></p>
+          </form>
+          <div class="ar-prizes">Prizes in USDT + Coliseum glory</div>
+        </section>
+
+        <section class="ar-card">
+          <h2>Field · Preclassifieds</h2>
+          <p id="ar-seed-note" class="ar-seed-note">
+            Tennis-style seeding: ranked by historical rating. Top seeds are placed to avoid early
+            collisions (1 vs 2 only possible in the final).
+          </p>
+          <div class="ar-table-wrap">
+            <table class="ar-table">
+              <thead>
+                <tr>
+                  <th>Seed</th>
+                  <th>Entry</th>
+                  <th>Wallet</th>
+                  <th>Elo</th>
+                  <th>W–L</th>
+                </tr>
+              </thead>
+              <tbody id="ar-entries-body"></tbody>
+            </table>
+            <p id="ar-empty" class="ar-empty" style="display: none">
+              No inscriptions yet — be the first seed on the board.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <section class="ar-card ar-bracket">
+        <h2>Projected Round of 1 (tennis draw)</h2>
+        <p class="ar-seed-note" style="margin-top: 0">
+          Live preview of R1 pairings from current seeds. Byes go to open slots when the field is
+          not a power of two. Final draw locks when registration closes.
+        </p>
+        <div id="ar-r1" class="ar-r1"></div>
+      </section>
+    </div>
+    <script src="./arena-inscription.js"></script>
+  </body>
+</html>

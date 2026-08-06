@@ -1,0 +1,10 @@
+# Chain Lords static landing — https://chainlords.net
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npx --yes serve -s . -l tcp://0.0.0.0:$PORT"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

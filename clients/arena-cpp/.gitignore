@@ -1,0 +1,10 @@
+build/
+cmake-build-*/
+generated/proto/*.pb.cc
+generated/proto/*.pb.h
+vendor/olympia-client/
+assets/maps/
+*.user
+*.suo
+.vs/
+out/

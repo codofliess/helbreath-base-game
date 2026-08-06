@@ -36,3 +36,9 @@ multiplayer/server/_build_check_out/
 multiplayer/server/Chars/
 **/.env
 !**/.env.example
+
+# local secrets never push
+**/.env.local.secret
+**/.public-url.txt
+landing-api/.env.local.secret
+

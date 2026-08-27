@@ -1,13 +1,28 @@
 # Standing orders for agents (Chain Lords / helbreath-base-game)
 
+## LIVE FREEZE (Grok Bot / Cursor cloud / default)
+
+Until the PO says **“ok deploy”** in the same thread:
+
+- **Do not** SSH Hetzner, restart `chainlords-game`, or write `/opt/chainlords/`.
+- **Do not** `railway up` / redeploy landing, middleware, or stats.
+- **Do not** merge to `master` or force-push.
+- **Do not** post as @ChainLordsHQ or Discord announcements.
+- Work on a **feature branch** from `consolidacion`. PR only. Local/dev stack is OK.
+- Read `docs/SESSION-HANDOFF-2026-08-27-GROKBOT.md` first.
+
+Prod snapshot (2026-08-27): play.chainlords.net **UP**, game heartbeat **UP**, `online: 0`. Middleware Railway **UP** but `postgres: false`. Live is fragile — observe, don’t “fix” prod.
+
 ## Player / QA access (standing permission)
 
 - **Absolute permission** to use the PO’s live traveler characters (including Boris / Co2 wallets) for testing on the test-week server when needed.
 - Prefer **non-destructive** grants and audits; do not wipe unrelated players.
 - Do **not** ask again for permission to:
   - log in as QA / PO chars when debugging combat, bag, specialty, cash shop, drops
-  - stop/start `chainlords-game` for safe offline grants
-  - deploy server/client to `46.224.129.38` for fixes the PO already ordered
+- **Do** ask again before:
+  - stop/start `chainlords-game`
+  - deploy server/client to `46.224.129.38` / Hetzner / Railway
+  (PO freeze: live not touched unless explicitly ordered in-thread.)
 
 ## Olympia reference — auto-ingest (no per-turn permission)
 

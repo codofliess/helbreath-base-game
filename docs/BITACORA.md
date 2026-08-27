@@ -1,5 +1,12 @@
 # Bitácora de sesión — Helbreath Chain Lord
 
+## 2026-08-27 — Grok Bot GitHub access + live freeze
+
+- Cursor/Grok Bot GitHub App: acceso a `codofliess/helbreath-base-game`.
+- **Live freeze** en `AGENTS.md`: no Hetzner, no Railway deploy, no merge `master`.
+- Handoff: `docs/SESSION-HANDOFF-2026-08-27-GROKBOT.md`.
+- Stack check: play + game heartbeat UP, 0 online; middleware `postgres: false`.
+
 ## 2026-08-06 — Ops prod + digresión TMS/logística + memoria/skills (antes de volver a CL)
 
 **Contexto:** sesión post PC-reset. Stack real = **Hetzner game** + **Railway middleware** + client `play.chainlords.net`. No asumir localhost como prod.

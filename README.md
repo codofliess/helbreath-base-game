@@ -137,6 +137,12 @@ dotnet run
 
 The multiplayer client lives in [`multiplayer/mp-client`](./multiplayer/mp-client) and connects to the server over WebSockets. See [`multiplayer/server/README.md`](./multiplayer/server/README.md) for the full server setup, configuration reference, and performance / stress-test notes.
 
+### Playtest door (separate host — never live)
+
+Elon (or another tester) can enter as character **Elon** without Phantom on a **dedicated playtest host/ports**, documented in [`multiplayer/playtest/README.md`](./multiplayer/playtest/README.md).
+
+**Never** enable `PLAYTEST=1` or `VITE_PLAYTEST=true` on **play.chainlords.net**. Live wallet login must stay on the live host only.
+
 ## Project Structure
 
 - `sp-client` - Browser-based single-player client

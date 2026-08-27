@@ -4,6 +4,7 @@ import {
     OUT_UI_SET_MUSIC_VOLUME,
     OUT_UI_SET_SOUND_VOLUME,
 } from '../constants/EventNames';
+import { IS_PLAYTEST, PLAYTEST_CHARACTER_NAME, PLAYTEST_NETWORK_ID } from '../playtest';
 
 /**
  * Represents the saved game state structure stored in localStorage.
@@ -37,7 +38,8 @@ export class GameStateManager {
     /** Sound volume (0-100) */
     private soundVolume = 50;
 
-    private readonly STORAGE_KEY = 'gameState';
+    /** Playtest uses a separate key so a playtest browser profile cannot overwrite live `gameState`. */
+    private readonly STORAGE_KEY = IS_PLAYTEST ? 'gameState.playtest' : 'gameState';
 
     private static createNetworkId(): string {
         return crypto.randomUUID();
@@ -101,6 +103,12 @@ export class GameStateManager {
             }
         } catch (error) {
             console.warn('[GameStateManager] Failed to load game state from localStorage:', error);
+            shouldPersist = true;
+        }
+
+        if (IS_PLAYTEST) {
+            this.networkId = PLAYTEST_NETWORK_ID;
+            this.characterName = PLAYTEST_CHARACTER_NAME;
             shouldPersist = true;
         }
 

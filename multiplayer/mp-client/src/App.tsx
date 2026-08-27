@@ -52,6 +52,7 @@ import { connectingDialogStore } from './ui/store/ConnectingDialog.store';
 import { connectDialogStore } from './ui/store/ConnectDialog.store';
 import { serverMessageDialogStore, setServerMessageDialogOpen } from './ui/store/ServerMessageDialog.store';
 import { chatDialogStore, setChatDialogOpen } from './ui/store/ChatDialog.store';
+import { IS_PLAYTEST, PLAYTEST_CHARACTER_NAME } from './playtest';
 
 const DIALOG_STACK_POSITION = { x: DIALOG_START_X, y: DIALOG_START_Y };
 /** Position for dialogs opened from Controls - placed next to ControlsDialog (min-width 350px at x=20), ~310px from left */
@@ -792,6 +793,26 @@ function App()
     return (
         <DndContext onDragEnd={handleDragEnd}>
             <div id="app">
+                {IS_PLAYTEST ? (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            zIndex: 20000,
+                            padding: '6px 12px',
+                            background: 'rgba(80, 20, 20, 0.92)',
+                            color: '#f4e4bc',
+                            fontFamily: 'Georgia, serif',
+                            fontSize: '13px',
+                            textAlign: 'center',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        PLAYTEST host — enter as {PLAYTEST_CHARACTER_NAME}. No wallet, $HELL, airdrop, or mint. Never use on play.chainlords.net.
+                    </div>
+                ) : null}
                 <PhaserGame ref={phaserRef} />
                 
                 {showControlsDialog && (

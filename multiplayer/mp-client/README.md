@@ -33,6 +33,20 @@ pnpm dev
 
 The client dev server runs at **http://localhost:8080** (same as single-player). Use the in-game **Connect** dialog: defaults are host `localhost`, port `1337`, plus a character name.
 
+### Playtest host (no wallet)
+
+To let a tester enter as **Elon** on a **separate** port/host — never `play.chainlords.net` — see [`../playtest/README.md`](../playtest/README.md). Quick local pair:
+
+```bash
+# terminal 1, multiplayer/server
+PLAYTEST=1 PLAYTEST_LISTEN_PORT=1338 PLAYTEST_RESET_CHARACTER=1 dotnet run
+
+# terminal 2, multiplayer/mp-client
+pnpm run dev:playtest
+```
+
+Open **http://localhost:8081** and click **Enter as Elon**. Default `pnpm dev` (port 8080) is unchanged and must stay the production-style Connect dialog.
+
 ---
 
 ## Scripts

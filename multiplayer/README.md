@@ -7,7 +7,7 @@ Authoritative game server (C#) and browser client (Phaser + React) with a shared
 | **Browser client** | [`mp-client/README.md`](./mp-client/README.md) |
 | **Game server** | [`server/README.md`](./server/README.md) |
 
-Shared design docs live under [`docs/`](./docs/). Network schemas are in [`proto/`](./proto/).
+Shared design docs live under [`docs/`](./docs/). Network schemas are in [`proto/`](./proto/). Isolated playtest host (character **Elon**, no wallet, never `play.chainlords.net`): [`playtest/README.md`](./playtest/README.md).
 
 ## Asset loading and ZIP
 

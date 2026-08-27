@@ -29,7 +29,16 @@ try {
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+var playtest = PlaytestRuntime.FromEnvironment();
+playtest.AbortIfBoundToForbiddenProductionHost();
 var settings = await Config.LoadSettings();
+if (playtest.Enabled) {
+    if (playtest.ListenPort is int playtestPort) {
+        settings = settings with { Port = playtestPort };
+    }
+    Console.WriteLine("[Server] PLAYTEST MODE. This process must never serve play.chainlords.net.");
+    Console.WriteLine($"[Server] Playtest character '{playtest.CharacterName}' networkId '{playtest.NetworkId}' listen port {settings.Port}.");
+}
 var gcMonitor = settings.Debug.EnableGcLogs ? new GarbageCollectorMonitor() : null;
 var worldRegistry = new WorldRegistry(settings, workerCount: settings.Threads.GameWorldWorkers, tickInterval: TimeSpan.FromMilliseconds(settings.GameWorld.TickInterval));
 var sessionsByNetworkId = new ConcurrentDictionary<string, PlayerSession>(StringComparer.Ordinal);
@@ -50,6 +59,7 @@ var npcsConfig = await Config.LoadNpcsConfig();
 var npcsById = Config.BuildNpcCatalog(npcsConfig);
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
 var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+playtest.ResetCharacterSaveIfRequested(charsDirectory);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -236,6 +246,7 @@ app.Map("/ws", async context => {
                     initialGameWorldId,
                     sessionsByNetworkId,
                     sessionsByServerId,
+                    playtest,
                     out authenticatedSession,
                     out var isReconnect,
                     out var authenticationError)) {
@@ -422,6 +433,7 @@ static bool TryAuthenticatePlayer(
     string initialGameWorldId,
     ConcurrentDictionary<string, PlayerSession> sessionsByNetworkId,
     ConcurrentDictionary<Guid, PlayerSession> sessionsByServerId,
+    PlaytestRuntime playtest,
     out PlayerSession? session,
     out bool isReconnect,
     out string? errorMessage) {
@@ -437,6 +449,10 @@ static bool TryAuthenticatePlayer(
     var trimmedCharacterName = characterName.Trim();
     if (string.IsNullOrEmpty(trimmedCharacterName)) {
         errorMessage = "Character name is required.";
+        return false;
+    }
+
+    if (!playtest.TryValidateAuthentication(networkId, trimmedCharacterName, out errorMessage)) {
         return false;
     }
 

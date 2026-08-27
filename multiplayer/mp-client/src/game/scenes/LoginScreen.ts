@@ -24,6 +24,7 @@ import { NetworkManager } from '../../utils/NetworkManager';
 import type { InitialGameWorldStateEventData } from '../../Types';
 import { setConnectingDialogOpen } from '../../ui/store/ConnectingDialog.store';
 import { openConnectDialogForLogin, setConnectDialogOpen } from '../../ui/store/ConnectDialog.store';
+import { IS_PLAYTEST, PLAYTEST_CHARACTER_NAME } from '../../playtest';
 
 /**
  * Login screen scene. Displays title and opens the Connect dialog to join the server.
@@ -89,7 +90,7 @@ export class LoginScreen extends Scene {
         drawAppTitle(this);
 
         const gsm = getGameStateManager(this.game);
-        openConnectDialogForLogin(gsm.getCharacterName() ?? '');
+        openConnectDialogForLogin(IS_PLAYTEST ? PLAYTEST_CHARACTER_NAME : (gsm.getCharacterName() ?? ''));
 
             const handleConnectToServer = async (payload: ConnectToServerPayload) => {
             if (this.isConnecting) {

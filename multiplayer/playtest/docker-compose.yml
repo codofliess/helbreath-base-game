@@ -1,0 +1,49 @@
+# Isolated playtest stack. NEVER point this at play.chainlords.net.
+# Usage (from this directory): docker compose -f docker-compose.yml up --build
+#
+# Browser: http://localhost:8081  →  Enter as Elon
+# Game WS: localhost:1338
+#
+# If the browser is not on the same machine, export VITE_PLAYTEST_WS_HOST to the
+# public DNS of THIS playtest host before compose up.
+
+name: helbreath-playtest
+
+services:
+  playtest-server:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /src/multiplayer/server
+    volumes:
+      - ../..:/src
+    environment:
+      PLAYTEST: "1"
+      PLAYTEST_LISTEN_PORT: "1338"
+      PLAYTEST_RESET_CHARACTER: "1"
+      PLAYTEST_CHARACTER_NAME: "Elon"
+      PLAYTEST_NETWORK_ID: "playtest-elon"
+      # Set this to the public hostname of the playtest VM if you use a reverse proxy.
+      # Must not be play.chainlords.net — the server will refuse to start.
+      GAME_PUBLIC_HOSTNAME: ${GAME_PUBLIC_HOSTNAME:-localhost}
+    command: ["dotnet", "run", "--no-launch-profile"]
+    ports:
+      - "1338:1338"
+
+  playtest-client:
+    image: node:22-bookworm
+    working_dir: /src/multiplayer/mp-client
+    volumes:
+      - ../..:/src
+    environment:
+      VITE_PLAYTEST: "true"
+      VITE_PLAYTEST_CHARACTER_NAME: "Elon"
+      VITE_PLAYTEST_NETWORK_ID: "playtest-elon"
+      VITE_PLAYTEST_WS_HOST: ${VITE_PLAYTEST_WS_HOST:-localhost}
+      VITE_PLAYTEST_WS_PORT: "1338"
+    command:
+      - sh
+      - -c
+      - corepack enable && pnpm install && pnpm run dev:playtest
+    ports:
+      - "8081:8081"
+    depends_on:
+      - playtest-server

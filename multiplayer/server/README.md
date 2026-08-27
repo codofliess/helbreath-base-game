@@ -33,6 +33,8 @@ dotnet run
 
 The server binds the port configured in [`Config/Settings.json`](./Config/Settings.json) (default `1337`). Point the multiplayer client at it and connect.
 
+For an isolated **playtest** listener (port **1338**, character **Elon**, no wallet UI), see [`../playtest/README.md`](../playtest/README.md). Do not set `PLAYTEST=1` on the live `play.chainlords.net` process.
+
 ---
 
 ## Server Configuration

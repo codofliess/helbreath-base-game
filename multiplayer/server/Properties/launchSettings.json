@@ -18,6 +18,19 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
+    },
+    "Playtest": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "PLAYTEST": "1",
+        "PLAYTEST_LISTEN_PORT": "1338",
+        "PLAYTEST_RESET_CHARACTER": "1",
+        "PLAYTEST_CHARACTER_NAME": "Elon",
+        "PLAYTEST_NETWORK_ID": "playtest-elon"
+      }
     }
   }
 }

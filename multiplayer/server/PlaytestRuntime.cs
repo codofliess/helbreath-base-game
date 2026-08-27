@@ -122,9 +122,13 @@ public sealed class PlaytestRuntime {
         yield return Environment.GetEnvironmentVariable("VIRTUAL_HOST") ?? string.Empty;
         yield return Environment.GetEnvironmentVariable("PLAYTEST_PUBLIC_HOST") ?? string.Empty;
         yield return Environment.GetEnvironmentVariable("HOSTNAME") ?? string.Empty;
+        string? dnsHost = null;
         try {
-            yield return System.Net.Dns.GetHostName();
+            dnsHost = System.Net.Dns.GetHostName();
         } catch (Exception) {
+        }
+        if (!string.IsNullOrEmpty(dnsHost)) {
+            yield return dnsHost;
         }
     }
 

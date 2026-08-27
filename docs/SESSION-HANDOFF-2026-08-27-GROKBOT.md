@@ -35,10 +35,15 @@ Secrets, `.env`, social-bot tokens, wallet keys, Railway/Hetzner deploys, X/Disc
 - X brand: @ChainLordsHQ — password recovery pending; drafts only.
 - Discord: do not reuse production `DISCORD_BOT_TOKEN` in Grok Bot (Gateway clash).
 
+## Playtest door (docs)
+
+Phantom-free entry is **not** allowed on live. Isolated how-to: [`docs/qa/PLAYTEST-DOOR.md`](qa/PLAYTEST-DOOR.md) (traveler Vite `:8081`, local game `:1337`, char **`ElonQa`**). Do not deploy that host; do not point `VITE_GAME_HOST` at play/Hetzner.
+
 ## First useful jobs (pick one, PR)
 
 1. CDO/UI polish from `tmp-po-*.png` (wallet vs referral, Arena button, create-duel, pixelated HUD).
 2. Inventory/bag work already dirty on local `consolidacion` — **do not overwrite uncommitted PO files**; ask if conflict.
 3. Document-only: map Railway vs Hetzner in README ops section.
+4. **Done (docs):** playtest door without Phantom — see `docs/qa/PLAYTEST-DOOR.md`. No CDO/UI in that PR.
 
 Local workstation may have **uncommitted** consolidacion changes. Prefer a clean branch from `origin/consolidacion` unless PO says to continue that WIP.

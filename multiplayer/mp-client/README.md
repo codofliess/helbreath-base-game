@@ -33,6 +33,8 @@ pnpm dev
 
 The client dev server runs at **http://localhost:8080** (same as single-player). Use the in-game **Connect** dialog: defaults are host `localhost`, port `1337`, plus a character name.
 
+**Traveler playtest without Phantom** is a **separate** Vite host on **8081**, never a skip on `play.chainlords.net`. See [`docs/qa/PLAYTEST-DOOR.md`](../../docs/qa/PLAYTEST-DOOR.md). Do not point that client at production.
+
 ---
 
 ## Scripts

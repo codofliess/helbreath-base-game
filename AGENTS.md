@@ -1,5 +1,12 @@
 # Standing orders for agents (Chain Lords / helbreath-base-game)
 
+## GitHub + Cursor Origin
+
+- **Source of truth:** GitHub `codofliess/helbreath-base-game` (mirrored into Cursor Origin).
+- Cloud / Grok Bot agents: use the **Origin** copy of this repo. Pushes on a GitHub-synced repo go **through to GitHub**.
+- Workstation Grok Build: remote `origin` = GitHub. Do not retarget local remotes unless PO asks.
+- Issues/CI stay on GitHub. PRs can be opened on Origin and sync back.
+
 ## LIVE FREEZE (Grok Bot / Cursor cloud / default)
 
 Until the PO says **“ok deploy”** in the same thread:

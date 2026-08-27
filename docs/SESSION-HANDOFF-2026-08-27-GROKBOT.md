@@ -1,6 +1,7 @@
 # Session handoff — 2026-08-27 (Grok Bot)
 
 Repo: `codofliess/helbreath-base-game`  
+**Cursor Origin:** GitHub mirror (PO synced full git into Origin 2026-08-27). Agents work here; GitHub remains canonical.  
 Work branch: **`consolidacion`** (not `master`)  
 PO: Martín / codofliess  
 **LIVE: do not touch.**

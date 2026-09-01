@@ -1,5 +1,11 @@
 # Bitácora de sesión — Helbreath Chain Lord
 
+## 2026-08-27 — Cursor Origin: full git mirror
+
+- PO: cloned/synced **all git** into Cursor Origin (`cursor.com/codebase`).
+- Agents (Grok Bot / Cursor cloud) attach to Origin; GitHub sigue source of truth (pushes pass through).
+- Local Grok Build: remote sigue `https://github.com/codofliess/helbreath-base-game.git`.
+
 ## 2026-08-27 — Grok Bot GitHub access + live freeze
 
 - Cursor/Grok Bot GitHub App: acceso a `codofliess/helbreath-base-game`.

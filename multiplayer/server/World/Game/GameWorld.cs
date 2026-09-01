@@ -741,7 +741,11 @@ public sealed class GameWorld : IWorkerWorld {
         if (connectedMessage.PersistedState is not null) {
             player.ApplyPersistedState(connectedMessage.PersistedState);
             if (connectedMessage.TravelerMode) {
-                player.ApplyTravelerModeConstraints();
+                if (PlaytestMode.AllowsSandboxSelfEdit(connectedMessage.AccountWallet)) {
+                    player.SetTravelerMode(true);
+                } else {
+                    player.ApplyTravelerModeConstraints();
+                }
             }
         } else {
             // Brand-new character: soft starter (never GM OP kit), desk slot, optional create appearance.
@@ -942,15 +946,21 @@ public sealed class GameWorld : IWorkerWorld {
             }
         }
         if (transferPlayerInMessage.Player.TravelerMode) {
-            // CreatePlayer seeds GM HP (1000); keep traveler soft pools without wiping city-transfer inventory.
-            player.RestoreTravelerCombatPools();
+            if (PlaytestMode.AllowsSandboxSelfEdit(player.AccountWallet)) {
+                player.SetTravelerMode(true);
+            } else {
+                // CreatePlayer seeds GM HP (1000); keep traveler soft pools without wiping city-transfer inventory.
+                player.RestoreTravelerCombatPools();
+            }
         }
         ApplyTournamentEntry(player, transferPlayerInMessage.Player.State);
         OnlinePlayerDirectory.Register(player);
         Console.WriteLine($"[GameWorld:{id}] Player transferred in. Players on world: {playersBySessionId.Count}");
         // Arena must resync full spell directory (empty InitialState wipes client VFX table → Blizzard invisible).
         // Travelers also need learned unlocks re-pushed after map change.
-        var includeSpells = player.InTournamentArena || player.TravelerMode;
+        var includeSpells = player.InTournamentArena
+            || player.TravelerMode
+            || PlaytestMode.AllowsSandboxSelfEdit(player.AccountWallet);
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: includeSpells);
     }
 

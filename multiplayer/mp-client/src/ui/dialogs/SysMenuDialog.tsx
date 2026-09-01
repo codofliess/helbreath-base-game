@@ -34,7 +34,7 @@ import { setTrainingDialogOpen } from '../store/TrainingDialog.store';
 import { openAuctionBoard } from '../store/AuctionBoardDialog.store';
 import { setAntiBotToolsDialogOpen } from '../store/AntiBotToolsDialog.store';
 import { hellMiningStore } from '../store/HellMining.store';
-import { isTravelerPlayerMode } from '../../utils/playerMode';
+import { showGmSandboxUi } from '../../utils/playerMode';
 import { setCharacterDialogOpen, setCharacterSubPanel } from '../store/CharacterDialog.store';
 import { mapDialogStore, setDisplayGrid } from '../store/MapDialog.store';
 
@@ -347,7 +347,7 @@ export function SysMenuDialog({
                     ) : null}
                 </div>
 
-                {!isTravelerPlayerMode() ? (
+                {showGmSandboxUi() ? (
                     <button
                         type="button"
                         className="olympia-text-btn sys-menu-antibot"

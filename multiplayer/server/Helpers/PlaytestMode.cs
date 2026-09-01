@@ -50,8 +50,8 @@ public static class PlaytestMode {
     }
 
     /// <summary>
-    /// Abort if PLAYTEST=1 is combined with live auth, Postgres, $HELL mint, or market middleware.
-    /// No-op when playtest is off.
+    /// Abort if PLAYTEST=1 is combined with live auth, $HELL mint, or market middleware.
+    /// Leftover DATABASE_URL is ignored (JSON kit only). No-op when playtest is off.
     /// </summary>
     public static void ThrowIfUnsafeConfiguration() {
         if (!IsEnabled) {
@@ -62,16 +62,30 @@ public static class PlaytestMode {
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name));
 
         if (Set("WALLET_AUTH_SECRET") ||
-            Set("DATABASE_URL") ||
             Set("HELL_MINT") ||
             Set("MARKET_MIDDLEWARE_URL")) {
             throw new InvalidOperationException(
-                "PLAYTEST=1 refuses to start with WALLET_AUTH_SECRET, DATABASE_URL, HELL_MINT, or MARKET_MIDDLEWARE_URL. " +
+                "PLAYTEST=1 refuses to start with WALLET_AUTH_SECRET, HELL_MINT, or MARKET_MIDDLEWARE_URL. " +
                 "This door is isolated from live. Unset those variables (do not point this process at Hetzner/Railway prod).");
+        }
+
+        if (Set("DATABASE_URL") || Set("POSTGRES_CONNECTION_STRING")) {
+            Console.WriteLine(
+                "[PLAYTEST] DATABASE_URL is set but will be ignored — ElonQa is JSON-only under " +
+                $"./{CharsDirectoryName}/ (Postgres character list must not win).");
         }
 
         Console.WriteLine(
             $"[PLAYTEST] Isolated door ON. account={AccountId} char={CharacterName} saves=./{CharsDirectoryName}/ " +
-            "No Phantom, no $HELL, no airdrop. Do not bind this process to play.chainlords.net.");
+            "JSON kit wins over Postgres. ElonQa may self-edit (GM tools). No Phantom, no $HELL, no airdrop. " +
+            "Do not bind this process to play.chainlords.net.");
+    }
+
+    /// <summary>
+    /// Isolated playtest ElonQa may use GM self-edit (stats, items, teleport, summons) without a
+    /// Phantom wallet. Live traveler sessions stay locked.
+    /// </summary>
+    public static bool AllowsSandboxSelfEdit(string? accountWallet) {
+        return IsEnabled && IsIsolatedAccount(accountWallet);
     }
 }

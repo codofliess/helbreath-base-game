@@ -48,6 +48,9 @@ public static class AdminSecurity {
     /// </summary>
     public static bool CanUseGmTools(GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
+        if (PlaytestMode.AllowsSandboxSelfEdit(player.AccountWallet)) {
+            return true;
+        }
         if (player.TravelerMode) {
             return false;
         }
@@ -60,8 +63,12 @@ public static class AdminSecurity {
     /// <summary>
     /// Forces traveler mode for any wallet that is not GM-allowlisted (and not open-dev sandbox).
     /// Prevents client spoof of <c>playerMode=gm</c> into free CreateItem / teleport / kill-all.
+    /// Isolated playtest ElonQa still logs in on the traveler hub, but is not a live traveler lock.
     /// </summary>
     public static bool ShouldForceTravelerMode(string? walletPubkey, bool clientRequestedTravelerMode) {
+        if (PlaytestMode.AllowsSandboxSelfEdit(walletPubkey)) {
+            return false;
+        }
         if (clientRequestedTravelerMode) {
             return true;
         }

@@ -104,7 +104,7 @@ import { openWarehouseDialog, warehouseDialogStore } from './ui/store/WarehouseD
 import { openBlacksmithDialog, blacksmithDialogStore } from './ui/store/BlacksmithDialog.store';
 import { openNpcTalkDialog, npcTalkDialogStore, type NpcTalkRole } from './ui/store/NpcTalkDialog.store';
 import { getNetworkManager } from './utils/RegistryUtils';
-import { getTravelerWorldId, isTravelerPlayerMode } from './utils/playerMode';
+import { getTravelerWorldId, isTravelerPlayerMode, showGmSandboxUi } from './utils/playerMode';
 import { inventoryDialogStore, setInventoryDialogOpen } from './ui/store/InventoryDialog.store';
 import { arenaSlimModeStore } from './ui/store/ArenaSlimMode.store';
 import { itemDialogStore, setItemDialogOpen } from './ui/store/ItemDialog.store';
@@ -219,6 +219,7 @@ function App()
     /** True only while Phaser GameWorld is the active scene — never during SELECTCHAR / hub. */
     const [isInGameWorld, setIsInGameWorld] = useState(false);
     const travelerMode = isTravelerPlayerMode();
+    const gmSandboxUi = showGmSandboxUi();
     /** World HUDs (dock, minimap, quest log) must never paint over login desks. */
     const showWorldHud = isMapLoaded && isInGameWorld;
     /** Duel-focused HUD: bag + combat only (see ArenaSlimMode.store). */
@@ -279,7 +280,7 @@ function App()
         const handleMapLoaded = () => {
             setIsMapLoaded(true);
             setIsInGameWorld(true);
-            if (!travelerMode) {
+            if (gmSandboxUi) {
                 setControlsDialogOpen(true);
             }
             if (!hasInitialMapLoadRef.current) {
@@ -334,7 +335,7 @@ function App()
                 }
             }, 900);
 
-            if (!travelerMode) {
+            if (!travelerMode || gmSandboxUi) {
                 return;
             }
 
@@ -362,7 +363,7 @@ function App()
         return () => {
             EventBus.off(OUT_MAP_LOADED, handleMapLoaded);
         };
-    }, [travelerMode]);
+    }, [travelerMode, gmSandboxUi]);
 
     /**
      * SELECTCHAR / Create Character live on LoginScreen. If isMapLoaded stayed true after
@@ -1115,7 +1116,7 @@ function App()
             <div id="app">
                 <PhaserGame ref={phaserRef} />
                 
-                {showControlsDialog && !travelerMode && (
+                {showControlsDialog && gmSandboxUi && (
                     <ControlsDialog
                         position={dialogPosition}
                         phaserRef={phaserRef}
@@ -1124,7 +1125,7 @@ function App()
                     />
                 )}
                 
-                {showMapDialog && !travelerMode && (
+                {showMapDialog && gmSandboxUi && (
                     <MapDialog
                         position={mapDialogPosition}
                         onClose={() => setMapDialogOpen(false)}
@@ -1133,7 +1134,7 @@ function App()
                     />
                 )}
                 
-                {showCameraDialog && !travelerMode && (
+                {showCameraDialog && gmSandboxUi && (
                     <CameraDialog
                         position={cameraDialogPosition}
                         onClose={() => setCameraDialogOpen(false)}
@@ -1142,7 +1143,7 @@ function App()
                     />
                 )}
                 
-                {showPlayerDialog && !travelerMode && (
+                {showPlayerDialog && gmSandboxUi && (
                     <PlayerDialog
                         position={playerDialogPosition}
                         onClose={() => setPlayerDialogOpen(false)}
@@ -1165,7 +1166,7 @@ function App()
                 {showWorldHud && <CornerMinimapHud />}
                 {showFullWorldChrome && <TestnetHud phaserRef={phaserRef} />}
                 
-                {showSoundDialog && !travelerMode && (
+                {showSoundDialog && gmSandboxUi && (
                     <SoundDialog
                         position={soundDialogPosition}
                         onClose={() => setSoundDialogOpen(false)}
@@ -1174,7 +1175,7 @@ function App()
                     />
                 )}
                 
-                {showMonsterDialog && !travelerMode && (
+                {showMonsterDialog && gmSandboxUi && (
                     <MonsterDialog
                         position={monsterDialogPosition}
                         phaserRef={phaserRef}
@@ -1183,7 +1184,7 @@ function App()
                     />
                 )}
                 
-                {showNPCDialog && !travelerMode && (
+                {showNPCDialog && gmSandboxUi && (
                     <NPCDialog
                         position={npcDialogPosition}
                         zIndex={npcDialogZIndex}
@@ -1191,7 +1192,7 @@ function App()
                     />
                 )}
                 
-                {showEffectDialog && !travelerMode && (
+                {showEffectDialog && gmSandboxUi && (
                     <EffectDialog
                         position={effectDialogPosition}
                         zIndex={effectDialogZIndex}
@@ -1220,7 +1221,7 @@ function App()
                     />
                 )}
                 
-                {showItemDialog && !travelerMode && !arenaSlim && (
+                {showItemDialog && gmSandboxUi && !arenaSlim && (
                     <ItemDialog
                         position={itemDialogPosition}
                         onClose={() => setItemDialogOpen(false)}
@@ -1229,7 +1230,7 @@ function App()
                     />
                 )}
                 
-                {showServerDialog && !travelerMode && (
+                {showServerDialog && gmSandboxUi && (
                     <ServerDialog
                         position={serverDialogPosition}
                         onClose={() => setServerDialogOpen(false)}
@@ -1238,7 +1239,7 @@ function App()
                     />
                 )}
                 
-                {showPerformanceDialog && !travelerMode && (
+                {showPerformanceDialog && gmSandboxUi && (
                     <PerformanceDialog
                         position={performanceDialogPosition}
                         onClose={() => setPerformanceDialogOpen(false)}
@@ -1320,7 +1321,7 @@ function App()
                             onBringToFront={() => bringDialogToFront('guild-warehouse-dialog')}
                             onPositionChange={setOlympiaMenuPosition}
                         />
-                        {!isTravelerPlayerMode() ? (
+                        {gmSandboxUi ? (
                             <AntiBotToolsDialog
                                 position={olympiaMenuPosition}
                                 zIndex={olympiaMenuZIndex}
@@ -1348,7 +1349,7 @@ function App()
                 {showWorldHud && <ChatWorldLog duelOnly={arenaSlim} />}
                 {showWorldHud && <ChatComposeBar phaserRef={phaserRef} duelOnly={arenaSlim} />}
 
-                {!travelerMode && !arenaSlim && <AssetDebugOverlay />}
+                {gmSandboxUi && !arenaSlim && <AssetDebugOverlay />}
                 <InventoryItemHoverOverlay />
                 {/* Monster/NPC hover: skip in slim — less work mid-duel (players still hoverable). */}
                 {showFullWorldChrome && <MonsterHoverOverlay />}

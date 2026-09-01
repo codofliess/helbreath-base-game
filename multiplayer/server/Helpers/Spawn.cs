@@ -127,7 +127,7 @@ public static class Spawn {
         IEnumerable<SpellConfig> spells;
         if (!includeSpells) {
             spells = Array.Empty<SpellConfig>();
-        } else if (player.TravelerMode) {
+        } else if (player.TravelerMode && !PlaytestMode.AllowsSandboxSelfEdit(player.AccountWallet)) {
             // Traveler: Energy Bolt + Magic Tower combat unlocks (never full GM sandbox).
             var list = new List<SpellConfig>();
             if (wr.SpellsById.TryGetValue(0, out var energyBolt)) {

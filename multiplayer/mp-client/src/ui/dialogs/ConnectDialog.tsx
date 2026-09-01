@@ -65,7 +65,6 @@ import {
     createPlaytestWalletSession,
     isPlaytestClient,
     PLAYTEST_CHARACTER_NAME,
-    PLAYTEST_CREATE_STATS,
 } from '../../utils/playtestMode';
 import { ARENA_CLOSED_MESSAGE, ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
@@ -345,15 +344,16 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 setCharacterSlots(slots);
                 setReferralInfo(result.referral ?? null);
                 const firstOccupied = slots[0];
-                if (firstOccupied && isPlaytestClient() && walletSession) {
-                    setSelectedSlotIndex(firstOccupied.slotIndex);
-                    setCharacterName(firstOccupied.name);
+                if (isPlaytestClient() && walletSession) {
+                    const slotIndex = firstOccupied?.slotIndex ?? 0;
+                    setSelectedSlotIndex(slotIndex);
+                    setCharacterName(PLAYTEST_CHARACTER_NAME);
                     setConnectDialogOpen(false);
                     EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
                         host,
                         port,
                         characterName: PLAYTEST_CHARACTER_NAME,
-                        slotIndex: firstOccupied.slotIndex,
+                        slotIndex,
                         preferredInitialWorldId: getPreferredInitialWorldId(),
                         walletSession: {
                             wallet: walletSession.wallet,
@@ -364,32 +364,6 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 } else if (firstOccupied) {
                     setSelectedSlotIndex(firstOccupied.slotIndex);
                     setCharacterName(firstOccupied.name);
-                } else if (isPlaytestClient() && walletSession) {
-                    setSelectedSlotIndex(0);
-                    setCharacterName(PLAYTEST_CHARACTER_NAME);
-                    setConnectDialogOpen(false);
-                    EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
-                        host,
-                        port,
-                        characterName: PLAYTEST_CHARACTER_NAME,
-                        slotIndex: 0,
-                        preferredInitialWorldId: getPreferredInitialWorldId(),
-                        gender: PLAYTEST_CREATE_STATS.gender,
-                        skinColor: PLAYTEST_CREATE_STATS.skinColor,
-                        hairStyleIndex: PLAYTEST_CREATE_STATS.hairStyleIndex,
-                        underwearColorIndex: PLAYTEST_CREATE_STATS.underwearColorIndex,
-                        str: PLAYTEST_CREATE_STATS.str,
-                        vit: PLAYTEST_CREATE_STATS.vit,
-                        dex: PLAYTEST_CREATE_STATS.dex,
-                        int: PLAYTEST_CREATE_STATS.int,
-                        mag: PLAYTEST_CREATE_STATS.mag,
-                        chr: PLAYTEST_CREATE_STATS.chr,
-                        walletSession: {
-                            wallet: walletSession.wallet,
-                            token: walletSession.token,
-                            expiresAt: walletSession.expiresAt,
-                        },
-                    });
                 } else {
                     // No playable character yet → Create Character is step 1 (cannot Start).
                     setSelectedSlotIndex(0);
@@ -410,7 +384,24 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 setReferralInfo(null);
                 const message = error instanceof Error ? error.message : 'Failed to load characters.';
                 console.warn('[ConnectDialog] Character list failed:', message);
-                // Toast only once per open cycle — effect can re-run on host/port/wallet churn.
+                if (isPlaytestClient() && walletSession) {
+                    setSelectedSlotIndex(0);
+                    setCharacterName(PLAYTEST_CHARACTER_NAME);
+                    setConnectDialogOpen(false);
+                    EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+                        host,
+                        port,
+                        characterName: PLAYTEST_CHARACTER_NAME,
+                        slotIndex: 0,
+                        preferredInitialWorldId: getPreferredInitialWorldId(),
+                        walletSession: {
+                            wallet: walletSession.wallet,
+                            token: walletSession.token,
+                            expiresAt: walletSession.expiresAt,
+                        },
+                    });
+                    return;
+                }
                 EventBus.emit(TOAST_REQUESTED, {
                     message,
                     severity: 'warning',

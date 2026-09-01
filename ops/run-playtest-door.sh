@@ -4,13 +4,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-unset DATABASE_URL WALLET_AUTH_SECRET HELL_MINT MARKET_MIDDLEWARE_URL SOLANA_RPC_URL || true
+unset DATABASE_URL POSTGRES_CONNECTION_STRING WALLET_AUTH_SECRET HELL_MINT MARKET_MIDDLEWARE_URL SOLANA_RPC_URL || true
 export PLAYTEST=1
 export ASPNETCORE_ENVIRONMENT=Development
 export HELL_TESTING_WEEK=0
 export HELL_TESTING_WEEK_UNTIL=2020-01-01
 
 echo "[playtest] game :1337 + client http://127.0.0.1:8081  (not play.chainlords.net)"
+echo "[playtest] ElonQa L150 kit from PlaytestKits/ → CharsPlaytest/ (JSON, no Phantom, GM self-edit)"
 
 cd "$ROOT/multiplayer/server"
 dotnet run --no-launch-profile &

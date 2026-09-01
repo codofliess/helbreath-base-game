@@ -36,7 +36,7 @@ import {
     chatTranslationStore,
     setShowSpeakerLanguageTag,
 } from './ui/store/ChatTranslation.store';
-import { isTravelerPlayerMode } from './utils/playerMode';
+import { showGmSandboxUi } from './utils/playerMode';
 import { installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
 import { captureReferralFromUrl } from './utils/referral';
 import { EventBus } from './game/EventBus';
@@ -234,8 +234,8 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
     }
 
     if (isGameActive() && e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'D' || e.code === 'KeyD')) {
-        // GM tooling panel — disabled in traveler / real-player mode.
-        if (isTravelerPlayerMode()) {
+        // GM tooling panel — disabled in traveler / real-player mode (playtest ElonQa may self-edit).
+        if (!showGmSandboxUi()) {
             return;
         }
         e.preventDefault();

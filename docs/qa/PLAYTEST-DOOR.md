@@ -88,5 +88,6 @@ Static bundle (still not live): `pnpm build:playtest` → `multiplayer/mp-client
 |-------|----------|
 | Address bar | `http://127.0.0.1:8081`, **not** play.chainlords.net |
 | Character | `ElonQa` |
+| Traveler map | `GET /assets/maps/default.amd` (and `/game-assets/maps/traveler.amd`) is binary, **not** `index.html` |
 | Live play | Unchanged Phantom login |
 | This agent | No public URL (no Railway/Hetzner creds for a separate host) |

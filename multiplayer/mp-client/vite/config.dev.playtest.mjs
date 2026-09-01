@@ -2,9 +2,11 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { helbreathPlaytestAssetsPlugin } from './helbreathPlaytestAssetsPlugin.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
+const mpClientRoot = path.resolve(__dirname, '..')
 
 /**
  * Isolated playtest traveler on :8081 (PLAYTEST=1). Not the live host.
@@ -12,7 +14,7 @@ const repoRoot = path.resolve(__dirname, '../../..')
  */
 export default defineConfig({
     base: './',
-    plugins: [react()],
+    plugins: [react(), helbreathPlaytestAssetsPlugin(mpClientRoot)],
     resolve: {
         alias: {
             '@sp-client': path.resolve(repoRoot, 'sp-client/src'),

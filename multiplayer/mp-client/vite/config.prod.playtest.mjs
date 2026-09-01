@@ -2,6 +2,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { helbreathPlaytestAssetsPlugin } from './helbreathPlaytestAssetsPlugin.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
@@ -13,7 +14,7 @@ const mpClientRoot = path.resolve(__dirname, '..')
  */
 export default defineConfig({
     base: './',
-    plugins: [react()],
+    plugins: [react(), helbreathPlaytestAssetsPlugin(mpClientRoot)],
     define: {
         'import.meta.env.VITE_PLAYER_MODE': JSON.stringify('traveler'),
         'import.meta.env.VITE_PLAYTEST': JSON.stringify('1'),

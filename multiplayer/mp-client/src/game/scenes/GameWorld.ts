@@ -45,7 +45,7 @@ import type { InitialGameWorldState } from '../../utils/RegistryUtils';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
-import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
+import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand, toClientMapFileName } from '../../utils/MapAssets';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { SoundManager } from '../../utils/SoundManager';
@@ -531,7 +531,7 @@ export class GameWorld extends Scene {
 
     /**
      * Clears leftover SELECTCHAR canvas CSS / ownership, then prepares for in-game
-     * viewport presentation (Scale.FIT + fixed 1024×576 FOV — pillarbox, not more map).
+     * viewport presentation (Scale.FIT + fixed 1024×576 FOV — letterbox, not more map).
      */
     private clearResidualLoginDeskChrome(): void {
         forceClearLoginDeskCanvasPresentation(this);
@@ -555,7 +555,9 @@ export class GameWorld extends Scene {
         let savedTextVisible = false;
         this.mapManager = new MapManager({
             scene: this,
-            initialMapName: this.initialGameWorldState?.mapName,
+            initialMapName: this.initialGameWorldState?.mapName
+                ? toClientMapFileName(this.initialGameWorldState.mapName, this.initialGameWorldState.gameWorldId)
+                : undefined,
             initialMusicFile: this.initialGameWorldState?.musicFile,
             playMapMusic: this.playMapMusic,
             onBeforeSnapshot: () => {
@@ -3393,8 +3395,6 @@ export class GameWorld extends Scene {
             return;
         }
         if (!this.player) {
-            console.warn(
-                `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Ignoring monster enter before player exists (id=${data.monsterId})`);
             return;
         }
 
@@ -4951,7 +4951,7 @@ export class GameWorld extends Scene {
 function toRegistryInitialGameWorldState(data: InitialGameWorldStateEventData): InitialGameWorldState {
     return {
         gameWorldId: data.gameWorldId,
-        mapName: `${data.mapName}.amd`,
+        mapName: toClientMapFileName(data.mapName, data.gameWorldId),
         musicFile: data.musicFile,
         playerX: data.playerX,
         playerY: data.playerY,

@@ -67,6 +67,7 @@ import {
     PLAYTEST_CHARACTER_NAME,
     PLAYTEST_CREATE_STATS,
 } from '../../utils/playtestMode';
+import { ARENA_CLOSED_MESSAGE, ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';

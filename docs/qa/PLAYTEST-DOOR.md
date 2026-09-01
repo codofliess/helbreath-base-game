@@ -68,7 +68,18 @@ pnpm playtest
 ```
 
 Browser: **http://127.0.0.1:8081/**  
-Click **Enter as ElonQa** (or wait — hub auto-enters). No Phantom. First visit creates `ElonQa`; later visits load `CharsPlaytest/`. Traveler map: kill a mob.
+Click **Enter as ElonQa** (or wait — hub auto-enters). No Phantom.
+
+**ElonQa is a seeded L150 kit**, not a Create Character L1. Source of truth:
+
+1. Committed template `multiplayer/server/PlaytestKits/playtest-elonqa.traveler.json`
+2. Runtime save `multiplayer/server/CharsPlaytest/playtest-elonqa.traveler.json` (gitignored)
+
+On `PLAYTEST=1` start the server copies the template into `CharsPlaytest/` if that save is missing or is a starter L1. **Postgres is skipped** (even if `DATABASE_URL` is leftover in the shell). Logout of a bad L1 **cannot** overwrite the L150 kit.
+
+Spawn is always **traveler (90,80)** (city / city hall walk). Do not expect Ice Bound on login — walk Middleland pads ~`(452,281)` → Ice Bound ~`(255,250)`.
+
+F5 expect: Level 150, Giant Battle Hammer equipped (no shield), STR 182 / INT 65 / MAG 50 / VIT 80 / DEX 128. Bag: hero mage set, Merien shield, Storm Bringer, Ice Elemental neck, Xelima neck, MS22 wand.
 
 Static bundle (still not live): `pnpm build:playtest` → `multiplayer/mp-client/dist-playtest/`. Serve that folder only next to a `PLAYTEST=1` server. Do not upload it as the production traveler.
 
@@ -87,7 +98,8 @@ Static bundle (still not live): `pnpm build:playtest` → `multiplayer/mp-client
 | Check | Expected |
 |-------|----------|
 | Address bar | `http://127.0.0.1:8081`, **not** play.chainlords.net |
-| Character | `ElonQa` |
+| Character | `ElonQa` Lev. **150**, GBH equipped (not L1 dagger) |
+| JSON vs PG | `CharsPlaytest/` + `PlaytestKits/` win; Postgres list is not used |
 | Traveler map | `GET /assets/maps/default.amd` (and `/game-assets/maps/traveler.amd`) is binary, **not** `index.html` |
 | Live play | Unchanged Phantom login |
 | This agent | No public URL (no Railway/Hetzner creds for a separate host) |

@@ -62,16 +62,21 @@ public static class PlaytestMode {
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name));
 
         if (Set("WALLET_AUTH_SECRET") ||
-            Set("DATABASE_URL") ||
             Set("HELL_MINT") ||
             Set("MARKET_MIDDLEWARE_URL")) {
             throw new InvalidOperationException(
-                "PLAYTEST=1 refuses to start with WALLET_AUTH_SECRET, DATABASE_URL, HELL_MINT, or MARKET_MIDDLEWARE_URL. " +
+                "PLAYTEST=1 refuses to start with WALLET_AUTH_SECRET, HELL_MINT, or MARKET_MIDDLEWARE_URL. " +
                 "This door is isolated from live. Unset those variables (do not point this process at Hetzner/Railway prod).");
+        }
+
+        if (Set("DATABASE_URL") || Set("POSTGRES_CONNECTION_STRING")) {
+            Console.WriteLine(
+                "[PLAYTEST] DATABASE_URL is set but will be ignored — ElonQa is JSON-only under " +
+                $"./{CharsDirectoryName}/ (Postgres character list must not win).");
         }
 
         Console.WriteLine(
             $"[PLAYTEST] Isolated door ON. account={AccountId} char={CharacterName} saves=./{CharsDirectoryName}/ " +
-            "No Phantom, no $HELL, no airdrop. Do not bind this process to play.chainlords.net.");
+            "JSON kit wins over Postgres. No Phantom, no $HELL, no airdrop. Do not bind this process to play.chainlords.net.");
     }
 }

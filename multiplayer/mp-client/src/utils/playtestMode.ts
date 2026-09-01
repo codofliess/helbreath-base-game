@@ -9,20 +9,6 @@ export const PLAYTEST_ACCOUNT_ID = 'playtest-elonqa';
 /** Token accepted only by a PLAYTEST=1 game server. */
 export const PLAYTEST_AUTH_TOKEN = 'playtest-bypass-token';
 
-/** Classic create-character point-buy: each 10–14, sum 70. */
-export const PLAYTEST_CREATE_STATS = {
-    gender: 'male' as const,
-    skinColor: 'light' as const,
-    hairStyleIndex: 0,
-    underwearColorIndex: 0,
-    str: 12,
-    vit: 12,
-    dex: 12,
-    int: 12,
-    mag: 10,
-    chr: 12,
-};
-
 /**
  * True only for a dedicated playtest Vite/build with VITE_PLAYTEST=1.
  * Always false on play.chainlords.net / *.chainlords.net / live VPS IPs

@@ -34,7 +34,11 @@ var app = builder.Build();
 PlaytestMode.ThrowIfUnsafeConfiguration();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 var settings = await Config.LoadSettings();
-await GamePersistence.InitializeAsync();
+if (PlaytestMode.IsEnabled) {
+    Console.WriteLine("[PLAYTEST] PostgreSQL persistence skipped — CharsPlaytest JSON is the character store.");
+} else {
+    await GamePersistence.InitializeAsync();
+}
 var antiBotToolsConfig = await Config.LoadAntiBotToolsConfig();
 AntiBotTools.Initialize(antiBotToolsConfig);
 TimedChallenge.Initialize();
@@ -56,10 +60,10 @@ if (AdminSecurity.AllowOpenGmSandbox) {
         "[SECURITY] GM sandbox locked: only GM_WALLET_ALLOWLIST wallets (or Development+ALLOW_OPEN_GM_SANDBOX). " +
         "All other sessions are forced traveler.");
 }
-AuctionBoardStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-HellMiningStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-ArenaIncentives.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-Referral.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
+AuctionBoardStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+HellMiningStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+ArenaIncentives.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+Referral.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
 Console.WriteLine(
     $"[HellMining] TestingWeek={HellMiningStore.IsTestingWeekActive()} " +
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
@@ -127,6 +131,7 @@ try {
 }
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
 var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName);
+PlaytestElonQaKit.EnsureSeeded(charsDirectory);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -516,11 +521,12 @@ app.Map("/ws", async context => {
                     }
 
                     var wallet = listReq.Id.Trim();
-                    if (GamePersistence.Current is not null) {
+                    if (GamePersistence.Current is not null && !PlaytestMode.IsIsolatedAccount(wallet)) {
                         await GamePersistence.Current.UpsertAccountLoginAsync(wallet, receiveCts.Token);
                     }
 
-                    var listTravelerMode = IsTravelerPlayerMode(listReq.HasPlayerMode ? listReq.PlayerMode : null);
+                    var listTravelerMode = PlaytestMode.IsEnabled
+                        || IsTravelerPlayerMode(listReq.HasPlayerMode ? listReq.PlayerMode : null);
                     var entries = await GamePersistence.ListCharactersDualAsync(
                         GamePersistence.Current,
                         charsDirectory,
@@ -663,6 +669,9 @@ app.Map("/ws", async context => {
                     }
                     authReq.CharacterName = PlaytestMode.CharacterName;
                     authReq.PlayerMode = "traveler";
+                    if (gameWorldsById.ContainsKey("traveler")) {
+                        initialGameWorldId = "traveler";
+                    }
                 }
                 var clientTravelerMode = IsTravelerPlayerMode(authReq.HasPlayerMode ? authReq.PlayerMode : null);
                 // Security: never trust client "gm" mode alone — force traveler unless wallet is GM-allowlisted
@@ -683,7 +692,7 @@ app.Map("/ws", async context => {
                     return;
                 }
 
-                if (authReq.HasPreferredInitialWorldId) {
+                if (authReq.HasPreferredInitialWorldId && !PlaytestMode.IsEnabled) {
                     var preferredWorldId = authReq.PreferredInitialWorldId.Trim();
                     if (preferredWorldId.Length > 0 && gameWorldsById.TryGetValue(preferredWorldId, out var preferredGw)) {
                         // Arena / tournament preferred world always wins (even for traveler clients with kit).
@@ -737,7 +746,7 @@ app.Map("/ws", async context => {
                 lock (session.SyncRoot) {
                     session.TravelerMode = travelerMode;
                 }
-                if (GamePersistence.Current is not null) {
+                if (GamePersistence.Current is not null && !PlaytestMode.IsIsolatedAccount(session.NetworkId)) {
                     await GamePersistence.Current.UpsertAccountLoginAsync(session.NetworkId, receiveCts.Token);
                 }
 
@@ -749,6 +758,9 @@ app.Map("/ws", async context => {
                         session.NetworkId,
                         session.CharacterName,
                         travelerMode);
+                    if (PlaytestMode.IsEnabled && loadedPlayerState is null) {
+                        loadedPlayerState = PlaytestElonQaKit.LoadPreferredState(charsDirectory);
+                    }
                     // Brand-new create: only via Create Character desk (name + looks + stats).
                     if (loadedPlayerState is null) {
                         if (!authReq.HasGender || !authReq.HasStr) {

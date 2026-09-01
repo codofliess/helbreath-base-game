@@ -92,7 +92,7 @@ Until launch polish is signed off, **any agent touching visuals acts as CDO**:
 
 ## Playtest door (no Phantom) — isolated host only
 
-Elon / QA without Phantom: **local traveler `:8081` + local game `:1337`**, not a skip on `play.chainlords.net`. How-to, character name **`ElonQa`**, and “never point at production”: [`docs/qa/PLAYTEST-DOOR.md`](docs/qa/PLAYTEST-DOOR.md). Do not deploy that host. Do not wire it to live wallets, $HELL, middleware, or Hetzner.
+Elon / QA: **`PLAYTEST=1`** local door (`pnpm playtest` → http://127.0.0.1:8081, char **`ElonQa`**). **Not** a skip on `play.chainlords.net`. How-to: [`docs/qa/PLAYTEST-DOOR.md`](docs/qa/PLAYTEST-DOOR.md). Do not deploy that host to live. No wallets, no $HELL, no airdrop.
 
 ## Out of scope unless asked
 

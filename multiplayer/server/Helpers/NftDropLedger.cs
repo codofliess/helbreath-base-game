@@ -12,6 +12,10 @@ public static class NftDropLedger {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(item);
 
+        if (PlaytestMode.IsEnabled) {
+            return;
+        }
+
         var persistence = GamePersistence.Current;
         if (persistence is null) {
             return;

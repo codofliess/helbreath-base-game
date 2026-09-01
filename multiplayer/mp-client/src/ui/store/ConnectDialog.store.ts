@@ -5,6 +5,11 @@ import { EventBus } from '../../game/EventBus';
 import { IN_UI_CONNECT_TO_SERVER, OUT_UI_SELECTCHAR_ACTION } from '../../constants/EventNames';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
+import {
+    createPlaytestWalletSession,
+    isPlaytestClient,
+    PLAYTEST_CHARACTER_NAME,
+} from '../../utils/playtestMode';
 import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 
 /**
@@ -147,12 +152,12 @@ export const setArenaDeskIndex = (arenaDeskIndex: number) => {
 };
 
 /**
- * DEV-only: open SELECTCHAR / Create Character without Phantom (automation / VerifyFix).
+ * DEV / PLAYTEST: open SELECTCHAR without Phantom.
  * Console: `window.__helbreathDevEnterPlayWorld()` · `window.__helbreathDevEnterCreateChar(0)`
  * · `window.__helbreathDevStartSelectedChar()` (emits Start for the focused occupied slot)
  */
 export function installConnectDialogDevHooks(): void {
-    if (!import.meta.env.DEV) {
+    if (!import.meta.env.DEV && !isPlaytestClient()) {
         return;
     }
 
@@ -160,7 +165,7 @@ export function installConnectDialogDevHooks(): void {
         if (connectDialogStore.state.walletSession) {
             return;
         }
-        setConnectWalletSession({
+        setConnectWalletSession(isPlaytestClient() ? createPlaytestWalletSession() : {
             wallet: 'DevTestWallet111111111111111111111111',
             token: 'dev-bypass-token',
             expiresAt: Date.now() + 60 * 60 * 1000,
@@ -215,7 +220,7 @@ export function installConnectDialogDevHooks(): void {
     };
 
     /** Direct connect for viewport / world automation when CharacterList is empty. */
-    w.__helbreathDevConnectAs = (characterName = 'Traveler') => {
+    w.__helbreathDevConnectAs = (characterName = isPlaytestClient() ? PLAYTEST_CHARACTER_NAME : 'Traveler') => {
         ensureDevWallet();
         const s = connectDialogStore.state;
         const session = s.walletSession;

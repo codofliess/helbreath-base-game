@@ -31,6 +31,7 @@ try {
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
+PlaytestMode.ThrowIfUnsafeConfiguration();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 var settings = await Config.LoadSettings();
 await GamePersistence.InitializeAsync();
@@ -40,7 +41,9 @@ TimedChallenge.Initialize();
 PvpAcademy.Initialize();
 
 // Launch security banners — ops must set these for a real soft test.
-if (!WalletAuthValidator.IsRequired) {
+if (PlaytestMode.IsEnabled) {
+    // Banner already printed from ThrowIfUnsafeConfiguration.
+} else if (!WalletAuthValidator.IsRequired) {
     Console.WriteLine(
         "[SECURITY] WARNING: WALLET_AUTH_SECRET is not set — any client can spoof any wallet id. " +
         "Set WALLET_AUTH_SECRET (same as middleware) before public play.");
@@ -123,7 +126,7 @@ try {
     Console.WriteLine($"[Server] ArenaKitCatalog load failed: {ex.Message}");
 }
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
-var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -653,6 +656,14 @@ app.Map("/ws", async context => {
                     ? gameWorlds[Random.Shared.Next(gameWorlds.Length)].Id
                     : settings.InitialMap;
                 var authReq = clientMessage.AuthenticateRequest;
+                if (PlaytestMode.IsEnabled) {
+                    if (!PlaytestMode.IsIsolatedAccount(authReq.Id)) {
+                        RequestDisconnect("Playtest door only accepts the isolated ElonQa account.");
+                        return;
+                    }
+                    authReq.CharacterName = PlaytestMode.CharacterName;
+                    authReq.PlayerMode = "traveler";
+                }
                 var clientTravelerMode = IsTravelerPlayerMode(authReq.HasPlayerMode ? authReq.PlayerMode : null);
                 // Security: never trust client "gm" mode alone — force traveler unless wallet is GM-allowlisted
                 // (or Development + ALLOW_OPEN_GM_SANDBOX). Prevents free CreateItem / teleport / kill-all.

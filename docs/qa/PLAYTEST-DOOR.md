@@ -1,9 +1,23 @@
-# Playtest door (no Phantom) — local / isolated host only
+# Playtest door (PLAYTEST=1) — not live
 
-**Audience:** Elon / QA who need to enter the traveler client without installing Phantom.  
-**This is not a login skip on live.** Do not deploy this host. Do not point it at production.
+**Product this week:** a separate host/build so Elon can enter and kill a mob **without Phantom**.  
+**Not** a skip on `https://play.chainlords.net`. **Not** the 11-tier loot table.
 
-Live (`https://play.chainlords.net`) stays Phantom + SIWS. Production auth is unchanged.
+Live auth stays Phantom + SIWS. This door is a **different build** (`VITE_PLAYTEST=1`) talking to a **different game process** (`PLAYTEST=1`).
+
+---
+
+## Host status (this PR)
+
+A public playtest URL was **not provisioned**.
+
+- Railway MCP in this agent is **unavailable** (tool discovery error). Standing orders still forbid `railway up`.
+- Live Hetzner / `play.chainlords.net` must **not** be used.
+- No playtest domain is invented here.
+
+**How to reach it (local isolated stack):** `http://127.0.0.1:8081/` after the commands below. That URL is loopback on the machine that runs the scripts — it is **not** a public host.
+
+If someone later stands up a throwaway VM, they must publish **that** machine’s URL. Do not point DNS at live play.
 
 ---
 
@@ -11,108 +25,68 @@ Live (`https://play.chainlords.net`) stays Phantom + SIWS. Production auth is un
 
 | Do | Do not |
 |----|--------|
-| Run a **separate** Vite traveler + **local** C# game server | Put a Phantom skip on `play.chainlords.net` |
-| Open **http://127.0.0.1:8081** only | Open live, then use browser console “dev” hooks |
-| Keep saves in this machine’s `Chars/` | Set `VITE_GAME_HOST` / `VITE_GAME_PORT` to play / Hetzner |
-| Leave wallets, middleware, $HELL, market **off** | Set `VITE_MIDDLEWARE_URL` to Railway middleware |
-| Use character name **`ElonQa`** | Copy live `Chars/`, `DATABASE_URL`, or `WALLET_AUTH_SECRET` |
+| `PLAYTEST=1` game + `pnpm playtest` / `pnpm build:playtest` | Deploy this build to `play.chainlords.net` |
+| Character **`ElonQa`** on account `playtest-elonqa` | Use Boris / live wallets |
+| Saves in `CharsPlaytest/` | Set `WALLET_AUTH_SECRET`, `DATABASE_URL`, `HELL_MINT` |
+| Open **http://127.0.0.1:8081** | Set `VITE_GAME_HOST` to play / Hetzner IPs |
 
-**Never point the playtest client at production.** If the page hostname is `play.chainlords.net`, `*.chainlords.net`, or the VPS IPs, the client treats the session as public traveler and talks to that host’s `/ws`. A fake `dev-bypass-token` there is either rejected (secret required) or would be an account-takeover bug. Do not test that path.
-
-The no-Phantom helpers exist only while Vite `import.meta.env.DEV` is true (`installConnectDialogDevHooks` in `ConnectDialog.store.ts`). A production `pnpm build` **does not** install them. Do not add a production flag to “make Phantom optional.”
+Public hostnames (`play.chainlords.net`, `*.chainlords.net`, live VPS IPs) **force playtest off** in the client even if `VITE_PLAYTEST=1` was baked in. The server **refuses to start** PLAYTEST=1 with live secrets/DB/mint.
 
 ---
 
-## What you actually start (later — not in this freeze)
+## How to run (isolated, later)
 
-Two processes on **your laptop / a throwaway VM**, never Hetzner, never Railway:
+From repo root:
 
-1. **Game server** — WebSocket **1337**, `ASPNETCORE_ENVIRONMENT=Development`, **no** `WALLET_AUTH_SECRET`.
-2. **Traveler client** — existing Vite config on port **8081** (`vite/config.dev.traveler.mjs`). GM tooling stays on **8080**; Elon should use **8081**.
+```bash
+chmod +x ops/run-playtest-door.sh
+./ops/run-playtest-door.sh
+```
 
-Do **not** start production middleware. Wallet auth defaults to `http://localhost:3001`; leave that unused.
+Or two terminals:
 
-Do **not** `railway up`, SSH, or copy this stack onto `play.chainlords.net`.
-
----
-
-## How to run (when someone is allowed to boot a local stack)
-
-From a clone of this repo (branch does not matter for *running*; ship docs via PR to `consolidacion`).
-
-**Terminal A — game server**
+**A — game**
 
 ```bash
 cd multiplayer/server
-# Isolated playtest: Development auth, no HMAC, no prod DB, no $HELL mint.
 unset DATABASE_URL WALLET_AUTH_SECRET HELL_MINT MARKET_MIDDLEWARE_URL SOLANA_RPC_URL
+export PLAYTEST=1
 export ASPNETCORE_ENVIRONMENT=Development
 export HELL_TESTING_WEEK=0
 export HELL_TESTING_WEEK_UNTIL=2020-01-01
-# launchSettings.json sets HELL_MINT — skip that profile.
 dotnet run --no-launch-profile
 ```
 
-Expect a bind on **1337** (see `Config/Settings.json`). You may see `[SECURITY] WARNING: WALLET_AUTH_SECRET is not set` — that is **required** for this isolated door. It must **never** appear on the live VPS.
+Expect `[PLAYTEST] Isolated door ON` and bind **1337**.
 
-**Terminal B — traveler Vite (8081)**
+**B — client**
 
 ```bash
 cd multiplayer/mp-client
 pnpm install
-# Do not set VITE_GAME_HOST / VITE_GAME_PORT / VITE_MIDDLEWARE_URL.
-pnpm exec vite --config vite/config.dev.traveler.mjs
+pnpm playtest
 ```
 
-Browser: **http://127.0.0.1:8081/** (prefer IPv4; the game often binds `0.0.0.0` and not `[::1]`).
+Browser: **http://127.0.0.1:8081/**  
+Click **Enter as ElonQa** (or wait — hub auto-enters). No Phantom. First visit creates `ElonQa`; later visits load `CharsPlaytest/`. Traveler map: kill a mob.
+
+Static bundle (still not live): `pnpm build:playtest` → `multiplayer/mp-client/dist-playtest/`. Serve that folder only next to a `PLAYTEST=1` server. Do not upload it as the production traveler.
 
 ---
 
-## Enter without Phantom
+## What this flag does
 
-1. Wait until the login hub paints.
-2. Open DevTools → Console on **that same 8081 origin**.
-3. First time (empty slots):
-
-   ```js
-   window.__helbreathDevEnterCreateChar(0)
-   ```
-
-   Create the character with display name **`ElonQa`** (2–10 letters/digits, must start with a letter). Complete appearance + stats on the Create Character desk.
-
-4. Later logins (slot already saved locally):
-
-   ```js
-   window.__helbreathDevEnterPlayWorld()
-   ```
-
-   then Start on the occupied slot, **or**:
-
-   ```js
-   window.__helbreathDevConnectAs('ElonQa')
-   ```
-
-`__helbreathDevConnectAs` sends a **fake** wallet id (`DevTestWallet…`) and `dev-bypass-token`. That is accepted only because this server is Development with no `WALLET_AUTH_SECRET`. It is not a Solana wallet and must not be used against live.
+- Client: skip Phantom; isolated session `playtest-elonqa` / `playtest-bypass-token`.
+- Server: accept **only** that account; force name `ElonQa`; traveler mode; `CharsPlaytest/`.
+- Off: `$HELL` mining/claim, airdrop/testing-week credits, NFT drop ledger, EK screenshot upload, middleware / Railway URLs.
 
 ---
 
-## Economy / live isolation
-
-- **No Phantom, no SIWS, no real pubkey.**
-- **No $HELL:** do not set `HELL_MINT`; keep testing-week env off as above. Any local credit JSON under `Chars/` is toy data — do not claim, mint, or merge it with live.
-- **No cash shop / market / middleware.** Do not set `CASH_SHOP_ALLOW_DEV_GRANT=1`.
-- **No Postgres.** Leave `DATABASE_URL` unset so persistence stays local `Chars/*.json`.
-- **No bridge:** do not rsync `Chars/`, do not reuse live `WALLET_AUTH_SECRET`, do not tunnel 8081 to the VPS.
-
----
-
-## Sanity checks
+## Sanity
 
 | Check | Expected |
 |-------|----------|
-| Address bar | `http://127.0.0.1:8081` (or `localhost`), **not** `play.chainlords.net` |
-| `window.__helbreathDevConnectAs` | Function exists (Vite DEV only) |
-| Live play | Unchanged: Phantom required; no `__helbreathDev*` |
-| This PR | Docs only; nobody deployed a playtest host |
-
-If `__helbreathDevConnectAs` is missing, you are on a production build — **stop**. Do not invent a skip.
+| Address bar | `http://127.0.0.1:8081`, **not** play.chainlords.net |
+| Character | `ElonQa` |
+| Live play | Unchanged Phantom login |
+| This agent | No public URL (no Railway/Hetzner creds for a separate host) |

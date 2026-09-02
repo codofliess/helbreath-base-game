@@ -560,6 +560,8 @@ export class GameWorld extends Scene {
                 : undefined,
             initialMusicFile: this.initialGameWorldState?.musicFile,
             playMapMusic: this.playMapMusic,
+            initialFocusTileX: this.initialGameWorldState?.playerX,
+            initialFocusTileY: this.initialGameWorldState?.playerY,
             onBeforeSnapshot: () => {
                 const overlay = this.loadingOverlayController?.getOverlay();
                 const text = this.loadingOverlayController?.getText();
@@ -2506,6 +2508,10 @@ export class GameWorld extends Scene {
         this.initialGameWorldState = toRegistryInitialGameWorldState(data);
         setInitialGameWorldState(this.game, this.initialGameWorldState);
         this.mapManager?.setInitialMapName(this.initialGameWorldState.mapName);
+        this.mapManager?.setInitialFocusTile(
+            this.initialGameWorldState.playerX,
+            this.initialGameWorldState.playerY,
+        );
         this.mapManager?.setInitialMusicFile(data.musicFile);
         if (this.playMapMusic && data.musicFile) {
             this.mapManager?.playInitialMusic();
@@ -2679,6 +2685,7 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
+                void this.mapManager?.syncStreamedView();
                 this.handleMapObjectCollisions();
 
                 if (!this.pendingPredictedWorldTransfer && !this.awaitingTransferredWorldState && !this.loadingMap) {
@@ -2733,7 +2740,10 @@ export class GameWorld extends Scene {
     private async runDeferredMapLoad(): Promise<void> {
         try {
             if (shouldLoadMapAssetsOnDemand()) {
-                await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName());
+                await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName(), {
+                    focusTileX: this.initialGameWorldState?.playerX,
+                    focusTileY: this.initialGameWorldState?.playerY,
+                });
             }
 
             runSafeSync('GameWorld:deferredMapLoad', () => {

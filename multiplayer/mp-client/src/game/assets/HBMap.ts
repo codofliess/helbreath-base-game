@@ -5,6 +5,11 @@ import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { GameAsset } from '../objects/GameAsset';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { SpatialGrid } from '../../utils/SpatialGrid';
+import {
+    cameraStreamTileRect,
+    mapTileRectsEqual,
+    type MapTileRect,
+} from '../../utils/mapViewportStream';
 
 const ASCII_DECODER = new TextDecoder('ascii');
 
@@ -147,16 +152,28 @@ export class HBMap {
     private spatialGrid: SpatialGrid = new SpatialGrid(TILE_SIZE);
 
     /**
-     * One Phaser tilemap per map row (Y-sorted). A single layer at a fixed depth draws all ground
-     * (including building roofs) under every entity — slugs/players then float over Aresden roofs.
+     * Viewport-streamed Phaser tilemaps keyed by map row Y. Never allocate one layer per world row.
      */
-    private rowTilemaps: Phaser.Tilemaps.Tilemap[] = [];
+    private rowTilemapsByY = new Map<number, Phaser.Tilemaps.Tilemap>();
 
-    /** Row layers aligned with {@link rowTilemaps}; depth = rowY * DEPTH_MULTIPLIER - ground bias. */
-    private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = [];
+    /** Row layers aligned with {@link rowTilemapsByY}; depth = rowY * DEPTH_MULTIPLIER - ground bias. */
+    private tilemapLayersByY = new Map<number, Phaser.Tilemaps.TilemapLayer>();
 
-    /** The GameAsset instances created by renderMapObjects */
+    /** Static map objects currently instantiated (viewport + ring), keyed by `x,y`. */
+    private mapObjectsByCell = new Map<string, GameAsset>();
+
+    /** Same objects as {@link mapObjectsByCell} for collision / detail-level callers. */
     private mapObjects: GameAsset[] = [];
+
+    /** Last painted stream rect; used to skip no-op camera updates. */
+    private streamedRect: MapTileRect | undefined = undefined;
+
+    /** Trees are a second pass so they stay out of (disabled) full-map snapshots. */
+    private streamIncludeTrees = false;
+
+    private streamTilesEnabled = true;
+
+    private streamObjectsEnabled = true;
 
     /**
      * Creates a new HBMap instance.
@@ -357,52 +374,89 @@ export class HBMap {
     }
 
     /**
-     * Paints all map tiles to the scene by creating an optimized tileset and using Phaser's Tilemap API.
-     * This method:
-     * 1. Identifies unique tiles (sprite+frame combinations) to avoid duplication
-     * 2. Creates a compact tileset texture containing only unique tiles
-     * 3. Uses Phaser's Tilemap system to efficiently render the map with proper culling and batching
-     * 
-     * This is a first pass implementation that renders ground tiles only.
-     * 
-     * @param scene - The Phaser scene to render tiles into
-     * @returns The created tilemap object
-     * @throws Error if the map is not loaded or required textures are missing
+     * Paints ground tiles for the current stream rect only (viewport + ring).
+     * Never creates one Phaser tilemap per world row — that is the verified OOM on "Loading map".
      */
-    public renderMapTiles(scene: Phaser.Scene): Phaser.Tilemaps.Tilemap {
+    public renderMapTiles(scene: Phaser.Scene, rect?: MapTileRect): Phaser.Tilemaps.Tilemap {
+        this.streamTilesEnabled = true;
+        const camera = scene.cameras?.main;
+        const fromCamera = camera
+            ? cameraStreamTileRect({
+                  scrollX: camera.scrollX,
+                  scrollY: camera.scrollY,
+                  viewWidthPx: camera.width,
+                  viewHeightPx: camera.height,
+                  zoom: camera.zoom,
+                  mapSizeX: this.sizeX,
+                  mapSizeY: this.sizeY,
+              })
+            : undefined;
+        const target = rect ?? this.streamedRect ?? fromCamera;
+        if (!target) {
+            throw new Error('Map stream rect is required before painting tiles');
+        }
+        this.syncViewportStream(scene, target);
+        const first = this.rowTilemapsByY.values().next().value;
+        if (!first) {
+            throw new Error('Failed to create streamed tilemap');
+        }
+        return first;
+    }
+
+    /**
+     * Instantiates or drops Phaser ground layers + static objects so they match `rect`.
+     * Tile `.spr` packs for `rect` must already be loaded (see MapAssets.loadTileSpritePacksForMapRect).
+     */
+    public syncViewportStream(scene: Phaser.Scene, rect: MapTileRect): void {
         if (!this.loaded) {
-            throw new Error('Map must be loaded before painting tiles');
+            throw new Error('Map must be loaded before streaming tiles');
         }
 
-        // Step 1: Identify unique tiles (sprite+frame combinations)
+        const sameRect = mapTileRectsEqual(this.streamedRect, rect);
+        if (sameRect) {
+            return;
+        }
+
+        if (this.streamTilesEnabled) {
+            this.paintStreamedGround(scene, rect);
+        }
+
+        if (this.streamObjectsEnabled) {
+            this.syncStreamedMapObjects(scene, rect);
+        } else {
+            this.destroyMapObjects();
+        }
+
+        this.streamedRect = rect;
+    }
+
+    private paintStreamedGround(scene: Phaser.Scene, rect: MapTileRect): void {
         const uniqueTilesMap = new Map<string, UniqueTile>();
-        const tileKeys: string[] = []; // Ordered list of tile keys
+        const tileKeys: string[] = [];
 
-        // Scan all map tiles to find unique sprite+frame combinations
-        for (let y = 0; y < this.sizeY; y++) {
-            for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
-
-                // Skip tiles with invalid sprite indices
-                if (tile.sprite < 0) {
+        for (let y = rect.minY; y <= rect.maxY; y++) {
+            for (let x = rect.minX; x <= rect.maxX; x++) {
+                const tile = this.tiles[y]?.[x];
+                if (!tile || tile.sprite < 0) {
                     continue;
                 }
-
                 const tileKey = `${tile.sprite}-${tile.spriteFrame}`;
-
                 if (!uniqueTilesMap.has(tileKey)) {
                     uniqueTilesMap.set(tileKey, {
                         sprite: tile.sprite,
                         spriteFrame: tile.spriteFrame,
-                        tilesetIndex: tileKeys.length
+                        tilesetIndex: tileKeys.length,
                     });
                     tileKeys.push(tileKey);
                 }
             }
         }
 
-        const uniqueTileCount = tileKeys.length;
-        console.log(`Found ${uniqueTileCount} unique tiles out of ${this.sizeX * this.sizeY} total tiles`);
+        const uniqueTileCount = Math.max(1, tileKeys.length);
+        console.log(
+            `Found ${tileKeys.length} unique tiles in stream ${rect.minX},${rect.minY}-${rect.maxX},${rect.maxY} ` +
+                `(world ${this.sizeX}x${this.sizeY})`,
+        );
 
         // Always rebuild the compact tileset. Reusing a prior canvas (e.g. built before
         // on-demand tile packs finished, or after a failed frame draw) leaves blank cells
@@ -526,46 +580,28 @@ export class HBMap {
                     : ''),
         );
 
-        // Step 3: Create a 2D array for tilemap data
-        const mapDataArray: number[][] = [];
-        for (let y = 0; y < this.sizeY; y++) {
-            const row: number[] = [];
-            for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
-
-                if (tile.sprite < 0) {
-                    row.push(-1); // -1 means no tile
-                } else {
-                    const tileKey = `${tile.sprite}-${tile.spriteFrame}`;
-                    const uniqueTile = uniqueTilesMap.get(tileKey);
-
-                    if (uniqueTile) {
-                        // Phaser tilemap indices are 0-based when using ARRAY_2D format
-                        // -1 means empty, 0+ are tile indices
-                        row.push(uniqueTile.tilesetIndex);
-                    } else {
-                        row.push(-1);
-                    }
-                }
-            }
-            mapDataArray.push(row);
-        }
-
-        // One layer per row so ground/building tiles Y-sort with entities (DEPTH_MULTIPLIER).
-        // Bias ground slightly under same-Y entities/map objects.
+        const streamWidth = rect.maxX - rect.minX + 1;
         const groundDepthBias = 10;
-        this.rowTilemaps = [];
-        this.tilemapLayers = [];
 
-        for (let y = 0; y < this.sizeY; y++) {
+        for (let y = rect.minY; y <= rect.maxY; y++) {
+            const row: number[] = [];
+            for (let x = rect.minX; x <= rect.maxX; x++) {
+                const tile = this.tiles[y]?.[x];
+                if (!tile || tile.sprite < 0) {
+                    row.push(-1);
+                    continue;
+                }
+                const uniqueTile = uniqueTilesMap.get(`${tile.sprite}-${tile.spriteFrame}`);
+                row.push(uniqueTile ? uniqueTile.tilesetIndex : -1);
+            }
+
             const rowTilemap = scene.make.tilemap({
-                data: [mapDataArray[y]],
+                data: [row],
                 tileWidth: TILE_SIZE,
                 tileHeight: TILE_SIZE,
-                width: this.sizeX,
+                width: streamWidth,
                 height: 1,
             });
-
             const tileset = rowTilemap.addTilesetImage(
                 tilesetKey,
                 tilesetKey,
@@ -579,124 +615,110 @@ export class HBMap {
                 this.destroyRowTilemaps();
                 throw new Error(`Failed to add tileset for map row ${y}`);
             }
-
-            const layer = rowTilemap.createLayer(0, tileset, 0, y * TILE_SIZE);
+            const layer = rowTilemap.createLayer(0, tileset, rect.minX * TILE_SIZE, y * TILE_SIZE);
             if (!layer) {
                 rowTilemap.destroy();
                 this.destroyRowTilemaps();
                 throw new Error(`Failed to create tilemap layer for map row ${y}`);
             }
-
             layer.setDepth(y * DEPTH_MULTIPLIER - groundDepthBias);
-            this.rowTilemaps.push(rowTilemap);
-            this.tilemapLayers.push(layer);
+            this.rowTilemapsByY.set(y, rowTilemap);
+            this.tilemapLayersByY.set(y, layer);
         }
 
         console.log(
-            `Map tiles painted: ${this.sizeX}x${this.sizeY} tiles using ${uniqueTileCount} unique tiles (${this.tilemapLayers.length} Y-sorted rows)`,
+            `Map tiles streamed: ${streamWidth}x${rect.maxY - rect.minY + 1} of ${this.sizeX}x${this.sizeY} ` +
+                `using ${tileKeys.length} unique tiles (${this.rowTilemapsByY.size} Y-sorted rows)` +
+                (missingTextureCount || missingFrameCount
+                    ? ` [missing textures=${missingTextureCount}, frames=${missingFrameCount}]`
+                    : ''),
         );
-
-        // Callers historically expected a tilemap; return the first row map as a handle.
-        return this.rowTilemaps[0]!;
     }
 
     /**
-     * Renders all map objects (objectSprite and objectSpriteFrame) from the map data.
-     * This method iterates through all tiles and creates GameAsset instances for tiles
-     * that have valid object sprites (objectSprite >= 0).
-     * 
-     * NOTE: This method may be called multiple times (once for trees, once for non-trees).
-     * Objects are accumulated in the mapObjects array and spatial grid across calls.
-     * Call destroyMapObjects() to clear all objects before re-rendering.
-     * 
-     * @param scene - The Phaser scene to render objects into
-     * @param drawTree - If true, only tree objects (sprite 100-145) will be created. If false, all objects except trees will be created.
-     * @returns An array of GameAsset instances that were created
-     * @throws Error if the map is not loaded
+     * Streams static map objects for the current viewport rect.
+     * `drawTree` includes trees (pass 3). Objects outside the stream rect are never instantiated.
      */
     public renderMapObjects(scene: Phaser.Scene, drawTree = false): GameAsset[] {
         if (!this.loaded) {
             throw new Error('Map must be loaded before rendering objects');
         }
-
-        // Clear spatial grid on first call (when mapObjects is empty)
-        // This ensures we start fresh when rendering a new set of objects
-        if (this.mapObjects.length === 0) {
-            this.spatialGrid.clear();
+        this.streamObjectsEnabled = true;
+        if (drawTree) {
+            this.streamIncludeTrees = true;
         }
+        const rect = this.streamedRect;
+        if (!rect) {
+            return this.mapObjects;
+        }
+        this.syncStreamedMapObjects(scene, rect);
+        return this.mapObjects;
+    }
 
-        const gameAssets: GameAsset[] = [];
-        let objectCount = 0;
-
-        // Iterate through all map tiles
-        for (let y = 0; y < this.sizeY; y++) {
-            for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
-
-                // Skip tiles without valid object sprites (< 0 or 0)
-                if (tile.objectSprite <= 0) {
+    private syncStreamedMapObjects(scene: Phaser.Scene, rect: MapTileRect): void {
+        const wanted = new Set<string>();
+        for (let y = rect.minY; y <= rect.maxY; y++) {
+            for (let x = rect.minX; x <= rect.maxX; x++) {
+                const tile = this.tiles[y]?.[x];
+                if (!tile || tile.objectSprite <= 0) {
                     continue;
                 }
-
-                // Skip creating these static map objects. Middleland seems to be littered with these, which can cause WebGL canvas to run out of memory.
-                // Besides these are placed in map tile layers anyway, original developers probably changed their minds how these tiles should be placed and didn't clean up after.
-                if (tile.objectSprite === 6 || tile.objectSprite === 7 || tile.objectSprite === 9 || tile.objectSprite === 24) {
+                if (
+                    tile.objectSprite === 6 ||
+                    tile.objectSprite === 7 ||
+                    tile.objectSprite === 9 ||
+                    tile.objectSprite === 24
+                ) {
                     continue;
                 }
-
-                // Check if this is a tree object (sprite 100-145 = Trees1)
                 const isTree = isTreeSpriteIndex(tile.objectSprite);
-
-                // Filter based on drawTree parameter
-                if (drawTree && !isTree) {
-                    continue; // If drawTree is true, skip non-tree objects
+                if (isTree && !this.streamIncludeTrees) {
+                    continue;
                 }
-                if (!drawTree && isTree) {
-                    continue; // If drawTree is false, skip tree objects
+                const key = `${x},${y}`;
+                wanted.add(key);
+                if (this.mapObjectsByCell.has(key)) {
+                    continue;
                 }
-
-                // Calculate world position in pixels
-                const worldX = x * TILE_SIZE;
-                const worldY = y * TILE_SIZE;
-
                 try {
                     const gameAsset = new GameAsset(scene, {
-                        x: worldX,
-                        y: worldY,
+                        x: x * TILE_SIZE,
+                        y: y * TILE_SIZE,
                         spriteName: `map-tile-${tile.objectSprite}`,
-                        mapObject: true, // Texture key = basename `spriteName`
-                        frameIndex: tile.objectSpriteFrame
+                        mapObject: true,
+                        frameIndex: tile.objectSpriteFrame,
                     });
-
-                    // Set depth based on world position Y (tile Y coordinate * DEPTH_MULTIPLIER)
                     gameAsset.setDepth(y * DEPTH_MULTIPLIER);
-
-                    gameAssets.push(gameAsset);
-                    objectCount++;
+                    this.mapObjectsByCell.set(key, gameAsset);
+                    this.spatialGrid.insert(gameAsset);
                 } catch (error) {
                     console.warn(
                         `Failed to create object at (${x}, ${y}) with sprite ${tile.objectSprite}, frame ${tile.objectSpriteFrame}:`,
-                        error
+                        error,
                     );
                 }
             }
         }
 
-        console.log(`Map objects rendered: ${objectCount} objects created`);
-
-        // Store references for later destruction
-        this.mapObjects.push(...gameAssets);
-
-        // Add objects to spatial grid for efficient collision detection
-        // NOTE: Do NOT clear the grid here - renderMapObjects may be called multiple times
-        // (once for trees, once for non-trees) and we want to keep all objects in the grid
-        for (const gameAsset of gameAssets) {
-            this.spatialGrid.insert(gameAsset);
+        for (const [key, asset] of this.mapObjectsByCell) {
+            if (wanted.has(key)) {
+                continue;
+            }
+            try {
+                if (asset?.scene) {
+                    asset.destroy();
+                }
+            } catch {
+                /* already destroyed */
+            }
+            this.mapObjectsByCell.delete(key);
         }
 
-        console.log(`Spatial grid updated: ${this.spatialGrid.getOccupiedCellCount()} cells occupied, ${this.spatialGrid.getTotalObjectCount()} objects indexed`);
-
-        return gameAssets;
+        this.mapObjects = [...this.mapObjectsByCell.values()];
+        this.spatialGrid.clear();
+        for (const gameAsset of this.mapObjects) {
+            this.spatialGrid.insert(gameAsset);
+        }
     }
 
     /**
@@ -722,28 +744,32 @@ export class HBMap {
      * Returns the first row tilemap layer (legacy accessor). Prefer Y-sorted {@link tilemapLayers}.
      */
     public getTilemapLayer(): Phaser.Tilemaps.TilemapLayer | undefined {
-        return this.tilemapLayers[0];
+        return this.tilemapLayersByY.values().next().value;
     }
 
-    /** Destroys all per-row tilemaps/layers created by {@link renderMapTiles}. */
+    public getStreamedRect(): MapTileRect | undefined {
+        return this.streamedRect;
+    }
+
+    /** Destroys streamed per-row tilemaps/layers created by {@link paintStreamedGround}. */
     private destroyRowTilemaps(): void {
-        for (const layer of this.tilemapLayers) {
+        for (const layer of this.tilemapLayersByY.values()) {
             try {
                 layer.destroy();
             } catch {
                 /* already destroyed */
             }
         }
-        this.tilemapLayers = [];
+        this.tilemapLayersByY.clear();
 
-        for (const rowTilemap of this.rowTilemaps) {
+        for (const rowTilemap of this.rowTilemapsByY.values()) {
             try {
                 rowTilemap.destroy();
             } catch {
                 /* already destroyed */
             }
         }
-        this.rowTilemaps = [];
+        this.rowTilemapsByY.clear();
     }
 
     /**
@@ -763,6 +789,7 @@ export class HBMap {
      * Destroys all map objects created by renderMapObjects.
      */
     public destroyMapObjects(): void {
+        this.streamObjectsEnabled = false;
         // Destroy all GameAsset instances (if they still exist)
         // Note: Objects may already be destroyed by Phaser when scene shuts down
         this.mapObjects.forEach(gameAsset => {
@@ -778,8 +805,7 @@ export class HBMap {
 
         // Clear the array
         this.mapObjects = [];
-
-        // Clear the spatial grid
+        this.mapObjectsByCell.clear();
         this.spatialGrid.clear();
 
         console.log('Map objects destroyed');
@@ -1363,7 +1389,9 @@ export class HBMap {
      * @param scene - The Phaser scene (needed to access texture cache for cleanup)
      */
     public destroyMapTiles(scene: Phaser.Scene): void {
+        this.streamTilesEnabled = false;
         this.destroyRowTilemaps();
+        this.streamedRect = undefined;
 
         // Remove tileset texture from cache to prevent memory leak when switching maps
         const tilesetKey = `${this.fileName}-tileset`;

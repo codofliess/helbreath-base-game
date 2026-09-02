@@ -6,6 +6,11 @@ import { HBSpriteFile } from '../game/assets/HBSprite';
 import { HBMap } from '../game/assets/HBMap';
 import { setMap } from './RegistryUtils';
 import { isTreeSpriteIndex } from './SpriteUtils';
+import {
+    collectSpriteIndicesInRect,
+    initialFocusStreamRect,
+    type MapTileRect,
+} from './mapViewportStream';
 
 const tilePackLoadPromisesByScene = new WeakMap<Scene, Map<string, Promise<void>>>();
 const tilePackShutdownHookRegistered = new WeakSet<Scene>();
@@ -130,29 +135,12 @@ function getTileSpriteAssetForIndex(index: number): AssetData {
 }
 
 /**
- * Ground and map-object sprite indices referenced by the parsed map, plus derived indices.
- * Tree shadows use `map-tile-(treeIndex + 50)` (see {@link GameAsset.applyShadowIfTree}); those
- * textures are not stored in the .amd and must be pulled in with `treeshadows.spr` (see GameAsset tree shadow).
+ * Ground and map-object sprite indices inside `rect` (viewport + ring), plus tree-shadow +50.
+ * Do not call this without a rect on the load path — a full-map scan plus every `.spr` pack
+ * is the previous OOM (Aw Snap 9 on "Loading map").
  */
-export function collectRequiredTileIndices(hbMap: HBMap): Set<number> {
-    const indices = new Set<number>();
-    for (let y = 0; y < hbMap.sizeY; y++) {
-        for (let x = 0; x < hbMap.sizeX; x++) {
-            const tile = hbMap.tiles[y][x];
-            if (tile.sprite >= 0) {
-                indices.add(tile.sprite);
-            }
-            if (tile.objectSprite > 0) {
-                indices.add(tile.objectSprite);
-            }
-        }
-    }
-    for (const idx of indices) {
-        if (isTreeSpriteIndex(idx)) {
-            indices.add(idx + 50);
-        }
-    }
-    return indices;
+export function collectRequiredTileIndices(hbMap: HBMap, rect: MapTileRect): Set<number> {
+    return collectSpriteIndicesInRect(hbMap.tiles, rect, isTreeSpriteIndex);
 }
 
 export function resolveTileSpriteAssets(indices: Set<number>): AssetData[] {
@@ -205,10 +193,33 @@ export async function fetchHelbreathGameAsset(
     return fetchHelbreathBinary(kind, fileName);
 }
 
+export interface PrepareMapOptions {
+    /** Player spawn cell; stream packs around this instead of every index on the .amd. */
+    focusTileX?: number;
+    focusTileY?: number;
+}
+
 /**
- * Fetches the map binary, parses it, loads only required tile `.spr` packs, and registers the map on the scene.
+ * Loads tile `.spr` packs referenced by `rect` only. Safe to call again as the camera moves.
  */
-export async function prepareMapForGameWorld(scene: Scene, mapFileName: string): Promise<HBMap> {
+export async function loadTileSpritePacksForMapRect(
+    scene: Scene,
+    hbMap: HBMap,
+    rect: MapTileRect,
+): Promise<number> {
+    const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(hbMap, rect));
+    await Promise.all(tileAssets.map((a) => loadTileSpritePackOnce(scene, a)));
+    return tileAssets.length;
+}
+
+/**
+ * Fetches the map binary, parses it, loads tile packs for the spawn viewport only, and registers the map.
+ */
+export async function prepareMapForGameWorld(
+    scene: Scene,
+    mapFileName: string,
+    options?: PrepareMapOptions,
+): Promise<HBMap> {
     const startedAt = performance.now();
     const mapAsset = getMapAssetByFileName(mapFileName);
     const mapKey = mapAsset.key;
@@ -217,13 +228,17 @@ export async function prepareMapForGameWorld(scene: Scene, mapFileName: string):
     const map = new HBMap(mapKey);
     map.loadFromBuffer(buffer);
 
-    const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(map));
-    await Promise.all(tileAssets.map((a) => loadTileSpritePackOnce(scene, a)));
+    const focusX = options?.focusTileX != null && options.focusTileX >= 0 ? options.focusTileX : 0;
+    const focusY = options?.focusTileY != null && options.focusTileY >= 0 ? options.focusTileY : 0;
+    const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+    const packCount = await loadTileSpritePacksForMapRect(scene, map, rect);
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;
     console.log(
-        `[MapAssets] On-demand map ready: ${mapFileName} (${tileAssets.length} tile pack(s), ${map.sizeX}x${map.sizeY}) in ${elapsedMs.toFixed(2)}ms`,
+        `[MapAssets] On-demand map ready: ${mapFileName} (${packCount} viewport tile pack(s), ` +
+            `${map.sizeX}x${map.sizeY} world, stream ${rect.minX},${rect.minY}-${rect.maxX},${rect.maxY}) ` +
+            `in ${elapsedMs.toFixed(2)}ms`,
     );
     return map;
 }

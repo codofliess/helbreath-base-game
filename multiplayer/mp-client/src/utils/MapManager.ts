@@ -15,6 +15,12 @@ import { getMusicManager } from './RegistryUtils';
 import { getMapData } from '../constants/Maps';
 import { Minimap } from '../constants/Assets';
 import { OUT_UI_MINIMAP_CAPTURED, OUT_UI_MINIMAP_LOADING, OUT_UI_SET_SELECTED_MUSIC } from '../constants/EventNames';
+import { loadTileSpritePacksForMapRect } from './MapAssets';
+import {
+    cameraStreamTileRect,
+    initialFocusStreamRect,
+    mapTileRectContains,
+} from './mapViewportStream';
 
 export interface MapManagerConfig {
     scene: Scene;
@@ -28,6 +34,9 @@ export interface MapManagerConfig {
     initialMusicFile?: string;
     /** Whether to play map music when map loads */
     playMapMusic?: boolean;
+    /** Spawn cell used to stream the first viewport (not 0,0). */
+    initialFocusTileX?: number;
+    initialFocusTileY?: number;
     /** Called before taking minimap snapshot (e.g. to hide loading overlay) */
     onBeforeSnapshot?: () => void;
     /** Called after taking minimap snapshot (e.g. to restore loading overlay) */
@@ -43,6 +52,9 @@ export class MapManager {
     private initialMapName: string | undefined;
     private initialMusicFile: string | undefined;
     private playMapMusic: boolean;
+    private initialFocusTileX: number;
+    private initialFocusTileY: number;
+    private streamInFlight = false;
     private onBeforeSnapshot?: () => void;
     private onAfterSnapshot?: () => void;
 
@@ -55,6 +67,8 @@ export class MapManager {
         this.initialMapName = config.initialMapName;
         this.initialMusicFile = config.initialMusicFile;
         this.playMapMusic = config.playMapMusic ?? true;
+        this.initialFocusTileX = config.initialFocusTileX ?? 0;
+        this.initialFocusTileY = config.initialFocusTileY ?? 0;
         this.onBeforeSnapshot = config.onBeforeSnapshot;
         this.onAfterSnapshot = config.onAfterSnapshot;
     }
@@ -110,11 +124,15 @@ export class MapManager {
         this.capturingMinimap = false;
     }
 
+    public setInitialFocusTile(tileX: number, tileY: number): void {
+        this.initialFocusTileX = tileX >= 0 ? tileX : 0;
+        this.initialFocusTileY = tileY >= 0 ? tileY : 0;
+    }
+
     /**
-     * Renders map tiles and objects, sets up camera, optionally captures minimap.
-     * Calls finishedCallback with the map when done.
-     *
-     * @param finishedCallback - Called when map setup (and minimap capture if enabled) is complete
+     * Renders the spawn viewport (not the whole .amd), sets camera bounds, skips full-world
+     * minimap GPU snapshots (Aw Snap 9 / OOM). Pre-generated minimap JPGs load after the map
+     * is playable, downscaled — see MinimapDialog.store.
      */
     public startMinimapCapture(finishedCallback: (map: HBMap) => void): void {
         const map = this.getCurrentMap();
@@ -122,7 +140,6 @@ export class MapManager {
         const mapData = getMapData(mapFileName);
         const minimapType = mapData?.minimap ?? Minimap.ON_DEMAND_GENERATED;
 
-        // Notify UI that minimap is loading (shows "Loading minimap")
         EventBus.emit(OUT_UI_MINIMAP_LOADING, {
             minimap: minimapType,
             mapName: mapFileName,
@@ -130,24 +147,73 @@ export class MapManager {
             mapSizeY: map.sizeY,
         });
 
-        // Render map tiles and objects
-        map.renderMapTiles(this.scene);
-        map.renderMapObjects(this.scene);
+        const focusX = this.initialFocusTileX;
+        const focusY = this.initialFocusTileY;
+        const streamRect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
 
-        // Set up camera
         this.cameraManager?.setBounds(map.sizeX * TILE_SIZE, map.sizeY * TILE_SIZE);
+        this.scene.cameras?.main?.centerOn(focusX * TILE_SIZE + TILE_SIZE / 2, focusY * TILE_SIZE + TILE_SIZE / 2);
         this.cameraManager?.setZoom(1);
 
-        // Play music for the current map when map loads (if enabled)
+        map.syncViewportStream(this.scene, streamRect);
+        map.renderMapObjects(this.scene, false);
+
         if (this.playMapMusic && this.initialMusicFile) {
             this.playInitialMusic();
         }
 
-        const shouldGenerateMinimap = GENERATE_MINIMAP && minimapType === Minimap.ON_DEMAND_GENERATED;
-        if (shouldGenerateMinimap) {
-            this.captureMinimap(map, () => finishedCallback(map));
-        } else {
-            finishedCallback(map);
+        // Never zoom the camera to fit the whole world. GENERATE_MINIMAP / DOWNLOAD_MAP_SNAPSHOT
+        // full-map WebGL snapshots are the other OOM path (hunch if packs were already clipped).
+        if (GENERATE_MINIMAP && minimapType === Minimap.ON_DEMAND_GENERATED) {
+            console.warn(
+                `[MapManager] Skipping full-map on-demand minimap snapshot for ${mapFileName} (viewport stream only).`,
+            );
+        }
+        if (DOWNLOAD_MAP_SNAPSHOT) {
+            console.warn(`[MapManager] Skipping full-resolution map download for ${mapFileName} (OOM).`);
+        }
+
+        finishedCallback(map);
+    }
+
+    /**
+     * Loads tile packs for the camera window (if needed) and paints that rect only.
+     */
+    public async syncStreamedView(): Promise<void> {
+        if (this.streamInFlight) {
+            return;
+        }
+        const camera = this.scene.cameras?.main;
+        if (!camera) {
+            return;
+        }
+        let map: HBMap;
+        try {
+            map = this.getCurrentMap();
+        } catch {
+            return;
+        }
+        const next = cameraStreamTileRect({
+            scrollX: camera.scrollX,
+            scrollY: camera.scrollY,
+            viewWidthPx: camera.width,
+            viewHeightPx: camera.height,
+            zoom: camera.zoom,
+            mapSizeX: map.sizeX,
+            mapSizeY: map.sizeY,
+        });
+        const current = map.getStreamedRect();
+        if (current && mapTileRectContains(current, next)) {
+            return;
+        }
+        this.streamInFlight = true;
+        try {
+            await loadTileSpritePacksForMapRect(this.scene, map, next);
+            map.syncViewportStream(this.scene, next);
+        } catch (error) {
+            console.warn('[MapManager] Viewport stream update failed:', error);
+        } finally {
+            this.streamInFlight = false;
         }
     }
 

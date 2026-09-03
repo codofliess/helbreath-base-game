@@ -3,19 +3,100 @@ const path = require('path');
 const { Pool } = require('pg');
 
 let pool;
+/** @type {boolean | null} */
+let postgresReady = null;
+/** @type {Promise<boolean> | null} */
+let postgresCheckPromise = null;
+
+/**
+ * Resolve Postgres URL from Railway / standard env aliases.
+ * Never log the returned string (contains credentials).
+ */
+function resolveDatabaseUrl() {
+    const direct =
+        process.env.DATABASE_URL ||
+        process.env.POSTGRES_CONNECTION_STRING ||
+        process.env.DATABASE_PRIVATE_URL ||
+        process.env.DATABASE_PUBLIC_URL;
+    if (direct && String(direct).trim()) {
+        return String(direct).trim();
+    }
+
+    const host = process.env.PGHOST || process.env.POSTGRES_HOST;
+    const user = process.env.PGUSER || process.env.POSTGRES_USER;
+    const password = process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD;
+    const database = process.env.PGDATABASE || process.env.POSTGRES_DB || 'railway';
+    const port = process.env.PGPORT || process.env.POSTGRES_PORT || '5432';
+
+    if (host && user && password) {
+        const encUser = encodeURIComponent(user);
+        const encPass = encodeURIComponent(password);
+        return `postgresql://${encUser}:${encPass}@${host}:${port}/${database}`;
+    }
+
+    return null;
+}
 
 function getPool() {
     if (pool) {
         return pool;
     }
 
-    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_CONNECTION_STRING;
+    const connectionString = resolveDatabaseUrl();
     if (!connectionString) {
         return null;
     }
 
-    pool = new Pool({ connectionString });
+    pool = new Pool({
+        connectionString,
+        max: Number(process.env.PG_POOL_MAX || 10),
+        connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10000),
+        idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 30000),
+    });
+
+    pool.on('error', (error) => {
+        console.error('[persistence] Pool error:', error.message);
+        postgresReady = false;
+    });
+
     return pool;
+}
+
+async function pingPostgres() {
+    const db = getPool();
+    if (!db) {
+        postgresReady = false;
+        return false;
+    }
+
+    try {
+        await db.query('SELECT 1 AS ok');
+        postgresReady = true;
+        return true;
+    } catch (error) {
+        console.error('[persistence] Ping failed:', error.message);
+        postgresReady = false;
+        return false;
+    }
+}
+
+function isPostgresConfigured() {
+    return Boolean(resolveDatabaseUrl());
+}
+
+async function isPostgresReady() {
+    if (!isPostgresConfigured()) {
+        return false;
+    }
+    if (postgresReady === true) {
+        return true;
+    }
+    if (!postgresCheckPromise) {
+        postgresCheckPromise = pingPostgres().finally(() => {
+            postgresCheckPromise = null;
+        });
+    }
+    return postgresCheckPromise;
 }
 
 async function ensureSchema() {
@@ -33,6 +114,7 @@ async function ensureSchema() {
     const sql = fs.readFileSync(schemaPath, 'utf8');
     await db.query(sql);
     console.log('[persistence] Schema applied.');
+    postgresReady = true;
     return true;
 }
 
@@ -123,7 +205,11 @@ async function markDropClaimed(dropId, mintAddress) {
 }
 
 module.exports = {
+    resolveDatabaseUrl,
     getPool,
+    pingPostgres,
+    isPostgresConfigured,
+    isPostgresReady,
     ensureSchema,
     listUnclaimedDrops,
     getDropById,

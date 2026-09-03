@@ -1,0 +1,59 @@
+# Chain Lords — play.chainlords.net (Hetzner nginx)
+# Install: see docs/PRODUCTION-REPAIR-RUNBOOK.md
+#
+# Replace __CLIENT_ROOT__ and reload nginx after game server deploy.
+# All /api/* routes must reach the game process on :1337 (not the SPA).
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name play.chainlords.net __SERVER_IP__;
+
+    root __CLIENT_ROOT__;
+    index index.html;
+
+    # WebSocket game traffic
+    location /ws {
+        proxy_pass http://127.0.0.1:1337;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Game HTTP API (realm-stats, duels, arena/bleeding-online, streams, …)
+    location /api/ {
+        proxy_pass http://127.0.0.1:1337;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        add_header Cache-Control "no-store, max-age=0" always;
+    }
+
+    # Hashed Vite assets — long cache when present
+    location /assets/ {
+        try_files $uri @assets_missing;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location @assets_missing {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        return 404;
+    }
+
+    # SPA fallback for traveler client
+    location / {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

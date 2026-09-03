@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "Chain Lords marketing landing (static site)",
   "scripts": {
-    "start": "serve -s . -l tcp://0.0.0.0:${PORT:-3000}"
+    "start": "node server.js",
+    "start:static-only": "serve -s . -l tcp://0.0.0.0:${PORT:-3000}",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20"

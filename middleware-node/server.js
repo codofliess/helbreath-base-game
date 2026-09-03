@@ -6,7 +6,7 @@ const { Connection } = require('@solana/web3.js');
 const { registerAuthRoutes } = require('./auth');
 const { registerDropRoutes } = require('./drops');
 const { registerTournamentRoutes, startEloDecayJob } = require('./tournaments');
-const { getPool, ensureSchema } = require('./persistence');
+const { getPool, ensureSchema, isPostgresConfigured, isPostgresReady } = require('./persistence');
 const { registerMetadataRoutes } = require('./metadata');
 const { registerChatTranslateRoutes } = require('./chatTranslate');
 const { registerEkScreenshotRoutes } = require('./ekScreenshots');
@@ -44,13 +44,20 @@ if (hellConfig?.mint) {
     console.log('ℹ️ No collection configured — run npm run init-devnet-collection for verified devnet cNFTs');
 }
 
-if (getPool()) {
-    void ensureSchema().catch((error) => {
-        console.error('[persistence] Schema apply failed:', error);
-    });
-    console.log('🗄️ PostgreSQL connected (drop ledger enabled)');
+if (isPostgresConfigured()) {
+    void ensureSchema()
+        .then((ok) => {
+            if (ok) {
+                console.log('🗄️ PostgreSQL schema ready (drop ledger + tournaments enabled)');
+            } else {
+                console.warn('⚠️ PostgreSQL configured but schema apply failed — check DATABASE_URL / network');
+            }
+        })
+        .catch((error) => {
+            console.error('[persistence] Schema apply failed:', error);
+        });
 } else {
-    console.log('ℹ️ PostgreSQL not configured — drop ledger API returns empty until DATABASE_URL is set');
+    console.log('ℹ️ PostgreSQL not configured — set DATABASE_URL=${{Postgres.DATABASE_URL}} on Railway');
 }
 
 // Launch security banners
@@ -77,10 +84,12 @@ registerMarketRoutes(app);
 registerAssistantRoutes(app);
 startEloDecayJob();
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+    const postgres = await isPostgresReady();
     res.json({
         ok: true,
-        postgres: Boolean(getPool()),
+        postgres,
+        postgresConfigured: isPostgresConfigured(),
         mintMode: getMintMode(),
         gameAuthority: GAME_AUTHORITY.publicKey.toBase58(),
         collectionMint: collectionConfig?.collectionMint ?? null,
@@ -92,11 +101,13 @@ app.get('/health', (_req, res) => {
     });
 });
 
-app.get('/metrics', (_req, res) => {
+app.get('/metrics', async (_req, res) => {
+    const postgres = await isPostgresReady();
     res.json({
         ok: true,
         mintMode: getMintMode(),
-        postgres: Boolean(getPool()),
+        postgres,
+        postgresConfigured: isPostgresConfigured(),
         ...metricsSnapshot(),
     });
 });

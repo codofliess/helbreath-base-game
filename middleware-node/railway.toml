@@ -1,4 +1,5 @@
 # Chain Lords middleware (auth, market side door, hell, tournaments)
+# Railway Root Directory: /middleware-node (schema lives at Persistence/schema.sql in this tree)
 [build]
 builder = "NIXPACKS"
 

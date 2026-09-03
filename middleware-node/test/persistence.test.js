@@ -86,3 +86,24 @@ describe('isPostgresConfigured', () => {
     assert.equal(isPostgresConfigured(), true);
   });
 });
+
+describe('resolveSchemaPath', () => {
+  it('finds schema.sql inside middleware-node (Railway Root Directory layout)', () => {
+    const { resolveSchemaPath } = require('../persistence.js');
+    const found = resolveSchemaPath();
+    assert.ok(found);
+    assert.match(found.replace(/\\/g, '/'), /Persistence\/schema\.sql$/);
+    assert.ok(require('fs').existsSync(found));
+  });
+
+  it('keeps packaged schema identical to the C# server schema', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const packaged = fs.readFileSync(path.join(__dirname, '..', 'Persistence', 'schema.sql'), 'utf8');
+    const canonical = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'multiplayer', 'server', 'Persistence', 'schema.sql'),
+      'utf8',
+    );
+    assert.equal(packaged, canonical);
+  });
+});

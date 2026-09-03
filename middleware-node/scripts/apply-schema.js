@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Apply multiplayer/server/Persistence/schema.sql when DATABASE_URL is configured.
+ * Apply Persistence/schema.sql when DATABASE_URL is configured.
+ * Railway Root Directory is middleware-node (packaged copy); local also tries the C# schema path.
  * Safe to run on every deploy (idempotent CREATE IF NOT EXISTS).
  */
 const { ensureSchema, getPool, resolveDatabaseUrl } = require('../persistence');

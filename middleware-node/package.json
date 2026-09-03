@@ -10,7 +10,8 @@
     "start": "node server.js",
     "init-devnet-collection": "node scripts/init-devnet-collection.js",
     "init-hell-token": "node scripts/init-hell-token.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js",
+    "apply-schema": "node scripts/apply-schema.js"
   },
   "keywords": [],
   "author": "",

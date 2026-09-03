@@ -44,6 +44,8 @@ railway up -y
 railway cdn purge all
 ```
 
+The landing service runs `node server.js`, which serves static files and **reverse-proxies** public API paths (`/health`, `/leaderboard`, `/api/arena/*`) to middleware and play hosts. See [`docs/PRODUCTION-REPAIR-RUNBOOK.md`](../docs/PRODUCTION-REPAIR-RUNBOOK.md).
+
 ## Related services
 
 | Service | Role |

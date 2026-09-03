@@ -4,6 +4,7 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "node server.js"
+preDeployCommand = "node scripts/apply-schema.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

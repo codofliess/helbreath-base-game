@@ -64,7 +64,7 @@ curl -sSI https://play.chainlords.net/api/arena/bleeding-online | grep -i conten
 **Repo fix:**
 
 - `middleware-node/persistence.js` — resolve `DATABASE_URL`, `PGHOST`/`PGUSER`/…, ping on `/health`
-- `middleware-node/scripts/apply-schema.js` — idempotent schema from `multiplayer/server/Persistence/schema.sql`
+- `middleware-node/scripts/apply-schema.js` — idempotent schema from `middleware-node/Persistence/schema.sql` (Railway Root Directory `/middleware-node`; keep in sync with `multiplayer/server/Persistence/schema.sql`)
 - `middleware-node/railway.toml` — `preDeployCommand = "node scripts/apply-schema.js"`
 
 ### Minimal host action (Railway UI — unavoidable for variable reference)

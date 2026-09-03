@@ -99,15 +99,37 @@ async function isPostgresReady() {
     return postgresCheckPromise;
 }
 
+/**
+ * Locate schema.sql for Railway Root Directory `/middleware-node` and local monorepo checkouts.
+ * Railway only copies the service root, so `../multiplayer/...` is `/multiplayer/...` and missing.
+ */
+function resolveSchemaPath() {
+    const fromEnv = (process.env.SCHEMA_SQL_PATH || '').trim();
+    const candidates = [
+        fromEnv,
+        path.join(__dirname, 'Persistence', 'schema.sql'),
+        path.join(process.cwd(), 'Persistence', 'schema.sql'),
+        path.join(__dirname, '..', 'multiplayer', 'server', 'Persistence', 'schema.sql'),
+        path.join(process.cwd(), '..', 'multiplayer', 'server', 'Persistence', 'schema.sql'),
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
 async function ensureSchema() {
     const db = getPool();
     if (!db) {
         return false;
     }
 
-    const schemaPath = path.join(__dirname, '..', 'multiplayer', 'server', 'Persistence', 'schema.sql');
-    if (!fs.existsSync(schemaPath)) {
-        console.warn(`[persistence] schema.sql not found at ${schemaPath}`);
+    const schemaPath = resolveSchemaPath();
+    if (!schemaPath) {
+        console.warn('[persistence] schema.sql not found (tried Persistence/schema.sql and monorepo multiplayer path)');
         return false;
     }
 
@@ -206,6 +228,7 @@ async function markDropClaimed(dropId, mintAddress) {
 
 module.exports = {
     resolveDatabaseUrl,
+    resolveSchemaPath,
     getPool,
     pingPostgres,
     isPostgresConfigured,

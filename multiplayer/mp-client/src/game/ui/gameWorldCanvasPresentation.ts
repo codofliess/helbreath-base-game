@@ -9,8 +9,8 @@ import { IN_UI_GAME_VIEWPORT_RESIZED } from '../../constants/EventNames';
  * Never Scale.RESIZE / never grow the buffer with the monitor: extra map FOV
  * is PvP-unfair (mages / dark elves can hit beyond intended vision).
  *
- * Presentation: Scale.ENVELOP covers the parent edge-to-edge (may crop thin
- * strips on non-16:9). HUD docks to the *visible* canvas×viewport intersection.
+ * Presentation: Scale.FIT in the parent (viewport minus dock). HUD docks to the
+ * visible canvas×viewport intersection. Extra map FOV is never granted.
  */
 export const GAME_VIEW_W = 1024;
 export const GAME_VIEW_H = 576;
@@ -126,7 +126,7 @@ function applyClassicFovPresentation(game: Game): void {
         canvas.classList.remove('fullscreen');
     }
 
-    game.scale.scaleMode = Scale.ENVELOP;
+    game.scale.scaleMode = Scale.FIT;
     game.scale.autoCenter = Scale.CENTER_BOTH;
     safeResize(game, GAME_VIEW_W, GAME_VIEW_H);
     try {
@@ -174,14 +174,14 @@ function ensureWindowResizeListener(): void {
 }
 
 /**
- * In-game: fixed 1024×576 FOV + Scale.ENVELOP (windowed or fullscreen).
+ * In-game: fixed 1024×576 FOV + Scale.FIT (windowed or fullscreen), parent minus dock.
  */
 export function applyGameWorldCanvasPresentation(scene: Scene): void {
     applyClassicFovPresentation(scene.game);
 }
 
 /**
- * Re-assert ENVELOP + classic FOV after Phaser refresh / leaving browser fullscreen.
+ * Re-assert FIT + classic FOV after Phaser refresh / leaving browser fullscreen.
  */
 export function resyncGameWorldCanvasPresentation(scene: Scene): void {
     if (!presentationActive && !document.body.classList.contains('game-world-active')) {

@@ -90,6 +90,10 @@ Until launch polish is signed off, **any agent touching visuals acts as CDO**:
 4. Before deploy: pass CDO gate in `docs/design/CDO.md` (no overlap, clear bands, readable type).  
 5. F5 avatar = real layered character; body bag-icon grids are **banned**.
 
+## Playtest door (no Phantom) — isolated host only
+
+Elon / QA: **`PLAYTEST=1`** local door (`pnpm playtest` → http://127.0.0.1:8081, char **`ElonQa`**). **Not** a skip on `play.chainlords.net`. How-to: [`docs/qa/PLAYTEST-DOOR.md`](docs/qa/PLAYTEST-DOOR.md). Do not deploy that host to live. No wallets, no $HELL, no airdrop.
+
 ## Out of scope unless asked
 
 - Feel/timing/latency dens polish as primary task  

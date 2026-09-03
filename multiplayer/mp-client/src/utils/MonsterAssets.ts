@@ -3,6 +3,7 @@ import type { Scene } from 'phaser';
 import { LOAD_MONSTER_ASSETS_ON_DEMAND, MONSTER_PLACEHOLDER_SPRITE } from '../Config';
 import { AssetType, getMonsterAssets, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
+import { fetchHelbreathGameAsset } from './MapAssets';
 
 const monsterAssetLoadPromises = new Map<string, Promise<void>>();
 const assetLoadPromises = new Map<string, Promise<void>>();
@@ -107,12 +108,7 @@ async function fetchAndRegisterMonsterSprite(scene: Scene, asset: AssetData): Pr
         throw new Error(`Monster sprite asset ${asset.key} is missing spriteType`);
     }
 
-    const response = await fetch(`assets/sprites/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch monster sprite ${asset.fileName}: ${response.status} ${response.statusText}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await fetchHelbreathGameAsset('sprites', asset.fileName);
     scene.cache.binary.add(asset.key, arrayBuffer);
 
     const hbFile = new HBSpriteFile(asset.key, asset.spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
@@ -120,11 +116,6 @@ async function fetchAndRegisterMonsterSprite(scene: Scene, asset: AssetData): Pr
 }
 
 async function fetchAndRegisterMonsterSound(scene: Scene, asset: AssetData): Promise<void> {
-    const response = await fetch(`assets/sounds/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch monster sound ${asset.fileName}: ${response.status} ${response.statusText}`);
-    }
-
     const soundManager = scene.sound as { context?: AudioContext };
     const audioContext = soundManager.context;
     if (!audioContext) {
@@ -132,7 +123,17 @@ async function fetchAndRegisterMonsterSound(scene: Scene, asset: AssetData): Pro
         return;
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    scene.cache.audio.add(asset.key, audioBuffer);
+    let arrayBuffer: ArrayBuffer;
+    try {
+        arrayBuffer = await fetchHelbreathGameAsset('sounds', asset.fileName);
+    } catch (error) {
+        console.warn(`[MonsterAssetLoader] Skipping sound ${asset.fileName}:`, error);
+        return;
+    }
+    try {
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+        scene.cache.audio.add(asset.key, audioBuffer);
+    } catch (error) {
+        console.warn(`[MonsterAssetLoader] Failed to decode ${asset.fileName}:`, error);
+    }
 }

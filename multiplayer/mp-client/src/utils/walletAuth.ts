@@ -1,3 +1,5 @@
+import { isPlaytestClient } from './playtestMode';
+
 const DEFAULT_MIDDLEWARE_URL = 'http://localhost:3001';
 const PROD_MIDDLEWARE_URL =
     'https://chainlords-middleware-production.up.railway.app';
@@ -27,6 +29,9 @@ function getPhantom(): PhantomProvider | undefined {
 }
 
 export function getMiddlewareAuthUrl(): string {
+    if (isPlaytestClient()) {
+        return '';
+    }
     const fromEnv = (import.meta.env.VITE_MIDDLEWARE_URL ?? '').toString().trim();
     if (fromEnv.length > 0) {
         return fromEnv;
@@ -261,6 +266,9 @@ export function clearWalletDeepLink(): void {
 /** Call once at app boot so the query string is not lost if LoginScreen starts late. */
 export function bootstrapWalletDeepLinkAtBoot(): void {
     if (typeof window === 'undefined') {
+        return;
+    }
+    if (isPlaytestClient()) {
         return;
     }
     try {

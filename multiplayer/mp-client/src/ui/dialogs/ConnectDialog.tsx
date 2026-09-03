@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import {
@@ -61,6 +61,11 @@ import {
     type ArenaSlotIndex,
 } from '../../utils/arenaKits';
 import { openArenaKitBuilder } from '../store/ArenaKitBuilder.store';
+import {
+    createPlaytestWalletSession,
+    isPlaytestClient,
+    PLAYTEST_CHARACTER_NAME,
+} from '../../utils/playtestMode';
 import { ARENA_CLOSED_MESSAGE, ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
@@ -100,6 +105,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     /** Pending PVP duel invites for this wallet (world names + arena kit names). */
     const [pvpInvites, setPvpInvites] = useState<ArenaPactState[]>([]);
     const [pvpInboxBusy, setPvpInboxBusy] = useState(false);
+    const playtestAutoEnteredRef = useRef(false);
 
     const collectInboxNames = useCallback((): string[] => {
         const wallet = walletSession?.wallet ?? getStoredWalletPubkey();
@@ -118,7 +124,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     }, [walletSession, characterSlots]);
 
     const refreshPvpInbox = useCallback(async () => {
-        if (!walletSession?.wallet || !walletSession.token) {
+        if (isPlaytestClient() || !walletSession?.wallet || !walletSession.token) {
             setPvpInvites([]);
             return;
         }
@@ -338,7 +344,24 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 setCharacterSlots(slots);
                 setReferralInfo(result.referral ?? null);
                 const firstOccupied = slots[0];
-                if (firstOccupied) {
+                if (isPlaytestClient() && walletSession) {
+                    const slotIndex = firstOccupied?.slotIndex ?? 0;
+                    setSelectedSlotIndex(slotIndex);
+                    setCharacterName(PLAYTEST_CHARACTER_NAME);
+                    setConnectDialogOpen(false);
+                    EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+                        host,
+                        port,
+                        characterName: PLAYTEST_CHARACTER_NAME,
+                        slotIndex,
+                        preferredInitialWorldId: getPreferredInitialWorldId(),
+                        walletSession: {
+                            wallet: walletSession.wallet,
+                            token: walletSession.token,
+                            expiresAt: walletSession.expiresAt,
+                        },
+                    });
+                } else if (firstOccupied) {
                     setSelectedSlotIndex(firstOccupied.slotIndex);
                     setCharacterName(firstOccupied.name);
                 } else {
@@ -361,7 +384,24 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 setReferralInfo(null);
                 const message = error instanceof Error ? error.message : 'Failed to load characters.';
                 console.warn('[ConnectDialog] Character list failed:', message);
-                // Toast only once per open cycle — effect can re-run on host/port/wallet churn.
+                if (isPlaytestClient() && walletSession) {
+                    setSelectedSlotIndex(0);
+                    setCharacterName(PLAYTEST_CHARACTER_NAME);
+                    setConnectDialogOpen(false);
+                    EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+                        host,
+                        port,
+                        characterName: PLAYTEST_CHARACTER_NAME,
+                        slotIndex: 0,
+                        preferredInitialWorldId: getPreferredInitialWorldId(),
+                        walletSession: {
+                            wallet: walletSession.wallet,
+                            token: walletSession.token,
+                            expiresAt: walletSession.expiresAt,
+                        },
+                    });
+                    return;
+                }
                 EventBus.emit(TOAST_REQUESTED, {
                     message,
                     severity: 'warning',
@@ -699,6 +739,12 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     /** One click: Phantom sign (if needed) → classic SELECTCHAR desk. */
     const handleEnterWorldFromHub = async () => {
         setHubError(undefined);
+        if (isPlaytestClient()) {
+            const session = createPlaytestWalletSession();
+            setConnectWalletSession(session);
+            enterPhaserDeskPhase('play-world', false);
+            return;
+        }
         let session = walletSession;
         let justAuthed = false;
         if (!session) {
@@ -711,7 +757,22 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         enterPhaserDeskPhase('play-world', justAuthed);
     };
 
+    useEffect(() => {
+        if (!isOpen || phase !== 'hub' || !isPlaytestClient() || playtestAutoEnteredRef.current) {
+            return;
+        }
+        playtestAutoEnteredRef.current = true;
+        void handleEnterWorldFromHub();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, phase]);
+
     const handleEnterArenaFromHub = () => {
+        if (isPlaytestClient()) {
+            const message = 'Arena is not part of this playtest door.';
+            setHubError(message);
+            EventBus.emit(TOAST_REQUESTED, { message, severity: 'info', autoClose: 5000 });
+            return;
+        }
         if (!ARENA_ENTRY_ENABLED) {
             setHubError(ARENA_CLOSED_MESSAGE);
             EventBus.emit(TOAST_REQUESTED, {
@@ -763,12 +824,16 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     <div className="login-hub-path-veil" aria-hidden="true" />
                     <div className="login-hub-path-body login-hub-path-body--stack-top">
                         <div className="login-hub-path-portal login-hub-path-portal--compact">
-                            <p className="login-hub-path-kicker">Under the goddesses</p>
+                            <p className="login-hub-path-kicker">
+                                {isPlaytestClient() ? 'Playtest door — not live' : 'Under the goddesses'}
+                            </p>
                             <h2 id="hub-world-title" className="login-hub-path-title">
                                 Helbreath World
                             </h2>
                             <p className="login-hub-path-lead">
-                                Pledge your seal, then choose a hero under Aresden or Elendiel.
+                                {isPlaytestClient()
+                                    ? `No Phantom. Character ${PLAYTEST_CHARACTER_NAME}. Kill a mob on this isolated host.`
+                                    : 'Pledge your seal, then choose a hero under Aresden or Elendiel.'}
                             </p>
                             {walletShort && (
                                 <div className="login-gate-wallet-chip">Seal {walletShort}</div>
@@ -779,11 +844,13 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                                 disabled={walletBusy}
                                 onClick={() => void handleEnterWorldFromHub()}
                             >
-                                {walletBusy
-                                    ? 'Binding seal…'
-                                    : walletSession
-                                      ? 'Enter Helbreath World'
-                                      : 'Bind seal & enter'}
+                                {isPlaytestClient()
+                                    ? `Enter as ${PLAYTEST_CHARACTER_NAME}`
+                                    : walletBusy
+                                      ? 'Binding seal…'
+                                      : walletSession
+                                        ? 'Enter Helbreath World'
+                                        : 'Bind seal & enter'}
                             </button>
                         </div>
 

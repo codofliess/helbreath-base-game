@@ -37,6 +37,7 @@ import { SelectCharDesk } from '../ui/SelectCharDesk';
 import { CreateCharDesk } from '../ui/CreateCharDesk';
 import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
 import { loadArenaKits } from '../../utils/arenaKits';
+import { toClientMapFileName } from '../../utils/MapAssets';
 
 /**
  * Login screen. Hub is React; after Enter Helbreath World / Arena, Phaser owns the
@@ -189,7 +190,7 @@ export class LoginScreen extends Scene {
                 gsm.setCharacterName(payload.characterName);
                 setInitialGameWorldState(this.game, {
                     gameWorldId: data.gameWorldId,
-                    mapName: `${data.mapName}.amd`,
+                    mapName: toClientMapFileName(data.mapName, data.gameWorldId),
                     musicFile: data.musicFile || undefined,
                     playerX: data.playerX,
                     playerY: data.playerY,

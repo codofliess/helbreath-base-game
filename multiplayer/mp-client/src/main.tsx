@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 
-import { toggleCharacterDialog } from './ui/store/CharacterDialog.store';
+import { toggleCharacterDialog, setCharacterDialogOpen, characterDialogStore } from './ui/store/CharacterDialog.store';
 import { toggleInventoryDialog } from './ui/store/InventoryDialog.store';
 import { isArenaSlimMode, wireArenaSlimModeListeners } from './ui/store/ArenaSlimMode.store';
 import { openCastDialogOnCircle, toggleCastDialogOnCircle, prepareSelectedSpell, castDialogStore } from './ui/store/CastDialog.store';
@@ -272,10 +272,21 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
                     closeChatCompose();
                     return;
                 }
-                // Local cast clear + server cancel (right-click does the same on the player).
+                if (characterDialogStore.state.isOpen) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCharacterDialogOpen(false);
+                    return;
+                }
                 EventBus.emit(IN_UI_FORCE_CANCEL_CAST);
                 e.preventDefault();
                 e.stopPropagation();
+                return;
+            }
+            if (isLetterCode(e, 'KeyI', 'i') && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCharacterDialog();
                 return;
             }
             // Olympia Enter-to-chat: open compose bar just above the bottom dock.

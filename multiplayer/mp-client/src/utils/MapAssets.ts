@@ -32,11 +32,66 @@ export function shouldLoadMapAssetsOnDemand(): boolean {
 }
 
 /**
+ * Server world id `traveler` uses Helbreath file `default.amd`.
+ * Accepts `default`, `default.amd`, `traveler`, or `traveler.amd`.
+ */
+export function toClientMapFileName(mapName: string, gameWorldId?: string): string {
+    const raw = (mapName || gameWorldId || '').trim();
+    let id = raw;
+    if (id.toLowerCase().startsWith('map-')) {
+        id = id.slice(4);
+    }
+    if (id.toLowerCase().endsWith('.amd')) {
+        id = id.slice(0, -4);
+    }
+    const base = id.toLowerCase() === 'traveler' || id === '' ? 'default' : id;
+    return `${base}.amd`;
+}
+
+function isHtmlArrayBuffer(buffer: ArrayBuffer): boolean {
+    const bytes = new Uint8Array(buffer.slice(0, 64));
+    const head = String.fromCharCode(...bytes).replace(/^\uFEFF/, '').trimStart().toLowerCase();
+    return head.startsWith('<!doctype') || head.startsWith('<html');
+}
+
+/**
+ * Fetch a Helbreath binary. Local Vite serves `public/assets`; live CF uses `/game-assets`.
+ * Rejects SPA `index.html` so `.amd` is never parsed as HTML (0×0 map).
+ */
+async function fetchHelbreathBinary(kind: 'maps' | 'sprites' | 'sounds' | 'music', fileName: string): Promise<ArrayBuffer> {
+    const paths = [`/assets/${kind}/${fileName}`, `/game-assets/${kind}/${fileName}`];
+    let lastError: Error | undefined;
+    for (const url of paths) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                lastError = new Error(`${url}: ${response.status} ${response.statusText}`);
+                continue;
+            }
+            const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
+            const buffer = await response.arrayBuffer();
+            if (contentType.includes('text/html') || isHtmlArrayBuffer(buffer)) {
+                lastError = new Error(`${url}: got HTML instead of binary (SPA fallback)`);
+                continue;
+            }
+            if (buffer.byteLength < 16) {
+                lastError = new Error(`${url}: empty or tiny body (${buffer.byteLength} bytes)`);
+                continue;
+            }
+            return buffer;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+        }
+    }
+    throw lastError ?? new Error(`[MapAssets] Failed to fetch ${kind}/${fileName}`);
+}
+
+/**
  * Resolve map asset metadata. Prefer the static {@link ASSETS} catalog; if a map is
- * missing there (e.g. barracks floor 2), still allow HTTP load from game-assets/maps.
+ * missing there (e.g. barracks floor 2), still allow HTTP load from assets/maps.
  */
 function getMapAssetByFileName(mapFileName: string): AssetData {
-    const normalized = mapFileName.endsWith('.amd') ? mapFileName : `${mapFileName}.amd`;
+    const normalized = toClientMapFileName(mapFileName);
     const asset = ASSETS.find(
         (a) => a.assetType === AssetType.MAP && a.fileName === normalized,
     );
@@ -125,14 +180,7 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
         if (!asset.spriteType) {
             throw new Error(`[MapAssets] Tile asset ${asset.key} is missing spriteType`);
         }
-        // Absolute path so login deep-links / base URL never resolve to /assets (CF poison / 404).
-        const response = await fetch(`/game-assets/sprites/${asset.fileName}`);
-        if (!response.ok) {
-            throw new Error(
-                `[MapAssets] Failed to fetch tile sprite ${asset.fileName}: ${response.status} ${response.statusText}`,
-            );
-        }
-        const arrayBuffer = await response.arrayBuffer();
+        const arrayBuffer = await fetchHelbreathBinary('sprites', asset.fileName);
         scene.cache.binary.add(asset.key, arrayBuffer);
         const hbFile = new HBSpriteFile(
             asset.key,
@@ -150,6 +198,13 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
     return promise;
 }
 
+export async function fetchHelbreathGameAsset(
+    kind: 'maps' | 'sprites' | 'sounds' | 'music',
+    fileName: string,
+): Promise<ArrayBuffer> {
+    return fetchHelbreathBinary(kind, fileName);
+}
+
 /**
  * Fetches the map binary, parses it, loads only required tile `.spr` packs, and registers the map on the scene.
  */
@@ -157,14 +212,7 @@ export async function prepareMapForGameWorld(scene: Scene, mapFileName: string):
     const startedAt = performance.now();
     const mapAsset = getMapAssetByFileName(mapFileName);
     const mapKey = mapAsset.key;
-
-    const response = await fetch(`/game-assets/maps/${mapFileName}`);
-    if (!response.ok) {
-        throw new Error(
-            `[MapAssets] Failed to fetch map ${mapFileName}: ${response.status} ${response.statusText}`,
-        );
-    }
-    const buffer = await response.arrayBuffer();
+    const buffer = await fetchHelbreathBinary('maps', mapAsset.fileName);
 
     const map = new HBMap(mapKey);
     map.loadFromBuffer(buffer);

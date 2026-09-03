@@ -10,8 +10,8 @@ export type PlayerMode = 'gm' | 'traveler';
 
 const TRAVELER_WORLD_ID = 'traveler';
 
-/** Hostnames that must never expose GM tooling UI. */
-function isPublicPlayHost(): boolean {
+/** Hostnames that must never expose GM tooling UI or a Phantom skip. */
+export function isPublicPlayHost(): boolean {
     if (typeof window === 'undefined' || !window.location?.hostname) {
         return false;
     }
@@ -24,6 +24,14 @@ function isPublicPlayHost(): boolean {
     );
 }
 
+function isPlaytestViteFlag(): boolean {
+    if (isPublicPlayHost()) {
+        return false;
+    }
+    const raw = (import.meta.env.VITE_PLAYTEST ?? '').toString().trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 /** True when this Vite build is the real-player / traveler experience. */
 export function isTravelerPlayerMode(): boolean {
     // Public play URL always traveler (overrides accidental gm prod builds).
@@ -32,6 +40,20 @@ export function isTravelerPlayerMode(): boolean {
     }
     const mode = (import.meta.env.VITE_PLAYER_MODE ?? 'gm').toString().trim().toLowerCase();
     return mode === 'traveler' || mode === 'traveller' || mode === 'player';
+}
+
+/**
+ * Isolated playtest ElonQa may open GM self-edit UI (Player / Item / Map / summon)
+ * without a Phantom wallet. Never true on public play hosts.
+ */
+export function showGmSandboxUi(): boolean {
+    if (isPublicPlayHost()) {
+        return false;
+    }
+    if (isPlaytestViteFlag()) {
+        return true;
+    }
+    return !isTravelerPlayerMode();
 }
 
 export function getPlayerMode(): PlayerMode {
@@ -45,10 +67,16 @@ export function getTravelerWorldId(): string {
 
 /** Preferred spawn world sent on AuthenticateRequest in traveler mode. */
 export function getPreferredInitialWorldId(): string | undefined {
-    return isTravelerPlayerMode() ? TRAVELER_WORLD_ID : undefined;
+    if (isPlaytestViteFlag() || isTravelerPlayerMode()) {
+        return TRAVELER_WORLD_ID;
+    }
+    return undefined;
 }
 
 /** Proto `player_mode` string announced to the server on authenticate. */
 export function getPlayerModeWireValue(): string {
+    if (isPlaytestViteFlag()) {
+        return 'gm';
+    }
     return getPlayerMode();
 }

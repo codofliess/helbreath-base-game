@@ -5,6 +5,7 @@ import { AssetType, getItemEquippedAppearanceSpriteNames, getPlayerItemAppearanc
 import { ItemTypes, getItemById, type EquipmentSlot, type InventoryItem } from '../constants/Items';
 import { Gender } from '../Types';
 import { HBSpriteFile } from '../game/assets/HBSprite';
+import { fetchHelbreathGameAsset } from './MapAssets';
 
 const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
     ItemTypes.WEAPON,
@@ -148,12 +149,7 @@ async function fetchAndRegisterPlayerItemSprite(scene: Scene, asset: AssetData):
         throw new Error(`Player item appearance asset ${asset.key} is missing spriteType`);
     }
 
-    const response = await fetch(`assets/sprites/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch item appearance ${asset.fileName}: ${response.status} ${response.statusText}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await fetchHelbreathGameAsset('sprites', asset.fileName);
     scene.cache.binary.add(asset.key, arrayBuffer);
 
     const hbFile = new HBSpriteFile(asset.key, asset.spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);

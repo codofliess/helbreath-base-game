@@ -1026,7 +1026,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
             return true;
         }
 
-        if (!travelerMode) {
+        if (!travelerMode || PlaytestMode.AllowsSandboxSelfEdit(AccountWallet)) {
             return true;
         }
 

@@ -33,12 +33,16 @@ pnpm dev
 
 The client dev server runs at **http://localhost:8080** (same as single-player). Use the in-game **Connect** dialog: defaults are host `localhost`, port `1337`, plus a character name.
 
+**Traveler playtest without Phantom:** `pnpm playtest` (isolated `VITE_PLAYTEST=1` on **8081**). Character **`ElonQa`**. Never a skip on `play.chainlords.net`. See [`docs/qa/PLAYTEST-DOOR.md`](../../docs/qa/PLAYTEST-DOOR.md).
+
 ---
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
+| `pnpm playtest` | Isolated PLAYTEST=1 traveler on **8081** (no Phantom; not live) |
+| `pnpm build:playtest` | Static playtest bundle → `dist-playtest/` (do not ship as live traveler) |
 | `pnpm proto:generate` | Regenerate `src/proto/generated/network.ts` from `../proto/network.proto` |
 | `pnpm dev` | Runs `proto:generate`, frees port 8080 if in use, then starts Vite (`vite/config.dev.mjs`) |
 | `pnpm build` | Runs `proto:generate`, then production build → `multiplayer/mp-client/dist` |

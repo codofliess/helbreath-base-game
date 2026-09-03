@@ -296,8 +296,8 @@ body.login-selectchar-active #game-container canvas.login-selectchar-canvas,
 }
 
 /*
- * In-game: 1024×576 FOV buffer + Scale.ENVELOP (cover monitor edge-to-edge).
- * Parent is fixed full viewport; canvas may overflow one axis (cropped by overflow:hidden).
+ * In-game: 1024×576 FOV buffer + Scale.FIT inside the viewport minus the dock.
+ * Parent is fixed; bottom strip is reserved so HP/MP/F-keys stay on-screen at 1280×800.
  */
 body.game-world-active {
     background: #000000;
@@ -337,9 +337,13 @@ body.game-world-active #game-wrapper {
 
 body.game-world-active #game-container {
     position: absolute !important;
-    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* Leave the bottom dock hittable on 1280×800 (canvas 720 + 90px chrome overflowed). */
+    bottom: var(--hb-dock-height, 96px) !important;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     display: block !important;

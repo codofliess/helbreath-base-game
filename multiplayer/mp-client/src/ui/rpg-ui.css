@@ -85,6 +85,12 @@
     bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 72px) + 10px) !important;
 }
 
+body.game-world-active .Toastify__toast-container--bottom-right.rpg-toast-container,
+body.game-world-active .Toastify__toast-container--bottom-center.rpg-toast-container,
+body.game-world-active .rpg-toast-container--olympia {
+    bottom: calc(var(--hb-dock-height, 72px) + 10px) !important;
+}
+
 .rpg-toast-container--olympia .rpg-toast {
     pointer-events: auto;
     justify-content: center;
@@ -7480,6 +7486,12 @@ button.city-select-dialog-btn.olympia-text-btn {
     filter: drop-shadow(0 -2px 8px rgba(0, 0, 0, 0.7));
 }
 
+body.game-world-active .hotkey-bar-root {
+    left: 0;
+    width: 100%;
+    bottom: 0;
+}
+
 /* ===== Chain Lord dock (new skin only) ===== */
 .cl-dock-panel {
     pointer-events: auto;
@@ -9989,6 +10001,10 @@ button.shop-dialog-row.shop-dialog-row--selected {
     max-height: min(360px, 42vh);
 }
 
+body.game-world-active .system-log-overlay {
+    bottom: calc(var(--hb-dock-height, 56px) + 20px);
+}
+
 /*
  * Olympia world chat (F9 closed): bare PutString2 lines top-left over the map.
  * Larger readable face; ~2 ch from left edge, ~1cm from top of viewport.
@@ -10339,6 +10355,10 @@ body.arena-slim-mode .bag-dialog-root {
     box-shadow:
         0 0 0 1px rgba(0, 0, 0, 0.55),
         0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+body.game-world-active .chat-compose-bar {
+    bottom: calc(var(--hb-dock-height, 100px) + 16px);
 }
 
 .chat-compose-bar-channel {

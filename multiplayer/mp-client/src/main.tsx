@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 
-import { toggleCharacterDialog } from './ui/store/CharacterDialog.store';
+import { toggleCharacterDialog, setCharacterDialogOpen, characterDialogStore } from './ui/store/CharacterDialog.store';
 import { toggleInventoryDialog } from './ui/store/InventoryDialog.store';
 import { isArenaSlimMode, wireArenaSlimModeListeners } from './ui/store/ArenaSlimMode.store';
 import { openCastDialogOnCircle, toggleCastDialogOnCircle, prepareSelectedSpell, castDialogStore } from './ui/store/CastDialog.store';
@@ -36,7 +36,7 @@ import {
     chatTranslationStore,
     setShowSpeakerLanguageTag,
 } from './ui/store/ChatTranslation.store';
-import { isTravelerPlayerMode } from './utils/playerMode';
+import { showGmSandboxUi } from './utils/playerMode';
 import { installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
 import { captureReferralFromUrl } from './utils/referral';
 import { EventBus } from './game/EventBus';
@@ -234,8 +234,8 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
     }
 
     if (isGameActive() && e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'D' || e.code === 'KeyD')) {
-        // GM tooling panel — disabled in traveler / real-player mode.
-        if (isTravelerPlayerMode()) {
+        // GM tooling panel — disabled in traveler / real-player mode (playtest ElonQa may self-edit).
+        if (!showGmSandboxUi()) {
             return;
         }
         e.preventDefault();
@@ -272,10 +272,21 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
                     closeChatCompose();
                     return;
                 }
-                // Local cast clear + server cancel (right-click does the same on the player).
+                if (characterDialogStore.state.isOpen) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCharacterDialogOpen(false);
+                    return;
+                }
                 EventBus.emit(IN_UI_FORCE_CANCEL_CAST);
                 e.preventDefault();
                 e.stopPropagation();
+                return;
+            }
+            if (isLetterCode(e, 'KeyI', 'i') && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCharacterDialog();
                 return;
             }
             // Olympia Enter-to-chat: open compose bar just above the bottom dock.

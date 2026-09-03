@@ -142,6 +142,9 @@ public static class HellMiningStore {
 
     /// <summary>True during public testing week (env <c>HELL_TESTING_WEEK=1</c> or until <c>HELL_TESTING_WEEK_UNTIL</c> UTC date).</summary>
     public static bool IsTestingWeekActive(long? nowMs = null) {
+        if (PlaytestMode.IsEnabled) {
+            return false;
+        }
         var flag = Environment.GetEnvironmentVariable("HELL_TESTING_WEEK");
         if (string.Equals(flag, "1", StringComparison.Ordinal) ||
             string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase)) {

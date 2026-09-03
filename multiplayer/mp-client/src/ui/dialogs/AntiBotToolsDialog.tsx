@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store';
 import { toast } from 'react-toastify';
 import { TOURNAMENT_DIALOG_BG } from '../../constants/SpriteKeys';
 import type { IRefPhaserGame } from '../../PhaserGame';
-import { isTravelerPlayerMode } from '../../utils/playerMode';
+import { showGmSandboxUi } from '../../utils/playerMode';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
 import {
@@ -93,7 +93,7 @@ export function AntiBotToolsDialog({
     const statusMessage = useStore(antiBotToolsDialogStore, (s) => s.statusMessage);
 
     useEffect(() => {
-        if (!isOpen || isTravelerPlayerMode()) {
+        if (!isOpen || !showGmSandboxUi()) {
             return;
         }
         const game = phaserRef?.current?.game;
@@ -107,7 +107,7 @@ export function AntiBotToolsDialog({
         networkManager.requestGetAntiBotTools();
     }, [isOpen, phaserRef]);
 
-    if (!isOpen || isTravelerPlayerMode()) {
+    if (!isOpen || !showGmSandboxUi()) {
         return null;
     }
 

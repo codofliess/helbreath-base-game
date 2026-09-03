@@ -3,6 +3,8 @@
  * download locally as {victim}_{nnn}.jpg, and best-effort POST to the middleware gallery stub.
  */
 
+import { isPlaytestClient } from '../../utils/playtestMode';
+
 export type EkScreenshotRarity = 'unspecified' | 'common' | 'rare' | 'legendary';
 
 export interface EkScreenshotMeta {
@@ -188,6 +190,9 @@ export function captureManualScreenshot(game: Phaser.Game | undefined): void {
  * Schedules an EK capture on the given Phaser game canvas (Olympia ~650ms delay).
  */
 export function scheduleEkScreenshot(game: Phaser.Game | undefined, meta: EkScreenshotMeta): void {
+    if (isPlaytestClient()) {
+        return;
+    }
     const victimName = meta.victimName?.trim();
     if (!victimName) {
         console.warn('[EkScreenshotCapture] missing victim name; skip');

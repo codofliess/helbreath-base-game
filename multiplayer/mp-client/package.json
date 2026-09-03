@@ -23,6 +23,8 @@
         "proto:generate": "node scripts/generate-proto.cjs",
         "predev": "pnpm run proto:generate",
         "dev": "sh -c 'for p in 8080; do lsof -iTCP:$p -sTCP:LISTEN -t 2>/dev/null | xargs kill -9 2>/dev/null; done; exec vite --config vite/config.dev.mjs'",
+        "playtest": "vite --config vite/config.dev.playtest.mjs",
+        "build:playtest": "vite build --config vite/config.prod.playtest.mjs",
         "prebuild": "pnpm run proto:generate",
         "build": "vite build --config vite/config.prod.mjs",
         "predev-nolog": "pnpm run proto:generate",

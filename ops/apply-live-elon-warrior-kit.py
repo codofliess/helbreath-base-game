@@ -360,6 +360,8 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def connect():
     url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_CONNECTION_STRING")
+    if not url and Path("/opt/chainlords/server").is_dir():
+        url = "postgresql://helbreath:helbreath@127.0.0.1:5432/helbreath"
     if not url:
         return None, "DATABASE_URL / POSTGRES_CONNECTION_STRING not set"
     try:
@@ -416,6 +418,31 @@ def fetch_elon(conn) -> tuple[dict[str, Any] | None, str]:
     return data, ""
 
 
+def write_chars_mirror(chars_dir: Path, state: dict[str, Any]) -> int:
+    """Rewrite traveler/GM JSON only when the file is Elon on the allowlisted wallet."""
+    if not chars_dir.is_dir():
+        print(f"CHARS_DIR missing: {chars_dir}", file=sys.stderr)
+        return 0
+    prefix = TARGET_WALLET[:8]
+    written = 0
+    for path in sorted(chars_dir.glob("*.json")):
+        if prefix not in path.name:
+            continue
+        try:
+            current = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        name = pick(current, "CharacterName", "characterName")
+        if name != TARGET_NAME:
+            continue
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.replace(path)
+        print(f"wrote Chars mirror {path.name}")
+        written += 1
+    return written
+
+
 def write_elon(conn, row: dict[str, Any], state: dict[str, Any]) -> None:
     sql = """
         UPDATE characters
@@ -465,6 +492,11 @@ def main() -> int:
     parser.add_argument("--from-json", type=Path, help="Overlay a JSON snapshot (no DB).")
     parser.add_argument("--write-json", type=Path, help="Write overlay JSON (with --from-json).")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--chars-dir",
+        type=Path,
+        help="Optional Chars/ mirror: rewrite only JSON whose name is Elon and filename contains the wallet prefix.",
+    )
     args = parser.parse_args()
 
     if args.self_test:
@@ -533,6 +565,9 @@ def main() -> int:
             f"UPDATED characters.id={row['id']} name=Elon (state_json only; world/pos unchanged). "
             "If Elon is online, re-log. Server was not restarted."
         )
+        if args.chars_dir:
+            n = write_chars_mirror(args.chars_dir, after)
+            print(f"Chars mirror files written: {n}")
         return 0
     finally:
         conn.close()

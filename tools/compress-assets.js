@@ -134,6 +134,12 @@ const loadPlayerItemAppearanceAssetsOnDemandMatch = configContent.match(
     /export const LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND\s*=\s*(true|false)/,
 );
 const loadPlayerItemAppearanceAssetsOnDemand = loadPlayerItemAppearanceAssetsOnDemandMatch?.[1] === 'true';
+const loadEffectAssetsOnDemandMatch = configContent.match(/export const LOAD_EFFECT_ASSETS_ON_DEMAND\s*=\s*(true|false)/);
+const loadEffectAssetsOnDemand = loadEffectAssetsOnDemandMatch?.[1] === 'true';
+const loadNpcAssetsOnDemandMatch = configContent.match(/export const LOAD_NPC_ASSETS_ON_DEMAND\s*=\s*(true|false)/);
+const loadNpcAssetsOnDemand = loadNpcAssetsOnDemandMatch?.[1] === 'true';
+const loadItemIconAssetsOnDemandMatch = configContent.match(/export const LOAD_ITEM_ICON_ASSETS_ON_DEMAND\s*=\s*(true|false)/);
+const loadItemIconAssetsOnDemand = loadItemIconAssetsOnDemandMatch?.[1] === 'true';
 const placeholderSpriteMatch = configContent.match(/export const MONSTER_PLACEHOLDER_SPRITE\s*=\s*['"]([^'"]+)['"]/);
 const monsterPlaceholderSprite = placeholderSpriteMatch?.[1] ?? 'ghk';
 
@@ -490,32 +496,39 @@ bundledMonsterSounds.forEach(soundFile => {
 });
 
 // Add effect sprites to asset entries
-effectSprites.forEach(spriteName => {
-    assetEntries.push({
-        key: `sprite-${spriteName}`,
-        fileName: `${spriteName}.spr`,
-        assetType: 'SPRITE'
+if (!loadEffectAssetsOnDemand) {
+    effectSprites.forEach(spriteName => {
+        assetEntries.push({
+            key: `sprite-${spriteName}`,
+            fileName: `${spriteName}.spr`,
+            assetType: 'SPRITE'
+        });
     });
-});
 
-// Add effect sounds to asset entries
-effectSounds.forEach(soundFile => {
-    const key = soundFile.replace('.mp3', '');
-    assetEntries.push({
-        key: key,
-        fileName: soundFile,
-        assetType: 'SOUND'
+    effectSounds.forEach(soundFile => {
+        const key = soundFile.replace('.mp3', '');
+        assetEntries.push({
+            key: key,
+            fileName: soundFile,
+            assetType: 'SOUND'
+        });
     });
-});
+} else {
+    console.log('Effect on-demand assets: enabled (excluding effect sprites/sounds from zip)');
+}
 
 // Add NPC sprites to asset entries (with .spr extension)
-npcSprites.forEach(spriteName => {
-    assetEntries.push({
-        key: `sprite-${spriteName}`,
-        fileName: `${spriteName}.spr`,
-        assetType: 'SPRITE'
+if (!loadNpcAssetsOnDemand) {
+    npcSprites.forEach(spriteName => {
+        assetEntries.push({
+            key: `sprite-${spriteName}`,
+            fileName: `${spriteName}.spr`,
+            assetType: 'SPRITE'
+        });
     });
-});
+} else {
+    console.log('NPC on-demand assets: enabled (excluding NPC sprites from zip)');
+}
 
 // Add equipped sprites from Items.ts (skip if already in assetEntries)
 if (!loadPlayerItemAppearanceAssetsOnDemand) {
@@ -541,6 +554,18 @@ if (!loadPlayerItemAppearanceAssetsOnDemand) {
     filtered.forEach((a) => assetEntries.push(a));
     console.log(
         `Player item appearance on-demand: removed ${before - assetEntries.length} equipped item sprite entries from zip list`,
+    );
+}
+
+if (loadItemIconAssetsOnDemand) {
+    const beforeIcons = assetEntries.length;
+    const filteredIcons = assetEntries.filter(
+        (a) => a.key !== 'sprite-item-pack' && a.key !== 'sprite-item-ground',
+    );
+    assetEntries.length = 0;
+    filteredIcons.forEach((a) => assetEntries.push(a));
+    console.log(
+        `Item icon on-demand: removed ${beforeIcons - assetEntries.length} item-pack/item-ground entries from zip`,
     );
 }
 

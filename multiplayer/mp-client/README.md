@@ -107,15 +107,9 @@ Live `play.chainlords.net` (Hetzner) serves this dist from **`/opt/chainlords/cl
 
 ### Live memory / OOM (Chrome Aw Snap 9)
 
-Entering a city as a fully geared character used to OOM the tab when the client either preloaded every map/tile pack or zoomed the camera to snapshot the **entire** world for a minimap.
+Entering a city as a fully geared character used to OOM the tab when the client preloaded every map/tile pack, zoomed the camera for a full-world minimap, or registered the full item/monster/effect catalog (including item-pack frame data URLs) before the first GameWorld frame.
 
-| Flag | Live production | Notes |
-|------|-----------------|--------|
-| `LOAD_MAP_ASSETS_ON_DEMAND` | **true** (Config, not env) | LoadingScreen skips all `.amd` / tile `.spr`; `prepareMapForGameWorld` loads only the current map + required packs (including tree-shadow indices `tree+50`). |
-| `VITE_GENERATE_MINIMAP` | **unset** → `GENERATE_MINIMAP = false` | Skips full-world WebGL minimap capture. Pre-baked `assets/images/minimaps/*.jpg` still load for `Minimap.PRE_GENERATED`. |
-| `VITE_GENERATE_MINIMAP=1` | snapshot tooling only | Re-enables on-demand full-map capture (can OOM). Use with `DOWNLOAD_MAP_SNAPSHOT` per [`sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`](../../sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md). Do **not** bake this into the Hetzner client. |
-
-World rendering stays camera window + culling ring; this change does not reduce Olympia-quality sprites in view.
+World rendering stays camera window + culling ring; this change does not reduce Olympia-quality sprites **in view**. First spell/NPC/bag may hitch once while that pack fetches.
 
 ### Publish static client to Hetzner (PaioPez)
 
@@ -131,9 +125,22 @@ pnpm build
 
 # On Hetzner play host (example — keep a dated backup):
 sudo cp -a /opt/chainlords/client "/opt/chainlords/client.bak-$(date +%Y%m%d-%H%M)"
-# Sync dist contents (not the dist folder itself) onto the nginx root:
-sudo rsync -a --delete ./dist/ /opt/chainlords/client/
-# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: hashed JS is new, not August bundle.
+# Sync dist contents onto the nginx root. Preserve live `game-assets/` (maps/sprites HTTP).
+sudo rsync -a --delete --exclude game-assets ./dist/ /opt/chainlords/client/
+# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: new hashed JS (not PR #8 `index-DlGsHxOc.js`).
+# Enter traveler as Elon/Martín: character list → Enter World must not Aw Snap 9. Open bag after world is up.
 ```
+
+| Flag | Live production | Notes |
+|------|-----------------|--------|
+| `LOAD_MAP_ASSETS_ON_DEMAND` | **true** (Config, not env) | LoadingScreen skips all `.amd` / tile `.spr`; `prepareMapForGameWorld` loads only the current map + required packs sequentially (including tree-shadow indices `tree+50`). |
+| `LOAD_MONSTER_ASSETS_ON_DEMAND` | **true** | Only placeholder monster `.spr` at load; concrete packs when a mob enters view. |
+| `LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND` | **true** | Equipped gear `.spr` after map ready, sequential (not racing tile packs on enter). |
+| `LOAD_EFFECT_ASSETS_ON_DEMAND` | **true** | Effect catalog not registered at load; first VFX for that pack fetches it. |
+| `LOAD_NPC_ASSETS_ON_DEMAND` | **true** | NPC `.spr` when an NPC enters view. |
+| `LOAD_ITEM_ICON_ASSETS_ON_DEMAND` | **true** | `item-pack` / `item-ground` on bag open or ground pile — no full frame data-URL dump. |
+| `ENABLE_ZIP_LOADING` | **false** | Do not decompress a full `assets.zip` into memory on live. |
+| `VITE_GENERATE_MINIMAP` | **unset** → `GENERATE_MINIMAP = false` | Skips full-world WebGL minimap capture. Pre-baked `assets/images/minimaps/*.jpg` still load for `Minimap.PRE_GENERATED`. |
+| `VITE_GENERATE_MINIMAP=1` | snapshot tooling only | Re-enables on-demand full-map capture (can OOM). Use with `DOWNLOAD_MAP_SNAPSHOT` per [`sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`](../../sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md). Do **not** bake this into the Hetzner client. |
 
 Do not SSH from cloud agents; do not write live Postgres or character kit rows.

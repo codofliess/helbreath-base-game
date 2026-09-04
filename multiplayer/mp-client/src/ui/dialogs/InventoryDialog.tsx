@@ -93,6 +93,7 @@ import { formatOlympiaCompactAmount } from '../../utils/olympiaFormat';
 import { getOlympiaItemPriceCatalog } from '../../utils/olympiaItemPriceCatalog';
 import { isPostTestNftMintEligible } from '../../utils/olympiaDropRules';
 import type { IRefPhaserGame } from '../../PhaserGame';
+import { loadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { Gender } from '../../Types';
 import type { ItemDropLogEntry } from '../store/ItemDrops.store';
 
@@ -368,6 +369,17 @@ export function InventoryDialog({
         }
         void refreshNftClaims(walletPubkey);
     }, [activeTab, walletPubkey]);
+
+    useEffect(() => {
+        const game = phaserRef?.current?.game;
+        const scene = game?.scene?.getScene('GameWorld');
+        if (!scene) {
+            return;
+        }
+        void loadItemIconAssetsOnDemand(scene).catch((error) => {
+            console.warn('[InventoryDialog] Failed to lazy-load item icon packs', error);
+        });
+    }, [phaserRef]);
 
     useEffect(() => {
         const onSellResult = (ev: SellBagItemResultEvent) => {

@@ -164,7 +164,8 @@ export interface ConnectToServerPayload {
 export const SOCKET_DISCONNECTED = 'socket-disconnected';
 /**
  * InitialState: gender-resolved equipped item appearance basenames to prefetch lazily.
- * LoginScreen queues on `game.registry`; GameWorld drains on create (parallel with map load).
+ * LoginScreen queues on `game.registry`; GameWorld drains after the map first frame
+ * (sequential), not in parallel with tile-pack decode.
  */
 export const PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED = 'player-item-appearance-prefetch-requested';
 export interface PlayerItemAppearancePrefetchEventData {

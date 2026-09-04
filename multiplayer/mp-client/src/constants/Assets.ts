@@ -20,7 +20,10 @@ export enum AssetType {
 
 import { SpriteType } from '../game/assets/HBSprite';
 import {
+    LOAD_EFFECT_ASSETS_ON_DEMAND,
+    LOAD_ITEM_ICON_ASSETS_ON_DEMAND,
     LOAD_MONSTER_ASSETS_ON_DEMAND,
+    LOAD_NPC_ASSETS_ON_DEMAND,
     LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND,
     MONSTER_PLACEHOLDER_SPRITE,
 } from '../Config';
@@ -341,17 +344,18 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
         });
     });
 
-    // Add NPC sprite assets (NPCs use Monster sprite type - same format)
-    NPC_SPRITE_NAMES.forEach((sprite) => {
-        if (!assets.some((asset) => asset.key === `sprite-${sprite}`) && !monsterSpriteNames.has(sprite)) {
-            assets.push({
-                key: `sprite-${sprite}`,
-                fileName: `${sprite}.spr`,
-                assetType: AssetType.SPRITE,
-                spriteType: SpriteType.Monster
-            });
-        }
-    });
+    if (!LOAD_NPC_ASSETS_ON_DEMAND) {
+        NPC_SPRITE_NAMES.forEach((sprite) => {
+            if (!assets.some((asset) => asset.key === `sprite-${sprite}`) && !monsterSpriteNames.has(sprite)) {
+                assets.push({
+                    key: `sprite-${sprite}`,
+                    fileName: `${sprite}.spr`,
+                    assetType: AssetType.SPRITE,
+                    spriteType: SpriteType.Monster
+                });
+            }
+        });
+    }
     
     // Add monster sound assets
     monsterSounds.forEach(soundFile => {
@@ -364,36 +368,35 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
         });
     });
 
-    // Extract effect sprites and sounds from EFFECTS array
-    const effectSpriteNames = new Set<string>();
-    const effectSounds = new Set<string>();
+    if (!LOAD_EFFECT_ASSETS_ON_DEMAND) {
+        const effectSpriteNames = new Set<string>();
+        const effectSounds = new Set<string>();
 
-    EFFECTS.forEach((effect) => {
-        effectSpriteNames.add(effect.sprite);
-        if (effect.sound) {
-            effectSounds.add(effect.sound);
-        }
-    });
-
-    // Add effect sprite assets
-    effectSpriteNames.forEach((spriteName) => {
-        assets.push({
-            key: `sprite-${spriteName}`,
-            fileName: `${spriteName}.spr`,
-            assetType: AssetType.SPRITE,
-            spriteType: SpriteType.Effect
+        EFFECTS.forEach((effect) => {
+            effectSpriteNames.add(effect.sprite);
+            if (effect.sound) {
+                effectSounds.add(effect.sound);
+            }
         });
-    });
 
-    // Add effect sound assets
-    effectSounds.forEach((soundFile) => {
-        const key = soundFile.replace('.mp3', '');
-        assets.push({
-            key,
-            fileName: soundFile,
-            assetType: AssetType.SOUND
+        effectSpriteNames.forEach((spriteName) => {
+            assets.push({
+                key: `sprite-${spriteName}`,
+                fileName: `${spriteName}.spr`,
+                assetType: AssetType.SPRITE,
+                spriteType: SpriteType.Effect
+            });
         });
-    });
+
+        effectSounds.forEach((soundFile) => {
+            const key = soundFile.replace('.mp3', '');
+            assets.push({
+                key,
+                fileName: soundFile,
+                assetType: AssetType.SOUND
+            });
+        });
+    }
 
     // Add equipped sprites and consumption sounds from ITEMS
     const equippedSpriteNames = new Set<string>();
@@ -434,9 +437,10 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
         }
     });
 
+    let result = assets;
     if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
         const lazyNames = equippedSpriteNames;
-        return assets.filter((a) => {
+        result = result.filter((a) => {
             if (a.assetType !== AssetType.SPRITE) {
                 return true;
             }
@@ -449,7 +453,13 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
         });
     }
 
-    return assets;
+    if (LOAD_ITEM_ICON_ASSETS_ON_DEMAND) {
+        result = result.filter(
+            (a) => a.key !== 'sprite-item-pack' && a.key !== 'sprite-item-ground',
+        );
+    }
+
+    return result;
 }
 
 /**

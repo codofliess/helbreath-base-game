@@ -173,6 +173,23 @@ export const LOAD_MAP_ASSETS_ON_DEMAND = true;
 export const LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND = true;
 
 /**
+ * When true, effect `.spr` / SFX are not registered in LoadingScreen; the first
+ * `drawEffect` for that pack fetches it. Live must keep this true (catalog VFX packs OOM enter).
+ */
+export const LOAD_EFFECT_ASSETS_ON_DEMAND = true;
+
+/**
+ * When true, NPC `.spr` files are not registered in LoadingScreen; they load when an NPC enters view.
+ */
+export const LOAD_NPC_ASSETS_ON_DEMAND = true;
+
+/**
+ * When true, `item-pack.spr` / `item-ground.spr` skip LoadingScreen (and skip dumping every
+ * frame as a PNG data URL). Bag open and ground piles fetch them later.
+ */
+export const LOAD_ITEM_ICON_ASSETS_ON_DEMAND = true;
+
+/**
  * Phaser texture key for a 1×1 transparent placeholder used while a lazy item appearance `.spr` loads.
  * Registered in {@link Boot}.
  */

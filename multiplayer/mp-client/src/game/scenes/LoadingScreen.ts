@@ -9,13 +9,16 @@ import { getLoadingBgKey, setItemPackSpriteSheets, setItemPackEmittedTintKeys, s
 import { EventBus } from '../EventBus';
 import { CURRENT_SCENE_READY } from '../../constants/EventNames';
 import { ENABLE_ZIP_LOADING, LOAD_MAP_ASSETS_ON_DEMAND } from '../../Config';
+import { SpriteType } from '../assets/HBSprite';
 
 type LoadingScreenInitData = {
     enableZipLoading?: boolean;
 };
 
 /**
- * Initial loading scene. Displays progress bar while loading assets (sprites, maps, music).
+ * Initial loading scene. Displays progress bar while loading a **light** asset set
+ * (human bodies first, then hair/underwear, then UI). Maps, tiles, effects, NPCs,
+ * item-pack, and equipped gear stay on-demand for live Chrome memory.
  * After loading, transitions to LoginScreen.
  */
 export class LoadingScreen extends Scene {
@@ -172,6 +175,19 @@ export class LoadingScreen extends Scene {
         return all.filter(
             (a) => a.assetType !== AssetType.MAP && a.assetType !== AssetType.TILE_SPRITE,
         );
+    }
+
+    private spriteLoadPriority(asset: AssetData): number {
+        switch (asset.spriteType) {
+            case SpriteType.Human:
+                return 0;
+            case SpriteType.EquipmentPack:
+                return 1;
+            case SpriteType.Interface:
+                return 2;
+            default:
+                return 3;
+        }
     }
 
     private setProgress(progress: number) {
@@ -554,37 +570,37 @@ export class LoadingScreen extends Scene {
         
         // Load sprites dynamically from Assets collection
         const assets = this.getLoadingAssets();
-        const spriteAssets = assets.filter(
-            asset => asset.assetType === AssetType.TILE_SPRITE || asset.assetType === AssetType.SPRITE
-        );
+        const spriteAssets = assets
+            .filter((asset) => asset.assetType === AssetType.TILE_SPRITE || asset.assetType === AssetType.SPRITE)
+            .sort((a, b) => this.spriteLoadPriority(a) - this.spriteLoadPriority(b));
         
         const spritesStart = performance.now();
-        await Promise.all(
-            spriteAssets.map(async asset => {
-                if (!asset.spriteType) {
-                    throw new Error(`Sprite asset ${asset.key} is missing spriteType`);
+        // Live memory path: decode one .spr at a time (Body first / sequential wm.spr, then hair/UI).
+        // Promise.all of catalog packs (effects/item-pack/NPCs) was a Chrome Aw Snap 9 spike.
+        for (const asset of spriteAssets) {
+            if (!asset.spriteType) {
+                throw new Error(`Sprite asset ${asset.key} is missing spriteType`);
+            }
+            try {
+                console.log(`[LoadingScreen] Loading sprite: ${asset.key} (${asset.fileName})`);
+                const hbFile = new HBSpriteFile(
+                    asset.key,
+                    asset.spriteType,
+                    asset.exportFramesAsDataUrls || false,
+                    asset.tileStartIndex
+                );
+                await hbFile.load(this);
+                if (asset.key === 'sprite-item-pack') {
+                    setItemPackSpriteSheets(this.game, hbFile.spriteSheets);
+                    setItemPackEmittedTintKeys(this.game, new Set<string>());
                 }
-                try {
-                    console.log(`[LoadingScreen] Loading sprite: ${asset.key} (${asset.fileName})`);
-                    const hbFile = new HBSpriteFile(
-                        asset.key,
-                        asset.spriteType,
-                        asset.exportFramesAsDataUrls || false,
-                        asset.tileStartIndex
-                    );
-                    await hbFile.load(this);
-                    if (asset.key === 'sprite-item-pack') {
-                        setItemPackSpriteSheets(this.game, hbFile.spriteSheets);
-                        setItemPackEmittedTintKeys(this.game, new Set<string>());
-                    }
-                    onSpriteLoaded();
-                } catch (error) {
-                    console.error(`[LoadingScreen] ❌ Failed to load sprite: ${asset.key} (${asset.fileName})`);
-                    console.error(`[LoadingScreen] Error details:`, error);
-                    throw error; // Re-throw to fail the loading process
-                }
-            })
-        );
+                onSpriteLoaded();
+            } catch (error) {
+                console.error(`[LoadingScreen] ❌ Failed to load sprite: ${asset.key} (${asset.fileName})`);
+                console.error(`[LoadingScreen] Error details:`, error);
+                throw error;
+            }
+        }
         
         this.phaseTimings.parseSprites = performance.now() - spritesStart;
         console.log(`[LoadingScreen] ⏱️  Parse sprites: ${this.phaseTimings.parseSprites.toFixed(2)}ms (${spriteAssets.length} sprites)`);

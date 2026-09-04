@@ -6,6 +6,7 @@ import { HBSpriteFile } from '../game/assets/HBSprite';
 import { HBMap } from '../game/assets/HBMap';
 import { setMap } from './RegistryUtils';
 import { isTreeSpriteIndex } from './SpriteUtils';
+import { fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
 
 const tilePackLoadPromisesByScene = new WeakMap<Scene, Map<string, Promise<void>>>();
 const tilePackShutdownHookRegistered = new WeakSet<Scene>();
@@ -126,13 +127,7 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
             throw new Error(`[MapAssets] Tile asset ${asset.key} is missing spriteType`);
         }
         // Absolute path so login deep-links / base URL never resolve to /assets (CF poison / 404).
-        const response = await fetch(`/game-assets/sprites/${asset.fileName}`);
-        if (!response.ok) {
-            throw new Error(
-                `[MapAssets] Failed to fetch tile sprite ${asset.fileName}: ${response.status} ${response.statusText}`,
-            );
-        }
-        const arrayBuffer = await response.arrayBuffer();
+        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
         scene.cache.binary.add(asset.key, arrayBuffer);
         const hbFile = new HBSpriteFile(
             asset.key,
@@ -158,19 +153,16 @@ export async function prepareMapForGameWorld(scene: Scene, mapFileName: string):
     const mapAsset = getMapAssetByFileName(mapFileName);
     const mapKey = mapAsset.key;
 
-    const response = await fetch(`/game-assets/maps/${mapFileName}`);
-    if (!response.ok) {
-        throw new Error(
-            `[MapAssets] Failed to fetch map ${mapFileName}: ${response.status} ${response.statusText}`,
-        );
-    }
-    const buffer = await response.arrayBuffer();
+    const buffer = await fetchGameAssetArrayBuffer('maps', mapFileName);
 
     const map = new HBMap(mapKey);
     map.loadFromBuffer(buffer);
 
     const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(map));
-    await Promise.all(tileAssets.map((a) => loadTileSpritePackOnce(scene, a)));
+    // Sequential decode — parallel objects*.spr + trees + shadows OOMs enter on ~2GB-free Chrome.
+    for (const asset of tileAssets) {
+        await loadTileSpritePackOnce(scene, asset);
+    }
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;

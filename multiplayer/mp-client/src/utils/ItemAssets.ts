@@ -5,6 +5,7 @@ import { AssetType, getItemEquippedAppearanceSpriteNames, getPlayerItemAppearanc
 import { ItemTypes, getItemById, type EquipmentSlot, type InventoryItem } from '../constants/Items';
 import { Gender } from '../Types';
 import { HBSpriteFile } from '../game/assets/HBSprite';
+import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
 
 const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
     ItemTypes.WEAPON,
@@ -147,15 +148,16 @@ async function fetchAndRegisterPlayerItemSprite(scene: Scene, asset: AssetData):
     if (!asset.spriteType) {
         throw new Error(`Player item appearance asset ${asset.key} is missing spriteType`);
     }
+    const spriteType = asset.spriteType;
 
-    const response = await fetch(`assets/sprites/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch item appearance ${asset.fileName}: ${response.status} ${response.statusText}`);
-    }
+    await enqueueSpriteDecode(async () => {
+        if (scene.textures.exists(`${asset.key}-0`)) {
+            return;
+        }
+        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+        scene.cache.binary.add(asset.key, arrayBuffer);
 
-    const arrayBuffer = await response.arrayBuffer();
-    scene.cache.binary.add(asset.key, arrayBuffer);
-
-    const hbFile = new HBSpriteFile(asset.key, asset.spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
-    await hbFile.load(scene);
+        const hbFile = new HBSpriteFile(asset.key, spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
+        await hbFile.load(scene);
+    });
 }

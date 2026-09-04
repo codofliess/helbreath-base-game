@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
     readonly VITE_PLAYER_MODE?: string;
+    /** Isolated playtest door. Must never be '1' on the live traveler build. */
+    readonly VITE_PLAYTEST?: string;
     readonly VITE_MIDDLEWARE_URL?: string;
     /** Optional game-server host for World flow (default localhost). */
     readonly VITE_GAME_HOST?: string;

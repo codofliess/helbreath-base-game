@@ -27,6 +27,9 @@ public static class HellMining {
 
     /// <summary>First join of the day → +1 participation credit.</summary>
     public static void OnPlayerJoined(GameWorldPlayer player) {
+        if (PlaytestMode.IsEnabled) {
+            return;
+        }
         if (player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
             return;
         }
@@ -39,6 +42,9 @@ public static class HellMining {
 
     /// <summary>1-minute heartbeat: session minutes + 1 credit per full hour online (AFK counts).</summary>
     public static void OnSessionMinute(GameWorldPlayer player) {
+        if (PlaytestMode.IsEnabled) {
+            return;
+        }
         if (player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
             return;
         }
@@ -51,7 +57,7 @@ public static class HellMining {
 
     /// <summary>Monster kill: testing = HP-weighted farm credits, max 100 kills/species + diversity double.</summary>
     public static void OnMonsterKilled(GameWorldPlayer killer, int catalogMonsterId = 0, int monsterMaxHp = 0) {
-        if (killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
+        if (PlaytestMode.IsEnabled || killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -70,7 +76,7 @@ public static class HellMining {
         GameWorldPlayer killer,
         int? victimCityKillerRank,
         EkScreenshotRarity rarity) {
-        if (killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
+        if (PlaytestMode.IsEnabled || killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -98,7 +104,7 @@ public static class HellMining {
 
     /// <summary>Timed Challenge clear → credits (and post-testing direct tokens).</summary>
     public static void OnEventParticipation(GameWorldPlayer player) {
-        if (player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
+        if (PlaytestMode.IsEnabled || player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -112,6 +118,11 @@ public static class HellMining {
     public static void HandleStatusRequest(GameWorldPlayer player, HellMiningStatusRequest request) {
         ArgumentNullException.ThrowIfNull(player);
         _ = request;
+        if (PlaytestMode.IsEnabled) {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            SendStatus(player, nowMs, "Playtest door: $HELL mining and airdrop are off.");
+            return;
+        }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         SendStatus(player, nowMs, message: null);
     }
@@ -122,6 +133,17 @@ public static class HellMining {
     public static void HandleClaimRequest(GameWorldPlayer player, HellMiningClaimRequest request) {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(request);
+        if (PlaytestMode.IsEnabled) {
+            NetworkManager.SendToPlayer(player, new ServerMessage {
+                HellMiningClaimResult = new HellMiningClaimResult {
+                    Ok = false,
+                    Message = "Playtest door: $HELL claims and airdrops are disabled.",
+                    PendingHell = 0,
+                    ClaimedAmount = 0,
+                },
+            });
+            return;
+        }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var snap = HellMiningStore.GetSnapshot(player.AccountWallet, nowMs);
         if (!snap.ClaimAvailable) {

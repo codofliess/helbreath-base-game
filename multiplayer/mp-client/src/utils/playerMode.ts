@@ -10,8 +10,8 @@ export type PlayerMode = 'gm' | 'traveler';
 
 const TRAVELER_WORLD_ID = 'traveler';
 
-/** Hostnames that must never expose GM tooling UI. */
-function isPublicPlayHost(): boolean {
+/** Hostnames that must never expose GM tooling UI or a Phantom skip. */
+export function isPublicPlayHost(): boolean {
     if (typeof window === 'undefined' || !window.location?.hostname) {
         return false;
     }

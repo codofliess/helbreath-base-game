@@ -16,6 +16,7 @@ Until the PO says **“ok deploy”** in the same thread:
 - **Do not** merge to `master` or force-push.
 - **Do not** post as @ChainLordsHQ or Discord announcements.
 - Work on a **feature branch** from `consolidacion`. PR only. Local/dev stack is OK.
+- Live traveler **`Elon`** (wallet `4R7Fsy…5r7K`): one-character kit overlay is `ops/apply-live-elon-warrior-kit.py` (name+wallet allowlist, `ALLOW_LIVE_ELON_KIT=1`, `--apply`). Not a generic give-item API. Never PauPau / other names.
 - Read `docs/SESSION-HANDOFF-2026-08-27-GROKBOT.md` first.
 
 Prod snapshot (2026-08-27): play.chainlords.net **UP**, game heartbeat **UP**, `online: 0`. Middleware Railway **UP** but `postgres: false`. Live is fragile — observe, don’t “fix” prod.

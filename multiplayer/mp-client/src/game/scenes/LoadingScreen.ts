@@ -479,8 +479,7 @@ export class LoadingScreen extends Scene {
                         this.setProgress(0.35 + (processedFiles / totalFiles * 0.15));
                     })
                     .catch(error => {
-                        console.error(`[LoadingScreen] Failed to decode audio ${asset.key}:`, error);
-                        throw error;
+                        console.warn(`[LoadingScreen] Failed to decode audio ${asset.key}:`, error);
                     });
             });
             

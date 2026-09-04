@@ -168,7 +168,47 @@
 
         <!-- CENTER: content -->
         <div id="content">
-          <!-- CHAIN LORDS TV first (high center) — above loop video / future live embeds -->
+          <!-- $HELL live — Abaddon + mint (token copy only; no Helbreath in this block) -->
+          <section class="hell-live" id="hell" aria-labelledby="hell-live-title">
+            <div class="hell-live-portrait">
+              <img
+                id="hell-abaddon"
+                class="hell-live-img"
+                src="./branding/abaddon-icon/discord-server-icon.png"
+                alt="Abaddon — $HELL"
+                width="1024"
+                height="1024"
+                decoding="async"
+                fetchpriority="high"
+              />
+            </div>
+            <div class="hell-live-copy">
+              <p class="hell-live-status"><span class="hell-live-dot" aria-hidden="true"></span> LIVE</p>
+              <h2 id="hell-live-title" class="hell-live-title">$HELL</h2>
+              <p class="hell-live-maggy">Hell is what you leave still.</p>
+              <p class="hell-live-sub">$HELL · Meteora</p>
+              <div class="hell-live-mint">
+                <span class="hell-mint-label">Mint</span>
+                <code class="hell-mint-addr" id="hell-mint-addr">A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ</code>
+                <button type="button" class="hell-mint-copy" id="hell-mint-copy" data-mint="A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ">
+                  Copy
+                </button>
+                <a
+                  class="hell-mint-solscan"
+                  href="https://solscan.io/token/A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Solscan</a
+                >
+              </div>
+              <p class="hell-live-pool">
+                <span class="hell-mint-label">Meteora DBC</span>
+                <code class="hell-mint-addr">4HQX8w9bKfvFKg7NsUoRUpNboH4LyBb1ZkSkW1N2uL9q</code>
+              </p>
+            </div>
+          </section>
+
+          <!-- CHAIN LORDS TV (high center) — above loop video / future live embeds -->
           <section class="cl-tv cl-tv--hero" id="cl-tv" aria-labelledby="cl-tv-title">
             <header class="cl-tv-head">
               <div>
@@ -217,8 +257,7 @@
 
           <div id="top" class="hero-manifesto hero-manifesto--compact">
             <p class="hero-lead">
-              <strong>Helbreath Chain Lords</strong> — open PvP, PvE, Arena, and Solana-native
-              ownership. Two nations. One realm.
+              Open PvP, PvE, Arena, and Solana-native ownership. Two nations. One realm.
             </p>
           </div>
 
@@ -362,17 +401,30 @@
             <div class="postcontent">
               <article class="news-announcement" style="margin-bottom: 1.25rem">
                 <p style="margin: 0 0 0.35rem; color: #e0b45a; font-weight: 700; letter-spacing: 0.04em">
-                  ANNOUNCEMENT · Testing Week 1
+                  ANNOUNCEMENT · $HELL is live
                 </p>
                 <h4 style="margin: 0 0 0.6rem; color: #f0e0c0; font-size: 1.15rem">
-                  Play-mine credits · $HELL at TGE / airdrop
+                  Hell is what you leave still.
                 </h4>
+                <p style="margin: 0 0 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; color: #c9a060; font-size: 0.8rem">
+                  $HELL · Meteora
+                </p>
+                <p>
+                  <strong>$HELL is live on Solana.</strong> Utility for shops, sinks, and play-mine
+                  credits — not a salary, not ROI. Mint
+                  <code class="hell-mint-addr">A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ</code>
+                  ·
+                  <a
+                    href="https://solscan.io/token/A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Solscan</a
+                  >.
+                </p>
                 <p>
                   During this first public testing week, every action that earns
                   <strong>mining credits</strong> feeds a daily pool. At the end of each UTC day,
-                  credits are tallied and converted into
-                  <strong>pending $HELL</strong> for that wallet. Redeemable at the
-                  <strong>Token Generation Event (TGE) / airdrop</strong> — not a salary, not ROI.
+                  credits are tallied and converted into <strong>$HELL</strong> for that wallet.
                 </p>
                 <p><strong>Credit rules (UTC day):</strong></p>
                 <ul>
@@ -382,11 +434,11 @@
                   <li><strong>Diversity</strong> — kill at least <strong>10 different monster classes</strong> in the day →
                     <strong>all your credits that day are doubled</strong>.</li>
                   <li><strong>Enemy Kills (EK)</strong> — +10 credits per eligible EK, max <strong>10 EKs / day</strong> (+100).
-                    Testing-week EKs <strong>do not</strong> count toward post-TGE ladders / future EK rewards; credits only.</li>
+                    Testing-week EKs <strong>do not</strong> count toward future EK ladders / rewards; credits only.</li>
                 </ul>
                 <p>
                   At day settle, the daily token budget is shared by credit weight among players who were active.
-                  If only a few characters play, they still split that day's allocation. Totals roll into pending for TGE.
+                  If only a few characters play, they still split that day's allocation. Totals roll into live $HELL.
                 </p>
                 <p>
                   Full patch notes and live status also on
@@ -512,6 +564,8 @@
         © Helbreath Chain Lords. All rights reserved. chainlords.net
       </p>
       <p class="footer-meta">
+        <a href="#hell">$HELL</a>
+        |
         <a href="#play">Play</a>
         |
         <a href="https://discord.gg/F4NwwbfKtj" target="_blank" rel="noopener noreferrer">Discord</a>
@@ -522,6 +576,6 @@
       </p>
     </div>
 
-    <script src="./main.js?v=play-https-20260724"></script>
+    <script src="./main.js?v=hell-live-20260904"></script>
   </body>
 </html>

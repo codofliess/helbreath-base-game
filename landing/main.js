@@ -890,6 +890,45 @@
     });
   }
 
+  function setupHellLive() {
+    var img = document.getElementById("hell-abaddon");
+    if (img) {
+      var hellImgFallbacks = [
+        "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@consolidacion/branding/hell-token/hell-token-logo-metaplex-1024.png",
+        "https://raw.githubusercontent.com/codofliess/helbreath-base-game/consolidacion/branding/hell-token/hell-token-logo-metaplex-1024.png",
+      ];
+      img.addEventListener("error", function onHellImgError() {
+        var next = hellImgFallbacks.shift();
+        if (!next) {
+          img.removeEventListener("error", onHellImgError);
+          return;
+        }
+        img.src = next;
+      });
+    }
+
+    var btn = document.getElementById("hell-mint-copy");
+    if (!btn) return;
+    var mint = btn.getAttribute("data-mint") || "";
+    btn.addEventListener("click", function () {
+      function copied() {
+        btn.classList.add("is-copied");
+        btn.textContent = "Copied";
+        window.setTimeout(function () {
+          btn.classList.remove("is-copied");
+          btn.textContent = "Copy";
+        }, 1800);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(mint).then(copied).catch(function () {
+          window.prompt("Mint", mint);
+        });
+      } else {
+        window.prompt("Mint", mint);
+      }
+    });
+  }
+
   preload("./img/playover.png,./img/down.png,./img/playnow.png");
   setupMobileNav();
   setupSiteLang();
@@ -897,4 +936,5 @@
   setupEkGallery();
   setupRealmStats();
   setupClTv();
+  setupHellLive();
 })();

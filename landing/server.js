@@ -49,8 +49,16 @@ function shouldProxy(pathname) {
 }
 
 function send(res, status, body, headers = {}) {
-  res.writeHead(status, { 'Cache-Control': 'no-store', ...headers });
+  res.writeHead(status, { 'Cache-Control': headers['Cache-Control'] || 'no-store', ...headers });
   res.end(body);
+}
+
+function isAssetPath(pathname) {
+  const ext = path.extname(pathname).toLowerCase();
+  if (ext && MIME[ext] && ext !== '.html') return true;
+  if (pathname === '/branding/abaddon-icon/discord-server-icon.png') return true;
+  if (pathname.startsWith('/branding/')) return true;
+  return false;
 }
 
 async function proxyRequest(req, res, route, url) {
@@ -101,6 +109,11 @@ function serveStatic(req, res, url) {
 
   fs.stat(filePath, (err, stat) => {
     if (err || !stat.isFile()) {
+      // Never SPA-fallback asset URLs (Metaplex token uri is a locked .png path).
+      if (isAssetPath(url.pathname)) {
+        send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
+        return;
+      }
       const fallback = path.join(ROOT, 'index.html');
       fs.readFile(fallback, (readErr, data) => {
         if (readErr) {
@@ -118,7 +131,11 @@ function serveStatic(req, res, url) {
         return;
       }
       const ext = path.extname(filePath).toLowerCase();
-      send(res, 200, data, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+      const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+      if (ext === '.png' || ext === '.jpg' || ext === '.jpeg' || ext === '.webp' || ext === '.ico') {
+        headers['Cache-Control'] = 'public, max-age=86400';
+      }
+      send(res, 200, data, headers);
     });
   });
 }
@@ -141,4 +158,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { shouldProxy, PROXY_ROUTES, MIDDLEWARE_URL, PLAY_URL, server };
+module.exports = { shouldProxy, isAssetPath, PROXY_ROUTES, MIDDLEWARE_URL, PLAY_URL, server };

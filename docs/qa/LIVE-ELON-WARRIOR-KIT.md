@@ -30,6 +30,7 @@ Not PauPau. Not playtest `ElonQa`. No INSERT. No generic give-item packet.
 - Bag: Magic Wand(MS22) — CP nibble **15** (cap; product CP40 no cabe en 4 bits), HR nibble **13** (display ×7 ≈ **91**, closest to HR90)
 - Bag: a Hero Cap(M) + a Hero Robe(M) (swap mage)
 - Bag CIC4 HP70 each: Wings-Helm(M) 751, Plate Mail(M) 458, Plate Leggings(M) 462, Hauberk(M) 454, Cape 402
+- Bag extra Cape 402 **MCon/DR**: MCon nibble 15 (cap; product 20 no cabe, combate clampa a 13), DR nibble 11 → 77 (más cerca de 80; 12 sería 84)
 
 ## Apply on the game Postgres host
 

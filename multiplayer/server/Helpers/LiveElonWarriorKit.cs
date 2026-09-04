@@ -51,6 +51,20 @@ public static class LiveElonWarriorKit {
     public const int CicHpKind = CicItemCraft.StatHp;
     public const int CicHpValue = 70;
 
+    /// <summary>
+    /// Extra bag cape: Mana Converting nibble 15 (4-bit max; product MCon20 does not fit;
+    /// combat clamps MCon to 13). DR nibble 11 → 77 (closest to 80; 12 would be 84).
+    /// </summary>
+    public const int CapeMconNibble = 15;
+    public const int CapeDrNibble = 11;
+
+    public static uint CapeMconDrAttribute => Enchanting.Encode(
+        ItemMagicAttribute.P_ManaConverting,
+        CapeMconNibble,
+        ItemMagicAttribute.S_DefenseRatio,
+        CapeDrNibble,
+        upgrade: 0);
+
     public static uint WandItemAttribute => Enchanting.Encode(
         ItemMagicAttribute.P_CastingProb,
         WandCastingProbNibble,
@@ -149,6 +163,7 @@ public static class LiveElonWarriorKit {
                 Bag(PlateLeggingsId, 2, 1, 0, 0, cicLevel: CicLevel, cicKind: CicHpKind, cicValue: CicHpValue),
                 Bag(PlateHauberkId, 3, 1, 0, 0, cicLevel: CicLevel, cicKind: CicHpKind, cicValue: CicHpValue),
                 Bag(PlateCapeId, 4, 1, 0, 0, cicLevel: CicLevel, cicKind: CicHpKind, cicValue: CicHpValue),
+                Bag(PlateCapeId, 5, 1, 0, 0, CapeMconDrAttribute),
             ],
             EquippedItems = [
                 new PersistedEquippedInventoryItem("helmet", Eq(HeroHelmId, 0, 0)),

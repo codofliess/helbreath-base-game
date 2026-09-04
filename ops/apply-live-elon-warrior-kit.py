@@ -85,8 +85,14 @@ def encode_magic(p_type: int, p_val: int, s_type: int, s_val: int, upgrade: int 
     )
 
 
+P_MANA_CONVERT = 10
+S_DEFENSE_RATIO = 3
+CAPE_MCON_NIBBLE = 15
+CAPE_DR_NIBBLE = 11
+
 WAND_ATTR = encode_magic(P_CASTING_PROB, WAND_CP_NIBBLE, S_HIT_PROB, WAND_HR_NIBBLE, 0)
 HAMMER_ATTR = encode_magic(0, 0, 0, 0, HAMMER_PLUS)
+CAPE_MCON_DR_ATTR = encode_magic(P_MANA_CONVERT, CAPE_MCON_NIBBLE, S_DEFENSE_RATIO, CAPE_DR_NIBBLE, 0)
 PLAYTEST_WAND_HR7 = encode_magic(P_CASTING_PROB, 15, S_HIT_PROB, 7, 0)
 
 
@@ -201,6 +207,7 @@ def apply_kit(state: dict[str, Any]) -> dict[str, Any]:
         (ITEM_PLATE_LEGS, 2, 1, 0, 0, 0, CIC_LEVEL, CIC_HP, CIC_HP_VALUE),
         (ITEM_PLATE_HAUBERK, 3, 1, 0, 0, 0, CIC_LEVEL, CIC_HP, CIC_HP_VALUE),
         (ITEM_CAPE, 4, 1, 0, 0, 0, CIC_LEVEL, CIC_HP, CIC_HP_VALUE),
+        (ITEM_CAPE, 5, 1, 0, 0, CAPE_MCON_DR_ATTR, 0, 0, 0),
     ):
         item_id, x, y, cur, mx, attr, cic_l, cic_k, cic_v = spec
         bag.append(inventory_item(item_id, uid, x, y, cur, mx, attr, cic_l, cic_k, cic_v))
@@ -319,12 +326,16 @@ def assert_kit(state: dict[str, Any]) -> list[str]:
         errors.append(f"bag missing {sorted(missing)}")
     wand = hammer = None
     cic_ok = 0
+    mcon_cape = 0
     for row in bag_rows:
         iid = int(pick(row, "ItemId", "itemId", default=0) or 0)
+        attr = int(pick(row, "ItemAttribute", "itemAttribute", default=0) or 0)
         if iid == ITEM_MS22:
-            wand = int(pick(row, "ItemAttribute", "itemAttribute", default=0) or 0)
+            wand = attr
         if iid == ITEM_GBH:
-            hammer = int(pick(row, "ItemAttribute", "itemAttribute", default=0) or 0)
+            hammer = attr
+        if iid == ITEM_CAPE and attr == CAPE_MCON_DR_ATTR:
+            mcon_cape += 1
         if iid in {ITEM_WINGS, ITEM_PLATE, ITEM_PLATE_LEGS, ITEM_PLATE_HAUBERK, ITEM_CAPE}:
             if (
                 int(pick(row, "CicLevel", "cicLevel", default=0) or 0) == CIC_LEVEL
@@ -338,6 +349,8 @@ def assert_kit(state: dict[str, Any]) -> list[str]:
         errors.append(f"hammer attr={hammer} want {HAMMER_ATTR} (+7)")
     if cic_ok != 5:
         errors.append(f"CIC4 HP70 pieces={cic_ok} want 5")
+    if mcon_cape != 1:
+        errors.append(f"MCon/DR cape count={mcon_cape} want 1")
     return errors
 
 
@@ -441,7 +454,7 @@ def self_test() -> int:
     print(
         "SELF-TEST OK: L1 14/14/12 overlay → L150 182/65/50/80/128/12, "
         f"bag GBH +7 attr={HAMMER_ATTR}, wand attr={WAND_ATTR} "
-        "(CP nibble 15 / HR nibble 13 ≈91), CIC4 HP70 ×5."
+        f"(CP nibble 15 / HR nibble 13 ≈91), CIC4 HP70 ×5, cape MCon/DR attr={CAPE_MCON_DR_ATTR}."
     )
     return 0
 
@@ -506,7 +519,8 @@ def main() -> int:
         print(
             f"encoding: wand ItemAttribute={WAND_ATTR} CP nibble={WAND_CP_NIBBLE} "
             f"(cap; CP40 no cabe) HR nibble={WAND_HR_NIBBLE} (×7≈91). "
-            f"GBH +7 ItemAttribute={HAMMER_ATTR}. CIC4 HP70 ×5."
+            f"GBH +7 ItemAttribute={HAMMER_ATTR}. CIC4 HP70 ×5. "
+            f"cape MCon nibble {CAPE_MCON_NIBBLE} / DR nibble {CAPE_DR_NIBBLE} attr={CAPE_MCON_DR_ATTR}."
         )
         if errors:
             print("kit check FAIL", errors, file=sys.stderr)

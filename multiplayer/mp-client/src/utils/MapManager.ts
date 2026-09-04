@@ -120,7 +120,15 @@ export class MapManager {
         const map = this.getCurrentMap();
         const mapFileName = this.getCurrentMapName();
         const mapData = getMapData(mapFileName);
-        const minimapType = mapData?.minimap ?? Minimap.ON_DEMAND_GENERATED;
+        const catalogMinimap = mapData?.minimap ?? Minimap.ON_DEMAND_GENERATED;
+        const shouldGenerateMinimap =
+            GENERATE_MINIMAP && catalogMinimap === Minimap.ON_DEMAND_GENERATED;
+        // Without a WebGL snapshot, ON_DEMAND_GENERATED would leave the HUD on
+        // "Loading minimap" forever. Treat skipped generation as no minimap.
+        const minimapType =
+            catalogMinimap === Minimap.ON_DEMAND_GENERATED && !shouldGenerateMinimap
+                ? Minimap.NONE
+                : catalogMinimap;
 
         // Notify UI that minimap is loading (shows "Loading minimap")
         EventBus.emit(OUT_UI_MINIMAP_LOADING, {
@@ -143,10 +151,14 @@ export class MapManager {
             this.playInitialMusic();
         }
 
-        const shouldGenerateMinimap = GENERATE_MINIMAP && minimapType === Minimap.ON_DEMAND_GENERATED;
         if (shouldGenerateMinimap) {
             this.captureMinimap(map, () => finishedCallback(map));
         } else {
+            if (catalogMinimap === Minimap.ON_DEMAND_GENERATED) {
+                console.log(
+                    `[MapManager] Skipping full-world minimap snapshot for ${mapFileName} (GENERATE_MINIMAP off; set VITE_GENERATE_MINIMAP=1 to capture)`,
+                );
+            }
             finishedCallback(map);
         }
     }
@@ -158,7 +170,10 @@ export class MapManager {
     }
 
     /**
-     * Captures a minimap image of the entire game world.
+     * Captures a minimap image of the entire game world (OOM-prone: full-map camera zoom + WebGL snapshot).
+     * Only runs when {@link GENERATE_MINIMAP} is on (`VITE_GENERATE_MINIMAP=1`) and the map is
+     * `Minimap.ON_DEMAND_GENERATED`. Live production leaves this off.
+     *
      * Temporarily zooms out the camera to capture the full map, then scales down the image.
      * Emits the minimap image to React layer via EventBus.
      * Uses cache to avoid regenerating minimap if it already exists for the current map.

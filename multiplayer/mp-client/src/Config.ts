@@ -2,12 +2,32 @@
  * Configuration constants for the game client: tuning values, layout, defaults, and feature toggles.
  */
 
+/** Vite `VITE_*` flags: only `'1'` or `'true'` (case-insensitive) enable. Unset/empty is off. */
+function isViteFlagOn(value: string | boolean | undefined): boolean {
+    if (value === true) {
+        return true;
+    }
+    if (typeof value !== 'string') {
+        return false;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true';
+}
+
 /**
- * Whether to generate the minimap when loading a map.
- * Prefer PRE_GENERATED assets; on-demand WebGL snapshot can hang → black "Loading map...".
- * Keep true for maps that only have ON_DEMAND_GENERATED (timeout in MapManager still applies).
+ * Whether to capture a **full-world** WebGL minimap snapshot on map enter for
+ * `Minimap.ON_DEMAND_GENERATED` maps. Default **off**.
+ *
+ * That path zooms the camera to fit the entire map, then snapshots — it can
+ * allocate multiple GB and Chrome-tab OOM (Aw Snap error 9) on live enter
+ * (full kit + city/world tiles). Live play uses pre-baked JPGs
+ * (`Minimap.PRE_GENERATED`) and camera window + ring for world rendering.
+ *
+ * Opt in only for snapshot tooling (never the Hetzner production `pnpm build`):
+ * `VITE_GENERATE_MINIMAP=1 pnpm dev` or `VITE_GENERATE_MINIMAP=1 pnpm build`.
+ * See `sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`.
  */
-export const GENERATE_MINIMAP = true;
+export const GENERATE_MINIMAP = isViteFlagOn(import.meta.env.VITE_GENERATE_MINIMAP);
 
 /**
  * Player body horizontal scale vs height (height stays 1).
@@ -138,6 +158,9 @@ export const LOAD_MONSTER_ASSETS_ON_DEMAND = true;
  * and only the tile sheets that map needs are fetched when the GameWorld scene starts.
  * Requires HTTP paths `assets/maps/*` and `assets/sprites/*` (natural fit with `ENABLE_ZIP_LOADING = false`).
  * ZIP output from `tools/compress-assets.js` omits map/tile entries when this matches Config.
+ *
+ * Live production must keep this **true**. Preloading every map + tile pack on enter
+ * is a known Chrome OOM (Aw Snap 9) path. Do not gate this on a playtest-only flag.
  */
 export const LOAD_MAP_ASSETS_ON_DEMAND = true;
 

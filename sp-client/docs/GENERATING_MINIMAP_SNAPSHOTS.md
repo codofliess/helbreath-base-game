@@ -16,6 +16,8 @@ Maps can use one of three minimap sources (see `constants/Assets.ts`):
 
 To create a pre-generated minimap, you capture the map as an image during load, post-process it, then add it to your assets.
 
+**Multiplayer client:** also set `VITE_GENERATE_MINIMAP=1` (capture is off by default to avoid live Chrome OOM).
+
 ---
 
 ## Step 1: Enable Map Snapshot Download
@@ -67,6 +69,7 @@ The raw PNG can be large. To create an optimized minimap image:
 
 ## Notes
 
-- **GENERATE_MINIMAP:** When `false` in `Config.ts`, minimap capture is skipped entirely. Keep it `true` when capturing snapshots.
+- **GENERATE_MINIMAP / `VITE_GENERATE_MINIMAP`:** The multiplayer client (`mp-client`) keeps full-world WebGL capture **off** unless you build or run with `VITE_GENERATE_MINIMAP=1`. Live `pnpm build` for Hetzner must leave that env unset (Chrome OOM / Aw Snap 9 on map enter). When the flag is off, `Minimap.ON_DEMAND_GENERATED` maps skip capture; use `PRE_GENERATED` JPGs for play.
+- In `sp-client` `Config.ts`, `GENERATE_MINIMAP` is still a boolean constant — set it `true` when capturing snapshots from the single-player client.
 - The snapshot captures map tiles and static objects (trees, etc.) but not the player or dynamic entities.
 - Very large maps may require `MAP_SNAPSHOT_SHRINK_MULTIPLIER = 3` to stay within WebGL framebuffer limits.

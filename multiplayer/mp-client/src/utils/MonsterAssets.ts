@@ -3,6 +3,7 @@ import type { Scene } from 'phaser';
 import { LOAD_MONSTER_ASSETS_ON_DEMAND, MONSTER_PLACEHOLDER_SPRITE } from '../Config';
 import { AssetType, getMonsterAssets, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
+import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
 
 const monsterAssetLoadPromises = new Map<string, Promise<void>>();
 const assetLoadPromises = new Map<string, Promise<void>>();
@@ -106,25 +107,24 @@ async function fetchAndRegisterMonsterSprite(scene: Scene, asset: AssetData): Pr
     if (!asset.spriteType) {
         throw new Error(`Monster sprite asset ${asset.key} is missing spriteType`);
     }
+    const spriteType = asset.spriteType;
 
-    const response = await fetch(`assets/sprites/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch monster sprite ${asset.fileName}: ${response.status} ${response.statusText}`);
-    }
+    await enqueueSpriteDecode(async () => {
+        if (scene.textures.exists(`${asset.key}-0`)) {
+            return;
+        }
+        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+        scene.cache.binary.add(asset.key, arrayBuffer);
 
-    const arrayBuffer = await response.arrayBuffer();
-    scene.cache.binary.add(asset.key, arrayBuffer);
-
-    const hbFile = new HBSpriteFile(asset.key, asset.spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
-    await hbFile.load(scene);
+        const hbFile = new HBSpriteFile(asset.key, spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
+        await hbFile.load(scene);
+    });
 }
 
 async function fetchAndRegisterMonsterSound(scene: Scene, asset: AssetData): Promise<void> {
-    const response = await fetch(`assets/sounds/${asset.fileName}`);
-    if (!response.ok) {
-        throw new Error(`Failed to fetch monster sound ${asset.fileName}: ${response.status} ${response.statusText}`);
+    if (scene.cache.audio.exists(asset.key)) {
+        return;
     }
-
     const soundManager = scene.sound as { context?: AudioContext };
     const audioContext = soundManager.context;
     if (!audioContext) {
@@ -132,7 +132,7 @@ async function fetchAndRegisterMonsterSound(scene: Scene, asset: AssetData): Pro
         return;
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await fetchGameAssetArrayBuffer('sounds', asset.fileName);
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
     scene.cache.audio.add(asset.key, audioBuffer);
 }

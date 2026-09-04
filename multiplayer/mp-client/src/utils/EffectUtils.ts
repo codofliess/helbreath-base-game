@@ -5,6 +5,7 @@ import type { EffectConfig } from '../constants/Effects';
 import { convertWorldPosToPixelPos } from './CoordinateUtils';
 import type { SoundManager } from './SoundManager';
 import { TILE_SIZE } from '../game/assets/HBMap';
+import { areEffectSpriteLoaded, loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from './EffectAssets';
 
 /**
  * Builds the texture key for an effect config.
@@ -118,6 +119,13 @@ export function drawEffectAtPixelCoords(
     const config = getEffectByKey(effectKey);
     if (!config) {
         console.warn(`[EffectUtils] Effect config not found: ${effectKey}`);
+        return undefined;
+    }
+
+    if (shouldLoadEffectAssetsOnDemand() && !areEffectSpriteLoaded(scene, config.sprite)) {
+        void loadEffectAssetsOnDemand(scene, config).catch((error) => {
+            console.warn(`[EffectUtils] Failed to lazy-load effect sprite '${config.sprite}'`, error);
+        });
         return undefined;
     }
 

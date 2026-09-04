@@ -7,6 +7,7 @@ import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../utils/EffectUtils';
 import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { createLightRadiusOverlay } from '../../utils/SpriteUtils';
+import { loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from '../../utils/EffectAssets';
 
 const DEFAULT_FRAME_RATE = 10;
 
@@ -65,6 +66,20 @@ export class Effect {
 
         const frameRate = providedFrameRate ?? (config.frameRate ?? DEFAULT_FRAME_RATE);
         const textureKey = getTextureKeyFromEffectConfig(config);
+
+        if (shouldLoadEffectAssetsOnDemand() && !scene.textures.exists(textureKey)) {
+            void loadEffectAssetsOnDemand(scene, config).catch((error) => {
+                console.warn(`[Effect] Failed to lazy-load '${config.sprite}'`, error);
+            });
+            this.asset = new GameAsset(scene, {
+                x: drawX,
+                y: drawY,
+                spriteName: config.sprite,
+                pendingLazyPlayerItemAppearance: true,
+            });
+            this.destroy();
+            return;
+        }
 
         // Determine frame range
         let startFrame: number;

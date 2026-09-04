@@ -48,6 +48,8 @@ import { MapManager } from '../../utils/MapManager';
 import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
+import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
+import { areNpcSpriteLoaded, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
 import { getMonsterData } from '../../constants/Monsters';
 
@@ -439,10 +441,14 @@ export class GameWorld extends Scene {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
             return;
         }
-        for (const name of payload.spriteNames) {
-            void loadPlayerItemAppearanceOnDemand(this, name);
-        }
+        this.enqueuePlayerItemAppearancePrefetch(payload.spriteNames);
     };
+
+    /** Equipped appearance `.spr` names waiting until the map first frame is ready. */
+    private playerItemAppearancePrefetchQueue: string[] = [];
+    private playerItemAppearancePrefetchRunning = false;
+    /** NPC sprite loads in flight (instance id) so enter packets can retry after fetch. */
+    private readonly npcSpriteLoadsInFlight = new Set<string>();
 
     constructor() {
         super('GameWorld');
@@ -519,12 +525,6 @@ export class GameWorld extends Scene {
             document.body.classList.add('game-world-active');
             applyGameWorldCanvasPresentation(this);
             this.cameras.main.setBackgroundColor('#000');
-            if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
-                const pending = takePendingPlayerItemAppearancePrefetch(this.game);
-                for (const name of pending) {
-                    void loadPlayerItemAppearanceOnDemand(this, name);
-                }
-            }
             EventBus.emit(CURRENT_SCENE_READY, this);
         });
     }
@@ -2252,6 +2252,51 @@ export class GameWorld extends Scene {
         };
     }
 
+    /** Queue equipped appearance packs; decode after map enter so they do not race tile packs. */
+    private enqueuePlayerItemAppearancePrefetch(spriteNames: string[]): void {
+        if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || spriteNames.length === 0) {
+            return;
+        }
+        this.playerItemAppearancePrefetchQueue.push(...spriteNames);
+        if (!this.loadingMap) {
+            void this.drainPlayerItemAppearancePrefetch();
+        }
+    }
+
+    private startDeferredAppearancePrefetch(): void {
+        if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+            return;
+        }
+        const pending = takePendingPlayerItemAppearancePrefetch(this.game);
+        this.enqueuePlayerItemAppearancePrefetch(pending);
+        void this.drainPlayerItemAppearancePrefetch();
+    }
+
+    private async drainPlayerItemAppearancePrefetch(): Promise<void> {
+        if (this.playerItemAppearancePrefetchRunning) {
+            return;
+        }
+        this.playerItemAppearancePrefetchRunning = true;
+        try {
+            while (this.playerItemAppearancePrefetchQueue.length > 0) {
+                const name = this.playerItemAppearancePrefetchQueue.shift();
+                if (!name) {
+                    continue;
+                }
+                try {
+                    await loadPlayerItemAppearanceOnDemand(this, name);
+                } catch (error) {
+                    console.warn(
+                        `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to prefetch appearance '${name}'`,
+                        error,
+                    );
+                }
+            }
+        } finally {
+            this.playerItemAppearancePrefetchRunning = false;
+        }
+    }
+
     private syncMonstersFromNetworkState(): void {
         const inView = getNetworkManager(this.game)?.getMonstersInViewState() ?? [];
         for (const entry of inView) {
@@ -2309,6 +2354,7 @@ export class GameWorld extends Scene {
             if (this.gameWorldId) {
                 EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
             }
+            this.startDeferredAppearancePrefetch();
         } catch (error) {
             // Log full stack — "Map setup failed" without cause hid real bugs (player gear, camera, etc.).
             console.error('[GameWorld] setupMap failed:', error);
@@ -3115,6 +3161,25 @@ export class GameWorld extends Scene {
             );
             return;
         }
+        if (shouldLoadNpcAssetsOnDemand() && !areNpcSpriteLoaded(this, sprite)) {
+            if (this.npcSpriteLoadsInFlight.has(entry.npcId)) {
+                return;
+            }
+            this.npcSpriteLoadsInFlight.add(entry.npcId);
+            void loadNpcSpriteOnDemand(this, sprite)
+                .then(() => {
+                    this.npcSpriteLoadsInFlight.delete(entry.npcId);
+                    this.handleNpcEnteredRange(entry);
+                })
+                .catch((error) => {
+                    this.npcSpriteLoadsInFlight.delete(entry.npcId);
+                    console.warn(
+                        `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to lazy-load NPC sprite '${sprite}'`,
+                        error,
+                    );
+                });
+            return;
+        }
         const map = this.getCurrentMap();
         const npc = new NPC(this, {
             x: entry.x,
@@ -3742,6 +3807,28 @@ export class GameWorld extends Scene {
         itemAttribute?: number,
         itemColor?: number,
     ): void {
+        if (shouldLoadItemIconAssetsOnDemand() && !areItemIconAssetsLoaded(this)) {
+            void loadItemIconAssetsOnDemand(this)
+                .then(() => {
+                    this.upsertGroundItemVisual(
+                        worldX,
+                        worldY,
+                        itemId,
+                        itemUid,
+                        quantity,
+                        effectOverrides,
+                        itemAttribute,
+                        itemColor,
+                    );
+                })
+                .catch((error) => {
+                    console.warn(
+                        `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to lazy-load item icon packs`,
+                        error,
+                    );
+                });
+            return;
+        }
         this.removeGroundItemVisualAtCell(worldX, worldY);
 
         const playerGender = playerDialogStore.state.gender;

@@ -23,8 +23,8 @@ const config = {
         roundPixels: true // Round pixel positions to prevent sub-pixel rendering
     },
     scale: {
-        // Boot/login may override; GameWorld uses ENVELOP for edge-to-edge cover.
-        mode: Scale.ENVELOP,
+        // Boot/login may override; GameWorld uses FIT in the viewport minus the dock.
+        mode: Scale.FIT,
         autoCenter: Scale.CENTER_BOTH,
         expandParent: true,
         // #app includes canvas + React dock/HUD so fullscreen keeps bottom bar & dialogs.

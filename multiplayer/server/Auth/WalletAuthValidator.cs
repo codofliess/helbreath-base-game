@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Server.Helpers;
 
 namespace Server.Auth;
 
@@ -10,6 +11,10 @@ public static class WalletAuthValidator {
 
     public static bool TryValidate(string walletPubkey, string authToken, out string? errorMessage) {
         errorMessage = null;
+
+        if (PlaytestMode.IsEnabled) {
+            return PlaytestMode.TryValidate(walletPubkey, authToken, out errorMessage);
+        }
 
         if (!IsRequired) {
             // Fail closed outside Development: missing WALLET_AUTH_SECRET = open account takeover.

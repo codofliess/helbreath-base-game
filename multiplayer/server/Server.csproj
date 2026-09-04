@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <Content Include="Persistence\schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="PlaytestKits\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="Config\ArenaPrizeWhitelist.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

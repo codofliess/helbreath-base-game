@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using Npgsql;
+using Server.Helpers;
 using Server.Utils;
 using Server.World.Game;
 
@@ -575,6 +576,26 @@ public static class GamePersistence {
         string characterName,
         PlayerPersistenceState state,
         bool travelerMode = false) {
+        if (PlaytestMode.IsEnabled) {
+            if (!PlaytestMode.IsIsolatedAccount(accountWallet)) {
+                Console.WriteLine(
+                    $"[PLAYTEST] Refusing character save for '{characterName}' — not the isolated playtest account. Postgres not written.");
+                await Task.CompletedTask.ConfigureAwait(false);
+                return;
+            }
+
+            if (!PlaytestElonQaKit.ShouldWriteSave(charsDirectory, state)) {
+                await Task.CompletedTask.ConfigureAwait(false);
+                return;
+            }
+
+            SavePlayerJson(charsDirectory, accountWallet, state, travelerMode: true);
+            Console.WriteLine(
+                $"[PLAYTEST] Saved JSON-only '{characterName}' L{state.Level} ({state.X},{state.Y}) — Postgres skipped.");
+            await Task.CompletedTask.ConfigureAwait(false);
+            return;
+        }
+
         // Always dual-write PostgreSQL when available (including traveler). JSON remains the traveler
         // load primary / GM sandbox namespace so OP kits never mix across modes.
         if (persistence is not null) {
@@ -598,6 +619,22 @@ public static class GamePersistence {
         string accountWallet,
         string characterName,
         bool travelerMode = false) {
+        if (PlaytestMode.IsEnabled) {
+            if (!PlaytestMode.IsIsolatedAccount(accountWallet)) {
+                return await Task.FromResult<PlayerPersistenceState?>(null).ConfigureAwait(false);
+            }
+
+            var playtestState = PlaytestElonQaKit.LoadPreferredState(charsDirectory);
+            if (string.Equals(
+                    playtestState.CharacterName.Trim(),
+                    characterName.Trim(),
+                    StringComparison.OrdinalIgnoreCase)) {
+                return await Task.FromResult(playtestState).ConfigureAwait(false);
+            }
+
+            return await Task.FromResult<PlayerPersistenceState?>(null).ConfigureAwait(false);
+        }
+
         if (travelerMode) {
             PlayerPersistenceState? fromDb = null;
             if (persistence is not null) {
@@ -704,6 +741,22 @@ public static class GamePersistence {
         string charsDirectory,
         string accountWallet,
         bool travelerMode = false) {
+        if (PlaytestMode.IsEnabled) {
+            if (!PlaytestMode.IsIsolatedAccount(accountWallet)) {
+                return await Task.FromResult<IReadOnlyList<CharacterListEntry>>(
+                    Array.Empty<CharacterListEntry>()).ConfigureAwait(false);
+            }
+
+            var playtestState = PlaytestElonQaKit.LoadPreferredState(charsDirectory);
+            return await Task.FromResult<IReadOnlyList<CharacterListEntry>>([
+                EntryFromPersistenceState(
+                    playtestState,
+                    PlaytestMode.CharacterName,
+                    0,
+                    Math.Max(0, playtestState.HoursPlayed)),
+            ]).ConfigureAwait(false);
+        }
+
         // Multi-slot source of truth: PostgreSQL (Morlak slot0 + Dunga slot1 on same wallet, etc.).
         // Traveler used to only read wallet.traveler.json (one char) which made older chars "disappear".
         if (persistence is not null) {

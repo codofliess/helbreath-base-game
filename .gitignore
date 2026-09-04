@@ -7,6 +7,7 @@ middleware/target/
 **/bin/
 **/obj/
 **/Chars/
+**/CharsPlaytest/
 middleware-node/.game-authority.json
 middleware-node/.helbreath-devnet-collection.json
 middleware-node/.hell-token.json
@@ -21,7 +22,7 @@ social-bot/*.bak-*
 
 # Heavy local artifacts (Drive backup / never GitHub)
 **/publish-*/
-**/dist/
+**/dist-playtest/
 tmp-*/
 tmp_*
 **/*.tgz

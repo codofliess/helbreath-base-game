@@ -33,6 +33,7 @@
         "compress-assets:fast": "node ../../tools/compress-assets.js --ratio=1",
         "compress-assets:best": "node ../../tools/compress-assets.js --ratio=9",
         "lint": "pnpm exec tsc --noEmit",
+        "check:live-memory": "node scripts/assert-live-client-memory.mjs",
         "lint:eslint": "ESLINT_USE_FLAT_CONFIG=false eslint \"src/**/*.{ts,tsx}\""
     },
     "dependencies": {

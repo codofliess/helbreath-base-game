@@ -2,6 +2,11 @@
 
 interface ImportMetaEnv {
     readonly VITE_PLAYER_MODE?: string;
+    /**
+     * When `'1'` or `'true'`, generate a full-world WebGL minimap snapshot on enter
+     * for `Minimap.ON_DEMAND_GENERATED` maps. Default unset/off for live (OOM-safe).
+     */
+    readonly VITE_GENERATE_MINIMAP?: string;
     readonly VITE_MIDDLEWARE_URL?: string;
     /** Optional game-server host for World flow (default localhost). */
     readonly VITE_GAME_HOST?: string;

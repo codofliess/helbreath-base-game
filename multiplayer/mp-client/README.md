@@ -96,7 +96,44 @@ For **wire protocol, prediction, and server authority**, use the multiplayer rep
 ## Production Build
 
 ```bash
+cd multiplayer/mp-client
+pnpm install
 pnpm build
 ```
 
 Output is in `multiplayer/mp-client/dist`. Static files can be served from any host; ensure clients can open a **WebSocket** to your game server URL/port.
+
+Live `play.chainlords.net` (Hetzner) serves this dist from **`/opt/chainlords/client`**. Production `pnpm build` must **not** set `VITE_GENERATE_MINIMAP`. Confirm memory-safe flags with `pnpm check:live-memory` before publishing.
+
+### Live memory / OOM (Chrome Aw Snap 9)
+
+Entering a city as a fully geared character used to OOM the tab when the client either preloaded every map/tile pack or zoomed the camera to snapshot the **entire** world for a minimap.
+
+| Flag | Live production | Notes |
+|------|-----------------|--------|
+| `LOAD_MAP_ASSETS_ON_DEMAND` | **true** (Config, not env) | LoadingScreen skips all `.amd` / tile `.spr`; `prepareMapForGameWorld` loads only the current map + required packs (including tree-shadow indices `tree+50`). |
+| `VITE_GENERATE_MINIMAP` | **unset** → `GENERATE_MINIMAP = false` | Skips full-world WebGL minimap capture. Pre-baked `assets/images/minimaps/*.jpg` still load for `Minimap.PRE_GENERATED`. |
+| `VITE_GENERATE_MINIMAP=1` | snapshot tooling only | Re-enables on-demand full-map capture (can OOM). Use with `DOWNLOAD_MAP_SNAPSHOT` per [`sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`](../../sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md). Do **not** bake this into the Hetzner client. |
+
+World rendering stays camera window + culling ring; this change does not reduce Olympia-quality sprites in view.
+
+### Publish static client to Hetzner (PaioPez)
+
+Do this on the play host after merging to `consolidacion`. **Client-only** — do not restart the game server unless static files are mixed into the server tree (they are not; nginx points at `/opt/chainlords/client`).
+
+```bash
+# On a build machine with this repo (not from CI to live):
+cd /path/to/repo/multiplayer/mp-client
+pnpm install
+pnpm check:live-memory
+# Do not export VITE_GENERATE_MINIMAP
+pnpm build
+
+# On Hetzner play host (example — keep a dated backup):
+sudo cp -a /opt/chainlords/client "/opt/chainlords/client.bak-$(date +%Y%m%d-%H%M)"
+# Sync dist contents (not the dist folder itself) onto the nginx root:
+sudo rsync -a --delete ./dist/ /opt/chainlords/client/
+# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: hashed JS is new, not August bundle.
+```
+
+Do not SSH from cloud agents; do not write live Postgres or character kit rows.

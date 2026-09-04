@@ -34,6 +34,11 @@ export default defineConfig({
             process.env.VITE_MIDDLEWARE_URL ||
                 'https://chainlords-middleware-production.up.railway.app',
         ),
+        // Live Hetzner client must not bake in full-world minimap capture (Chrome OOM).
+        // Snapshot tooling: VITE_GENERATE_MINIMAP=1 pnpm build
+        'import.meta.env.VITE_GENERATE_MINIMAP': JSON.stringify(
+            process.env.VITE_GENERATE_MINIMAP || '',
+        ),
     },
     resolve: {
         alias: {

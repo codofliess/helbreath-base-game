@@ -207,3 +207,22 @@ CREATE TABLE IF NOT EXISTS auction_fee_debts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (account_wallet, character_name)
 );
+
+-- Multi-chain auth SoT: one player, many wallet bindings. UNIQUE (chain_id, address_key)
+-- so the same 0x on rh and base are two binds. actor_kind lives on the player row.
+CREATE TABLE IF NOT EXISTS players (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_kind TEXT NOT NULL DEFAULT 'human' CHECK (actor_kind IN ('human', 'bot')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS wallet_bindings (
+    chain_id TEXT NOT NULL,
+    address TEXT NOT NULL,
+    address_key TEXT NOT NULL,
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    bound_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (chain_id, address_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_bindings_player ON wallet_bindings(player_id);

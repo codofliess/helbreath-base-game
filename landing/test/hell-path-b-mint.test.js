@@ -37,13 +37,14 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.equal(html.includes(MINT), true);
   });
 
-  it('listing pack identifiers are Path B leftover 60%, not leftover 0 / A8fNV2', () => {
+  it('listing pack uses Path B mint and does not claim leftover already in A782', () => {
     assert.match(listing, new RegExp(MINT));
     assert.match(listing, new RegExp(POOL));
-    assert.match(listing, /leftover = 600/);
-    assert.match(listing, /\*\*60%\*\*/);
+    assert.match(listing, /Do not write “600M already in A782”/);
+    assert.match(listing, /DBC base vault/);
     assert.match(listing, /Post-migrate leftover note/);
     assert.match(listing, /Mint \| `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`/);
     assert.match(listing, /Do not list.*A8fNV2/);
+    assert.equal(listing.includes('leftover (off-curve at create → `A782…`)'), false);
   });
 });

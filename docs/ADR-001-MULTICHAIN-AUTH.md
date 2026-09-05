@@ -35,7 +35,7 @@ Copy constraint for all product/comms that mention the primary token: say **“R
 
 - A single player account (`playerId`) is the identity the game server and economy use.
 - Middleware DB is the SoT for: player row, `actorKind`, wallet bindings, session issuance.
-- Chain state (balances, NFT ownership, tax) is consulted **after** a bound wallet is authenticated — not as a substitute for SoT.
+- Chain state (balances, NFT ownership) is consulted **after** a bound wallet is authenticated — not as a substitute for SoT.
 
 ### 2. Wallets: Solana + Robinhood Chain + Base
 
@@ -47,10 +47,12 @@ Copy constraint for all product/comms that mention the primary token: say **“R
 
 A player **may bind multiple wallets** (any mix of chains) to **one** `playerId`. Binding is an authenticated SoT write, not “whoever signs this address owns that character.”
 
+The same `0x` address on `rh` and `base` is **two separate binds** (intentional). `UNIQUE` is `(chainId, address)`, not address alone.
+
 ### 3. Actor flag `human|bot` on the player account
 
 - Stored on the **player**, not on a wallet and not in the signature payload as authority.
-- Set only at **registration** or an **admin** path.
+- Set only at **registration** or an **admin** path. **Public register defaults to `human`.** Bot enrollment is a **gated + rate-limited** path (next code PR; see sketch).
 - A signature proves control of **that wallet**. It does **not** set or change `actorKind`. It does **not** let a bot wallet attach itself to a different (human) `playerId`.
 - Bots are **first-class citizens**, encouraged in-world. They are not “fake humans.”
 - Arenas later (out of scope): HvH / BvB / champions H vs B — matchmaking reads `actorKind` from SoT.
@@ -63,7 +65,6 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 - Contract: `0xb603D6b2e5472beb338CE079a63FEb8663171529` (Pons launchpad).
 - Copy: **RH Chain / Pons** only.
-- ~1B supply; ~1% creator tax → creator (on-chain fact for economy docs; **not** an auth parameter).
 
 **Solana listing (secondary):** `$HELL`
 
@@ -76,10 +77,11 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 ### 5. Auth design (Cruchi fail-closed)
 
 1. **Per-chain challenge-response.** Challenge is issued for `(chainId, address)`. Verifier is chain-specific. No shared secret across chains; HMAC `WALLET_AUTH_SECRET` only signs **server-issued sessions**, never player keys.
-2. **Secrets fail-closed.** Missing `WALLET_AUTH_SECRET`, `MARKET_SYNC_SECRET`, or required chain RPC keys → **deny**. Never `ALLOW_INSECURE_AUTH=1` in production (matches [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md)).
-3. **Bind without races.** Unique `(chainId, address)` → at most one `playerId`. Bind/login is transactional (lease or unique constraint); concurrent bind of the same address cannot mint two players or steal an existing one.
-4. **`human|bot` not forgeable via signature.** Verifier output is `{ chainId, address }`. SoT applies `actorKind` from the player row (or registration/admin input), never from client-claimed flags.
-5. **No impersonation.** Login of a bound wallet resumes that `playerId`. Unbound wallet may **create** a new player (with `actorKind` from registration path) or **bind** to the **currently authenticated** session’s `playerId` — not to an arbitrary id supplied in the body.
+2. **Anti-replay (signed message).** `AuthChallenge.message` **MUST** explicitly include `chainId` + `challengeId` + expiry so a signature cannot be replayed across protocols/chains.
+3. **Secrets fail-closed.** Missing `WALLET_AUTH_SECRET`, `MARKET_SYNC_SECRET`, or required chain RPC keys → **deny**. Never `ALLOW_INSECURE_AUTH=1` in production (matches [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md)).
+4. **Bind without races.** Unique `(chainId, address)` → at most one `playerId` **on that chain**. Same `0x` on `rh` vs `base` = two binds. Bind/login is transactional (lease or unique constraint); concurrent bind of the same `(chainId, address)` cannot mint two players or steal an existing one.
+5. **`human|bot` not forgeable via signature.** Verifier output is `{ chainId, address }`. SoT applies `actorKind` from the player row (or registration/admin input), never from client-claimed flags. Public register → `human`; bot enroll is gated + rate-limited.
+6. **No impersonation.** Login of a bound wallet resumes that `playerId`. Unbound wallet may **create** a new player (with `actorKind` from registration path) or **bind** to the **currently authenticated** session’s `playerId` — not to an arbitrary id supplied in the body.
 
 ---
 
@@ -89,7 +91,7 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 - One character / economy identity across Sol, RH, and Base.
 - Bots are explicit and matchable later without polluting human ladders.
-- Primary stake / consumibles rail is RH `$HELBREATH` (contract + ~1% creator tax as on-chain fact) without implying a Robinhood listing.
+- Primary stake / consumibles rail is RH `$HELBREATH` (`0xb603…`) without implying a Robinhood listing.
 - Sol `$HELL` remains listing / liquidity **secondary** with a single canonical mint/pool.
 
 **Martín cut — mining / rewards not locked**
@@ -107,6 +109,7 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 **Risks / follow-ups**
 
 - First code PR implements challenge + bind for **Sol + RH** only; Base verifier is a stub (see sketch).
+- That PR must honor Cruchi notes: signed `message` includes `chainId` + `challengeId` + expiry; `rh`/`base` same `0x` = two binds; public register `human`, bot enroll gated + rate-limited.
 - Existing Sol-only tokens (`X-Wallet-Token` keyed by wallet) must migrate to player-scoped sessions in that PR — not in this docs PR.
 
 ---
@@ -115,7 +118,7 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 | Rail | Chain | Asset | Address / id | Notes |
 |------|-------|--------|----------------|-------|
-| **Primary** stake / consumibles | RH (`rh`) | `$HELBREATH` | `0xb603D6b2e5472beb338CE079a63FEb8663171529` | Pons launchpad. ~1B supply. ~1% creator tax → creator. Copy: **RH Chain / Pons**. Never “listed on Robinhood”. |
+| **Primary** stake / consumibles | RH (`rh`) | `$HELBREATH` | `0xb603D6b2e5472beb338CE079a63FEb8663171529` | Pons launchpad. Copy: **RH Chain / Pons**. Never “listed on Robinhood”. |
 | **Secondary** listing | Solana (`sol`) | `$HELL` | mint `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq` | Pool `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx`. |
 | **Do not promote** | Solana | (legacy mint) | `A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ` | Retired Path mint. Do not use in UI, posts, or auth examples. |
 | NFT collection | `sol` | Helbreath collection | (existing Sol collection mints / trees — ops runbook) | Bound via Sol wallet on `playerId`. |

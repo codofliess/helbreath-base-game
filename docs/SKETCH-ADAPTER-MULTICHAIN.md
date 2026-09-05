@@ -28,7 +28,8 @@ interface AuthChallenge {
   challengeId: string;
   chainId: ChainId;
   address: string;
-  message: string; // exact bytes/utf-8 the wallet must sign
+  /** Exact bytes/utf-8 the wallet must sign. MUST include chainId + challengeId + expiry. */
+  message: string;
   expiresAt: number; // unix ms
 }
 
@@ -45,9 +46,20 @@ interface Session {
 
 Invariants:
 
-- `UNIQUE (chainId, address)` globally.
+- `UNIQUE (chainId, address)` globally. Same `0x` on `rh` and `base` = **two** binds (intentional).
 - `actorKind` lives on the **player** row, not on `WalletBinding`.
 - Challenge is single-use; consume on successful verify.
+- `message` MUST contain `chainId`, `challengeId`, and expiry (anti-replay cross-protocol).
+
+---
+
+## Cruchi notes (before middleware PR)
+
+Fail-closed GO. Implement these in the next code PR; do not weaken them.
+
+1. **Signed message composition.** `AuthChallenge.message` MUST explicitly include `chainId` + `challengeId` + expiry. Verifier checks the recovered signature against that exact string. A Sol signature must not satisfy an RH challenge (and vice versa); a reused `challengeId` after expiry or consume is deny.
+2. **EVM address per chain.** The same `0x` address on `rh` and `base` is two separate `WalletBinding` rows. `UNIQUE` is `(chainId, address)`, not `address` alone. Binding RH does not imply Base (Base remains stub until its verifier ships).
+3. **Actor enrollment.** Public register defaults to `human`. Bot enrollment is a **gated + rate-limited** route (admin or dedicated enroll), not a flag the client can set on verify. Signature alone cannot flip `actorKind` or attach to another `playerId`.
 
 ---
 
@@ -89,8 +101,9 @@ interface PlayerSoT {
   getById(playerId: string): Promise<{ playerId: string; actorKind: ActorKind } | null>;
   getByWallet(chainId: ChainId, address: string): Promise<{ playerId: string; actorKind: ActorKind } | null>;
   /**
-   * Registration or admin only. Signature verifiers must never call this
-   * with client-supplied actorKind.
+   * Public path: always persist actorKind=`human`.
+   * Bot enrollment is a separate gated + rate-limited route (next code PR).
+   * Signature verifiers must never pass client-supplied actorKind.
    */
   register(actorKind: ActorKind): Promise<{ playerId: string; actorKind: ActorKind }>;
   listBindings(playerId: string): Promise<WalletBinding[]>;
@@ -133,10 +146,10 @@ Bind-or-login rules:
 1. **Verify first.** No SoT write until the chain verifier returns `ok`.
 2. **Login:** wallet already bound → load that `playerId` + `actorKind` from SoT. Ignore any `playerId` / `actorKind` in the client body.
 3. **Bind:** authenticated session present + wallet unbound → `WalletBinder.bindOrReject(session.playerId, …)`.
-4. **Register:** no session + wallet unbound → `PlayerSoT.register(actorKind)` where `actorKind` comes from the **registration/admin** API (explicit field on a gated route), then bind. Default for the public wallet-only path: `human` unless the admin/bot-enroll route is used. Signature alone cannot select `bot` to masquerade, and cannot select another player’s id.
+4. **Register:** no session + wallet unbound → public path `PlayerSoT.register('human')`, then bind. **Bot enrollment** is a gated + rate-limited route (implement in next code PR). Signature alone cannot select `bot` or another player’s id.
 5. **Issue session** as JWT or HMAC cookie/header (`WALLET_AUTH_SECRET`), claims: `playerId`, `actorKind`, `boundChains` (and expiry). Game server fail-closed if secret missing.
 
-No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id, address)` (or equivalent lease). Conflict → 409, do not create a second player.
+No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id, address)` (or equivalent lease). Conflict → 409, do not create a second player. Same `0x` on `rh` vs `base` does **not** conflict.
 
 ---
 
@@ -147,15 +160,15 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
   `0xb603D6b2e5472beb338CE079a63FEb8663171529`
 
   Store checksummed; compare case-insensitive only after hex decode, then re-emit checksum. Do not accept a different casing as a second binding.
-- Verifier: standard EVM message sign for the challenge `message` (EIP-191 `personal_sign` or the project’s chosen equivalent). **Not** Solana ed25519. **Not** a shared HMAC the user signs.
-- **~1% creator tax** on `$HELBREATH` is an **on-chain economy fact** (stake/consumibles). Auth adapters must not encode tax, slippage, or Pons URLs into challenges or sessions.
+- Verifier: standard EVM message sign for the challenge `message` (EIP-191 `personal_sign` or the project’s chosen equivalent). **Not** Solana ed25519. **Not** a shared HMAC the user signs. `message` includes `chainId=rh` (or `base`), `challengeId`, and expiry.
 - Copy: **RH Chain / Pons**. Never “listed on Robinhood.”
+- Auth adapters must not encode slippage or Pons URLs into challenges or sessions.
 
 ---
 
 ## Sol notes
 
-- Verifier: **ed25519** as today (Phantom `signMessage`). Message shape stays challenge-bound, e.g. `Helbreath login: ${challenge}` plus the wallet-standard envelope (`Solana Signed Message:\n`) already used in middleware-node.
+- Verifier: **ed25519** as today (Phantom `signMessage`). Message **MUST** include `chainId` (`sol`) + `challengeId` + expiry (not challenge hex alone). Keep the wallet-standard envelope (`Solana Signed Message:\n`) already used in middleware-node.
 - Address = base58 pubkey; bind key `(sol, address)`.
 - Secondary token rail `$HELL` mint `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`, pool `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx` — economy, not auth.
 - Do not reference old mint `A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ` in challenge copy or examples.
@@ -171,10 +184,12 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
 | Sol RPC key/url missing when Sol verify needs RPC | **Deny** `sol` challenge/verify (do not skip signature check). | Deny that chain. |
 | RH RPC key/url missing when RH verify needs RPC | **Deny** `rh` challenge/verify. | Deny that chain. |
 | Base stub | **Deny** `base` verify (`not implemented`). | Deny. |
+| Challenge `message` missing `chainId` / `challengeId` / expiry | **Deny** verify (do not accept legacy challenge-only strings in prod). | Deny. |
 | Challenge expired / reused | **Deny**. | Deny. |
-| Signature valid but `actorKind` in body | **Ignore body**; use SoT. Attempt to change kind → **Deny** unless admin route. | Same. |
-| Signature valid, client sends another `playerId` | **Deny** (no impersonation). | Deny. |
+| Signature valid but `actorKind` in body | **Ignore body**; use SoT. Attempt to change kind → **Deny** unless gated bot-enroll. | Same. |
+| Public register requesting `bot` | **Deny** (default `human` only). | Deny unless gated enroll. |
 | Bind `(chainId, address)` already owned by other player | **Deny**. | Deny. |
+| Same `0x` rebound as the other of `rh`/`base` | **Allow** as a **second** bind (different `chainId`). | Allow. |
 | `ALLOW_INSECURE_AUTH=1` | **Forbidden.** Treat as misconfig; do not honor in prod. | Not a substitute for missing prod secrets. |
 
 ---
@@ -183,8 +198,8 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
 
 **Middleware-only, small:**
 
-1. Generalize challenge issue to `(chainId, address)` without a shared signing secret across chains.
+1. Generalize challenge issue to `(chainId, address)` without a shared signing secret across chains. **`message` includes `chainId` + `challengeId` + expiry.**
 2. Keep Sol ed25519 verifier; add RH EVM verifier.
-3. Player SoT + bind: `playerId`, `actorKind`, unique wallet bindings; session JWT/cookie with `playerId + actorKind + boundChains`.
+3. Player SoT + bind: `playerId`, `actorKind`, unique `(chainId, address)` bindings (rh vs base `0x` are separate); session JWT/cookie with `playerId + actorKind + boundChains`. Public register = `human`; **bot enroll gated + rate-limited**.
 4. **Base:** types + route stub that fail-closes.
 5. No landing HTML. No secrets/`.env` in git. No arenas / US migrate / ExactOut buyback or airdrop / mining-vault settle. **Mining rewards mechanism: OPEN.**

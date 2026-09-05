@@ -1,0 +1,20 @@
+{
+  "path": "B",
+  "totalTokenSupply": 1000000000,
+  "leftover": 600000000,
+  "leftoverReceiver": "A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g",
+  "feeClaimer": "A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g",
+  "poolCreator": "65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q",
+  "payer": "2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy",
+  "sender": "BTvNgC6MYNmbfxqakyCda32pBWxM7SbJPZKvTYPo4jSh",
+  "imageUri": "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@consolidacion/branding/hell-token/hell-token-logo-metaplex-1024.png",
+  "buckets": {
+    "bonding": 400000000,
+    "farming": 300000000,
+    "airdropFailedMintBuyers": 100000000,
+    "airdropList1000": 120000000,
+    "team": 80000000
+  },
+  "teamWallets": [],
+  "note": "teamWallets: Martín pasa lista [{address, amount}] sum 80000000. leftover=60% NUNCA 0."
+}

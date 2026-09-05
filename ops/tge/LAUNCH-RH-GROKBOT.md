@@ -3,7 +3,9 @@
 **Read before any RH deploy, listing, or landing edit.**  
 `assert-create-rh.cjs` fails if these NEVER lines are dropped from the plan.
 
-**No contract address in this PR. No `--execute`. No keys.**
+**Gainer launch = Pons** ([`CREATE-PONS-CHECKLIST.md`](./CREATE-PONS-CHECKLIST.md)). Paste pack [`pons-create-pack.json`](./pons-create-pack.json). Logo is the Solana Abaddon PNG. Socials: site + Discord + X + play in description.
+
+**No contract address in this PR. No `--execute`. No keys. Agent cannot sign Pons.**
 
 ---
 
@@ -19,6 +21,8 @@
 8. **NEVER write $50 buy = 50% of supply**
 9. **NEVER write listed on Robinhood** (brokerage). This is **Robinhood Chain** only.
 10. **NEVER honeypot** (no blacklist, no can’t-sell, tax cap 10%)
+11. **NEVER invent a Pons token address** or mark LIVE without `TokenLaunched`
+12. **NEVER** put a non-PNG / SPA HTML URL into Pons `logo()` — use the Abaddon `image/png` URL in the pack
 
 ## MUST
 

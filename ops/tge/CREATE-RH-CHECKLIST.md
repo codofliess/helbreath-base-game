@@ -1,7 +1,11 @@
 # PATH RH — Robinhood Chain launch (HELBREATH)
 
+**How the gainers actually launch:** [Pons](./CREATE-PONS-CHECKLIST.md) — one tx, 1B in a locked Uni V3/WETH pool, on-chain `logo()` + `socials()` (Abaddon face, game, Discord, X). Extra ETH above `0.0005` = the **$50** first buy. **No 60% treasury bag on Pons.**
+
+This file is the **custom tax-token fallback** if you want 600M in a wallet on day 0. That is **not** the Pons/gainer setup.
+
 Grokbot gate: [`LAUNCH-RH-GROKBOT.md`](./LAUNCH-RH-GROKBOT.md).  
-**This PR does not deploy.** No private keys. No `--execute`.
+**This PR does not deploy.** No private keys. No `--execute`. No Pons create tx.
 
 Ticker **HELBREATH** · name **Chain Lords Helbreath** · chain **Robinhood Chain** (EVM L2, chainId **4663**).  
 **NOT listed on Robinhood** the brokerage. RH Chain ≠ RH app listing.

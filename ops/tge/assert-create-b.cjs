@@ -2,7 +2,8 @@
 /**
  * PATH B asserts. Refuse execute if leftover==0 or split wrong.
  * Split lock: bonding 40% | farm 30% | airdrop fail 10% | airdrop list 12% | team 8%
- * leftover = 60% → A782
+ * leftover param = 60%. Tokens stay in the DBC vault until post-migrate withdrawLeftover.
+ * A782 does NOT receive leftover at create. leftover==0 is Path A — refuse.
  */
 const fs = require('fs');
 const path = require('path');

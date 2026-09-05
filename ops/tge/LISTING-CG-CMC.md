@@ -18,7 +18,7 @@
 | DBC pool | `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx` |
 | Quote | `So11111111111111111111111111111111111111112` (wSOL) |
 | Solscan | https://solscan.io/token/4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq |
-| DexScreener | https://dexscreener.com/solana/4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq |
+| DexScreener | https://dexscreener.com/solana/ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx |
 | Site | https://www.chainlords.net/#hell |
 | Play | https://play.chainlords.net |
 | Discord | https://discord.gg/F4NwwbfKtj |
@@ -46,26 +46,35 @@ That path must stay a real `image/png` (not SPA `index.html`). Landing on `conso
 
 ---
 
-## Supply on the DBC (the only honest allocation)
+## Supply on the DBC (read from chain 2026-09-05 — do not paste the plan)
 
-Path B create used **leftover = 600 000 000 (60%)**, `leftoverReceiver` = Squads vault `A782…`. That is **not** leftover=0.
+**Do not write “600M already in A782”.** That was the Path B *plan*. It is **not** what wallets show.
 
-| DBC / create field | Amount | % of 1B |
-|--------------------|--------|---------|
-| Bonding / on-curve class (`total − leftover`) | **400 000 000** | **40%** |
-| leftover (off-curve at create → `A782…`) | **600 000 000** | **60%** |
+Read from `PoolConfig` `14CeTDGTgV1CFgpo746MLFEheV8UMcVq3rrN1TLnwwXu` + vault `CmJSX3PsfCApVCohTo4njZUS7obPmCyjCRXwTMNNTFbx`:
 
-400M + 600M = 1B. That is the whole supply at create.
+| On-chain field | Amount (HELL, 9 dec) | % of 1B |
+|----------------|----------------------|---------|
+| `swap_base_amount` (sellable on the curve) | ≈ **322.096M** | **32.2%** |
+| `migration_base_threshold` (graduation LP) | ≈ **67.904M** | **6.8%** |
+| Implied leftover (`1B − swap − migration`) | ≈ **610.000M** | **61.0%** |
+| `pre_migration_token_supply` / `post_migration_token_supply` | **1 000 000 000** / **1 000 000 000** | — |
+| DBC base vault **right now** (`base_reserve` = ATA balance) | ≈ **991.32M** | **99.1%** |
+| `A782…` HELL ATA | **0** | **0%** |
+| `leftover_receiver` / `fee_claimer` | `A782…` (pubkey only — **no tokens yet**) | — |
+| `migration_quote_threshold` | ≈ **30.56 SOL** | — |
 
-Exact on-curve split between `swapBaseAmount` (sellable) and `migrationBaseThreshold` (graduation LP) must be read from the live DBC account for pool `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx` — do **not** paste Path A’s 825.887M / 174.112M numbers.
+322.096 + 67.904 + 610.000 = 1B. Leftover is **reserved in the DBC vault**, not sent to Squads at create. Meteora only pays leftover to `leftover_receiver` **after migrate** (`withdrawLeftover`). Until then DexScreener will look like “~100% on the curve”.
+
+**DexScreener (pool `ADHCfYc…`, checked 2026-09-05):** `fdv` ≈ **$2 122** and `marketCap` ≈ **$2 122** (they price × 1B). GeckoTerminal `market_cap_usd: null` is the honest tracker default. **Do not paste DexScreener MC as circulating.**
 
 **Forbidden on CG/CMC / social / Discord FAQ:**
 
+- “600M leftover already sitting in A782 / team / mine vault”
 - Treating MASTERPLAN canvas (100M team, 300M liq, 100M DAO, 100M growth, 400M play-mine) as **this mint’s on-chain buckets**
-- “circulating = 40% unlocked” without reading wallets vs curve vault
-- Any claim that play-mine credits are already a **separate** on-chain mint allocation (credits are a game ledger; leftover HELL at `A782…` is the vault those systems may later spend)
+- “circulating = 40% unlocked”
+- Any claim that play-mine credits are already a reserved on-chain allocation
 
-Internal leftover ledger tags (farm / fail-buyer / list / team) are **ops intent**, not listing-form fields unless those transfers have already happened on-chain.
+Internal leftover ledger tags (farm / fail-buyer / list / team) are **ops intent**. They cannot be spent from A782 until leftover is withdrawn post-migrate.
 
 ---
 
@@ -74,13 +83,13 @@ Internal leftover ledger tags (farm / fail-buyer / list / team) are **ops intent
 Until migration completes:
 
 - **Total / max supply:** 1 000 000 000 HELL (fixed; confirm mint authority revoked on Solscan).
-- **Circulating:** tokens that have **left the curve vault via swaps** (held by wallets), plus leftover tokens that have **left `A782…`** if any. Do **not** report FDV as circulating.
-- **Not circulating:** unsold on-curve tokens still in the DBC base vault, plus `migrationBaseThreshold` that only becomes AMM LP at graduation, plus leftover still sitting in `A782…`.
-- **Market cap:** if a tracker requires a number, use **price × tokens outside the curve vault**, or leave MC blank and report **FDV = price × 1B**. GeckoTerminal may report `market_cap_usd: null` while the launchpad is incomplete — that is the honest default.
+- **Circulating:** tokens that have **left the curve vault via swaps** (held by wallets). Today that is the ~8.7M bought so far — **not** 1B, **not** DexScreener’s MC. Do **not** report FDV as circulating.
+- **Not circulating:** the **~991M still in the DBC base vault** (unsold sellable + migration LP + leftover). Leftover is **not** in `A782…` yet.
+- **Market cap:** leave blank / `null` (GeckoTerminal) or use **price × tokens outside the vault**. DexScreener MC=FDV is a tracker artifact.
 
 ### Post-migrate leftover note (keep)
 
-After migrate: circulating = 1B minus LP tokens locked in the DAMM pool (70% of **partner** LP permanently locked; see below), minus any leftover still held in `A782…` that has not been distributed. Recalculate from the graduated pool + leftover wallet; do not keep DBC language. **Do not** call leftover=0 — Path B leftover already landed at create.
+After migrate: call `withdrawLeftover` → `leftover_receiver` `A782…`. Only then can leftover leave the DBC vault. Circulating = 1B minus locked partner LP (70% of **partner** LP; see below) minus leftover still sitting in `A782…`. Recalculate from the graduated pool + leftover wallet. **Do not** write leftover=0 (Path A). **Do not** write leftover already landed at create (the lie that showed up on DexScreener as ~100% in the vault).
 
 ---
 
@@ -104,7 +113,7 @@ Confirm full pubkeys on-chain (`VirtualPool.creator`, `PoolConfig.fee_claimer`) 
 | Creator | **0%** | — |
 | Partner (`A782…`) | **100%** of migrated LP | **30% unlocked** + **70% locked** |
 
-Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md). That note still describes Path A leftover=0 withdraw language — **Path B leftover is 60% at `A782…`**; do not `withdrawLeftover` as if leftover were 0, and do not retune LP 30/70.
+Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md) (Path B `4Sk2…`: **do** `withdrawLeftover` after migrate → `A782…`, ~610M if the curve completed as configured). Do not retune LP 30/70. Path A leftover=0 / “do not withdraw” is **only** for dead mint `A8fNV2…`.
 
 ---
 
@@ -116,14 +125,14 @@ Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md). That
 | **ExactOut** | **No.** |
 | **Robinhood / RH listing** | **No listing promise.** RH Chain is watchlist only (MASTERPLAN). Do not write “coming to Robinhood”. |
 | **Graduation date / MC floor** | None. Curve fills when quote hits the migrate threshold, not on a calendar. |
-| **Play-mine = circulating reserve** | Credits are a **game** ledger. Leftover HELL at `A782…` is not “already circulating play-mine.” |
+| **Play-mine = circulating reserve** | Credits are a **game** ledger. Leftover is still in the DBC vault, not a spendable A782 reserve. |
 | **Airdrop campaign** | **Out of scope for this pack.** Do not invent airdrop dates or amounts on CG/CMC. |
 
 ---
 
 ## Suggested listing description (utility, freeze C5)
 
-> HELL is the utility token for Chain Lords (browser MMO): shops, sinks, and play-mine credits. Fixed 1B supply on Solana. Live on a Meteora bonding curve (leftover 60% at create to the partner vault; 40% on-curve). Not an investment product. Not affiliated with official Helbreath.
+> HELL is the utility token for Chain Lords (browser MMO): shops, sinks, and play-mine credits. Fixed 1B supply on Solana. Live on a Meteora bonding curve. Leftover stays in the DBC vault until post-migrate withdraw — it is not in the partner wallet at create. Not an investment product. Not affiliated with official Helbreath.
 
 ---
 

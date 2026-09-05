@@ -16,5 +16,5 @@
     "team": 80000000
   },
   "teamWallets": [],
-  "note": "teamWallets: Martín pasa lista [{address, amount}] sum 80000000. leftover=60% NUNCA 0."
+  "note": "teamWallets: Martín pasa lista [{address, amount}] sum 80000000. leftover=60% NUNCA 0. leftover stays in the DBC vault until post-migrate withdrawLeftover — A782 is 0 at create."
 }

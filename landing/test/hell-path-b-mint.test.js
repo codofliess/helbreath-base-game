@@ -47,6 +47,7 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.match(listing, /Post-migrate leftover note/);
     assert.match(listing, /Mint \| `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`/);
     assert.match(listing, /Do not list.*A8fNV2/);
+    assert.match(listing, /Path C — HELBREATH \(planned \/ not created\)/);
     assert.equal(listing.includes('leftover (off-curve at create → `A782…`)'), false);
   });
 

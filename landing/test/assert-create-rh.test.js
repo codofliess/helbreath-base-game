@@ -37,4 +37,20 @@ describe('Path RH assert + launch copy', () => {
     assert.match(html, /4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq/);
     assert.equal(/0x[a-fA-F0-9]{40}/.test(html.slice(html.indexOf('id="hell"'), html.indexOf('id="cl-tv"'))), false);
   });
+
+  it('X Pons draft has no Solana mint and a blank CA line', () => {
+    const md = fs.readFileSync(path.join(root, 'X-PONS-POST.md'), 'utf8');
+    const tweet = md.split('```')[1] || '';
+    assert.match(md, /CA goes here after TokenLaunched/);
+    assert.match(tweet, /HELBREATH on Pons/);
+    assert.match(tweet, /play\.chainlords\.net/);
+    assert.match(tweet, /discord\.gg\/F4NwwbfKtj/);
+    assert.match(tweet, /@ChainLordsHQ/);
+    assert.match(tweet, /chainlords\.net/);
+    assert.match(tweet, /ponsfamily\.com/);
+    assert.equal(tweet.includes('4Sk2'), false);
+    assert.equal(tweet.includes('solscan'), false);
+    assert.equal(tweet.includes('dexscreener.com/solana'), false);
+    assert.equal(/0x[a-fA-F0-9]{40}/.test(tweet), false);
+  });
 });

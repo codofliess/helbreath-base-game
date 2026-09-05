@@ -11,6 +11,8 @@ const DEX = `https://dexscreener.com/solana/${MINT}`;
 
 const indexPath = path.join(__dirname, '..', 'index.html');
 const listingPath = path.join(__dirname, '..', '..', 'ops', 'tge', 'LISTING-CG-CMC.md');
+const checklistPath = path.join(__dirname, '..', '..', 'ops', 'tge', 'CREATE-B-CHECKLIST.md');
+const claimPath = path.join(__dirname, '..', '..', 'ops', 'tge', 'POST-MIGRATE-CLAIM.md');
 
 describe('Path B $HELL mint on landing + listing pack', () => {
   const html = fs.readFileSync(indexPath, 'utf8');
@@ -46,5 +48,17 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.match(listing, /Mint \| `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`/);
     assert.match(listing, /Do not list.*A8fNV2/);
     assert.equal(listing.includes('leftover (off-curve at create → `A782…`)'), false);
+  });
+
+  it('checklist and claim path do not say leftover already landed at A782', () => {
+    const checklist = fs.readFileSync(checklistPath, 'utf8');
+    const claim = fs.readFileSync(claimPath, 'utf8');
+    assert.equal(checklist.includes('A782 ≈ **600M** HELL (leftover landed)'), false);
+    assert.match(checklist, /A782 HELL ATA = \*\*0\*\* at create/);
+    assert.match(checklist, /Reserved in DBC vault/);
+    assert.match(claim, /4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq/);
+    assert.match(claim, /withdrawLeftover/);
+    assert.match(claim, /A782 = 0/);
+    assert.equal(claim.includes('Do not call `withdrawLeftover`. **leftover = 0** at create'), false);
   });
 });

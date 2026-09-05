@@ -113,7 +113,7 @@ Confirm full pubkeys on-chain (`VirtualPool.creator`, `PoolConfig.fee_claimer`) 
 | Creator | **0%** | — |
 | Partner (`A782…`) | **100%** of migrated LP | **30% unlocked** + **70% locked** |
 
-Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md). Path A leftover=0 language in that file is **wrong for this mint**. After migrate, **do** `withdrawLeftover` to `A782…` (~610M if the curve completed as configured). Do not retune LP 30/70.
+Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md) (Path B `4Sk2…`: **do** `withdrawLeftover` after migrate → `A782…`, ~610M if the curve completed as configured). Do not retune LP 30/70. Path A leftover=0 / “do not withdraw” is **only** for dead mint `A8fNV2…`.
 
 ---
 

@@ -34,7 +34,7 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.equal(hell.includes(OLD_MINT), false);
   });
 
-  it('news post points at Pons, not the Solana mint / DexScreener', () => {
+  it('news post points at Pons CA + curve, not the Solana mint / DexScreener', () => {
     const newsStart = html.indexOf('id="news"');
     const newsEnd = html.indexOf('id="features"', newsStart);
     assert.ok(newsStart > 0 && newsEnd > newsStart);
@@ -43,11 +43,17 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.equal(news.includes('solscan.io'), false);
     assert.equal(news.includes('dexscreener.com/solana'), false);
     assert.match(news, /HELBREATH · Pons/);
-    assert.match(news, /ponsfamily\.com/);
+    assert.match(news, /0xb603D6b2e5472beb338CE079a63FEb8663171529/);
+    assert.match(news, /0xd3335A347ccB25F377247A8a4bc9855f7E12d91f/);
+    assert.match(
+      news,
+      /ponsfamily\.com\/launchpad\/0xb603D6b2e5472beb338CE079a63FEb8663171529/,
+    );
     assert.match(news, /x\.com\/ChainLordsHQ/);
     assert.match(news, /discord\.gg\/F4NwwbfKtj/);
     assert.match(news, /play\.chainlords\.net/);
     assert.match(news, /TokenLaunched/);
+    assert.match(news, /no Uni V4 pool \/ DexScreener robinhood pair yet/);
   });
 
   it('does not advertise the failed Path A mint anywhere on the landing', () => {

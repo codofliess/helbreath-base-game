@@ -49,11 +49,11 @@ describe('Path RH assert + launch copy', () => {
   it('X Pons draft has the live RH CA and no Solana mint', () => {
     const md = fs.readFileSync(path.join(root, 'X-PONS-POST.md'), 'utf8');
     const tweet = md.split('```')[1] || '';
-    assert.match(tweet, /HELBREATH on Pons/);
+    const alt = md.split('```')[3] || '';
+    assert.match(tweet, /Now live on Robinhood Chain/);
+    assert.match(tweet, /\$HELBREATH/);
     assert.match(tweet, /play\.chainlords\.net/);
-    assert.match(tweet, /discord\.gg\/F4NwwbfKtj/);
-    assert.match(tweet, /@ChainLordsHQ/);
-    assert.match(tweet, /chainlords\.net/);
+    assert.match(tweet, /Not a Robinhood brokerage listing/);
     assert.match(tweet, /0xb603D6b2e5472beb338CE079a63FEb8663171529/);
     assert.match(
       tweet,
@@ -63,5 +63,8 @@ describe('Path RH assert + launch copy', () => {
     assert.equal(tweet.includes('solscan'), false);
     assert.equal(tweet.includes('dexscreener.com/solana'), false);
     assert.equal(tweet.includes('A782'), false);
+    assert.match(alt, /HELBREATH on Pons/);
+    assert.match(alt, /discord\.gg\/F4NwwbfKtj/);
+    assert.match(alt, /@ChainLordsHQ/);
   });
 });

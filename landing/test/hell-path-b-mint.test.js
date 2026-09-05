@@ -34,6 +34,22 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.equal(hell.includes(OLD_MINT), false);
   });
 
+  it('news post points at Pons, not the Solana mint / DexScreener', () => {
+    const newsStart = html.indexOf('id="news"');
+    const newsEnd = html.indexOf('id="features"', newsStart);
+    assert.ok(newsStart > 0 && newsEnd > newsStart);
+    const news = html.slice(newsStart, newsEnd);
+    assert.equal(news.includes(MINT), false);
+    assert.equal(news.includes('solscan.io'), false);
+    assert.equal(news.includes('dexscreener.com/solana'), false);
+    assert.match(news, /HELBREATH · Pons/);
+    assert.match(news, /ponsfamily\.com/);
+    assert.match(news, /x\.com\/ChainLordsHQ/);
+    assert.match(news, /discord\.gg\/F4NwwbfKtj/);
+    assert.match(news, /play\.chainlords\.net/);
+    assert.match(news, /TokenLaunched/);
+  });
+
   it('does not advertise the failed Path A mint anywhere on the landing', () => {
     assert.equal(html.includes(OLD_MINT), false);
     assert.equal(html.includes(MINT), true);

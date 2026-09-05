@@ -30,6 +30,30 @@ Token / coin copy: **$HELL / Chain Lords**. Do not write “Helbreath” in the 
 
 ---
 
+## Path C — HELBREATH (planned / not created)
+
+**Not live.** No mint. Do **not** paste a placeholder address into CG/CMC, DexScreener, or the www hero.
+
+| Field | Value |
+|-------|--------|
+| Status | **Planned only** — docs + asserts in `ops/tge/CREATE-C-CHECKLIST.md`. **No on-chain create in this PR.** |
+| Name (when created) | Chain Lords — Helbreath |
+| Symbol (when created) | HELBREATH |
+| Chain | Solana |
+| Mint | **none** — do not invent one; do not list a fake mint as live |
+| Live `$HELL` today | Path B `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq` (keep landing / current listing on this) |
+| Leftover at create | **Still in the DBC vault.** A782 = **0** until post-migrate `withdrawLeftover`. Same Path B trap, new ticker. |
+| leftover=0 | **Forbidden** (`assert-create-c.cjs` refuses `--execute`) |
+| Grokbot gate | [`LAUNCH-C-GROKBOT.md`](./LAUNCH-C-GROKBOT.md) — NEVER leftover=0 / NEVER “A782 already has 600M”. MUST `assert-create-c.cjs` PASS before execute. |
+
+Helbreath **is** the intended listing name for **this** ticker only. That does **not** change Path B `$HELL` copy above (still no Helbreath on the live HELL form).
+
+**Do not write** that leftover already sits in A782 on create day. leftover + leftoverReceiver are create params; Meteora pays leftover only after migrate.
+
+Landing / www hero stays on Path B `4Sk2…` until a **real** Path C mint exists.
+
+---
+
 ## Logos
 
 | Use | URL |
@@ -140,7 +164,7 @@ Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md) (Path
 
 | Check | `consolidacion` git | Live www |
 |-------|---------------------|----------|
-| Hero `#hell` (LIVE, Maggy line, Path B mint + DexScreener) | **This PR** | Requires Railway **chainlords-landing** redeploy |
+| Hero `#hell` (LIVE, Maggy line, Path B mint + DexScreener) | **Path B `4Sk2…` stays live** — do not point hero at a fake HELBREATH mint | Requires Railway **chainlords-landing** redeploy |
 | `landing/branding/abaddon-icon/discord-server-icon.png` (1024 PNG) | **Present** (PR #10) | Same redeploy |
 | SPA must not fallback `/branding/*.png` | `landing/server.js` + `landing/test/abaddon-png-path.test.js` | Same |
 

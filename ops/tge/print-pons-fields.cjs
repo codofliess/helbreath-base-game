@@ -20,5 +20,9 @@ console.log(`Discord:     ${p.socials.discord}`);
 console.log(`Play:        ${p.play}`);
 console.log(`Description: ${p.description}`);
 console.log(`First buy:   $${p.developerBuyUsd} ETH (not 50% supply)`);
+if (!/0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e/i.test(p.factory)) {
+  console.error('ASSERT_FAIL factory must be Pons V2');
+  process.exit(1);
+}
 console.log(`Factory:     ${p.factory}`);
 console.log('ASSERT_OK pons metadata pack');

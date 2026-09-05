@@ -1,6 +1,6 @@
 # PATH PONS — launch HELBREATH like RH gainers
 
-Pons (active factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB`) is how volume tokens launch on Robinhood Chain: **one tx** deploys the ERC-20, seeds a **locked Uniswap V3 / WETH** pool (1B supply, 1% fee), locks metadata on-chain. Terminals (Pons UI, DexScreener, GMGN) read `logo()` + `socials()` from the token.
+Pons **V2** factory `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e` is the live public launch (V1 `0xA5aA…` has `launchEnabled=false`). One tx deploys the ERC-20 onto a **bonding curve** (ETH quote, 1B supply, 1% curve fee, graduate at 4.2 ETH into locked Uni V4). Metadata is on-chain. Terminals read `logo()` + `socials()`.
 
 **This repo does not send the create tx.** Martín signs on [ponsfamily.com](https://ponsfamily.com) with a RH wallet. Metadata below is locked at create — typo = new token.
 
@@ -25,7 +25,7 @@ Pack: [`pons-create-pack.json`](./pons-create-pack.json)
 | Play (in description, Pons has one website slot) | `https://play.chainlords.net` |
 | Creator fee wallet | Martín RH EOA (same as signer unless you set Squads-equivalent) |
 | Creator tax | **5%** (500 bps) if the UI offers it — swap-side, not a honeypot |
-| Developer / first buy | **$50 in ETH** as extra value on the launch tx (Pons: ETH above `0.0005` launch fee = creator buy on block 0) |
+| Developer / first buy | **$50 in ETH** as a **second** curve buy after create. V2 `msg.value` must be **exactly** `0.0005` (extra value reverts). |
 
 Logo URL already returns `image/png` (Abaddon). That is the Solana / landing avatar. Terminals that scrape `logo()` will show this face.
 
@@ -33,10 +33,9 @@ Logo URL already returns `image/png` (Abaddon). That is the Solana / landing ava
 
 ## What Pons actually does (honest)
 
-- Supply **1B** all into the locked pool. **No 60% treasury bag.** That is the gainer setup.
-- Fees: **1% pool** → creator **70%** / protocol **30%** (current factory). Plus optional creator tax.
-- First **2 blocks**: only creator initial buy on launch block; then 5% max wallet.
-- Graduation = **4.2 ETH** paired. Same pool after. No Meteora leftover story.
+- Supply **1B** all onto the V2 bonding curve. **No 60% treasury bag.** That is the gainer setup.
+- Fees: **1% curve** + optional **5%** creator tax (cap 10%). Quote-denominated.
+- Graduation = **4.2 ETH** collected → locked Uni V4. No Meteora leftover story.
 - **NOT listed on Robinhood** the app.
 
 ---

@@ -921,10 +921,10 @@
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(mint).then(copied).catch(function () {
-          window.prompt("Mint", mint);
+          window.prompt("CA", mint);
         });
       } else {
-        window.prompt("Mint", mint);
+        window.prompt("CA", mint);
       }
     });
   }

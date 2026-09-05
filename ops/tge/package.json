@@ -1,0 +1,9 @@
+{
+  "name": "helbreath-tge-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Encode-only helpers for HELBREATH TGE. Does not send txs.",
+  "dependencies": {
+    "ethers": "^6.17.0"
+  }
+}

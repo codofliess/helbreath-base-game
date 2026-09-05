@@ -1,0 +1,46 @@
+{
+  "venue": "pons.family",
+  "chain": "robinhood-chain",
+  "chainId": 4663,
+  "factoryV1": "0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB",
+  "factory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "factoryNote": "V1 launchEnabled=false. Live public launches are V2 bonding curve.",
+  "createUrl": "https://ponsfamily.com",
+  "launchFeeEth": "0.0005",
+  "launchFeeExact": true,
+  "supply": 1000000000,
+  "poolFeeBps": 100,
+  "quote": "WETH",
+  "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  "name": "Chain Lords Helbreath",
+  "symbol": "HELBREATH",
+  "logo": "https://www.chainlords.net/branding/abaddon-icon/discord-server-icon.png",
+  "logoFallback": [
+    "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@consolidacion/landing/branding/abaddon-icon/discord-server-icon.png",
+    "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@consolidacion/branding/hell-token/hell-token-logo-metaplex-1024.png"
+  ],
+  "logoRepo": "landing/branding/abaddon-icon/discord-server-icon.png",
+  "logoUploadAlso": "branding/hell-token/pons-abaddon-avatar-1024.png",
+  "description": "HELBREATH — Chain Lords. Play: https://play.chainlords.net · Hell is what you leave still. Utility for the browser MMO (shops, sinks, play-mine credits). Not an investment product. Not a Robinhood brokerage listing.",
+  "socials": {
+    "twitter": "https://x.com/ChainLordsHQ",
+    "telegram": "",
+    "discord": "https://discord.gg/F4NwwbfKtj",
+    "website": "https://www.chainlords.net",
+    "farcaster": ""
+  },
+  "play": "https://play.chainlords.net",
+  "creatorTaxBps": 500,
+  "creatorFeeSplit": "70% creator / 30% protocol of the 1% pool fee",
+  "developerBuyUsd": 50,
+  "developerBuyNote": "V2: launchFee must be exactly 0.0005 ETH (msg.value != fee reverts). $50 first buy is a second tx on the bonding curve after TokenLaunched. NOT 50% of supply. NOT extra msg.value on create.",
+  "lockedAtCreate": true,
+  "notDeployed": true,
+  "never": [
+    "invent token address",
+    "publish LIVE without TokenLaunched tx",
+    "listed on Robinhood brokerage",
+    "$50 = 50% supply",
+    "reuse A8fNV2 or 4Sk2"
+  ]
+}

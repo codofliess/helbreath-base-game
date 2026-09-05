@@ -1,0 +1,41 @@
+{
+  "path": "RH",
+  "chain": "robinhood-chain",
+  "chainId": 4663,
+  "rpc": "https://rpc.mainnet.chain.robinhood.com",
+  "explorer": "https://robinhoodchain.blockscout.com",
+  "testnetChainId": 46630,
+  "testnetRpc": "https://rpc.testnet.chain.robinhood.com",
+  "name": "Chain Lords Helbreath",
+  "symbol": "HELBREATH",
+  "decimals": 18,
+  "totalTokenSupply": 1000000000,
+  "treasuryShare": 600000000,
+  "seedShare": 400000000,
+  "transferTaxBps": 500,
+  "maxTaxBps": 1000,
+  "firstBuyUsd": 50,
+  "firstBuyIsNotPercentOfSupply": true,
+  "treasury": null,
+  "deployer": null,
+  "contract": null,
+  "pair": null,
+  "dex": {
+    "name": "Uniswap V3",
+    "factory": "0x1f7d7550B1b028F7571E69A784071F0205FD2EfA",
+    "swapRouter02": "0xCaf681A66D020601342297493863E78C959E5Cb2",
+    "npm": "0x73991a25c818bf1f1128deaab1492d45638de0d3",
+    "quote": "WETH",
+    "note": "Reconfirm factory on Blockscout before seeding. V2 factory 0x8bcEaA40… is unofficial — prefer V3 docs."
+  },
+  "never": [
+    "leftover=0 Meteora remint",
+    "A782 already has leftover at create",
+    "listed on Robinhood brokerage",
+    "$50 buy = 50% supply",
+    "ExactOut",
+    "invent airdrop",
+    "publish LIVE without explorer+RPC"
+  ],
+  "note": "Deploy mints 1B to treasury. Then treasury sends 400M to LP. Treasury keeps 600M day-0. Tax 5% on non-excluded transfers → treasury. Martín $50 first swap is a chart tick, not an allocation. No --execute in git."
+}

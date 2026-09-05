@@ -114,7 +114,7 @@ app.get('/metrics', async (_req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Middleware Helbreath corriendo en http://localhost:${PORT}`);
-    console.log('✅ Auth: /auth/challenge, /auth/verify');
+    console.log('✅ Auth: /auth/challenge, /auth/verify (sol+rh; base stub), /auth/enroll-bot');
     console.log('✅ Drops: GET /drops?wallet=..., POST /drops/:id/claim');
     console.log('✅ Metadata: GET /metadata/collection, GET /metadata/:dropId');
     console.log('✅ Tournaments: GET /leaderboard, /tournaments, /hall-of-fame, /prizes');

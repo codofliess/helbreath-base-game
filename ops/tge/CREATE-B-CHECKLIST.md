@@ -19,6 +19,17 @@ Off-curve sum: 30+10+12+8 = **60%**. Curve = **40%**. Leftover param = **600M NU
 
 Failed-mint buyers (`A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ`): snapshot buy txs/holders → CSV → pay from **10%** bucket via sender. No curve buy.
 
+
+## Product lock (Martín / Elon) — AFTER mint
+
+Tokenomics unchanged: farm **30** / airdrop fail **10** / lista **12** / team **8** / bonding **40**.
+
+1. **Launch surface:** Abaddon avatar + redes + landing (URI PNG + hero mint). Redeploy Railway if live still stale.
+2. **Mining 30%:** farmable vía **Grok Bot** (créditos / tope diario) desde vault A782 — wire **después** del create, no en el tx Meteora.
+3. **Arenas + torneos:** agentes IA controlando jugadores — **después** del mint; no bloquea create.
+4. **Gas:** ~US$30 en SOL → Squads A `2a4b…` (payer create). Extra=0 fuera de eso.
+5. Orden: **checklist create first** → GO Cruchi → farm/arena product AFTER.
+
 ## Meteora `buildCurve*` MUST
 
 - `totalTokenSupply`: `1_000_000_000`

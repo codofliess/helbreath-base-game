@@ -898,6 +898,8 @@ body {
 }
 
 .hell-mint-copy,
+.hell-mint-pons,
+.hell-mint-explorer,
 .hell-mint-solscan,
 .hell-mint-dexscreener {
   font-family: var(--cl-font-ui);
@@ -914,6 +916,8 @@ body {
   text-decoration: none;
 }
 
+.hell-mint-pons,
+.hell-mint-explorer,
 .hell-mint-solscan,
 .hell-mint-dexscreener {
   background: transparent;
@@ -922,6 +926,8 @@ body {
 }
 
 .hell-mint-copy:hover,
+.hell-mint-pons:hover,
+.hell-mint-explorer:hover,
 .hell-mint-solscan:hover,
 .hell-mint-dexscreener:hover {
   filter: brightness(1.08);

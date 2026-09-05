@@ -92,6 +92,13 @@ describe('multichain auth', () => {
         assert.throws(() => auth.getAuthSecret(), /ALLOW_INSECURE_AUTH is forbidden in production/);
     });
 
+    it('fail-closed: production SoT requires DATABASE_URL (in-memory bindings forbidden)', async () => {
+        process.env.NODE_ENV = 'production';
+        delete process.env.DATABASE_URL;
+        const auth = loadAuth();
+        await assert.rejects(() => auth.registerPlayer('human'), /DATABASE_URL is required in production/);
+    });
+
     it('Sol ed25519 verify still works against the new challenge message', async () => {
         const auth = loadAuth();
         const kp = nacl.sign.keyPair();

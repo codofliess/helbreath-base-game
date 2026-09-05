@@ -68,6 +68,7 @@ A full review of critical processes (auth, GM sandbox, combat, economy, market d
 # Required on GAME SERVER
 set ASPNETCORE_ENVIRONMENT=Production   # or leave Development only on your PC
 set WALLET_AUTH_SECRET=<long random, same as middleware>
+set DATABASE_URL=<same Postgres as middleware>
 set MARKET_SYNC_SECRET=<long random, same as middleware>
 set MARKET_MIDDLEWARE_URL=https://your-middleware
 set GM_WALLET_ALLOWLIST=YourWalletBase58
@@ -75,6 +76,7 @@ set GM_WALLET_ALLOWLIST=YourWalletBase58
 # Required on MIDDLEWARE
 set NODE_ENV=production
 set WALLET_AUTH_SECRET=<same>
+set DATABASE_URL=<same Postgres as game server>
 set MARKET_SYNC_SECRET=<same>
 set MARKET_PAY_MODE=live
 # do NOT set ALLOW_MARKET_DEV_PAY

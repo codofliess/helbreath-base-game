@@ -40,6 +40,7 @@ TimedChallenge.Initialize();
 PvpAcademy.Initialize();
 
 // Launch security banners — ops must set these for a real soft test.
+WalletAuthValidator.EnsureProductionSecretOrThrow();
 if (!WalletAuthValidator.IsRequired) {
     Console.WriteLine(
         "[SECURITY] WARNING: WALLET_AUTH_SECRET is not set — any client can spoof any wallet id. " +

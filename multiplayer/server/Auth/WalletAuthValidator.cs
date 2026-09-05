@@ -1,18 +1,52 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Server.Auth;
 
-/// <summary>Validates wallet session tokens issued by middleware-node after Sign-In With Solana.</summary>
+/// <summary>
+/// Validates wallet session tokens issued by middleware-node (HMAC).
+/// Prefers v2 JSON claims (<c>playerId</c>, <c>actorKind</c>, <c>boundChains</c>); falls back to legacy <c>wallet:exp</c>.
+/// </summary>
 public static class WalletAuthValidator {
+    private static readonly JsonSerializerOptions SessionJsonOptions = new() {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     public static bool IsRequired =>
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WALLET_AUTH_SECRET"));
+
+    /// <summary>True when ASPNETCORE_ENVIRONMENT / DOTNET_ENVIRONMENT / NODE_ENV is production.</summary>
+    public static bool IsProductionHost {
+        get {
+            return IsProductionValue(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"))
+                || IsProductionValue(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"))
+                || IsProductionValue(Environment.GetEnvironmentVariable("NODE_ENV"));
+        }
+    }
+
+    /// <summary>Fail-closed at process start: production must have <c>WALLET_AUTH_SECRET</c>.</summary>
+    public static void EnsureProductionSecretOrThrow() {
+        if (IsProductionHost && !IsRequired) {
+            throw new InvalidOperationException(
+                "WALLET_AUTH_SECRET is required in production (fail-closed). " +
+                "ALLOW_INSECURE_AUTH is forbidden in production.");
+        }
+    }
 
     public static bool TryValidate(string walletPubkey, string authToken, out string? errorMessage) {
         errorMessage = null;
 
         if (!IsRequired) {
-            // Fail closed outside Development: missing WALLET_AUTH_SECRET = open account takeover.
+            if (IsProductionHost) {
+                errorMessage =
+                    "Server misconfiguration: WALLET_AUTH_SECRET is required in production. " +
+                    "ALLOW_INSECURE_AUTH is forbidden in production.";
+                return false;
+            }
+
             var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "";
             var allowInsecure = string.Equals(
                 Environment.GetEnvironmentVariable("ALLOW_INSECURE_AUTH"),
@@ -55,8 +89,11 @@ public static class WalletAuthValidator {
             return false;
         }
 
-        var secret = Environment.GetEnvironmentVariable("WALLET_AUTH_SECRET")
-            ?? throw new InvalidOperationException("WALLET_AUTH_SECRET must be set when wallet auth is required.");
+        var secret = Environment.GetEnvironmentVariable("WALLET_AUTH_SECRET")?.Trim();
+        if (string.IsNullOrEmpty(secret)) {
+            errorMessage = "Server misconfiguration: WALLET_AUTH_SECRET is required.";
+            return false;
+        }
 
         var expectedSig = Convert.ToBase64String(
             HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(payload)))
@@ -70,6 +107,59 @@ public static class WalletAuthValidator {
             return false;
         }
 
+        if (payload.StartsWith('{')) {
+            return TryValidateV2(walletPubkey.Trim(), payload, out errorMessage);
+        }
+
+        return TryValidateLegacy(walletPubkey.Trim(), payload, out errorMessage);
+    }
+
+    private static bool TryValidateV2(string walletPubkey, string payload, out string? errorMessage) {
+        errorMessage = null;
+        SessionV2? session;
+        try {
+            session = JsonSerializer.Deserialize<SessionV2>(payload, SessionJsonOptions);
+        } catch (JsonException) {
+            errorMessage = "Invalid auth token payload.";
+            return false;
+        }
+
+        if (session is null || session.V != 2 || string.IsNullOrWhiteSpace(session.PlayerId)) {
+            errorMessage = "Invalid auth token payload.";
+            return false;
+        }
+
+        if (session.Exp <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) {
+            errorMessage = "Auth token expired or wallet mismatch.";
+            return false;
+        }
+
+        var wallets = session.Wallets ?? Array.Empty<SessionWalletV2>();
+        var boundChains = session.BoundChains;
+        if (boundChains is null || boundChains.Length == 0) {
+            boundChains = wallets
+                .Select(w => w.ChainId)
+                .OfType<string>()
+                .Where(c => c.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        // Bind-before-world: enroll-bot / register without a wallet bind cannot enter the world.
+        if (boundChains.Length == 0 || wallets.Length == 0) {
+            errorMessage = "Wallet binding required before entering the world.";
+            return false;
+        }
+
+        if (!SessionIncludesWallet(wallets, walletPubkey)) {
+            errorMessage = "Auth token expired or wallet mismatch.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateLegacy(string walletPubkey, string payload, out string? errorMessage) {
         var segments = payload.Split(':', 2);
         if (segments.Length != 2 ||
             !string.Equals(segments[0], walletPubkey, StringComparison.Ordinal) ||
@@ -79,7 +169,27 @@ public static class WalletAuthValidator {
             return false;
         }
 
+        errorMessage = null;
         return true;
+    }
+
+    private static bool SessionIncludesWallet(SessionWalletV2[] wallets, string walletPubkey) {
+        foreach (var w in wallets) {
+            var addr = w.Address ?? "";
+            if (addr.Length == 0) {
+                continue;
+            }
+            if (string.Equals(addr, walletPubkey, StringComparison.Ordinal)
+                || string.Equals(addr, walletPubkey, StringComparison.OrdinalIgnoreCase)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsProductionValue(string? value) {
+        return string.Equals(value, "Production", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "production", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool FixedTimeEqualsAscii(string a, string b) {
@@ -93,7 +203,28 @@ public static class WalletAuthValidator {
     }
 
     private static string PadBase64(string base64Url) {
-        var padded = base64Url.Replace('-', '+').Replace('/', '_');
+        var padded = base64Url.Replace('-', '+').Replace('_', '/');
         return padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
+    }
+
+    private sealed class SessionV2 {
+        [JsonPropertyName("v")]
+        public int V { get; set; }
+
+        public string? PlayerId { get; set; }
+
+        public string? ActorKind { get; set; }
+
+        public string[]? BoundChains { get; set; }
+
+        public SessionWalletV2[]? Wallets { get; set; }
+
+        public long Exp { get; set; }
+    }
+
+    private sealed class SessionWalletV2 {
+        public string? ChainId { get; set; }
+
+        public string? Address { get; set; }
     }
 }

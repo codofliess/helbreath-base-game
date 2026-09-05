@@ -57,6 +57,11 @@ if (isPostgresConfigured()) {
             console.error('[persistence] Schema apply failed:', error);
         });
 } else {
+    if ((process.env.NODE_ENV || '').toLowerCase() === 'production') {
+        console.error(
+            '[SECURITY] DATABASE_URL is required in production — in-memory player/wallet SoT is forbidden (fail-closed).'
+        );
+    }
     console.log('ℹ️ PostgreSQL not configured — set DATABASE_URL=${{Postgres.DATABASE_URL}} on Railway');
 }
 

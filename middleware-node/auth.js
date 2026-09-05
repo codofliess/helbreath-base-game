@@ -470,7 +470,18 @@ function listBindingsForPlayerSync(playerId) {
     return out;
 }
 
+function assertPersistentSotForProduction() {
+    if (isProductionEnv() && !isPostgresConfigured()) {
+        const err = new Error(
+            'DATABASE_URL is required in production (player/wallet SoT). In-memory bindings are local-dev only.'
+        );
+        err.code = 'SOT_MEM_FORBIDDEN';
+        throw err;
+    }
+}
+
 async function pgAvailable() {
+    assertPersistentSotForProduction();
     return isPostgresConfigured() && Boolean(getPool());
 }
 
@@ -875,6 +886,10 @@ function registerAuthRoutes(app) {
             const session = await issueSessionResponse(playerId);
             res.json(session);
         } catch (err) {
+            if (err && err.code === 'SOT_MEM_FORBIDDEN') {
+                res.status(503).json({ success: false, error: err.message });
+                return;
+            }
             console.error('[auth] verify failed:', err.message);
             res.status(500).json({ success: false, error: 'Auth verify failed' });
         }
@@ -904,6 +919,10 @@ function registerAuthRoutes(app) {
             const session = await issueSessionResponse(player.playerId);
             res.json(session);
         } catch (err) {
+            if (err && err.code === 'SOT_MEM_FORBIDDEN') {
+                res.status(503).json({ success: false, error: err.message });
+                return;
+            }
             console.error('[auth] enroll-bot failed:', err.message);
             res.status(500).json({ success: false, error: 'Bot enrollment failed' });
         }

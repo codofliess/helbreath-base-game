@@ -565,7 +565,26 @@ public static class GamePersistence {
         Current = GamePersistenceService.TryCreateFromEnvironment();
         if (Current is not null) {
             await Current.EnsureSchemaAsync(cancellationToken).ConfigureAwait(false);
+        } else if (IsProductionHost()) {
+            throw new InvalidOperationException(
+                "DATABASE_URL is required in production (fail-closed). " +
+                "JSON/in-memory persistence is local-dev only — set DATABASE_URL (same Postgres as middleware SoT).");
+        } else {
+            Console.WriteLine(
+                "[Persistence] PostgreSQL not configured — JSON/local fallback. " +
+                "Production requires DATABASE_URL (fail-closed).");
         }
+    }
+
+    private static bool IsProductionHost() {
+        return IsProductionValue(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"))
+            || IsProductionValue(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"))
+            || IsProductionValue(Environment.GetEnvironmentVariable("NODE_ENV"));
+    }
+
+    private static bool IsProductionValue(string? value) {
+        return string.Equals(value, "Production", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "production", StringComparison.OrdinalIgnoreCase);
     }
 
     public static async Task SaveCharacterDualAsync(

@@ -123,7 +123,8 @@ Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md) (Path
 |------|----------------|
 | **Ronda2** | **DEFERRED.** Do not put a second round, second pool, or “phase 2 sale” on CG/CMC. |
 | **ExactOut** | **No.** |
-| **Robinhood / RH listing** | **No listing promise.** RH Chain is watchlist only (MASTERPLAN). Do not write “coming to Robinhood”. |
+| **Robinhood brokerage listing** | **No.** Do not write “coming to Robinhood” the app. |
+| **Robinhood Chain token** | **Planned Path RH** (`CREATE-RH-CHECKLIST.md`). HELBREATH ERC-20, tax 5% → treasury, 60% held at seed. **No contract address yet. Not a brokerage listing.** |
 | **Graduation date / MC floor** | None. Curve fills when quote hits the migrate threshold, not on a calendar. |
 | **Play-mine = circulating reserve** | Credits are a **game** ledger. Leftover is still in the DBC vault, not a spendable A782 reserve. |
 | **Airdrop campaign** | **Out of scope for this pack.** Do not invent airdrop dates or amounts on CG/CMC. |
@@ -145,3 +146,18 @@ Claim / withdraw steps: [`POST-MIGRATE-CLAIM.md`](./POST-MIGRATE-CLAIM.md) (Path
 | SPA must not fallback `/branding/*.png` | `landing/server.js` + `landing/test/abaddon-png-path.test.js` | Same |
 
 This PR does **not** redeploy Railway. If www still shows mint `A8fNV2…`, that is an **ops blocker**, not a git miss.
+
+---
+
+## Path RH (Robinhood Chain) — planned, not live
+
+See [`CREATE-RH-CHECKLIST.md`](./CREATE-RH-CHECKLIST.md). Do **not** paste a contract into CG/CMC until Blockscout + RPC confirm 1B supply and treasury balances.
+
+| Field | Value |
+|-------|--------|
+| Chain | Robinhood Chain (EVM, chainId 4663) |
+| Name / symbol | Chain Lords Helbreath / HELBREATH |
+| Tax | 5% of non-excluded transfers → treasury (cap 10%) |
+| Day-0 wallets | 600M treasury · 400M Uniswap seed |
+| First buy | **$50** manual swap — **not** 50% of supply |
+| Contract | **none yet** |

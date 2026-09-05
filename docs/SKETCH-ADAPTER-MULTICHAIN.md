@@ -5,6 +5,8 @@
 
 **Next PR (middleware-only, small):** implement challenge + bind for **Sol + RH** first; **Base stub** (same EVM types, verifier returns “not implemented”). Do not change landing HTML or secrets/`.env` in that PR either unless ops explicitly adds keys.
 
+**Mining rewards mechanism: OPEN** (ADR Consequences / Out of scope). This adapter does not issue play-mine claims, ExactOut buybacks, or a `$HELL` mining-vault settle. Token registry stays in the ADR: RH `$HELBREATH` = stake/consumibles; Sol `$HELL` = listing/liquidity secondary.
+
 ---
 
 ## Types
@@ -185,4 +187,4 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
 2. Keep Sol ed25519 verifier; add RH EVM verifier.
 3. Player SoT + bind: `playerId`, `actorKind`, unique wallet bindings; session JWT/cookie with `playerId + actorKind + boundChains`.
 4. **Base:** types + route stub that fail-closes.
-5. No landing HTML. No secrets/`.env` in git. No arenas / US migrate / ExactOut.
+5. No landing HTML. No secrets/`.env` in git. No arenas / US migrate / ExactOut buyback or airdrop / mining-vault settle. **Mining rewards mechanism: OPEN.**

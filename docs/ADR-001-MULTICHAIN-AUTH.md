@@ -10,7 +10,7 @@
 
 Related: [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md) · [`NFT-OPS-RUNBOOK.md`](./NFT-OPS-RUNBOOK.md) · sketch [`SKETCH-ADAPTER-MULTICHAIN.md`](./SKETCH-ADAPTER-MULTICHAIN.md)
 
-This record **locks** world, wallets, actor flag, and token rails. It does not enumerate rejected alternatives.
+This record **locks** world, wallets, actor flag, and **token rails** (which contract is stake vs listing). It does **not** lock mining, play-mine claims, or reward-budget buys. It does not enumerate rejected alternatives.
 
 ---
 
@@ -89,8 +89,14 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 - One character / economy identity across Sol, RH, and Base.
 - Bots are explicit and matchable later without polluting human ladders.
-- Primary stake rail is RH `$HELBREATH` without implying a Robinhood listing.
-- Sol `$HELL` remains the secondary listing with a single canonical mint/pool.
+- Primary stake / consumibles rail is RH `$HELBREATH` (contract + ~1% creator tax as on-chain fact) without implying a Robinhood listing.
+- Sol `$HELL` remains listing / liquidity **secondary** with a single canonical mint/pool.
+
+**Martín cut — mining / rewards not locked**
+
+- Mining, play-mine **claim**, and buying ~30% supply for rewards are **not** decided here.
+- Do **not** treat ExactOut buyback or a fixed `$HELL` mining-vault settle as the product path.
+- **Mining rewards mechanism: OPEN** / deferred. Future work: redesign play incentives so rewards encourage play that is **not** token farming — mechanism TBD by Martín later. Auth + rails in this ADR stay valid without that mechanism.
 
 **Operational**
 
@@ -115,8 +121,9 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 | NFT collection | `sol` | Helbreath collection | (existing Sol collection mints / trees — ops runbook) | Bound via Sol wallet on `playerId`. |
 | NFT collection | `rh` | Helbreath collection | (RH collection contract when deployed) | Same player; no double-mint vs Sol/Base. |
 | NFT collection | `base` | Helbreath collection | (Base collection contract when deployed) | Stub until Base auth ships. |
+| **Mining rewards mechanism** | — | — | — | **OPEN** / deferred. Not a rail. Not ExactOut buyback. Not a fixed `$HELL` mining-vault settle. |
 
-Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63FEb8663171529` (see sketch).
+Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63FEb8663171529` (see sketch). Token **registry** (stake vs listing contracts) is locked; mining-settle is not.
 
 ---
 
@@ -126,6 +133,8 @@ Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63
 |------|-----------|
 | **Arenas PR** — HvH / BvB / champions H vs B | Matchmaking and queue rules; reads `actorKind` already decided here. |
 | **US migrate** | Token/rail migration for US players; not auth. |
-| **ExactOut airdrop** | Distribution mechanics; not challenge-response or bind. |
+| **ExactOut airdrop / ExactOut buyback** | Not the product path. Out of this ADR; do not implement as mining settle. |
+| **Mining / play-mine claim / ~30% supply buy for rewards** | **OPEN.** Not locked. Do not treat a fixed `$HELL` mining-vault settle as decided. |
+| **Play-incentive redesign** (rewards that are not token farming) | TBD by Martín later; deferred from this ADR. |
 | Middleware implementation | Next PR: challenge + bind for Sol + RH; Base stub. This ADR is docs only. |
 | Landing HTML, secrets, `.env` | Unchanged by this decision record. |

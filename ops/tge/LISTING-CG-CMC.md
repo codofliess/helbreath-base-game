@@ -44,6 +44,7 @@ Token / coin copy: **$HELL / Chain Lords**. Do not write “Helbreath” in the 
 | Live `$HELL` today | Path B `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq` (keep landing / current listing on this) |
 | Leftover at create | **Still in the DBC vault.** A782 = **0** until post-migrate `withdrawLeftover`. Same Path B trap, new ticker. |
 | leftover=0 | **Forbidden** (`assert-create-c.cjs` refuses `--execute`) |
+| Grokbot gate | [`LAUNCH-C-GROKBOT.md`](./LAUNCH-C-GROKBOT.md) — NEVER leftover=0 / NEVER “A782 already has 600M”. MUST `assert-create-c.cjs` PASS before execute. |
 
 Helbreath **is** the intended listing name for **this** ticker only. That does **not** change Path B `$HELL` copy above (still no Helbreath on the live HELL form).
 

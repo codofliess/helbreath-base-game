@@ -12,8 +12,12 @@ const {
   A782,
   LEFTOVER,
   DAY0_TRUTH,
+  FORBIDDEN_MINTS,
+  POST_CREATE_PRINT,
   defaultPlan,
   checkPlan,
+  leftoverLandedCreateGoHits,
+  scanPathCDocs,
 } = require('../../ops/tge/assert-create-c.cjs');
 
 const script = path.join(__dirname, '..', '..', 'ops', 'tge', 'assert-create-c.cjs');
@@ -140,5 +144,70 @@ describe('Path C listing + checklist honesty (not live)', () => {
     assert.equal(hell.includes('HELBREATH'), false);
     assert.equal(hell.includes(PATH_A_MINT), false);
     assert.equal(html.includes(PATH_B_MINT), true);
+  });
+});
+
+describe('grokbot leftover=0 fixture + leftover-landed GO', () => {
+  const leftover0Fixture = path.join(
+    __dirname,
+    '..',
+    '..',
+    'ops',
+    'tge',
+    'fixtures',
+    'create-c-leftover-0.plan.json'
+  );
+  const grokbotPath = path.join(__dirname, '..', '..', 'ops', 'tge', 'LAUNCH-C-GROKBOT.md');
+
+  it('leftover=0 fixture makes assert-create-c.cjs fail', () => {
+    const fixture = JSON.parse(fs.readFileSync(leftover0Fixture, 'utf8'));
+    assert.equal(fixture.leftover, 0);
+    assert.throws(() => checkPlan(fixture), (err) => {
+      assert.ok(err instanceof AssertFail);
+      assert.match(err.message, /leftover==0/);
+      return true;
+    });
+
+    const r = spawnSync(process.execPath, [script, '--plan', leftover0Fixture, '--skip-image'], {
+      encoding: 'utf8',
+    });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /ASSERT_FAIL/);
+    assert.match(r.stderr, /leftover==0/);
+    assert.equal(r.stdout.includes('ASSERT_PASS'), false);
+  });
+
+  it('leftover-landed create GO text fails the scanner; NEVER lines pass', () => {
+    const hits = leftoverLandedCreateGoHits('- [ ] A782 ≈ **600M** leftover landed');
+    assert.ok(hits.length > 0);
+    const ok = leftoverLandedCreateGoHits('NEVER leftover landed in A782 at create');
+    assert.equal(ok.length, 0);
+    assert.doesNotThrow(() => scanPathCDocs());
+  });
+
+  it('reusing Path A or Path B mint as HELBREATH is refused', () => {
+    for (const mint of FORBIDDEN_MINTS) {
+      const bad = defaultPlan();
+      bad.mint = mint;
+      assert.throws(() => checkPlan(bad), /NEVER reuse/);
+    }
+  });
+
+  it('PASS prints vault ≈1B / A782=0 / leftover reserved in vault', () => {
+    const r = runAssert(defaultPlan());
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    for (const line of POST_CREATE_PRINT) {
+      assert.equal(r.stdout.includes(line), true, `missing ${line}`);
+    }
+  });
+
+  it('LAUNCH-C-GROKBOT.md exists and listing points at it', () => {
+    const grok = fs.readFileSync(grokbotPath, 'utf8');
+    assert.match(grok, /NEVER leftover=0/);
+    assert.match(grok, /NEVER leftover landed in A782 at create/);
+    assert.match(grok, /NEVER reuse A8fNV2 or 4Sk2 as HELBREATH/);
+    assert.match(grok, /MUST run assert-create-c.cjs PASS before any execute/);
+    const listing = fs.readFileSync(listingPath, 'utf8');
+    assert.match(listing, /LAUNCH-C-GROKBOT\.md/);
   });
 });

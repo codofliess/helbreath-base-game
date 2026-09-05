@@ -1,5 +1,6 @@
 # PATH C — Meteora DBC create checklist (HELBREATH — planned, not minted)
 
+Grokbot gate: [`LAUNCH-C-GROKBOT.md`](./LAUNCH-C-GROKBOT.md) — leftover=0 and “A782 already has 600M” are refused.  
 Extra=0 · tokens mínimos · **NO leftover=0** · **NO --execute in this PR**  
 Ticker **HELBREATH** · name **Chain Lords — Helbreath** (Helbreath ON this coin; Path B `$HELL` listing rule does not apply here)  
 Wallets lock (same as Path B): creator `65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q` · sender `BTvNgC6MYNmbfxqakyCda32pBWxM7SbJPZKvTYPo4jSh` · Squads A payer `2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy` · fee+leftover `A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g`  

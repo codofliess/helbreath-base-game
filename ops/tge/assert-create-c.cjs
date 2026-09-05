@@ -29,6 +29,28 @@ const A782 = 'A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g';
 const CREATOR = '65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q';
 const SENDER = 'BTvNgC6MYNmbfxqakyCda32pBWxM7SbJPZKvTYPo4jSh';
 const SQUADS_A = '2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy';
+const FORBIDDEN_MINTS = [
+  'A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ',
+  '4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq',
+];
+const POST_CREATE_PRINT = [
+  'POST_CREATE_MUST_PRINT vault ≈1B',
+  'POST_CREATE_MUST_PRINT A782=0',
+  'POST_CREATE_MUST_PRINT leftover reserved in vault',
+];
+const GROKBOT_MUST = [
+  'NEVER leftover=0',
+  'NEVER leftover landed in A782 at create',
+  'NEVER publish LIVE mint on landing/listing without RPC',
+  'NEVER reuse A8fNV2 or 4Sk2 as HELBREATH',
+  'NEVER remint ticker HELL',
+  'NEVER ExactOut',
+  'NEVER invent airdrop',
+  'NEVER buy 50% of supply',
+  'NEVER treat DexScreener MC=FDV as circulating',
+  'MUST run assert-create-c.cjs PASS before any execute',
+  'vault ≈1B, A782=0, leftover reserved in vault',
+];
 
 const DAY0_TRUTH =
   'A782 will be 0 HELBREATH until post-migrate withdrawLeftover. leftover stays in the DBC vault. No day-0 transfer instruction exists in Meteora DBC initialize/createPool.';
@@ -59,8 +81,12 @@ function defaultPlan() {
     imageUri:
       'https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@consolidacion/branding/hell-token/hell-token-logo-metaplex-1024.png',
     exactOut: false,
+    inventAirdrop: false,
+    buySupplyPct: 0,
+    dexscreenerMcIsCirculating: false,
     day0A782Balance: 0,
     leftoverTiming: 'vault-until-post-migrate-withdrawLeftover',
+    forbiddenMints: [...FORBIDDEN_MINTS],
     buckets: { ...BUCKETS },
     teamWallets: [],
   };
@@ -87,7 +113,12 @@ function checkPlan(plan, opts = {}) {
   const ticker = String(plan.ticker || plan.symbol || '');
 
   if (ticker !== TICKER) {
-    throw new AssertFail(`ticker/symbol must be ${TICKER}, got ${ticker || '(empty)'}`);
+    const hellRemint = ticker === 'HELL' || plan.symbol === 'HELL';
+    throw new AssertFail(
+      hellRemint
+        ? 'NEVER remint ticker HELL. ticker/symbol must be HELBREATH.'
+        : `ticker/symbol must be ${TICKER}, got ${ticker || '(empty)'}`
+    );
   }
   if (plan.symbol && plan.symbol !== TICKER) {
     throw new AssertFail(`symbol must be ${TICKER}, got ${plan.symbol}`);
@@ -95,9 +126,15 @@ function checkPlan(plan, opts = {}) {
   if (plan.name && plan.name !== NAME) {
     throw new AssertFail(`name must be ${NAME}, got ${plan.name}`);
   }
-  if (plan.mint) {
+  const mint = plan.mint || plan.baseMint || null;
+  if (mint && FORBIDDEN_MINTS.includes(String(mint))) {
     throw new AssertFail(
-      `Path C has no mint yet. Do not put a placeholder mint in the plan (got ${plan.mint}).`
+      `NEVER reuse ${mint} as HELBREATH (A8fNV2 Path A / 4Sk2 Path B $HELL)`
+    );
+  }
+  if (mint) {
+    throw new AssertFail(
+      `Path C has no mint yet. Do not put a placeholder mint in the plan (got ${mint}).`
     );
   }
 
@@ -120,7 +157,16 @@ function checkPlan(plan, opts = {}) {
   if (plan.poolCreator !== CREATOR) throw new AssertFail(`poolCreator must be ${CREATOR}`);
   if (plan.payer !== SQUADS_A) throw new AssertFail(`payer must be ${SQUADS_A}`);
   if (plan.sender && plan.sender !== SENDER) throw new AssertFail(`sender must be ${SENDER}`);
-  if (plan.exactOut) throw new AssertFail('ExactOut is forbidden on Path C');
+  if (plan.exactOut) throw new AssertFail('NEVER ExactOut — ExactOut is forbidden on Path C');
+  if (plan.inventAirdrop || plan.airdropNow) {
+    throw new AssertFail('NEVER invent airdrop');
+  }
+  if (Number(plan.buySupplyPct) === 50 || Number(plan.buyPercent) === 50) {
+    throw new AssertFail('NEVER buy 50% of supply');
+  }
+  if (plan.dexscreenerMcIsCirculating) {
+    throw new AssertFail('NEVER treat DexScreener MC=FDV as circulating');
+  }
 
   const b = plan.buckets || {};
   for (const [k, v] of Object.entries(BUCKETS)) {
@@ -153,8 +199,60 @@ function checkPlan(plan, opts = {}) {
     day0TransferInstruction: null,
     leftoverTiming: 'vault-until-post-migrate-withdrawLeftover',
     day0Truth: DAY0_TRUTH,
+    postCreateMustPrint: POST_CREATE_PRINT,
     executeRefusedIfLeftover0: execute ? 'execute-flag-seen-but-leftover-ok' : 'dry-run',
   };
+}
+
+const LANDED_CLAIM =
+  /leftover landed|600M already in A782|A782 already has 600M|A782 ≈ \*\*600M\*\*|A782 ≈ 600M leftover landed/i;
+const LANDED_PROHIBITION =
+  /NEVER|do not|don't|DO NOT|forbid|FORBIDDEN|refuse|not landed|is \*\*not\*\* landed|Do not write|do \*\*not\*\*|NOT landed|Forbidden checkbox|do \*\*not\*\* write|create GO|idiot move/i;
+
+function leftoverLandedCreateGoHits(text) {
+  const hits = [];
+  const lines = String(text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!LANDED_CLAIM.test(line)) continue;
+    if (LANDED_PROHIBITION.test(line)) continue;
+    hits.push({ line: i + 1, text: line });
+  }
+  return hits;
+}
+
+function pathCDocFiles() {
+  return [
+    path.join(DIR, 'LAUNCH-C-GROKBOT.md'),
+    path.join(DIR, 'CREATE-C-CHECKLIST.md'),
+    path.join(DIR, 'create-c.plan.json'),
+  ];
+}
+
+function scanPathCDocs(extraFiles = []) {
+  const launch = path.join(DIR, 'LAUNCH-C-GROKBOT.md');
+  if (!fs.existsSync(launch)) {
+    throw new AssertFail('LAUNCH-C-GROKBOT.md missing — grokbot gate required');
+  }
+  const launchText = fs.readFileSync(launch, 'utf8');
+  for (const phrase of GROKBOT_MUST) {
+    if (!launchText.includes(phrase)) {
+      throw new AssertFail(`LAUNCH-C-GROKBOT.md missing kill-switch: ${phrase}`);
+    }
+  }
+
+  const files = [...pathCDocFiles(), ...extraFiles];
+  for (const file of files) {
+    if (!fs.existsSync(file)) {
+      throw new AssertFail(`Path C doc missing: ${file}`);
+    }
+    const hits = leftoverLandedCreateGoHits(fs.readFileSync(file, 'utf8'));
+    if (hits.length) {
+      throw new AssertFail(
+        `leftover landed as a create GO in ${path.basename(file)}:${hits[0].line} — ${hits[0].text.trim()}`
+      );
+    }
+  }
 }
 
 function headContentType(url) {
@@ -181,6 +279,7 @@ async function main(argv = process.argv.slice(2)) {
   let result;
   try {
     result = checkPlan(plan, { execute });
+    scanPathCDocs();
   } catch (e) {
     if (e instanceof AssertFail) {
       console.error('ASSERT_FAIL', e.message);
@@ -223,6 +322,9 @@ async function main(argv = process.argv.slice(2)) {
     console.log('ASSERT_OK', `imageUri ${status} ${type}`);
   }
 
+  for (const line of POST_CREATE_PRINT) {
+    console.log(line);
+  }
   console.log(JSON.stringify(result, null, 2));
   console.log('ASSERT_PASS ready for create dry-run. leftover==0 refuses --execute. A782=0 at create.');
 }
@@ -234,9 +336,14 @@ module.exports = {
   NAME,
   LEFTOVER,
   DAY0_TRUTH,
+  FORBIDDEN_MINTS,
+  POST_CREATE_PRINT,
+  GROKBOT_MUST,
   defaultPlan,
   loadPlan,
   checkPlan,
+  leftoverLandedCreateGoHits,
+  scanPathCDocs,
   planPathFromArgv,
   main,
 };

@@ -164,6 +164,8 @@ export interface PrepareMapOptions {
     /** Player spawn cell; stream packs around this instead of every index on the .amd. */
     focusTileX?: number;
     focusTileY?: number;
+    /** Called after each tile pack so map-setup watchdog can tell decode is still alive. */
+    onProgress?: () => void;
 }
 
 /**
@@ -174,11 +176,13 @@ export async function loadTileSpritePacksForMapRect(
     scene: Scene,
     hbMap: HBMap,
     rect: MapTileRect,
+    onProgress?: () => void,
 ): Promise<number> {
     const indices = collectRequiredTileIndices(hbMap, rect);
     const tileAssets = resolveTileSpriteAssets(indices);
     for (const asset of tileAssets) {
         await ensureTileSpriteSheets(scene, asset, indices);
+        onProgress?.();
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
     return tileAssets.length;
@@ -239,7 +243,8 @@ export async function prepareMapForGameWorld(
     const focusX = options?.focusTileX != null && options.focusTileX >= 0 ? options.focusTileX : 0;
     const focusY = options?.focusTileY != null && options.focusTileY >= 0 ? options.focusTileY : 0;
     const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
-    const packCount = await loadTileSpritePacksForMapRect(scene, map, rect);
+    options?.onProgress?.();
+    const packCount = await loadTileSpritePacksForMapRect(scene, map, rect, options?.onProgress);
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;

@@ -124,6 +124,10 @@ export class NPC extends GameObject {
         return this.npcId;
     }
 
+    public getSpriteName(): string {
+        return this.assets[0]?.getSpriteName() ?? '';
+    }
+
     public getCatalogNpcId(): number {
         return this.catalogNpcId;
     }

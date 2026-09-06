@@ -17,6 +17,11 @@ const soundLoadPromises = new Map<string, Promise<void>>();
 const musicLoadPromises = new Map<string, Promise<void>>();
 const failedAudioKeys = new Set<string>();
 
+export interface LoadSpriteOnDemandOptions {
+    /** Decode only these local sheet indexes. Omit to decode the whole `.spr`. */
+    sheetIndices?: ReadonlySet<number>;
+}
+
 /**
  * Runs sprite decode/register work one-at-a-time. Parallel `HBSpriteFile.load`
  * of item/effect/tile packs is a known Chrome Aw Snap 9 (OOM) spike on live enter.
@@ -35,41 +40,116 @@ export function areSpriteSheetLoaded(scene: Scene, assetKey: string): boolean {
     return scene.textures.exists(`${assetKey}-0`);
 }
 
-/** Fetches and registers one `.spr` (shared promise per asset key; decode is serialized). */
-export function loadSpriteAssetOnDemand(scene: Scene, asset: AssetData): Promise<void> {
+/** True when every requested local sheet exists as `assetKey-{n}`. */
+export function areSpriteSheetsLoaded(
+    scene: Scene,
+    assetKey: string,
+    sheetIndices?: ReadonlySet<number>,
+): boolean {
+    if (!sheetIndices || sheetIndices.size === 0) {
+        return areSpriteSheetLoaded(scene, assetKey);
+    }
+    for (const index of sheetIndices) {
+        if (!scene.textures.exists(`${assetKey}-${index}`)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function listSceneTextureKeys(scene: Scene): string[] {
+    const textures = scene.textures as {
+        getTextureKeys?: () => string[];
+        list?: Record<string, unknown>;
+    };
+    if (typeof textures.getTextureKeys === 'function') {
+        return textures.getTextureKeys();
+    }
+    return Object.keys(textures.list ?? {});
+}
+
+/**
+ * Drops Canvas textures + Phaser animations for one sprite cache key outside the keep-set.
+ */
+export function evictSpriteSheetTextures(
+    scene: Scene,
+    assetKey: string,
+    keepLocalSheets: ReadonlySet<number>,
+): number {
+    const prefix = `${assetKey}-`;
+    let removed = 0;
+    for (const key of listSceneTextureKeys(scene)) {
+        if (!key.startsWith(prefix) || !/^\d+$/.test(key.slice(prefix.length))) {
+            continue;
+        }
+        const local = Number(key.slice(prefix.length));
+        if (keepLocalSheets.has(local)) {
+            continue;
+        }
+        try {
+            if (scene.textures.exists(key)) {
+                scene.textures.remove(key);
+            }
+            if (scene.anims.exists(key)) {
+                scene.anims.remove(key);
+            }
+            scene.registry.remove(`pivots-${key}`);
+            removed += 1;
+        } catch (error) {
+            console.warn(`[SpriteHttpLoader] Failed to evict ${key}`, error);
+        }
+    }
+    return removed;
+}
+
+/**
+ * Fetches and registers one `.spr` (shared promise per asset+sheets; decode is serialized).
+ * Never dumps every frame as a PNG data URL — that OOMs the live Canvas hub / pad enter.
+ */
+export function loadSpriteAssetOnDemand(
+    scene: Scene,
+    asset: AssetData,
+    options?: LoadSpriteOnDemandOptions,
+): Promise<void> {
     if (asset.assetType !== AssetType.SPRITE) {
         return Promise.resolve();
     }
-    if (areSpriteSheetLoaded(scene, asset.key)) {
+    const sheetIndices = options?.sheetIndices;
+    if (areSpriteSheetsLoaded(scene, asset.key, sheetIndices)) {
         return Promise.resolve();
     }
-    const existing = spriteLoadPromises.get(asset.key);
+    const promiseKey = sheetIndices
+        ? `${asset.key}:${[...sheetIndices].sort((a, b) => a - b).join(',')}`
+        : `${asset.key}:all`;
+    const existing = spriteLoadPromises.get(promiseKey);
     if (existing) {
         return existing;
     }
 
     const promise = enqueueSpriteDecode(async () => {
-        if (areSpriteSheetLoaded(scene, asset.key)) {
+        if (areSpriteSheetsLoaded(scene, asset.key, sheetIndices)) {
             return;
         }
         if (!asset.spriteType) {
             throw new Error(`Sprite asset ${asset.key} is missing spriteType`);
         }
-        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
-        scene.cache.binary.add(asset.key, arrayBuffer);
+        if (!scene.cache.binary.exists(asset.key)) {
+            const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+            scene.cache.binary.add(asset.key, arrayBuffer);
+        }
         const hbFile = new HBSpriteFile(
             asset.key,
             asset.spriteType,
-            asset.exportFramesAsDataUrls === true,
+            false,
             asset.tileStartIndex,
         );
-        await hbFile.load(scene);
+        await hbFile.load(scene, sheetIndices ? { sheetIndices } : undefined);
     }).catch((error) => {
-        spriteLoadPromises.delete(asset.key);
+        spriteLoadPromises.delete(promiseKey);
         throw error;
     });
 
-    spriteLoadPromises.set(asset.key, promise);
+    spriteLoadPromises.set(promiseKey, promise);
     return promise;
 }
 

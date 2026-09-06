@@ -4,7 +4,7 @@ import { LOAD_ITEM_ICON_ASSETS_ON_DEMAND } from '../Config';
 import { AssetType, type AssetData } from '../constants/Assets';
 import { HBSpriteFile, SpriteType } from '../game/assets/HBSprite';
 import { setItemPackEmittedTintKeys, setItemPackSpriteSheets } from './RegistryUtils';
-import { areSpriteSheetLoaded, enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
+import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
 
 const ITEM_PACK: AssetData = {
     key: 'sprite-item-pack',
@@ -22,58 +22,108 @@ const ITEM_GROUND: AssetData = {
     exportFramesAsDataUrls: false,
 };
 
-let itemIconLoadPromise: Promise<void> | undefined;
+const itemIconLoadPromises = new Map<string, Promise<void>>();
 
 /** True when bag/ground item sheets wait until bag open or a pile is in view. */
 export function shouldLoadItemIconAssetsOnDemand(): boolean {
     return LOAD_ITEM_ICON_ASSETS_ON_DEMAND;
 }
 
+export function areItemIconSheetsLoaded(
+    scene: Scene,
+    packSheets?: ReadonlySet<number>,
+    groundSheets?: ReadonlySet<number>,
+): boolean {
+    if (packSheets) {
+        for (const sheet of packSheets) {
+            if (!scene.textures.exists(`${ITEM_PACK.key}-${sheet}`)) {
+                return false;
+            }
+        }
+    }
+    if (groundSheets) {
+        for (const sheet of groundSheets) {
+            if (!scene.textures.exists(`${ITEM_GROUND.key}-${sheet}`)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/** Legacy: both packs have sheet 0. Prefer {@link areItemIconSheetsLoaded} for pad/bag filters. */
 export function areItemIconAssetsLoaded(scene: Scene): boolean {
-    return areSpriteSheetLoaded(scene, ITEM_PACK.key) && areSpriteSheetLoaded(scene, ITEM_GROUND.key);
+    return scene.textures.exists(`${ITEM_PACK.key}-0`) && scene.textures.exists(`${ITEM_GROUND.key}-0`);
+}
+
+export interface LoadItemIconOptions {
+    packSheets?: ReadonlySet<number>;
+    groundSheets?: ReadonlySet<number>;
 }
 
 /**
- * Registers item-pack + item-ground without dumping every frame as a PNG data URL.
- * React bag icons extract frames on demand from Phaser textures.
+ * Registers only the item-pack / item-ground sheets needed for visible piles or bag items.
+ * Does not dump every frame as a PNG data URL.
  */
-export function loadItemIconAssetsOnDemand(scene: Scene): Promise<void> {
-    if (!LOAD_ITEM_ICON_ASSETS_ON_DEMAND || areItemIconAssetsLoaded(scene)) {
+export function loadItemIconAssetsOnDemand(scene: Scene, options?: LoadItemIconOptions): Promise<void> {
+    if (!LOAD_ITEM_ICON_ASSETS_ON_DEMAND) {
         return Promise.resolve();
     }
-    if (itemIconLoadPromise) {
-        return itemIconLoadPromise;
+    const packSheets = options?.packSheets;
+    const groundSheets = options?.groundSheets;
+    if (areItemIconSheetsLoaded(scene, packSheets, groundSheets)) {
+        return Promise.resolve();
+    }
+    const promiseKey = `p:${packSheets ? [...packSheets].sort((a, b) => a - b).join(',') : 'none'}|g:${groundSheets ? [...groundSheets].sort((a, b) => a - b).join(',') : 'none'}`;
+    const existing = itemIconLoadPromises.get(promiseKey);
+    if (existing) {
+        return existing;
     }
 
-    itemIconLoadPromise = (async () => {
-        await loadItemIconSprite(scene, ITEM_PACK, true);
-        await loadItemIconSprite(scene, ITEM_GROUND, false);
-        console.log('[ItemIconLoader] item-pack and item-ground registered (no full data-URL dump)');
+    const promise = (async () => {
+        if (packSheets && packSheets.size > 0) {
+            await loadItemIconSprite(scene, ITEM_PACK, true, packSheets);
+        }
+        if (groundSheets && groundSheets.size > 0) {
+            await loadItemIconSprite(scene, ITEM_GROUND, false, groundSheets);
+        }
+        console.log('[ItemIconLoader] item-pack/item-ground sheets registered (filtered, no data-URL dump)');
     })().catch((error) => {
-        itemIconLoadPromise = undefined;
+        itemIconLoadPromises.delete(promiseKey);
         throw error;
     });
 
-    return itemIconLoadPromise;
+    itemIconLoadPromises.set(promiseKey, promise);
+    return promise;
 }
 
-async function loadItemIconSprite(scene: Scene, asset: AssetData, capturePackSheets: boolean): Promise<void> {
-    if (areSpriteSheetLoaded(scene, asset.key)) {
-        return;
-    }
+async function loadItemIconSprite(
+    scene: Scene,
+    asset: AssetData,
+    capturePackSheets: boolean,
+    sheetIndices: ReadonlySet<number>,
+): Promise<void> {
     if (!asset.spriteType) {
         throw new Error(`Item icon asset ${asset.key} is missing spriteType`);
     }
     const spriteType = asset.spriteType;
 
     await enqueueSpriteDecode(async () => {
-        if (areSpriteSheetLoaded(scene, asset.key)) {
+        const missing: number[] = [];
+        for (const sheet of sheetIndices) {
+            if (!scene.textures.exists(`${asset.key}-${sheet}`)) {
+                missing.push(sheet);
+            }
+        }
+        if (missing.length === 0) {
             return;
         }
-        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
-        scene.cache.binary.add(asset.key, arrayBuffer);
+        if (!scene.cache.binary.exists(asset.key)) {
+            const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+            scene.cache.binary.add(asset.key, arrayBuffer);
+        }
         const hbFile = new HBSpriteFile(asset.key, spriteType, false, asset.tileStartIndex);
-        await hbFile.load(scene);
+        await hbFile.load(scene, { sheetIndices: new Set(missing) });
         if (capturePackSheets) {
             setItemPackSpriteSheets(scene.game, hbFile.spriteSheets);
             setItemPackEmittedTintKeys(scene.game, new Set<string>());

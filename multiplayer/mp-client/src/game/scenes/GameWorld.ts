@@ -40,6 +40,7 @@ import {
     setSoundManager,
     takePendingPlayerItemAppearancePrefetch,
     getMapIfPresent,
+    getGroundItemDisplaySize,
 } from '../../utils/RegistryUtils';
 import type { InitialGameWorldState } from '../../utils/RegistryUtils';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
@@ -50,10 +51,12 @@ import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
-import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
-import { areNpcSpriteLoaded, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
+import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
+import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
 import { getMonsterData } from '../../constants/Monsters';
+import { getItemById, getItemSheetIndex } from '../../constants/Items';
+import { GROUND_ITEM_DISPLAY_CONFIG } from '../../constants/GroundItemDisplay';
 
 import { getSpriteForCatalogNpcId } from '../../constants/NPCs';
 import { extractMonsterMinimapThumbDataUrl } from '../../utils/SpriteUtils';
@@ -325,9 +328,11 @@ import { drawEffect, type DrawEffectOptions } from '../../utils/EffectUtils';
 import { GroundEffectType, MonsterEntityState } from '../../proto/generated/network';
 import {
     areMonsterAssetsLoaded,
+    evictMonsterSpriteSheets,
     loadMonsterAssetsOnDemand,
     shouldLoadMonsterAssetsOnDemand,
 } from '../../utils/MonsterAssets';
+import { idleEntitySheetIndices } from '../../utils/entitySheetFilter';
 
 /**
  * Main game scene. Manages player, monsters, NPCs, ground items, map, camera, input,
@@ -375,6 +380,15 @@ export class GameWorld extends Scene {
     private playMapMusic = true;
     /** Whether the map is currently loading */
     private loadingMap = true;
+    /** Last progress timestamp for map tile decode (watchdog). */
+    private lastMapSetupProgressAt = 0;
+    /** True while `prepareMapForGameWorld` is awaiting tile packs. */
+    private mapPrepareInFlight = false;
+    /** Soft watchdog: overlay timeout must not abort decode or open entity spr burst. */
+    private mapSetupWatchdog: Phaser.Time.TimerEvent | undefined = undefined;
+    /** Entity `.spr` decode stays closed until tiles/player exist and a short GC gap elapsed. */
+    private worldReadyForEntities = false;
+    private mapSetupRetryCount = 0;
     /** Cast manager - handles server AoE spell visuals */
     private castManager: CastManager | undefined = undefined;
     /** Olympia local cast manager - utility spells + client-side VFX */
@@ -484,6 +498,10 @@ export class GameWorld extends Scene {
             // Reset initialization state
             this.initializationStarted = false;
             this.loadingMap = true;
+            this.worldReadyForEntities = false;
+            this.mapPrepareInFlight = false;
+            this.mapSetupRetryCount = 0;
+            this.clearMapSetupWatchdog();
 
             this.loadingOverlayController = new LoadingOverlayController(this);
 
@@ -2348,6 +2366,7 @@ export class GameWorld extends Scene {
             );
             this.pendingLoadedMap = undefined;
             this.loadingMap = true;
+            this.worldReadyForEntities = false;
             void this.runDeferredMapLoad();
             return;
         }
@@ -2359,12 +2378,6 @@ export class GameWorld extends Scene {
             if (this.gameWorldId) {
                 EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
             }
-            this.startDeferredAppearancePrefetch();
-            this.time.delayedCall(2500, () => {
-                void loadWorldDeferredSprites(this).catch((error) => {
-                    console.warn('[GameWorld] Deferred HUD/placeholder sprites failed', error);
-                });
-            });
         } catch (error) {
             // Log full stack — "Map setup failed" without cause hid real bugs (player gear, camera, etc.).
             console.error('[GameWorld] setupMap failed:', error);
@@ -2416,15 +2429,12 @@ export class GameWorld extends Scene {
 
         // Map has been fully loaded
         this.loadingMap = false;
+        this.clearMapSetupWatchdog();
         MapWarpSystem.getInstance().beginPostLoadGrace();
         // Never leave warp/water debug overlays on after map load (yellow/blue boxes hide the world).
         map.disableTeleportCellsHighlight();
         map.disableServerTeleportCellsHighlight();
         map.disableWaterCellsHighlight();
-        this.syncMonstersFromNetworkState();
-        this.syncNpcsFromNetworkState();
-        this.syncGroundStatesFromNetworkState();
-        this.syncOtherPlayersFromNetworkState();
         this.tryPushWorldTeleportCellsToCurrentMap();
         // Re-stream around the live player cell (Elvine plaza 149,131). First paint can
         // otherwise sit on 0,0 while the camera is already on the city hall.
@@ -2432,6 +2442,23 @@ export class GameWorld extends Scene {
             this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
             void this.mapManager?.syncStreamedView();
         }
+        // Entity/HUD/appearance decode is the pad-standstill OOM: wait for tile GC before
+        // slime/NPC idle sheets, and do not unpack gamedialog2 dialog packs on enter.
+        this.time.delayedCall(700, () => {
+            this.worldReadyForEntities = true;
+            this.syncMonstersFromNetworkState();
+            this.syncNpcsFromNetworkState();
+            this.syncGroundStatesFromNetworkState();
+            this.syncOtherPlayersFromNetworkState();
+        });
+        this.time.delayedCall(4000, () => {
+            this.startDeferredAppearancePrefetch();
+        });
+        this.time.delayedCall(8000, () => {
+            void loadWorldDeferredSprites(this).catch((error) => {
+                console.warn('[GameWorld] Deferred HUD sprites failed', error);
+            });
+        });
         // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
         // froze the browser (felt like "everything broke"). Pit markers still show as
         // letter labels; thumbs only when a live monster of that type enters view.
@@ -2584,7 +2611,7 @@ export class GameWorld extends Scene {
         }
         // NetworkManager already cleared in-view caches on IGWS and emits leave events;
         // rebuild remotes/ground/NPC/monsters from whatever has been re-filled so far.
-        if (!this.loadingMap && this.mapManager) {
+        if (!this.loadingMap && this.worldReadyForEntities && this.mapManager) {
             this.syncMonstersFromNetworkState();
             this.syncNpcsFromNetworkState();
             this.syncGroundStatesFromNetworkState();
@@ -2773,6 +2800,56 @@ export class GameWorld extends Scene {
         });
     }
 
+    private noteMapSetupProgress(): void {
+        this.lastMapSetupProgressAt = this.time.now;
+    }
+
+    private clearMapSetupWatchdog(): void {
+        this.mapSetupWatchdog?.remove(false);
+        this.mapSetupWatchdog = undefined;
+    }
+
+    private armMapSetupWatchdog(): void {
+        this.clearMapSetupWatchdog();
+        this.mapSetupWatchdog = this.time.addEvent({
+            delay: 5000,
+            loop: true,
+            callback: () => this.tickMapSetupWatchdog(),
+        });
+    }
+
+    /**
+     * Overlay fail-soft: never abort in-flight tile decode or flip loadingMap while
+     * prepare is still progressing (that used to spawn entity `.spr` bursts → Aw Snap).
+     */
+    private tickMapSetupWatchdog(): void {
+        if (!this.loadingMap) {
+            this.clearMapSetupWatchdog();
+            return;
+        }
+        const stalledMs = this.time.now - this.lastMapSetupProgressAt;
+        if (this.mapPrepareInFlight && stalledMs < 45_000) {
+            return;
+        }
+        if (stalledMs < 25_000) {
+            return;
+        }
+        console.warn(
+            `[GameWorld] Map setup watchdog (${Math.round(stalledMs)}ms since progress, prepare=${this.mapPrepareInFlight}) — clearing overlay only`,
+        );
+        this.loadingOverlayController?.destroyImmediate();
+        EventBus.emit(TOAST_REQUESTED, {
+            message: 'Map setup is slow. The world will keep loading — do not refresh unless it stays blank.',
+            severity: 'warning',
+            autoClose: 6000,
+        });
+        if (!this.mapPrepareInFlight && this.mapSetupRetryCount < 2) {
+            this.mapSetupRetryCount += 1;
+            this.noteMapSetupProgress();
+            void this.runDeferredMapLoad();
+        }
+    }
+
     private handleOverlayUpdate(): void {
         this.loadingOverlayController?.bringToTop();
         this.loadingOverlayController?.tickRemovalCountdown();
@@ -2781,29 +2858,26 @@ export class GameWorld extends Scene {
     private drawLoadingOverlay(callback: () => void): void {
         this.initializationStarted = true;
         this.loadingOverlayController!.drawAndDeferLoad(callback);
-        // Hard failsafe: never stay black with "Loading map..." forever (minimap/WebGL hang).
-        this.time.delayedCall(20000, () => {
-            if (this.loadingMap) {
-                console.warn('[GameWorld] Loading map timeout (20s) — forcing overlay clear.');
-                this.forceClearLoadingOverlay(
-                    'Map load timed out. If the world is blank, press F5 and re-enter.',
-                );
-            }
-        });
+        this.noteMapSetupProgress();
+        this.armMapSetupWatchdog();
     }
 
     /**
      * When map assets load on demand, fetches the current `.amd` and tile packs before the normal minimap path.
      */
     private async runDeferredMapLoad(): Promise<void> {
+        this.mapPrepareInFlight = true;
+        this.noteMapSetupProgress();
         try {
             if (shouldLoadMapAssetsOnDemand()) {
                 await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName(), {
                     focusTileX: this.initialGameWorldState?.playerX,
                     focusTileY: this.initialGameWorldState?.playerY,
+                    onProgress: () => this.noteMapSetupProgress(),
                 });
             }
 
+            this.noteMapSetupProgress();
             runSafeSync('GameWorld:deferredMapLoad', () => {
                 this.displayedMap = this.mapManager!.getCurrentMap();
                 this.mapManager!.startMinimapCapture((map) => {
@@ -2825,9 +2899,19 @@ export class GameWorld extends Scene {
             });
         } catch (error) {
             console.error('[GameWorld] Map on-demand load failed:', error);
+            if (this.mapSetupRetryCount < 2) {
+                this.mapSetupRetryCount += 1;
+                this.noteMapSetupProgress();
+                console.warn(`[GameWorld] Retrying map prepare (${this.mapSetupRetryCount})`);
+                this.mapPrepareInFlight = false;
+                void this.runDeferredMapLoad();
+                return;
+            }
             this.forceClearLoadingOverlay(
                 'Could not load map assets. Refresh (F5) or re-enter character.',
             );
+        } finally {
+            this.mapPrepareInFlight = false;
         }
     }
 
@@ -2837,6 +2921,7 @@ export class GameWorld extends Scene {
         this.awaitingTransferredWorldState = false;
         this.pendingPredictedWorldTransfer = false;
         this.clearWorldTransferWatchdog();
+        this.clearMapSetupWatchdog();
         this.loadingOverlayController?.destroyImmediate();
         if (message) {
             EventBus.emit(TOAST_REQUESTED, {
@@ -3175,6 +3260,9 @@ export class GameWorld extends Scene {
     }
 
     private handleNpcEnteredRange(entry: NpcEnteredRangeEventData): void {
+        if (this.loadingMap || !this.worldReadyForEntities) {
+            return;
+        }
         if (this.npcs.some((n) => n.getNPCId() === entry.npcId)) {
             return;
         }
@@ -3459,14 +3547,22 @@ export class GameWorld extends Scene {
     }
 
     private handleNpcsLeftRange(npcIds: string[]): void {
+        const leavingNames = new Set<string>();
         for (const id of npcIds) {
             const idx = this.npcs.findIndex((n) => n.getNPCId() === id);
             if (idx === -1) {
                 continue;
             }
             const npc = this.npcs[idx];
+            leavingNames.add(npc.getSpriteName());
             npc.destroy();
             this.npcs.splice(idx, 1);
+        }
+        for (const spriteName of leavingNames) {
+            if (!spriteName || this.npcs.some((n) => n.getSpriteName() === spriteName)) {
+                continue;
+            }
+            evictNpcSpriteSheets(this, spriteName);
         }
     }
 
@@ -3476,6 +3572,9 @@ export class GameWorld extends Scene {
             this.emitMonsterMinimapThumb(data.sprite);
         }
         if (this.monsters.some((m) => m.getMonsterId() === data.monsterId)) {
+            return;
+        }
+        if (this.loadingMap || !this.worldReadyForEntities) {
             return;
         }
         if (!this.mapManager || !this.displayedMap || !this.soundManager) {
@@ -3765,12 +3864,14 @@ export class GameWorld extends Scene {
     }
 
     private handleMonstersLeftRange(monsterIds: string[]): void {
+        const leavingNames = new Set<string>();
         for (const monsterId of monsterIds) {
             const monsterIndex = this.monsters.findIndex((m) => m.getMonsterId() === monsterId);
             if (monsterIndex === -1) {
                 continue;
             }
             const monster = this.monsters[monsterIndex];
+            leavingNames.add(monster.getMonsterSpriteName());
             if (this.player && this.player.getAttackTarget() === monster) {
                 this.player.clearAttackTarget();
             }
@@ -3780,6 +3881,23 @@ export class GameWorld extends Scene {
                 monster.destroy();
                 this.monsters.splice(monsterIndex, 1);
             }
+        }
+        for (const spriteName of leavingNames) {
+            if (!spriteName) {
+                continue;
+            }
+            const stillInView = this.monsters.filter((m) => m.getMonsterSpriteName() === spriteName);
+            if (stillInView.length === 0) {
+                evictMonsterSpriteSheets(this, spriteName, new Set());
+                continue;
+            }
+            const keep = new Set<number>(idleEntitySheetIndices());
+            for (const m of stillInView) {
+                for (const sheet of m.getKeepSheetIndices()) {
+                    keep.add(sheet);
+                }
+            }
+            evictMonsterSpriteSheets(this, spriteName, keep);
         }
     }
 
@@ -3831,8 +3949,20 @@ export class GameWorld extends Scene {
         itemAttribute?: number,
         itemColor?: number,
     ): void {
-        if (shouldLoadItemIconAssetsOnDemand() && !areItemIconAssetsLoaded(this)) {
-            void loadItemIconAssetsOnDemand(this)
+        const playerGender = playerDialogStore.state.gender;
+        const itemDef = getItemById(itemId);
+        const sheetIndex = itemDef ? getItemSheetIndex(itemDef, playerGender) : undefined;
+        const displayPrefix = GROUND_ITEM_DISPLAY_CONFIG[getGroundItemDisplaySize(this)].spritePrefix;
+        const packSheets =
+            displayPrefix === 'item-pack' && sheetIndex !== undefined ? new Set([sheetIndex]) : undefined;
+        const groundSheets =
+            displayPrefix === 'item-ground' && sheetIndex !== undefined ? new Set([sheetIndex]) : undefined;
+        if (
+            shouldLoadItemIconAssetsOnDemand() &&
+            sheetIndex !== undefined &&
+            !areItemIconSheetsLoaded(this, packSheets, groundSheets)
+        ) {
+            void loadItemIconAssetsOnDemand(this, { packSheets, groundSheets })
                 .then(() => {
                     this.upsertGroundItemVisual(
                         worldX,
@@ -3854,8 +3984,6 @@ export class GameWorld extends Scene {
             return;
         }
         this.removeGroundItemVisualAtCell(worldX, worldY);
-
-        const playerGender = playerDialogStore.state.gender;
         try {
             const groundItem = new GroundItem(
                 this,
@@ -4903,6 +5031,8 @@ export class GameWorld extends Scene {
 
             this.initializationStarted = false;
             this.loadingMap = true;
+            this.worldReadyForEntities = false;
+            this.clearMapSetupWatchdog();
             this.clearPendingWorldTransfer('shutdown');
             this.initialGameWorldState = undefined;
             this.pendingLoadedMap = undefined;

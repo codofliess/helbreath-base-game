@@ -122,7 +122,7 @@ export function drawEffectAtPixelCoords(
         return undefined;
     }
 
-    if (shouldLoadEffectAssetsOnDemand() && !areEffectSpriteLoaded(scene, config.sprite)) {
+    if (shouldLoadEffectAssetsOnDemand() && !areEffectSpriteLoaded(scene, config.sprite, config.spriteSheetIndex)) {
         void loadEffectAssetsOnDemand(scene, config).catch((error) => {
             console.warn(`[EffectUtils] Failed to lazy-load effect sprite '${config.sprite}'`, error);
         });

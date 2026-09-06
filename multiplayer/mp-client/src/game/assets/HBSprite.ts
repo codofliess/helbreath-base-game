@@ -1,8 +1,8 @@
 import { CANVAS, type Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import type { PivotFrame, PivotData } from '../../Types';
+import type { PivotData } from '../../Types';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../../constants/EventNames';
-import { getBinaryBuffer, setPivotDataByTextureKey, setPivotDataBySpriteName } from '../../utils/RegistryUtils';
+import { getBinaryBuffer, setPivotDataByTextureKey, mergePivotSheetBySpriteCacheKey } from '../../utils/RegistryUtils';
 import { sliceSprSheets } from '../../utils/sprSheetSlice';
 import { ITEMS, getItemSheetIndex, getItemSpriteIndex, getTintInventoryEffectColor } from '../../constants/Items';
 import { Gender } from '../../Types';
@@ -107,7 +107,7 @@ export class HBSpriteSheet {
     private readonly spriteName: string;
     
     /** The index of this sprite sheet within the sprite file */
-    private readonly spriteSheetIndex: number;
+    public readonly spriteSheetIndex: number;
     
     /** The canvas element used to create the texture (undefined after texture creation) */
     private canvas: HTMLCanvasElement | undefined = undefined;
@@ -498,7 +498,7 @@ export class HBSpriteFile {
      * 
      * @param scene - The Phaser scene with access to the binary cache
      * @throws Error if the sprite buffer is not found in cache
-     * @param options.sheetIndices Local sheet indexes to decode (tile packs). Omit to decode every sheet.
+     * @param options.sheetIndices Local sheet indexes to decode. Omit to decode every sheet.
      */
     public async load(scene: Scene, options?: { sheetIndices?: ReadonlySet<number> }): Promise<void> {
         // Load binary from cache using fileName
@@ -562,64 +562,46 @@ export class HBSpriteFile {
         // Populate spriteSheets
         this.spriteSheets = spriteSheets;
 
-        // Build pivot data structure and register it globally
-        const spriteSheetPivots: PivotFrame[][] = [];
-        for (let spriteSheetIndex = 0; spriteSheetIndex < spriteSheets.length; spriteSheetIndex++) {
-            const spriteSheet = spriteSheets[spriteSheetIndex];
+        for (const spriteSheet of spriteSheets) {
             const framePivots = spriteSheet.frames.map((frame) => ({
                 pivotX: frame.pivotX,
                 pivotY: frame.pivotY,
                 width: frame.width,
                 height: frame.height
             }));
-            spriteSheetPivots.push(framePivots);
-            
-            // For tiles, also register pivots using the textureKey for tile-based lookup
-            // This allows GameAsset to look up pivots using the textureKey (e.g., map-tile-123)
+
             if (this.spriteType === SpriteType.Tiles) {
-                const textureKey = spriteSheet.textureKey;
-                const texturePivotData: PivotData = { 
-                    spriteSheetPivots: [framePivots] // Single sprite sheet for this texture
+                const texturePivotData: PivotData = {
+                    spriteSheetPivots: [framePivots]
                 };
-                setPivotDataByTextureKey(scene, textureKey, texturePivotData);
+                setPivotDataByTextureKey(scene, spriteSheet.textureKey, texturePivotData);
+            } else {
+                mergePivotSheetBySpriteCacheKey(scene, spriteName, spriteSheet.spriteSheetIndex, framePivots);
             }
-        }
-        
-        // Register pivot data in Phaser registry (for backward compatibility)
-        if (!sheetFilter) {
-            const pivotData: PivotData = { spriteSheetPivots };
-            setPivotDataBySpriteName(scene, spriteName, pivotData);
         }
 
         // Create Animation instances if sprite type is not Tiles or Interface
         if (this.spriteType !== SpriteType.Tiles && this.spriteType !== SpriteType.Interface) {
             const animations: HBAnimation[] = [];
-            
-            for (let spriteSheetIndex = 0; spriteSheetIndex < spriteSheets.length; spriteSheetIndex++) {
-                const spriteSheet = spriteSheets[spriteSheetIndex];
-                
-                // Create Animation instance for this sprite sheet using HBAnimation class
-                // This will register the animation with Phaser's AnimationManager
-                const animation = new HBAnimation(
-                    scene,
-                    this.fileName,
-                    spriteSheetIndex,
-                    spriteSheet.frames,
-                    10, // frameRate
-                    -1  // repeat
+            for (const spriteSheet of spriteSheets) {
+                animations.push(
+                    new HBAnimation(
+                        scene,
+                        this.fileName,
+                        spriteSheet.spriteSheetIndex,
+                        spriteSheet.frames,
+                        10,
+                        -1
+                    ),
                 );
-                
-                animations.push(animation);
             }
-            
-            // Populate animations
             this.animations = animations;
         } else {
             this.animations = [];
         }
 
-        // Full loads can drop the .spr buffer. Partial tile-sheet loads keep it so walking
-        // can decode the next local sheets without fetching the pack again.
+        // Full loads can drop the .spr buffer. Partial loads keep it so later sheets
+        // (monster combat, bag icons, HUD dialogs) can decode without refetching.
         if (!sheetFilter) {
             scene.cache.binary.remove(this.fileName);
         }

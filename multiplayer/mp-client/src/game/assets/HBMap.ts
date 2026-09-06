@@ -192,7 +192,8 @@ export class HBMap {
 
     private streamTilesEnabled = true;
 
-    private streamObjectsEnabled = true;
+    /** Frame-0 and ground expand keep this false until plaza props are batched in. */
+    private streamObjectsEnabled = false;
 
     /**
      * Creates a new HBMap instance.
@@ -647,7 +648,20 @@ export class HBMap {
      * Streams static map objects for the current viewport rect.
      * `drawTree` includes trees (pass 3). Objects outside the stream rect are never instantiated.
      */
-    public renderMapObjects(scene: Phaser.Scene, drawTree = false): GameAsset[] {
+    public isStreamObjectsEnabled(): boolean {
+        return this.streamObjectsEnabled;
+    }
+
+    public isStreamTreesEnabled(): boolean {
+        return this.streamIncludeTrees;
+    }
+
+    /**
+     * Streams static map objects for the current viewport rect.
+     * `drawTree` includes trees (pass 3). Objects outside the stream rect are never instantiated.
+     * `maxNewInstances` caps how many GameAssets are created this call so plaza props can yield.
+     */
+    public renderMapObjects(scene: Phaser.Scene, drawTree = false, maxNewInstances?: number): GameAsset[] {
         if (!this.loaded) {
             throw new Error('Map must be loaded before rendering objects');
         }
@@ -659,12 +673,45 @@ export class HBMap {
         if (!rect) {
             return this.mapObjects;
         }
-        this.syncStreamedMapObjects(scene, rect);
+        this.syncStreamedMapObjects(scene, rect, maxNewInstances ?? Number.POSITIVE_INFINITY);
         return this.mapObjects;
     }
 
-    private syncStreamedMapObjects(scene: Phaser.Scene, rect: MapTileRect): void {
+    /** How many stream-rect objects still need a GameAsset (for batched instantiate). */
+    public countUninstantiatedStreamObjects(includeTrees = this.streamIncludeTrees): number {
+        const rect = this.streamedRect;
+        if (!rect) {
+            return 0;
+        }
+        let missing = 0;
+        for (let y = rect.minY; y <= rect.maxY; y++) {
+            for (let x = rect.minX; x <= rect.maxX; x++) {
+                const tile = this.getTile(x, y);
+                if (!tile || tile.objectSprite <= 0) {
+                    continue;
+                }
+                if (
+                    tile.objectSprite === 6 ||
+                    tile.objectSprite === 7 ||
+                    tile.objectSprite === 9 ||
+                    tile.objectSprite === 24
+                ) {
+                    continue;
+                }
+                if (isTreeSpriteIndex(tile.objectSprite) && !includeTrees) {
+                    continue;
+                }
+                if (!this.mapObjectsByCell.has(`${x},${y}`)) {
+                    missing += 1;
+                }
+            }
+        }
+        return missing;
+    }
+
+    private syncStreamedMapObjects(scene: Phaser.Scene, rect: MapTileRect, maxNew = Number.POSITIVE_INFINITY): void {
         const wanted = new Set<string>();
+        let created = 0;
         for (let y = rect.minY; y <= rect.maxY; y++) {
             for (let x = rect.minX; x <= rect.maxX; x++) {
                 const tile = this.getTile(x, y);
@@ -691,6 +738,9 @@ export class HBMap {
                 if (this.mapObjectsByCell.has(key)) {
                     continue;
                 }
+                if (created >= maxNew) {
+                    continue;
+                }
                 try {
                     const gameAsset = new GameAsset(scene, {
                         x: x * TILE_SIZE,
@@ -701,6 +751,7 @@ export class HBMap {
                     });
                     gameAsset.setDepth(y * DEPTH_MULTIPLIER);
                     this.mapObjectsByCell.set(key, gameAsset);
+                    created += 1;
                 } catch (error) {
                     console.warn(
                         `Failed to create object at (${x}, ${y}) with sprite ${tile.objectSprite}, frame ${tile.objectSpriteFrame}:`,

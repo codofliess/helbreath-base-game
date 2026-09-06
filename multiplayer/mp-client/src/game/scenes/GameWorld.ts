@@ -48,7 +48,17 @@ import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
-import { initialFocusStreamRect, waitForBrowserFrames } from '../../utils/mapViewportStream';
+import {
+    growMapTileRectToward,
+    initialFocusStreamRect,
+    MAP_OBJECT_INSTANTIATE_BATCH,
+    mapTileRectContains,
+    mapTileRectsEqual,
+    postPaintStreamRect,
+    waitForBrowserFrames,
+    waitMs,
+    type MapTileRect,
+} from '../../utils/mapViewportStream';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import {
     loadPlayerItemAppearanceOnDemand,
@@ -394,6 +404,13 @@ export class GameWorld extends Scene {
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
     private mapStreamWalkEnabled = false;
+    /** Tree-shadow sheets are decoded only after the post-stand object pass. */
+    private mapStreamTreesEnabled = false;
+    /** Plaza object packs exist; walk restream may include object sprites. */
+    private mapStreamObjectsEnabled = false;
+    /** Spawn cell used to treat camera follow as standing (no walk-cap restream). */
+    private mapStandFocusTileX = 0;
+    private mapStandFocusTileY = 0;
     /** Enter-ring tiles + plaza objects load after the first stable browser frame. */
     private mapExpandAfterFirstPaint: Promise<void> | undefined;
     private mapSetupRetryCount = 0;
@@ -508,6 +525,8 @@ export class GameWorld extends Scene {
             this.loadingMap = true;
             this.worldReadyForEntities = false;
             this.mapStreamWalkEnabled = false;
+            this.mapStreamTreesEnabled = false;
+            this.mapStreamObjectsEnabled = false;
             this.mapExpandAfterFirstPaint = undefined;
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
@@ -2379,6 +2398,8 @@ export class GameWorld extends Scene {
             this.loadingMap = true;
             this.worldReadyForEntities = false;
             this.mapStreamWalkEnabled = false;
+            this.mapStreamTreesEnabled = false;
+            this.mapStreamObjectsEnabled = false;
             void this.runDeferredMapLoad();
             return;
         }
@@ -2450,30 +2471,32 @@ export class GameWorld extends Scene {
         this.tryPushWorldTeleportCellsToCurrentMap();
         if (this.player) {
             this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
+            this.mapStandFocusTileX = this.player.getWorldX();
+            this.mapStandFocusTileY = this.player.getWorldY();
         }
         this.mapExpandAfterFirstPaint = this.expandMapAfterFirstPaint();
-        // After brief stand: do not dump trees+56×40 restream+NPCs+full gear in one beat.
-        this.time.delayedCall(400, () => {
+        // Saved zoom-out enlarges the camera frustum; keep zoom 1 until post-stand settle.
+        this.time.delayedCall(18000, () => {
             this.cameraManager?.setZoom(cameraZoom);
         });
-        this.time.delayedCall(5000, () => {
+        this.time.delayedCall(10000, () => {
             void this.enableTreesAfterFirstPaint();
         });
-        this.time.delayedCall(8000, () => {
+        this.time.delayedCall(12000, () => {
             this.worldReadyForEntities = true;
             this.syncMonstersFromNetworkState();
             this.syncGroundStatesFromNetworkState();
             this.syncOtherPlayersFromNetworkState();
         });
-        this.time.delayedCall(9000, () => {
+        this.time.delayedCall(14000, () => {
             this.syncNpcsFromNetworkState();
         });
-        this.time.delayedCall(10000, () => {
+        this.time.delayedCall(16000, () => {
             setPlayerItemAppearanceDecodeAllowed(true);
             this.player?.startPendingEquippedAppearanceLoads();
             this.startDeferredAppearancePrefetch();
         });
-        this.time.delayedCall(14000, () => {
+        this.time.delayedCall(20000, () => {
             void loadWorldDeferredSprites(this).catch((error) => {
                 console.warn('[GameWorld] Deferred HUD sprites failed', error);
             });
@@ -2790,7 +2813,11 @@ export class GameWorld extends Scene {
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
                 if (this.mapStreamWalkEnabled) {
-                    void this.mapManager?.syncStreamedView();
+                    void this.mapManager?.syncStreamedView({
+                        standingHold: this.isStandingNearEnterFocus(),
+                        includeTreeShadows: this.mapStreamTreesEnabled,
+                        includeObjectSprites: this.mapStreamObjectsEnabled,
+                    });
                 }
                 this.handleMapObjectCollisions();
 
@@ -2889,30 +2916,110 @@ export class GameWorld extends Scene {
     }
 
     /**
-     * After the tiny ground first-paint produces a real browser frame: decode enter-ring
-     * tiles + object packs, instantiate plaza props. Must not run during prepareMap.
+     * After the tiny ground first-paint produces a real browser frame: grow ground in small
+     * steps, then decode plaza object packs and instantiate props in batches. Must not run
+     * during prepareMap, and must not dump enter-ring + objects in one tick after stand.
      */
     private async expandMapAfterFirstPaint(): Promise<void> {
-        await waitForBrowserFrames(2);
+        await waitForBrowserFrames(10);
+        await waitMs(500);
         const map = this.displayedMap;
         if (!map || !this.mapManager) {
             return;
         }
         const focusX = this.player?.getWorldX() ?? this.initialGameWorldState?.playerX ?? 0;
         const focusY = this.player?.getWorldY() ?? this.initialGameWorldState?.playerY ?? 0;
-        const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        const post = postPaintStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        const enter = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
         try {
-            await loadTileSpritePacksForMapRect(this, map, rect, () => this.noteMapSetupProgress(), false, true);
-            map.syncViewportStream(this, rect);
-            map.renderMapObjects(this, false);
+            await this.expandStreamGroundToward(map, post);
+            await waitForBrowserFrames(4);
+            await waitMs(400);
+            await this.expandStreamGroundToward(map, enter);
+            await waitForBrowserFrames(4);
+            await waitMs(600);
+            await loadTileSpritePacksForMapRect(
+                this,
+                map,
+                post,
+                () => this.noteMapSetupProgress(),
+                false,
+                true,
+            );
+            this.mapStreamObjectsEnabled = true;
+            await this.instantiateStreamObjectsBatched(map, false);
+            await waitForBrowserFrames(4);
+            await waitMs(800);
+            await loadTileSpritePacksForMapRect(
+                this,
+                map,
+                enter,
+                () => this.noteMapSetupProgress(),
+                false,
+                true,
+            );
+            await this.instantiateStreamObjectsBatched(map, false);
             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
         } catch (error) {
             console.warn('[GameWorld] Enter-ring expand after first paint failed', error);
         }
     }
 
+    /** True when the local player has not walked off spawn — camera follow must not walk-cap restream. */
+    private isStandingNearEnterFocus(): boolean {
+        if (!this.player) {
+            return true;
+        }
+        const dx = Math.abs(this.player.getWorldX() - this.mapStandFocusTileX);
+        const dy = Math.abs(this.player.getWorldY() - this.mapStandFocusTileY);
+        return dx + dy <= 1;
+    }
+
+    /** Grow painted ground toward `target` in {@link MAP_EXPAND_STEP_TILES} steps, no object packs. */
+    private async expandStreamGroundToward(map: HBMap, target: MapTileRect): Promise<void> {
+        let painted = map.getStreamedRect();
+        let guard = 0;
+        while (guard < 16) {
+            guard += 1;
+            if (painted && mapTileRectContains(painted, target)) {
+                return;
+            }
+            const next = painted
+                ? growMapTileRectToward(painted, target)
+                : target;
+            await loadTileSpritePacksForMapRect(
+                this,
+                map,
+                next,
+                () => this.noteMapSetupProgress(),
+                false,
+                false,
+            );
+            map.syncViewportStream(this, next);
+            painted = next;
+            await waitForBrowserFrames(3);
+            await waitMs(80);
+            if (mapTileRectsEqual(painted, target)) {
+                return;
+            }
+        }
+    }
+
+    /** Instantiate stream-rect map objects a handful per frame so plaza props cannot Aw Snap. */
+    private async instantiateStreamObjectsBatched(map: HBMap, drawTree: boolean): Promise<void> {
+        let guard = 0;
+        while (map.countUninstantiatedStreamObjects(drawTree) > 0 && guard < 80) {
+            map.renderMapObjects(this, drawTree, MAP_OBJECT_INSTANTIATE_BATCH);
+            this.noteMapSetupProgress();
+            await waitForBrowserFrames(2);
+            await waitMs(40);
+            guard += 1;
+        }
+    }
+
     /**
      * After first paint GC: decode tree-shadow sheets, instantiate trees, then allow walk restream.
+     * Standing still uses enter-ring slack so focus cannot jump to the 56×40 walk cap.
      */
     private async enableTreesAfterFirstPaint(): Promise<void> {
         try {
@@ -2928,9 +3035,10 @@ export class GameWorld extends Scene {
         try {
             const rect = map.getStreamedRect();
             if (rect) {
-                await loadTileSpritePacksForMapRect(this, map, rect, undefined, true, true);
+                await loadTileSpritePacksForMapRect(this, map, rect, undefined, true, true, 64);
             }
-            map.renderMapObjects(this, true);
+            this.mapStreamTreesEnabled = true;
+            await this.instantiateStreamObjectsBatched(map, true);
             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
         } catch (error) {
             console.warn('[GameWorld] Tree pass after first paint failed', error);
@@ -2953,7 +3061,8 @@ export class GameWorld extends Scene {
             const undies = gender === Gender.MALE ? 'mpt' : 'wpt';
             evictUnusedSelectAppearanceSprites(this, [human, hair, undies]);
             trimSelectAppearanceToIdleSheets(this, human, idleEntitySheetIndices());
-            await waitForBrowserFrames(1);
+            await waitForBrowserFrames(4);
+            await waitMs(40);
 
             if (shouldLoadMapAssetsOnDemand()) {
                 await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName(), {
@@ -2967,7 +3076,7 @@ export class GameWorld extends Scene {
             }
 
             this.noteMapSetupProgress();
-            await new Promise((resolve) => setTimeout(resolve, 80));
+            await waitMs(120);
             this.noteMapSetupProgress();
             runSafeSync('GameWorld:deferredMapLoad', () => {
                 this.displayedMap = this.mapManager!.getCurrentMap();
@@ -5122,6 +5231,8 @@ export class GameWorld extends Scene {
             this.loadingMap = true;
             this.worldReadyForEntities = false;
             this.mapStreamWalkEnabled = false;
+            this.mapStreamTreesEnabled = false;
+            this.mapStreamObjectsEnabled = false;
             this.clearMapSetupWatchdog();
             this.clearPendingWorldTransfer('shutdown');
             this.initialGameWorldState = undefined;

@@ -2,14 +2,19 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
     MAP_ENTER_RING_TILES,
+    MAP_EXPAND_STEP_TILES,
     MAP_FIRST_PAINT_MAX_HEIGHT_TILES,
     MAP_FIRST_PAINT_MAX_WIDTH_TILES,
+    MAP_POST_PAINT_MAX_HEIGHT_TILES,
+    MAP_POST_PAINT_MAX_WIDTH_TILES,
+    MAP_STAND_REFRESH_SLACK_TILES,
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
     MAP_STREAM_RING_TILES,
     cameraStreamTileRect,
     collectSpriteIndicesInRect,
     firstPaintStreamRect,
+    growMapTileRectToward,
     initialFocusStreamRect,
     mapTileKeysToEvict,
     mapTileRectArea,
@@ -18,6 +23,7 @@ import {
     mapTileRectWidth,
     mapTileRectsEqual,
     paintStreamTileRect,
+    postPaintStreamRect,
     shouldRefreshMapStream,
 } from './mapViewportStream';
 
@@ -124,6 +130,52 @@ describe('mapViewportStream', () => {
         assert.ok(mapTileRectHeight(first) <= MAP_FIRST_PAINT_MAX_HEIGHT_TILES);
         assert.ok(mapTileRectArea(first) < mapTileRectArea(enter));
         assert.ok(MAP_FIRST_PAINT_MAX_WIDTH_TILES < MAP_STREAM_MAX_WIDTH_TILES);
+        const post = postPaintStreamRect(149, 131, 300, 300);
+        assert.ok(mapTileRectWidth(post) <= MAP_POST_PAINT_MAX_WIDTH_TILES);
+        assert.ok(mapTileRectHeight(post) <= MAP_POST_PAINT_MAX_HEIGHT_TILES);
+        assert.ok(mapTileRectArea(first) < mapTileRectArea(post));
+        assert.ok(mapTileRectArea(post) < mapTileRectArea(enter));
+    });
+
+    it('post-stand expand grows toward enter in small steps, never a walk-cap rebuild', () => {
+        const first = firstPaintStreamRect(149, 131, 300, 300);
+        const enter = initialFocusStreamRect(149, 131, 300, 300);
+        const walkCap = paintStreamTileRect({
+            scrollX: 149 * 32 - 512,
+            scrollY: 131 * 32 - 288,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        const step = growMapTileRectToward(first, enter, MAP_EXPAND_STEP_TILES);
+        assert.ok(mapTileRectContains(enter, step) || mapTileRectsEqual(step, enter) || mapTileRectContains(step, first));
+        assert.ok(mapTileRectArea(step) < mapTileRectArea(walkCap));
+        assert.ok(mapTileRectArea(step) <= mapTileRectArea(first) + (MAP_EXPAND_STEP_TILES * 2) * (mapTileRectWidth(first) + mapTileRectHeight(first) + MAP_EXPAND_STEP_TILES * 2));
+        assert.equal(mapTileRectsEqual(step, walkCap), false);
+        const neededWalk = cameraStreamTileRect({
+            scrollX: 149 * 32 - 512,
+            scrollY: 131 * 32 - 288,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+            ringTiles: MAP_STREAM_RING_TILES,
+        });
+        assert.equal(shouldRefreshMapStream(first, neededWalk, MAP_STAND_REFRESH_SLACK_TILES), false);
+        const focusNeeded = cameraStreamTileRect({
+            scrollX: 149 * 32 - 512,
+            scrollY: 131 * 32 - 288,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+            ringTiles: MAP_ENTER_RING_TILES,
+        });
+        assert.equal(shouldRefreshMapStream(enter, focusNeeded, MAP_STAND_REFRESH_SLACK_TILES), false);
     });
 
     it('live Elvine 300×300 .amd cannot paint as one layer per world row', () => {

@@ -212,7 +212,8 @@ assert(
         /firstPaintStreamRect/.test(mapAssets) &&
         /includeTreeShadows = true/.test(mapAssets) &&
         /includeObjectSprites = true/.test(mapAssets) &&
-        /setTimeout\(resolve, 32\)/.test(mapAssets) &&
+        /waitMs\(yieldMs\)/.test(mapAssets) &&
+        /waitForBrowserFrames\(1\)/.test(mapAssets) &&
         /for \(const asset of tileAssets\)/.test(mapAssets),
     'prepareMapForGameWorld must skip tree-shadow and object sheets on first paint and yield between sequential packs',
 );
@@ -224,9 +225,16 @@ assert(
         /MAP_FIRST_PAINT_MAX_WIDTH_TILES = 12/.test(mapViewportStream) &&
         /MAP_FIRST_PAINT_MAX_HEIGHT_TILES = 8/.test(mapViewportStream) &&
         /MAP_STREAM_REFRESH_SLACK_TILES = 10/.test(mapViewportStream) &&
+        /MAP_STAND_REFRESH_SLACK_TILES = 16/.test(mapViewportStream) &&
+        /MAP_EXPAND_STEP_TILES = 4/.test(mapViewportStream) &&
+        /MAP_POST_PAINT_MAX_WIDTH_TILES = 20/.test(mapViewportStream) &&
+        /MAP_POST_PAINT_MAX_HEIGHT_TILES = 12/.test(mapViewportStream) &&
         /ringTiles: MAP_ENTER_RING_TILES/.test(mapViewportStream) &&
         /export function firstPaintStreamRect/.test(mapViewportStream) &&
+        /export function postPaintStreamRect/.test(mapViewportStream) &&
+        /export function growMapTileRectToward/.test(mapViewportStream) &&
         /export function waitForBrowserFrames/.test(mapViewportStream) &&
+        /export function waitMs/.test(mapViewportStream) &&
         /export function cameraStreamTileRect/.test(mapViewportStream) &&
         /export function paintStreamTileRect/.test(mapViewportStream) &&
         /export function shouldRefreshMapStream/.test(mapViewportStream) &&
@@ -240,6 +248,9 @@ assert(
         /Never creates one Phaser tilemap per world row/.test(hbMap) &&
         /1 ground layer/.test(hbMap) &&
         /ground-stream/.test(hbMap) &&
+        /streamObjectsEnabled = false/.test(hbMap) &&
+        /countUninstantiatedStreamObjects/.test(hbMap) &&
+        /maxNewInstances/.test(hbMap) &&
         !/ground-y-\$\{y\}/.test(hbMap),
     'HBMap must stream one ground layer, not one tilemap layer per world Y',
 );
@@ -247,6 +258,9 @@ assert(
 assert(
     /firstPaintStreamRect/.test(mapManager) &&
         /Frame-0: ground only/.test(mapManager) &&
+        /standingHold/.test(mapManager) &&
+        /growMapTileRectToward/.test(mapManager) &&
+        /MAP_STAND_REFRESH_SLACK_TILES/.test(mapManager) &&
         /shouldRefreshMapStream/.test(mapManager) &&
         /evictUnusedMapTileTextures/.test(mapManager) &&
         /streamRefreshQueued/.test(mapManager),
@@ -269,8 +283,12 @@ assert(
         /firstPaint: true/.test(gameWorld) &&
         /includeObjectSprites: false/.test(gameWorld) &&
         /enableTreesAfterFirstPaint/.test(gameWorld) &&
+        /standingHold/.test(gameWorld) &&
+        /postPaintStreamRect/.test(gameWorld) &&
+        /growMapTileRectToward/.test(gameWorld) &&
+        /instantiateStreamObjectsBatched/.test(gameWorld) &&
         /mapStreamWalkEnabled/.test(gameWorld),
-    'GameWorld must first-paint tiny ground, evict unused SELECTCHAR packs, then expand after rAF',
+    'GameWorld must first-paint tiny ground, expand in steps after rAF, and hold walk-cap restream while standing',
 );
 
 assert(
@@ -374,10 +392,12 @@ assert(
         /tickMapSetupWatchdog/.test(gameWorld) &&
         /noteMapSetupProgress/.test(gameWorld) &&
         /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
-        /delayedCall\(8000/.test(gameWorld) &&
-        /delayedCall\(9000/.test(gameWorld) &&
         /delayedCall\(10000/.test(gameWorld) &&
+        /delayedCall\(12000/.test(gameWorld) &&
         /delayedCall\(14000/.test(gameWorld) &&
+        /delayedCall\(16000/.test(gameWorld) &&
+        /delayedCall\(18000/.test(gameWorld) &&
+        /delayedCall\(20000/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(false\)/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(true\)/.test(gameWorld) &&
         /displayedMap \|\| this\.pendingLoadedMap \|\| this\.mapPrepareInFlight/.test(gameWorld),

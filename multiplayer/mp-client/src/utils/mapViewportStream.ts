@@ -30,6 +30,27 @@ export const MAP_FIRST_PAINT_MAX_HEIGHT_TILES = 8;
 export const MAP_STREAM_REFRESH_SLACK_TILES = 10;
 
 /**
+ * While standing (camera follow / focus recenter), require a larger miss before restream.
+ * Slack 10 still let a focus-driven camera+ring miss the 12×8 then jump to the walk cap.
+ */
+export const MAP_STAND_REFRESH_SLACK_TILES = 16;
+
+/**
+ * Grow the painted window by at most this many tiles per edge per expand/restream.
+ * Jumping 12×8 → enter FOV+ring (~40×26) plus object packs in one tick Aw Snaps after stand.
+ */
+export const MAP_EXPAND_STEP_TILES = 4;
+
+/**
+ * First post-paint ground window (still smaller than enter FOV+ring).
+ */
+export const MAP_POST_PAINT_MAX_WIDTH_TILES = 20;
+export const MAP_POST_PAINT_MAX_HEIGHT_TILES = 12;
+
+/** New plaza GameAssets per yield so object instantiate cannot dump ~200 sprites in one tick. */
+export const MAP_OBJECT_INSTANTIATE_BATCH = 8;
+
+/**
  * Maximum streamed window. A tiny camera zoom (or a full-map minimap snapshot) must not expand
  * this to the whole world.
  */
@@ -211,6 +232,47 @@ export function firstPaintStreamRect(
     );
 }
 
+/**
+ * Intermediate ground window after frame-0. Larger than 12×8 so the plaza is walkable,
+ * smaller than enter FOV+ring so object packs are not decoded in the same beat.
+ */
+export function postPaintStreamRect(
+    focusTileX: number,
+    focusTileY: number,
+    mapSizeX: number,
+    mapSizeY: number,
+): MapTileRect {
+    const fx = Number.isFinite(focusTileX) ? focusTileX : 0;
+    const fy = Number.isFinite(focusTileY) ? focusTileY : 0;
+    const width = MAP_POST_PAINT_MAX_WIDTH_TILES;
+    const height = MAP_POST_PAINT_MAX_HEIGHT_TILES;
+    const minX = Math.round(fx) - Math.floor(width / 2);
+    const minY = Math.round(fy) - Math.floor(height / 2);
+    return clampMapTileRect(
+        { minX, minY, maxX: minX + width - 1, maxY: minY + height - 1 },
+        mapSizeX,
+        mapSizeY,
+    );
+}
+
+/**
+ * Expands `current` toward `target` by at most `stepTiles` per edge. Used so stand/focus
+ * never rebuilds a walk-cap tileset in one tick.
+ */
+export function growMapTileRectToward(
+    current: MapTileRect,
+    target: MapTileRect,
+    stepTiles = MAP_EXPAND_STEP_TILES,
+): MapTileRect {
+    const step = Math.max(1, stepTiles);
+    return {
+        minX: Math.max(target.minX, current.minX - step),
+        minY: Math.max(target.minY, current.minY - step),
+        maxX: Math.min(target.maxX, current.maxX + step),
+        maxY: Math.min(target.maxY, current.maxY + step),
+    };
+}
+
 /** Yields until `count` animation frames (or 16ms ticks when rAF is missing). */
 export function waitForBrowserFrames(count = 2): Promise<void> {
     const frames = Math.max(1, count);
@@ -233,6 +295,14 @@ export function waitForBrowserFrames(count = 2): Promise<void> {
         } else {
             setTimeout(tick, 16);
         }
+    });
+}
+
+/** Timer yield so Canvas 2D can GC between pack decode / object batches. */
+export function waitMs(ms: number): Promise<void> {
+    const delay = Math.max(0, ms);
+    return new Promise((resolve) => {
+        setTimeout(resolve, delay);
     });
 }
 

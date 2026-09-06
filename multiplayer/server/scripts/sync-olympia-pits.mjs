@@ -3,6 +3,7 @@
  * random-mob-generator level tables (expected counts), and patches Monsters.json
  * hp / attackDamage / respawnTime from reference/Npc.cfg using Olympia
  * Server.cpp formulas.
+ * Preserves barracks dummy ids and `_plazaHunt` traveler-plaza slime rectangles.
  *
  * Run: node multiplayer/server/scripts/sync-olympia-pits.mjs
  *
@@ -646,6 +647,7 @@ function main() {
         const preservedBarracks = (world.dwellAreas ?? []).filter((d) =>
             BARRACKS_MONSTER_IDS.has(d.monsterId),
         );
+        const preservedPlazaHunt = (world.dwellAreas ?? []).filter((d) => d._plazaHunt);
 
         if (spots.length === 0) {
             if (!random?.enabled) {
@@ -678,7 +680,7 @@ function main() {
             for (const s of skipped) {
                 report.spotSkips.push({ worldId, source: 'random', ...s });
             }
-            world.dwellAreas = [...dwell, ...preservedBarracks];
+            world.dwellAreas = [...dwell, ...preservedBarracks, ...preservedPlazaHunt];
             world._olympiaRandomMobGenerator = {
                 enabled: true,
                 level: random.level,
@@ -713,7 +715,7 @@ function main() {
         for (const s of skipped) {
             report.spotSkips.push({ worldId, ...s });
         }
-        world.dwellAreas = [...dwell, ...preservedBarracks];
+        world.dwellAreas = [...dwell, ...preservedBarracks, ...preservedPlazaHunt];
         if (random?.enabled) {
             world._olympiaRandomMobGenerator = {
                 enabled: true,

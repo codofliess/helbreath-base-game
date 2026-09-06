@@ -22,6 +22,8 @@ public static class Spawn {
     /// Used when a transfer has no teleport destination so <c>SpawnInMiddle</c> cannot drop citizens into water/wilds.
     /// Aresden (149,127) and Elvine (149,131) are dry plaza on their city maps — but the same numbers are
     /// coastal water on traveler map <c>default</c>, so the client must load the city .amd before applying them.
+    /// Traveler Zone pads land on those plaza tiles. Wild dwell pits sit outside Settings view (18×11);
+    /// plaza hunt slimes in <c>GameWorlds.json</c> (<c>_plazaHunt</c>) keep first-kill mobs in view at join.
     /// </summary>
     /// <summary>
     /// Default city spawn = Olympia mapdata initial-point #1 (primary gray pad), not intermap gates.

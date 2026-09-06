@@ -362,8 +362,19 @@
     "map": "aresden",
     "music": "aresden.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Citizenship / free-transfer spawn uses Spawn.TryGetTownDefaultSpawn → (149,127) city-hall plaza (dry spr 398). Same coords are water on traveler map default — client must load aresden.amd before applying.",
+    "_defaultSpawnNote": "Traveler pad (149,127). Citizenship / free-transfer uses Spawn.TryGetTownDefaultSpawn → (140,49) gray ip1. ViewRadius 18x11: plaza hunt slimes sit inside traveler view; wild pits do not.",
     "dwellAreas": [
+      {
+        "monsterId": 1,
+        "count": 12,
+        "area": {
+          "x1": 154,
+          "y1": 122,
+          "x2": 163,
+          "y2": 132
+        },
+        "_plazaHunt": "Traveler pad (149,127) view box X 131-167 Y 116-138. Entire rectangle stays in view (max dx 14, dy 5). Do not overlap pad cell."
+      },
       {
         "monsterId": 1,
         "count": 20,
@@ -1078,8 +1089,19 @@
     "map": "elvine",
     "music": "elvine.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Citizenship / free-transfer spawn uses Spawn.TryGetTownDefaultSpawn → (149,131) city-hall plaza",
+    "_defaultSpawnNote": "Traveler pad (149,131). Citizenship / free-transfer uses Spawn.TryGetTownDefaultSpawn → (158,57) gray ip1. ViewRadius 18x11: plaza hunt slimes sit inside traveler view; wild pits and ip3 guards (167+,142+) do not.",
     "dwellAreas": [
+      {
+        "monsterId": 1,
+        "count": 12,
+        "area": {
+          "x1": 154,
+          "y1": 126,
+          "x2": 163,
+          "y2": 136
+        },
+        "_plazaHunt": "Traveler pad (149,131) view box X 131-167 Y 120-142. Entire rectangle stays in view (max dx 14, dy 5). East of city-hall doors; not the landing cell."
+      },
       {
         "monsterId": 1,
         "count": 20,

@@ -362,18 +362,19 @@
     "map": "aresden",
     "music": "aresden.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Traveler pad (149,127). Citizenship / free-transfer uses Spawn.TryGetTownDefaultSpawn → (140,49) gray ip1. ViewRadius 18x11: plaza hunt slimes sit inside traveler view; wild pits do not.",
+    "_defaultSpawnNote": "Traveler pad (149,127). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile), not npcs[]. ViewRadius 18x11.",
     "dwellAreas": [
       {
         "monsterId": 1,
-        "count": 12,
+        "count": 28,
         "area": {
-          "x1": 154,
-          "y1": 122,
-          "x2": 163,
-          "y2": 132
+          "x1": 151,
+          "y1": 118,
+          "x2": 166,
+          "y2": 137
         },
-        "_plazaHunt": "Traveler pad (149,127) view box X 131-167 Y 116-138. Entire rectangle stays in view (max dx 14, dy 5). Do not overlap pad cell."
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 149, "y": 127 }
       },
       {
         "monsterId": 1,
@@ -1089,18 +1090,31 @@
     "map": "elvine",
     "music": "elvine.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Traveler pad (149,131). Citizenship / free-transfer uses Spawn.TryGetTownDefaultSpawn → (158,57) gray ip1. ViewRadius 18x11: plaza hunt slimes sit inside traveler view; wild pits and ip3 guards (167+,142+) do not.",
+    "_defaultSpawnNote": "Traveler pad (149,131). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile allegiance 0), not GameWorlds npcs[] (elvine npcs is empty). Client 'Elvine Civilian' is a player affiliation label. ViewRadius 18x11.",
     "dwellAreas": [
       {
         "monsterId": 1,
-        "count": 12,
+        "count": 28,
         "area": {
-          "x1": 154,
-          "y1": 126,
-          "x2": 163,
-          "y2": 136
+          "x1": 151,
+          "y1": 122,
+          "x2": 166,
+          "y2": 141
         },
-        "_plazaHunt": "Traveler pad (149,131) view box X 131-167 Y 120-142. Entire rectangle stays in view (max dx 14, dy 5). East of city-hall doors; not the landing cell."
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 149, "y": 131 }
+      },
+      {
+        "monsterId": 1,
+        "count": 28,
+        "area": {
+          "x1": 206,
+          "y1": 96,
+          "x2": 226,
+          "y2": 114
+        },
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 220, "y": 105 }
       },
       {
         "monsterId": 1,

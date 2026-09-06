@@ -6,7 +6,12 @@ import { HBSpriteFile } from '../game/assets/HBSprite';
 import { HBMap } from '../game/assets/HBMap';
 import { setMap } from './RegistryUtils';
 import { isTreeSpriteIndex } from './SpriteUtils';
-import { fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
+import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
+import {
+    collectSpriteIndicesInRect,
+    initialFocusStreamRect,
+    type MapTileRect,
+} from './mapViewportStream';
 
 const tilePackLoadPromisesByScene = new WeakMap<Scene, Map<string, Promise<void>>>();
 const tilePackShutdownHookRegistered = new WeakSet<Scene>();
@@ -37,18 +42,19 @@ export function shouldLoadMapAssetsOnDemand(): boolean {
  * missing there (e.g. barracks floor 2), still allow HTTP load from game-assets/maps.
  */
 function getMapAssetByFileName(mapFileName: string): AssetData {
-    const normalized = mapFileName.endsWith('.amd') ? mapFileName : `${mapFileName}.amd`;
+    const normalized = mapFileName.replace(/^.*[/\\]/, '');
+    const withExt = normalized.toLowerCase().endsWith('.amd') ? normalized : `${normalized}.amd`;
     const asset = ASSETS.find(
-        (a) => a.assetType === AssetType.MAP && a.fileName === normalized,
+        (a) => a.assetType === AssetType.MAP && a.fileName.toLowerCase() === withExt.toLowerCase(),
     );
     if (asset) {
         return asset;
     }
-    const base = normalized.replace(/\.amd$/i, '');
-    console.warn(`[MapAssets] Map '${normalized}' not in ASSETS catalog — loading via HTTP fallback.`);
+    const base = withExt.replace(/\.amd$/i, '');
+    console.warn(`[MapAssets] Map '${withExt}' not in ASSETS catalog — loading via HTTP fallback.`);
     return {
         key: `map-${base}`,
-        fileName: normalized,
+        fileName: withExt,
         assetType: AssetType.MAP,
         mapName: base,
         minimap: Minimap.NONE,
@@ -76,29 +82,12 @@ function getTileSpriteAssetForIndex(index: number): AssetData {
 }
 
 /**
- * Ground and map-object sprite indices referenced by the parsed map, plus derived indices.
- * Tree shadows use `map-tile-(treeIndex + 50)` (see {@link GameAsset.applyShadowIfTree}); those
- * textures are not stored in the .amd and must be pulled in with `treeshadows.spr` (see GameAsset tree shadow).
+ * Ground and map-object sprite indices inside `rect` (viewport + ring), plus tree-shadow +50.
+ * Do not call this without a rect on the load path — a full-map scan plus every `.spr` pack
+ * is the previous OOM (Aw Snap 9 on enter).
  */
-export function collectRequiredTileIndices(hbMap: HBMap): Set<number> {
-    const indices = new Set<number>();
-    for (let y = 0; y < hbMap.sizeY; y++) {
-        for (let x = 0; x < hbMap.sizeX; x++) {
-            const tile = hbMap.tiles[y][x];
-            if (tile.sprite >= 0) {
-                indices.add(tile.sprite);
-            }
-            if (tile.objectSprite > 0) {
-                indices.add(tile.objectSprite);
-            }
-        }
-    }
-    for (const idx of indices) {
-        if (isTreeSpriteIndex(idx)) {
-            indices.add(idx + 50);
-        }
-    }
-    return indices;
+export function collectRequiredTileIndices(hbMap: HBMap, rect: MapTileRect): Set<number> {
+    return collectSpriteIndicesInRect(hbMap.tiles, rect, isTreeSpriteIndex);
 }
 
 export function resolveTileSpriteAssets(indices: Set<number>): AssetData[] {
@@ -122,11 +111,10 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
         return Promise.resolve();
     }
 
-    const promise = (async () => {
+    const promise = enqueueSpriteDecode(async () => {
         if (!asset.spriteType) {
             throw new Error(`[MapAssets] Tile asset ${asset.key} is missing spriteType`);
         }
-        // Absolute path so login deep-links / base URL never resolve to /assets (CF poison / 404).
         const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
         scene.cache.binary.add(asset.key, arrayBuffer);
         const hbFile = new HBSpriteFile(
@@ -136,7 +124,7 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
             asset.tileStartIndex,
         );
         await hbFile.load(scene);
-    })().catch((error) => {
+    }).catch((error) => {
         promises.delete(asset.key);
         throw error;
     });
@@ -145,29 +133,57 @@ async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<v
     return promise;
 }
 
+export interface PrepareMapOptions {
+    /** Player spawn cell; stream packs around this instead of every index on the .amd. */
+    focusTileX?: number;
+    focusTileY?: number;
+}
+
 /**
- * Fetches the map binary, parses it, loads only required tile `.spr` packs, and registers the map on the scene.
+ * Loads tile `.spr` packs referenced by `rect` only. Safe to call again as the camera moves.
+ * Packs decode sequentially — parallel objects*.spr + trees + shadows OOMs enter on ~2GB Chrome.
  */
-export async function prepareMapForGameWorld(scene: Scene, mapFileName: string): Promise<HBMap> {
+export async function loadTileSpritePacksForMapRect(
+    scene: Scene,
+    hbMap: HBMap,
+    rect: MapTileRect,
+): Promise<number> {
+    const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(hbMap, rect));
+    for (const asset of tileAssets) {
+        await loadTileSpritePackOnce(scene, asset);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return tileAssets.length;
+}
+
+/**
+ * Fetches the map binary, parses it, loads tile packs for the spawn viewport only, and registers the map.
+ */
+export async function prepareMapForGameWorld(
+    scene: Scene,
+    mapFileName: string,
+    options?: PrepareMapOptions,
+): Promise<HBMap> {
     const startedAt = performance.now();
     const mapAsset = getMapAssetByFileName(mapFileName);
     const mapKey = mapAsset.key;
 
-    const buffer = await fetchGameAssetArrayBuffer('maps', mapFileName);
+    const buffer = await fetchGameAssetArrayBuffer('maps', mapAsset.fileName);
 
     const map = new HBMap(mapKey);
     map.loadFromBuffer(buffer);
 
-    const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(map));
-    // Sequential decode — parallel objects*.spr + trees + shadows OOMs enter on ~2GB-free Chrome.
-    for (const asset of tileAssets) {
-        await loadTileSpritePackOnce(scene, asset);
-    }
+    const focusX = options?.focusTileX != null && options.focusTileX >= 0 ? options.focusTileX : 0;
+    const focusY = options?.focusTileY != null && options.focusTileY >= 0 ? options.focusTileY : 0;
+    const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+    const packCount = await loadTileSpritePacksForMapRect(scene, map, rect);
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;
     console.log(
-        `[MapAssets] On-demand map ready: ${mapFileName} (${tileAssets.length} tile pack(s), ${map.sizeX}x${map.sizeY}) in ${elapsedMs.toFixed(2)}ms`,
+        `[MapAssets] On-demand map ready: ${mapFileName} (${packCount} viewport tile pack(s), ` +
+            `${map.sizeX}x${map.sizeY} world, stream ${rect.minX},${rect.minY}-${rect.maxX},${rect.maxY}) ` +
+            `in ${elapsedMs.toFixed(2)}ms`,
     );
     return map;
 }

@@ -1,4 +1,4 @@
-import type { Scene } from 'phaser';
+import { CANVAS, type Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import type { PivotFrame, PivotData } from '../../Types';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../../constants/EventNames';
@@ -140,7 +140,13 @@ export class HBSpriteSheet {
         // Build texture key: use custom key if provided, otherwise use {spriteName}-{spriteSheetIndex}
         this.textureKey = customTextureKey ?? `${spriteName}-${spriteSheetIndex}`;
 
-        this.createTexture(scene, spriteSheetImage, frames, exportFramesAsDataUrls, useCanvasTexture);
+        this.createTexture(
+            scene,
+            spriteSheetImage,
+            frames,
+            exportFramesAsDataUrls,
+            useCanvasTexture || scene.game.renderer.type === CANVAS,
+        );
 
         if (exportFramesAsDataUrls) {
             this.extractAllFramesAsDataUrls();
@@ -532,10 +538,7 @@ export class HBSpriteFile {
         for (let spriteSheetIndex = 0; spriteSheetIndex < parsedSprites.length; spriteSheetIndex++) {
             const parsedSprite = parsedSprites[spriteSheetIndex];
             
-            const spriteSheetImage = await this.createImageFromPng(
-                parsedSprite.imageData,
-                this.spriteType !== SpriteType.Tiles && !this.exportFramesAsDataUrls
-            );
+            const spriteSheetImage = await this.createImageFromPng(parsedSprite.imageData);
             
             try {
                 // Frames are already SpriteFrame instances from parseSprite
@@ -631,20 +634,11 @@ export class HBSpriteFile {
 
     /**
      * Creates an ImageBitmap from PNG image data.
-     * 
-     * @param data - The PNG image data as a Uint8Array
-     * @returns A Promise that resolves to an ImageBitmap
-     * @throws Error if the PNG data cannot be decoded
+     * ImageDecoder/VideoFrame is not used: Canvas-first Phaser closes the VideoFrame after
+     * texture create (`VideoFrame is closed`) and can OOM on enter.
      */
-    private async createImageFromPng(data: Uint8Array, preferDirectTextureSource: boolean): Promise<DecodedSpriteImage> {
+    private async createImageFromPng(data: Uint8Array): Promise<DecodedSpriteImage> {
         try {
-            if (preferDirectTextureSource) {
-                const decodedVideoFrame = await this.tryDecodeWithImageDecoder(data);
-                if (decodedVideoFrame) {
-                    return decodedVideoFrame;
-                }
-            }
-
             const imageBytes = new Uint8Array(data.byteLength);
             imageBytes.set(data);
             const blob = new Blob([imageBytes], { type: 'image/png' });
@@ -657,54 +651,6 @@ export class HBSpriteFile {
             };
         } catch (error) {
             throw new Error(`Failed to decode sprite PNG: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
-    /**
-     * Attempts to decode the PNG with WebCodecs ImageDecoder.
-     * Returns undefined when the API is unavailable or decode fails, so callers can
-     * fall back to the broadly supported createImageBitmap path.
-     */
-    private async tryDecodeWithImageDecoder(data: Uint8Array): Promise<DecodedSpriteImage | undefined> {
-        const ImageDecoderCtor = (globalThis as { ImageDecoder?: new (init: { data: Uint8Array; type: string }) => any }).ImageDecoder;
-
-        if (!ImageDecoderCtor) {
-            return undefined;
-        }
-
-        try {
-            const imageBytes = new Uint8Array(data.byteLength);
-            imageBytes.set(data);
-            const decoder = new ImageDecoderCtor({
-                data: imageBytes,
-                type: 'image/png',
-            });
-            const result = await decoder.decode({ frameIndex: 0 });
-            const frame = result.image as {
-                displayWidth?: number;
-                displayHeight?: number;
-                codedWidth?: number;
-                codedHeight?: number;
-                close(): void;
-            } & CanvasImageSource;
-            const width = frame.displayWidth ?? frame.codedWidth;
-            const height = frame.displayHeight ?? frame.codedHeight;
-
-            decoder.close?.();
-
-            if (!width || !height) {
-                frame.close();
-                return undefined;
-            }
-
-            return {
-                source: frame,
-                width,
-                height,
-                close: () => frame.close(),
-            };
-        } catch {
-            return undefined;
         }
     }
 

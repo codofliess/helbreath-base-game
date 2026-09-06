@@ -618,7 +618,7 @@ export class LoadingScreen extends Scene {
 
         this.phaseTimings.loadMaps = performance.now() - mapsStart;
         console.log(
-            `[LoadingScreen] ⏱️  Load maps: ${this.phaseTimings.loadMaps.toFixed(2)}ms (${LOAD_MAP_ASSETS_ON_DEMAND ? 0 : mapInstances.size} maps)`,
+            `[LoadingScreen] ⏱️  Load maps: ${this.phaseTimings.loadMaps.toFixed(2)}ms (${LOAD_MAP_ASSETS_ON_DEMAND ? 'on-demand at enter (0 preloaded)' : mapInstances.size} maps)`,
         );
     }
 

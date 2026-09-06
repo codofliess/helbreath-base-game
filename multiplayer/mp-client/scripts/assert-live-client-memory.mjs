@@ -28,6 +28,10 @@ const mapAssets = read('src/utils/MapAssets.ts');
 const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
 const gameWorld = read('src/game/scenes/GameWorld.ts');
+const mapViewportStream = read('src/utils/mapViewportStream.ts');
+const spriteHttp = read('src/utils/SpriteHttpLoader.ts');
+const hbSprite = read('src/game/assets/HBSprite.ts');
+const hbMap = read('src/game/assets/HBMap.ts');
 const prodVite = read('vite/config.prod.mjs');
 const viteEnv = read('src/vite-env.d.ts');
 
@@ -101,19 +105,55 @@ assert(
 );
 
 assert(
-    /isTreeSpriteIndex\(idx\)/.test(mapAssets) && /indices\.add\(idx \+ 50\)/.test(mapAssets),
+    /isTreeSpriteIndex\(idx\)/.test(mapViewportStream) && /indices\.add\(idx \+ 50\)/.test(mapViewportStream),
     'MapAssets must still pull tree-shadow tile indices (tree + 50) on the on-demand path',
 );
 
 assert(
     /export async function prepareMapForGameWorld/.test(mapAssets) &&
-        /resolveTileSpriteAssets\(collectRequiredTileIndices\(map\)\)/.test(mapAssets),
-    'prepareMapForGameWorld must load only required tile packs for the current map',
+        /resolveTileSpriteAssets\(collectRequiredTileIndices\(hbMap, rect\)\)/.test(mapAssets) &&
+        /initialFocusStreamRect/.test(mapAssets),
+    'prepareMapForGameWorld must load only viewport tile packs (spawn camera + ring)',
 );
 
 assert(
     /for \(const asset of tileAssets\)/.test(mapAssets),
     'prepareMapForGameWorld must load tile packs sequentially (not Promise.all)',
+);
+
+assert(
+    /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
+        /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
+        /export function cameraStreamTileRect/.test(mapViewportStream),
+    'mapViewportStream must cap the painted window (camera + ring, never full .amd)',
+);
+
+assert(
+    /syncViewportStream/.test(hbMap) &&
+        /rowTilemapsByY/.test(hbMap) &&
+        /Never creates one Phaser tilemap per world row/.test(hbMap),
+    'HBMap must stream viewport rows, not one tilemap layer per world Y',
+);
+
+assert(
+    /syncStreamedView/.test(gameWorld) &&
+        /focusTileX: this\.initialGameWorldState\?\.playerX/.test(gameWorld),
+    'GameWorld must stream around spawn and update the camera window while walking',
+);
+
+assert(
+    /isHtmlAssetBody/.test(spriteHttp) &&
+        /looksLikeAmdMap/.test(spriteHttp) &&
+        /\/game-assets\//.test(spriteHttp) &&
+        /\/assets\//.test(spriteHttp),
+    'fetchGameAssetArrayBuffer must try game-assets + assets and reject HTML SPA bodies',
+);
+
+assert(
+    !/tryDecodeWithImageDecoder/.test(hbSprite) &&
+        /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
+        /scene\.game\.renderer\.type === CANVAS/.test(hbSprite),
+    'HBSprite must not upload VideoFrames then close them (Canvas-first VideoFrame closed / OOM)',
 );
 
 assert(

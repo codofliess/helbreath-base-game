@@ -1,4 +1,5 @@
 import { getMapAssets, Minimap } from './Assets';
+import { findMapByServerId } from '../utils/mapCatalogLookup';
 
 /** Display name, `.amd` filename, and minimap policy for one map. */
 export interface MapData {
@@ -18,9 +19,7 @@ export function getMapNames(): MapData[] {
 
 /** Looks up `MapData` by map id or `.amd` filename (server sends `elvine`, catalog is `elvine.amd`). */
 export function getMapData(filename: string): MapData | undefined {
-    const file = filename.replace(/^.*[/\\]/, '');
-    const withAmd = file.toLowerCase().endsWith('.amd') ? file : `${file}.amd`;
-    return getMapNames().find((map) => map.mapFile.toLowerCase() === withAmd.toLowerCase());
+    return findMapByServerId(filename, getMapNames());
 }
 
 /** Map picker options: sorted by display label. */

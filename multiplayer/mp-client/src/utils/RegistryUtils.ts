@@ -27,6 +27,7 @@ import { parseGroundItemDisplaySize } from '../constants/GroundItemDisplay';
 import { NetworkManager } from './NetworkManager';
 import type { Gender, SkinColor, TeleportLocSet } from '../Types';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
+import { registryMapKey } from './mapCatalogLookup';
 
 /**
  * Typed Phaser registry accessors: managers, binary/minimap cache, pivot tables, and UI flags.
@@ -170,11 +171,6 @@ export function getGameStateManager(game: Game): GameStateManager {
  * @param mapKey - The registry key (e.g., 'map-aresden')
  * @param map - The HBMap instance to store
  */
-function registryMapKey(mapName: string): string {
-    const base = mapName.replace(/^.*[/\\]/, '').replace(/\.amd$/i, '');
-    return base.startsWith('map-') ? base : `map-${base}`;
-}
-
 export function setMap(scene: Scene, mapKey: string, map: HBMap): void {
     scene.registry.set(registryMapKey(mapKey), map);
 }

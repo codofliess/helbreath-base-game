@@ -7,6 +7,7 @@ import { HBMap } from '../game/assets/HBMap';
 import { setMap } from './RegistryUtils';
 import { isTreeSpriteIndex } from './SpriteUtils';
 import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
+import { catalogAmdFileName } from './mapCatalogLookup';
 import {
     collectSpriteIndicesInRect,
     initialFocusStreamRect,
@@ -42,8 +43,7 @@ export function shouldLoadMapAssetsOnDemand(): boolean {
  * missing there (e.g. barracks floor 2), still allow HTTP load from game-assets/maps.
  */
 function getMapAssetByFileName(mapFileName: string): AssetData {
-    const normalized = mapFileName.replace(/^.*[/\\]/, '');
-    const withExt = normalized.toLowerCase().endsWith('.amd') ? normalized : `${normalized}.amd`;
+    const withExt = catalogAmdFileName(mapFileName);
     const asset = ASSETS.find(
         (a) => a.assetType === AssetType.MAP && a.fileName.toLowerCase() === withExt.toLowerCase(),
     );

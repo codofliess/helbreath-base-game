@@ -83,6 +83,17 @@ describe('mapViewportStream', () => {
         assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
     });
 
+    it('live Elvine 300×300 .amd cannot paint as one layer per world row', () => {
+        const mapSizeX = 300;
+        const mapSizeY = 300;
+        const rect = initialFocusStreamRect(149, 131, mapSizeX, mapSizeY);
+        const oldLayers = mapSizeY;
+        const streamedRows = rect.maxY - rect.minY + 1;
+        assert.ok(streamedRows <= MAP_STREAM_MAX_HEIGHT_TILES);
+        assert.ok(streamedRows < oldLayers);
+        assert.ok(mapTileRectArea(rect) < mapSizeX * mapSizeY / 10);
+    });
+
     it('initial spawn focus window stays bounded', () => {
         const rect = initialFocusStreamRect(90, 80, 400, 400);
         assert.ok(mapTileRectContains(rect, { minX: 90, minY: 80, maxX: 90, maxY: 80 }));

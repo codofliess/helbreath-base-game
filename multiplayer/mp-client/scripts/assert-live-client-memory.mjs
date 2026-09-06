@@ -29,8 +29,10 @@ const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
 const gameWorld = read('src/game/scenes/GameWorld.ts');
 const maps = read('src/constants/Maps.ts');
+const mapCatalogLookup = read('src/utils/mapCatalogLookup.ts');
 const mapViewportStream = read('src/utils/mapViewportStream.ts');
 const spriteHttp = read('src/utils/SpriteHttpLoader.ts');
+const gameAssetHttp = read('src/utils/gameAssetHttp.ts');
 const hbSprite = read('src/game/assets/HBSprite.ts');
 const hbMap = read('src/game/assets/HBMap.ts');
 const prodVite = read('vite/config.prod.mjs');
@@ -144,15 +146,18 @@ assert(
 );
 
 assert(
-    /withAmd/.test(maps) && /mapFile\.toLowerCase\(\) === withAmd\.toLowerCase\(\)/.test(maps),
+    /findMapByServerId/.test(maps) &&
+        /catalogAmdFileName/.test(mapCatalogLookup) &&
+        /mapFile\.toLowerCase\(\) === withAmd\.toLowerCase\(\)/.test(mapCatalogLookup),
     'getMapData must match server map id elvine to catalog elvine.amd (PRE_GENERATED minimap / HUD)',
 );
 
 assert(
-    /isHtmlAssetBody/.test(spriteHttp) &&
-        /looksLikeAmdMap/.test(spriteHttp) &&
-        /\/game-assets\//.test(spriteHttp) &&
-        /\/assets\//.test(spriteHttp),
+    /isHtmlAssetBody/.test(gameAssetHttp) &&
+        /looksLikeAmdMap/.test(gameAssetHttp) &&
+        /\/game-assets\//.test(gameAssetHttp) &&
+        /\/assets\//.test(gameAssetHttp) &&
+        /fetchGameAssetArrayBuffer/.test(spriteHttp),
     'fetchGameAssetArrayBuffer must try game-assets + assets and reject HTML SPA bodies',
 );
 

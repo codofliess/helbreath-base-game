@@ -190,8 +190,10 @@ assert(
 );
 
 assert(
-    /createBlankLayer/.test(hbMap) && /Never creates one Phaser tilemap per world row/.test(hbMap),
-    'HBMap must use one streamed Tilemap (createBlankLayer per Y), not one Tilemap per row',
+    /occupiedFlags\.fill\(0\)/.test(hbMap) &&
+        /new Uint8Array\(this\.sizeX \* this\.sizeY\)/.test(hbMap) &&
+        /Use \{\@link getTile\}/.test(hbMap),
+    'HBMap must not allocate one HBMapTile per world cell at parse (Elvine 300×300 OOM)',
 );
 
 assert(

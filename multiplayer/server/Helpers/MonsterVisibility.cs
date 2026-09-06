@@ -67,19 +67,31 @@ public static class MonsterVisibility {
         player.ReplaceMonstersInRange(monstersNow.Keys);
     }
 
-    /// <summary>Sends bulk enter for monsters near <paramref name="player"/>, registers mutual visibility (join / reconnect), and updates <see cref="GameWorldPlayer.ReplaceMonstersInRange"/>. Logs to the console when sending, and when the map has monsters but none fall inside the player's view box (spawn vs radius diagnostic).</summary>
+    /// <summary>Sends bulk enter for monsters near <paramref name="player"/>, registers mutual visibility (join / reconnect), and updates <see cref="GameWorldPlayer.ReplaceMonstersInRange"/>. Join logs split hostile/neutral vs friendly monsters vs catalog NPCs (city <c>npcs[]</c> — not player “Civilian” affiliation labels).</summary>
     public static void SendMonstersInRangeOnPlayerJoin(GameWorldRef wr, GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
 
         FillNearbyMonstersById(wr, player.PosX, player.PosY, wr.NearbyMonstersByIdScratch);
         var nearby = wr.NearbyMonstersByIdScratch;
+        Npc.FillNearbyNpcsById(wr, player.PosX, player.PosY, wr.NearbyNpcsByIdScratch);
+        var npcInView = wr.NearbyNpcsByIdScratch.Count;
+        var hostileInView = 0;
+        var friendlyInView = 0;
+        foreach (var monster in nearby.Values) {
+            if (monster.Allegiance == MonsterAllegiance.Friendly) {
+                friendlyInView++;
+            } else {
+                hostileInView++;
+            }
+        }
+
         if (nearby.Count > 0 && !player.Disconnected) {
             Console.WriteLine(
-                $"[MonsterVisibility] Join: sending {nearby.Count} monster(s) in view to player {player.PlayerId} at ({player.PosX},{player.PosY}); map has {wr.MonstersByMonsterId.Count} total.");
+                $"[MonsterVisibility] Join: sending {nearby.Count} monster(s) in view ({hostileInView} hostile/neutral, {friendlyInView} friendly) to player {player.PlayerId} at ({player.PosX},{player.PosY}); {npcInView} npc(s) in view; map has {wr.MonstersByMonsterId.Count} monsters / {wr.NpcsByNpcId.Count} npcs.");
             NetworkManager.SendToPlayer(player, NetworkManager.CreateMonstersEnteredRange(nearby.Values));
         } else if (wr.MonstersByMonsterId.Count > 0) {
             Console.WriteLine(
-                $"[MonsterVisibility] Join: 0 monsters in view for player {player.PlayerId} at ({player.PosX},{player.PosY}); {wr.MonstersByMonsterId.Count} on map (check spawn vs view radius).");
+                $"[MonsterVisibility] Join: 0 monsters in view for player {player.PlayerId} at ({player.PosX},{player.PosY}); {npcInView} npc(s) in view; {wr.MonstersByMonsterId.Count} monsters / {wr.NpcsByNpcId.Count} npcs on map (check spawn vs view radius; 'Civilian' nameplates are players, not npcs).");
         }
 
         foreach (var monster in nearby.Values) {

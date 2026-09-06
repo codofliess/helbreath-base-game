@@ -362,8 +362,20 @@
     "map": "aresden",
     "music": "aresden.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Citizenship / free-transfer spawn uses Spawn.TryGetTownDefaultSpawn → (149,127) city-hall plaza (dry spr 398). Same coords are water on traveler map default — client must load aresden.amd before applying.",
+    "_defaultSpawnNote": "Traveler pad (149,127). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile), not npcs[]. ViewRadius 18x11.",
     "dwellAreas": [
+      {
+        "monsterId": 1,
+        "count": 28,
+        "area": {
+          "x1": 151,
+          "y1": 118,
+          "x2": 166,
+          "y2": 137
+        },
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 149, "y": 127 }
+      },
       {
         "monsterId": 1,
         "count": 20,
@@ -1078,8 +1090,32 @@
     "map": "elvine",
     "music": "elvine.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Citizenship / free-transfer spawn uses Spawn.TryGetTownDefaultSpawn → (149,131) city-hall plaza",
+    "_defaultSpawnNote": "Traveler pad (149,131). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile allegiance 0), not GameWorlds npcs[] (elvine npcs is empty). Client 'Elvine Civilian' is a player affiliation label. ViewRadius 18x11.",
     "dwellAreas": [
+      {
+        "monsterId": 1,
+        "count": 28,
+        "area": {
+          "x1": 151,
+          "y1": 122,
+          "x2": 166,
+          "y2": 141
+        },
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 149, "y": 131 }
+      },
+      {
+        "monsterId": 1,
+        "count": 28,
+        "area": {
+          "x1": 206,
+          "y1": 96,
+          "x2": 226,
+          "y2": 114
+        },
+        "_plazaHunt": "hostile-slime",
+        "_viewAnchor": { "x": 220, "y": 105 }
+      },
       {
         "monsterId": 1,
         "count": 20,

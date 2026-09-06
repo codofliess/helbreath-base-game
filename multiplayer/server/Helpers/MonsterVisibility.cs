@@ -67,7 +67,7 @@ public static class MonsterVisibility {
         player.ReplaceMonstersInRange(monstersNow.Keys);
     }
 
-    /// <summary>Sends bulk enter for monsters near <paramref name="player"/>, registers mutual visibility (join / reconnect), and updates <see cref="GameWorldPlayer.ReplaceMonstersInRange"/>. Logs to the console when sending, and when the map has monsters but none fall inside the player's view box (spawn vs radius diagnostic).</summary>
+    /// <summary>Sends bulk enter for monsters near <paramref name="player"/>, registers mutual visibility (join / reconnect), and updates <see cref="GameWorldPlayer.ReplaceMonstersInRange"/>. Join logs split hostile/neutral vs friendly monsters vs catalog NPCs (city <c>npcs[]</c> — not player “Civilian” affiliation labels).</summary>
     public static void SendMonstersInRangeOnPlayerJoin(GameWorldRef wr, GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
 

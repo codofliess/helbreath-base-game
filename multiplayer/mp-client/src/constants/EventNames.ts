@@ -460,6 +460,8 @@ export interface SystemLogAppendPayload {
 export const OUT_SPRITE_FRAME_EXTRACTED = 'sprite-frame-extracted';
 /** React → Phaser: refresh F5 paper-doll body layers from loaded player sprites. */
 export const IN_UI_PAPERDOLL_CAPTURE = 'ui-paperdoll-capture';
+/** React → Phaser: decode only the named UI/item-icon frames (never a full pack dump). Payload: string[] */
+export const IN_UI_ENSURE_SPRITE_FRAMES = 'ui-ensure-sprite-frames';
 export const OUT_UI_HOVER_SPRITE_FRAME_DEBUG = 'ui-hover-sprite-frame-debug';
 export const OUT_UI_HOVER_MONSTER = 'ui-hover-monster';
 /** Phaser → React: other player under cursor. Payload: PlayerHoverInfo | undefined */

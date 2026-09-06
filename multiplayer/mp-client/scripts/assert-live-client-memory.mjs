@@ -38,6 +38,11 @@ const hbSprite = read('src/game/assets/HBSprite.ts');
 const hbMap = read('src/game/assets/HBMap.ts');
 const prodVite = read('vite/config.prod.mjs');
 const viteEnv = read('src/vite-env.d.ts');
+const itemIcons = read('src/utils/ItemIconAssets.ts');
+const bootCatalog = read('src/utils/bootCatalog.ts');
+const inventoryDialog = read('src/ui/dialogs/InventoryDialog.tsx');
+const characterDialog = read('src/ui/dialogs/CharacterDialog.tsx');
+const paperDoll = read('src/ui/components/CharacterPaperDoll.tsx');
 
 assert(
     fs.existsSync(path.join(root, 'public/assets/sounds/magic.mp3')),
@@ -289,6 +294,62 @@ assert(
 assert(
     /loadNpcSpriteOnDemand/.test(gameWorld) && /loadItemIconAssetsOnDemand/.test(gameWorld),
     'GameWorld must lazy-load NPC sprites and item icon packs on enter/view, not at LoadingScreen',
+);
+
+assert(
+    /loadSpriteSheetsOnDemand/.test(spriteHttp) &&
+        /sheetIndices: new Set\(still\)/.test(spriteHttp) &&
+        /new HBSpriteFile\(asset\.key, asset\.spriteType, false/.test(spriteHttp),
+    'SpriteHttpLoader must decode listed sheets only and never data-URL dump them',
+);
+
+assert(
+    /packSheets/.test(itemIcons) &&
+        /groundSheets/.test(itemIcons) &&
+        /if \(packSheets\.length === 0 && groundSheets\.length === 0\)/.test(itemIcons),
+    'ItemIconAssets must no-op without sheet lists (never decode full bag on Char open)',
+);
+
+assert(
+    /loadSpriteSheetsOnDemand/.test(bootCatalog) &&
+        /WORLD_HUD_FRAME_KEYS/.test(bootCatalog) &&
+        /ensureNamedSpriteFrames/.test(bootCatalog) &&
+        !/dialogtext\.spr/.test(bootCatalog) &&
+        !/item-pack\.spr/.test(bootCatalog),
+    'Deferred world HUD must not decode dialogtext or item-pack',
+);
+
+assert(
+    /key: 'sprite-item-pack', fileName: 'item-pack\.spr', assetType: AssetType\.SPRITE, spriteType: SpriteType\.ItemPack, exportFramesAsDataUrls: false/.test(
+        assets,
+    ) &&
+        /key: 'sprite-dialogtext', fileName: 'dialogtext\.spr', assetType: AssetType\.SPRITE, spriteType: SpriteType\.Interface, exportFramesAsDataUrls: false/.test(
+            assets,
+        ),
+    'Interface and item-pack catalog rows must not dump every frame as a PNG data URL',
+);
+
+assert(
+    /IN_UI_ENSURE_SPRITE_FRAMES/.test(gameWorld) &&
+        /runPaperDollCapture/.test(gameWorld) &&
+        /groundItemIconSheets/.test(gameWorld) &&
+        /loadItemIconAssetsOnDemand\(this, request\)/.test(gameWorld),
+    'GameWorld must sheet-filter ground icons and coalesce F5 paper-doll captures',
+);
+
+assert(
+    /packSheets/.test(inventoryDialog) &&
+        /BAG_CHROME_FRAME_KEYS/.test(inventoryDialog) &&
+        !/loadItemIconAssetsOnDemand\(scene\)/.test(inventoryDialog),
+    'F6 bag must load item-pack sheets for bagged items only, not the full pack+ground',
+);
+
+assert(
+    /CHARACTER_MAIN_FRAME_KEYS/.test(characterDialog) &&
+        /IN_UI_ENSURE_SPRITE_FRAMES/.test(characterDialog) &&
+        /IN_UI_ENSURE_SPRITE_FRAMES/.test(paperDoll) &&
+        !/4000/.test(paperDoll),
+    'F5 Char must request dialogtext chrome + jewelry frames only (no 6-timeout capture burst)',
 );
 
 if (failures.length > 0) {

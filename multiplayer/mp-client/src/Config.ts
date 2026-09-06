@@ -184,8 +184,8 @@ export const LOAD_EFFECT_ASSETS_ON_DEMAND = true;
 export const LOAD_NPC_ASSETS_ON_DEMAND = true;
 
 /**
- * When true, `item-pack.spr` / `item-ground.spr` skip LoadingScreen (and skip dumping every
- * frame as a PNG data URL). Bag open and ground piles fetch them later.
+ * When true, `item-pack.spr` / `item-ground.spr` skip LoadingScreen. Bag open and ground
+ * piles fetch **only the sheets for visible items** — F5 Char must never decode the full bag.
  */
 export const LOAD_ITEM_ICON_ASSETS_ON_DEMAND = true;
 

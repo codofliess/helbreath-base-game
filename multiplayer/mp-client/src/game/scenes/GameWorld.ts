@@ -40,6 +40,7 @@ import {
     setSoundManager,
     takePendingPlayerItemAppearancePrefetch,
     getMapIfPresent,
+    getGroundItemDisplaySize,
 } from '../../utils/RegistryUtils';
 import type { InitialGameWorldState } from '../../utils/RegistryUtils';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
@@ -50,7 +51,13 @@ import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
-import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
+import {
+    areItemIconSheetsReady,
+    groundItemIconSheets,
+    loadItemIconAssetsOnDemand,
+    shouldLoadItemIconAssetsOnDemand,
+} from '../../utils/ItemIconAssets';
+import { ensureNamedSpriteFrames } from '../../utils/uiSpriteFrames';
 import { areNpcSpriteLoaded, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
 import { getMonsterData } from '../../constants/Monsters';
@@ -163,6 +170,7 @@ import {
     IN_UI_CHANGE_UNDERWEAR_COLOR,
     IN_UI_CHANGE_HAIR_STYLE,
     IN_UI_PAPERDOLL_CAPTURE,
+    IN_UI_ENSURE_SPRITE_FRAMES,
     IN_UI_CHANGE_MUSIC_VOLUME,
     IN_UI_CHANGE_SOUND_VOLUME,
     IN_UI_CHANGE_MUSIC_ENABLED,
@@ -451,6 +459,8 @@ export class GameWorld extends Scene {
     private playerItemAppearancePrefetchRunning = false;
     /** NPC sprite loads in flight (instance id) so enter packets can retry after fetch. */
     private readonly npcSpriteLoadsInFlight = new Set<string>();
+    /** Coalesce F5 paper-doll bursts (6 timeouts × canvas dumps OOM Char open). */
+    private paperDollCaptureTimer: Phaser.Time.TimerEvent | undefined;
 
     constructor() {
         super('GameWorld');
@@ -732,36 +742,21 @@ export class GameWorld extends Scene {
         EventBus.on(IN_UI_CHANGE_UNDERWEAR_COLOR, this.syncPlayerAppearanceHandler);
         EventBus.on(IN_UI_CHANGE_HAIR_STYLE, this.syncPlayerAppearanceHandler);
 
-        subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
-            try {
-                // Always recapture on F5 — stale cache was the #1 "wrong mannequin" cause.
-                invalidatePaperDollCache();
-                const inv = getInventoryManager(this.game);
-                const gender = this.player?.getGender?.() ?? playerDialogStore.state.gender;
-                const skin = playerDialogStore.state.skinColor;
-                const hair =
-                    this.player?.getHairStyleIndex?.() ?? playerDialogStore.state.hairStyleIndex;
-                const uw =
-                    this.player?.getUnderwearColorIndex?.() ??
-                    playerDialogStore.state.underwearColorIndex;
-                const equipped = inv?.equippedItems ?? {};
-
-                // 1) Prefer live map pixels first (even 1 layer = body) — most reliable for F5.
-                const liveLayers = this.player?.getVisibleSpritesForPaperDoll?.() ?? [];
-                if (this.player && liveLayers.length >= 1) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
-                }
-
-                // 2) Idle-south rebuild (fills gear when packs finish loading; upgrades nude→geared).
-                capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
-
-                // 3) Live again if multi-layer (gear) so F5 matches the world character.
-                if (this.player && liveLayers.length >= 2) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
-                }
-            } catch (err) {
-                console.warn('[GameWorld] paper-doll capture failed', err);
+        subscribeSafe('GameWorld', IN_UI_ENSURE_SPRITE_FRAMES, (keys: string[]) => {
+            if (!Array.isArray(keys) || keys.length === 0) {
+                return;
             }
+            void ensureNamedSpriteFrames(this, keys).catch((error) => {
+                console.warn('[GameWorld] ensureNamedSpriteFrames failed', error);
+            });
+        });
+
+        subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
+            this.paperDollCaptureTimer?.remove(false);
+            this.paperDollCaptureTimer = this.time.delayedCall(80, () => {
+                this.paperDollCaptureTimer = undefined;
+                this.runPaperDollCapture();
+            });
         });
 
         // Listen for map change events from React
@@ -2302,6 +2297,34 @@ export class GameWorld extends Scene {
         }
     }
 
+    private runPaperDollCapture(): void {
+        try {
+            invalidatePaperDollCache();
+            const inv = getInventoryManager(this.game);
+            const gender = this.player?.getGender?.() ?? playerDialogStore.state.gender;
+            const skin = playerDialogStore.state.skinColor;
+            const hair =
+                this.player?.getHairStyleIndex?.() ?? playerDialogStore.state.hairStyleIndex;
+            const uw =
+                this.player?.getUnderwearColorIndex?.() ??
+                playerDialogStore.state.underwearColorIndex;
+            const equipped = inv?.equippedItems ?? {};
+
+            const liveLayers = this.player?.getVisibleSpritesForPaperDoll?.() ?? [];
+            if (this.player && liveLayers.length >= 1) {
+                capturePaperDollFromLivePlayer(this, this.player, true);
+            }
+
+            capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
+
+            if (this.player && liveLayers.length >= 2) {
+                capturePaperDollFromLivePlayer(this, this.player, true);
+            }
+        } catch (err) {
+            console.warn('[GameWorld] paper-doll capture failed', err);
+        }
+    }
+
     private syncMonstersFromNetworkState(): void {
         const inView = getNetworkManager(this.game)?.getMonstersInViewState() ?? [];
         for (const entry of inView) {
@@ -3831,27 +3854,31 @@ export class GameWorld extends Scene {
         itemAttribute?: number,
         itemColor?: number,
     ): void {
-        if (shouldLoadItemIconAssetsOnDemand() && !areItemIconAssetsLoaded(this)) {
-            void loadItemIconAssetsOnDemand(this)
-                .then(() => {
-                    this.upsertGroundItemVisual(
-                        worldX,
-                        worldY,
-                        itemId,
-                        itemUid,
-                        quantity,
-                        effectOverrides,
-                        itemAttribute,
-                        itemColor,
-                    );
-                })
-                .catch((error) => {
-                    console.warn(
-                        `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to lazy-load item icon packs`,
-                        error,
-                    );
-                });
-            return;
+        if (shouldLoadItemIconAssetsOnDemand()) {
+            const gender = playerDialogStore.state.gender;
+            const request = groundItemIconSheets(itemId, gender, getGroundItemDisplaySize(this));
+            if (!areItemIconSheetsReady(this, request)) {
+                void loadItemIconAssetsOnDemand(this, request)
+                    .then(() => {
+                        this.upsertGroundItemVisual(
+                            worldX,
+                            worldY,
+                            itemId,
+                            itemUid,
+                            quantity,
+                            effectOverrides,
+                            itemAttribute,
+                            itemColor,
+                        );
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Failed to lazy-load item icon sheets`,
+                            error,
+                        );
+                    });
+                return;
+            }
         }
         this.removeGroundItemVisualAtCell(worldX, worldY);
 

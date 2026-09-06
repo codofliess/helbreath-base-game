@@ -15,7 +15,7 @@ import {
 import { buildItemHoverInfo } from '../../constants/OlympiaItemName';
 import { setInventoryItemHoverInfo } from '../store/InventoryItemHoverOverlay.store';
 import { EventBus } from '../../game/EventBus';
-import { IN_UI_PAPERDOLL_CAPTURE, ITEM_MOVED_TO_BAG } from '../../constants/EventNames';
+import { IN_UI_PAPERDOLL_CAPTURE, IN_UI_ENSURE_SPRITE_FRAMES, ITEM_MOVED_TO_BAG } from '../../constants/EventNames';
 import { Gender, SkinColor } from '../../Types';
 import { playerDialogStore } from '../store/PlayerDialog.store';
 import {
@@ -67,13 +67,11 @@ export function CharacterPaperDoll() {
     const hairStyleIndex = useStore(playerDialogStore, (s) => s.hairStyleIndex);
     const spriteFrameMap = useStore(appStore, (s) => s.spriteFrameMap);
 
-    // Re-capture avatar whenever looks/gear change (bursts while textures load).
+    // One recapture now + one after gear sheets; GameWorld debounces canvas dumps.
     useEffect(() => {
         EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
-        const bursts = [80, 250, 600, 1200, 2200, 4000].map((ms) =>
-            window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), ms),
-        );
-        return () => bursts.forEach((id) => window.clearTimeout(id));
+        const retry = window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), 700);
+        return () => window.clearTimeout(retry);
     }, [genderLook, skinColor, underwearColorIndex, hairStyleIndex, equippedItems]);
 
     const resolveSlotItem = useCallback(
@@ -93,6 +91,30 @@ export function CharacterPaperDoll() {
         },
         [equippedItems],
     );
+
+    useEffect(() => {
+        const gender = playerGender ?? Gender.MALE;
+        const keys: string[] = [];
+        for (const slot of ACCESSORY_SLOTS) {
+            const { equipped } = resolveSlotItem(slot);
+            const itemDef = equipped !== undefined ? getItemById(equipped.itemId) : undefined;
+            if (!itemDef || !equipped) {
+                continue;
+            }
+            const spriteKey = getItemInventorySpriteKeyWithOverrides(
+                itemDef,
+                gender,
+                equipped.effectOverrides,
+                equipped.itemColor,
+            );
+            if (spriteKey) {
+                keys.push(spriteKey);
+            }
+        }
+        if (keys.length > 0) {
+            EventBus.emit(IN_UI_ENSURE_SPRITE_FRAMES, keys);
+        }
+    }, [equippedItems, playerGender, resolveSlotItem]);
 
     const getSlotVisual = useCallback(
         (slot: EquipmentSlot) => {

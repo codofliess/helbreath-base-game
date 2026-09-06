@@ -178,14 +178,14 @@ export const ASSETS: AssetData[] = [
     { key: 'sprite-mhleggings2', fileName: 'mhleggings2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.EquipmentPack },
     { key: 'sprite-mhpmail2', fileName: 'mhpmail2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.EquipmentPack },
     { key: 'sprite-mbabhammer', fileName: 'mbabhammer.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Weapons },
-    { key: 'sprite-interface', fileName: 'interface.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: true },
-    { key: 'sprite-gamedialog2', fileName: 'gamedialog2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: true },
+    { key: 'sprite-interface', fileName: 'interface.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: false },
+    { key: 'sprite-gamedialog2', fileName: 'gamedialog2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: false },
     /** DialogText.pak — Character (F5) panel + ND_BUTTON sheet (Client.cpp DEF_SPRID_INTERFACE_ND_TEXT / ND_BUTTON) */
-    { key: 'sprite-dialogtext', fileName: 'dialogtext.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: true },
-    { key: 'sprite-interface2', fileName: 'interface2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: true },
+    { key: 'sprite-dialogtext', fileName: 'dialogtext.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: false },
+    { key: 'sprite-interface2', fileName: 'interface2.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.Interface, exportFramesAsDataUrls: false },
     // Item sprite sheets (pack = inventory/bag, ground = on map)
-    { key: 'sprite-item-pack', fileName: 'item-pack.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.ItemPack, exportFramesAsDataUrls: true },
-    { key: 'sprite-item-ground', fileName: 'item-ground.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.ItemGround, exportFramesAsDataUrls: true },
+    { key: 'sprite-item-pack', fileName: 'item-pack.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.ItemPack, exportFramesAsDataUrls: false },
+    { key: 'sprite-item-ground', fileName: 'item-ground.spr', assetType: AssetType.SPRITE, spriteType: SpriteType.ItemGround, exportFramesAsDataUrls: false },
     
     // Music files
     { key: 'abaddon', fileName: 'abaddon.mp3', assetType: AssetType.MUSIC },

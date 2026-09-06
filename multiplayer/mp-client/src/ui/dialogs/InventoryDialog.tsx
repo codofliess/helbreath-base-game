@@ -80,6 +80,7 @@ import {
     SELL_BAG_ITEM_RESULT,
     TOAST_REQUESTED,
     OUT_SPRITE_FRAME_EXTRACTED,
+    IN_UI_ENSURE_SPRITE_FRAMES,
     type SellBagItemResultEvent,
 } from '../../constants/EventNames';
 import { setInventoryItemHoverInfo, setInventoryItemHoverOverlaySuppressed, pinInventoryItemHoverInfo, clearInventoryItemHoverInfo } from '../store/InventoryItemHoverOverlay.store';
@@ -93,7 +94,8 @@ import { formatOlympiaCompactAmount } from '../../utils/olympiaFormat';
 import { getOlympiaItemPriceCatalog } from '../../utils/olympiaItemPriceCatalog';
 import { isPostTestNftMintEligible } from '../../utils/olympiaDropRules';
 import type { IRefPhaserGame } from '../../PhaserGame';
-import { loadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
+import { collectItemPackSheetsForItems, loadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
+import { BAG_CHROME_FRAME_KEYS } from '../../utils/uiDialogFrames';
 import { Gender } from '../../Types';
 import type { ItemDropLogEntry } from '../store/ItemDrops.store';
 
@@ -371,15 +373,18 @@ export function InventoryDialog({
     }, [activeTab, walletPubkey]);
 
     useEffect(() => {
+        EventBus.emit(IN_UI_ENSURE_SPRITE_FRAMES, [...BAG_CHROME_FRAME_KEYS]);
         const game = phaserRef?.current?.game;
         const scene = game?.scene?.getScene('GameWorld');
         if (!scene) {
             return;
         }
-        void loadItemIconAssetsOnDemand(scene).catch((error) => {
-            console.warn('[InventoryDialog] Failed to lazy-load item icon packs', error);
+        const gender = playerGender ?? Gender.MALE;
+        const packSheets = collectItemPackSheetsForItems(baggedItems, gender);
+        void loadItemIconAssetsOnDemand(scene, { packSheets }).catch((error) => {
+            console.warn('[InventoryDialog] Failed to lazy-load bag item-pack sheets', error);
         });
-    }, [phaserRef]);
+    }, [phaserRef, baggedItems, playerGender]);
 
     useEffect(() => {
         const onSellResult = (ev: SellBagItemResultEvent) => {

@@ -1,4 +1,4 @@
-import { type PointerEvent, type ReactNode, useState } from 'react';
+import { type PointerEvent, type ReactNode, useEffect, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { DialogDragHandle, HeadlessDraggableDialog } from './HeadlessDraggableDialog';
 import { CharacterPaperDoll } from '../components/CharacterPaperDoll';
@@ -14,6 +14,7 @@ import {
     IN_UI_BEGINNER_PATH_ENROLL,
     IN_UI_BEGINNER_PATH_UI_ACTION,
     IN_UI_CREATE_PARTY,
+    IN_UI_ENSURE_SPRITE_FRAMES,
     IN_UI_JOIN_PARTY,
     IN_UI_LEAVE_PARTY,
     IN_UI_LEVEL_UP_SETTINGS,
@@ -56,6 +57,7 @@ import {
     ACHIEVEMENTS_DIALOG_BG,
     ACHIEVEMENTS_DIALOG_TITLE,
 } from '../../constants/SpriteKeys';
+import { CHARACTER_MAIN_FRAME_KEYS } from '../../utils/uiDialogFrames';
 
 interface CharacterDialogProps {
     position: { x: number; y: number };
@@ -226,6 +228,10 @@ function CharacterSubPanelShell({
     const spriteFrameMap = useStore(appStore, (s) => s.spriteFrameMap);
     const bg = spriteFrameMap.get(bgKey);
     const title = spriteFrameMap.get(titleKey);
+
+    useEffect(() => {
+        EventBus.emit(IN_UI_ENSURE_SPRITE_FRAMES, [bgKey, titleKey, DIALOG_BTN_OK_CLASSIC, DIALOG_BTN_OK_CLASSIC_HOVER]);
+    }, [bgKey, titleKey]);
 
     return (
         <div
@@ -761,6 +767,10 @@ export function CharacterDialog({
     const openSubPanel = (panel: CharacterSubPanel) => setCharacterSubPanel(panel);
     const backToMain = () => setCharacterSubPanel('main');
     const showingSubPanel = activeSubPanel !== 'main';
+
+    useEffect(() => {
+        EventBus.emit(IN_UI_ENSURE_SPRITE_FRAMES, [...CHARACTER_MAIN_FRAME_KEYS]);
+    }, []);
 
     return (
         <HeadlessDraggableDialog

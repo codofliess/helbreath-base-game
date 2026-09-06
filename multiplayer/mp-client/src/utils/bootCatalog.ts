@@ -3,7 +3,9 @@ import type { Scene } from 'phaser';
 import { MONSTER_PLACEHOLDER_SPRITE } from '../Config';
 import { ASSETS, AssetType, type AssetData } from '../constants/Assets';
 import { SpriteType } from '../game/assets/HBSprite';
-import { loadSpriteAssetOnDemand } from './SpriteHttpLoader';
+import { WORLD_HUD_FRAME_KEYS } from './uiDialogFrames';
+import { ensureNamedSpriteFrames } from './uiSpriteFrames';
+import { loadSpriteAssetOnDemand, loadSpriteSheetsOnDemand } from './SpriteHttpLoader';
 
 /**
  * Body / underwear / hair packs for SELECTCHAR and Create Character paper-dolls.
@@ -26,13 +28,14 @@ function assetForSpriteName(spriteName: string, spriteType: SpriteType): AssetDa
     const key = `sprite-${spriteName}`;
     const row = ASSETS.find((a) => a.key === key && a.assetType === AssetType.SPRITE);
     if (row) {
-        return row;
+        return { ...row, exportFramesAsDataUrls: false };
     }
     return {
         key,
         fileName: `${spriteName}.spr`,
         assetType: AssetType.SPRITE,
         spriteType,
+        exportFramesAsDataUrls: false,
     };
 }
 
@@ -40,10 +43,32 @@ export function getSelectAppearanceAssets(): AssetData[] {
     return SELECT_APPEARANCE_SPRITE_NAMES.map((name) => assetForSpriteName(name, SpriteType.Human));
 }
 
+/** HUD only: interface cursors (sheet 0) + gamedialog2 dock (sheet 6). Never dialogtext / full bag. */
+export const WORLD_HUD_SPRITE_SHEETS: ReadonlyArray<{ asset: AssetData; sheets: readonly number[] }> = [
+    {
+        asset: {
+            key: 'sprite-interface',
+            fileName: 'interface.spr',
+            assetType: AssetType.SPRITE,
+            spriteType: SpriteType.Interface,
+            exportFramesAsDataUrls: false,
+        },
+        sheets: [0],
+    },
+    {
+        asset: {
+            key: 'sprite-gamedialog2',
+            fileName: 'gamedialog2.spr',
+            assetType: AssetType.SPRITE,
+            spriteType: SpriteType.Interface,
+            exportFramesAsDataUrls: false,
+        },
+        sheets: [6],
+    },
+];
+
 export function getWorldInterfaceAssets(): AssetData[] {
-    return ASSETS.filter(
-        (a) => a.assetType === AssetType.SPRITE && a.spriteType === SpriteType.Interface,
-    );
+    return WORLD_HUD_SPRITE_SHEETS.map((row) => row.asset);
 }
 
 export function getMonsterPlaceholderAsset(): AssetData {
@@ -66,13 +91,21 @@ export function loadSelectAppearanceSprites(scene: Scene): Promise<void> {
 }
 
 /**
- * HUD/dialog interface packs + monster placeholder. Call after map viewport stream so
- * enter-world does not race tile-sheet decode.
+ * HUD sheets + monster placeholder. Does not decode dialogtext or item-pack.
+ * Call after map viewport stream so enter-world does not race tile-sheet decode.
  */
-export function loadWorldDeferredSprites(scene: Scene): Promise<void> {
-    return loadSpriteList(
-        scene,
-        [...getWorldInterfaceAssets(), getMonsterPlaceholderAsset()],
-        'world',
-    );
+export async function loadWorldDeferredSprites(scene: Scene): Promise<void> {
+    for (const row of WORLD_HUD_SPRITE_SHEETS) {
+        try {
+            await loadSpriteSheetsOnDemand(scene, row.asset, row.sheets);
+        } catch (error) {
+            console.warn(`[bootCatalog] world skipped ${row.asset.fileName}`, error);
+        }
+    }
+    try {
+        await loadSpriteAssetOnDemand(scene, getMonsterPlaceholderAsset());
+    } catch (error) {
+        console.warn('[bootCatalog] world skipped monster placeholder', error);
+    }
+    await ensureNamedSpriteFrames(scene, WORLD_HUD_FRAME_KEYS);
 }

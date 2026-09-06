@@ -7,12 +7,14 @@ import {
     isHtmlAssetBody,
     looksLikeAmdMap,
 } from './gameAssetHttp';
+import { uniqueNonNegativeInts } from './itemIconSheets';
 import { resolveSoundAsset } from './soundAlias';
 
 export { fetchGameAssetArrayBuffer, isHtmlAssetBody, looksLikeAmdMap };
 
 let spriteDecodeChain: Promise<void> = Promise.resolve();
 const spriteLoadPromises = new Map<string, Promise<void>>();
+const spriteSheetLoadChains = new Map<string, Promise<void>>();
 const soundLoadPromises = new Map<string, Promise<void>>();
 const musicLoadPromises = new Map<string, Promise<void>>();
 const failedAudioKeys = new Set<string>();
@@ -33,6 +35,60 @@ export function enqueueSpriteDecode<T>(work: () => Promise<T>): Promise<T> {
 /** True when sheet 0 for this asset key is registered (load finished enough to draw). */
 export function areSpriteSheetLoaded(scene: Scene, assetKey: string): boolean {
     return scene.textures.exists(`${assetKey}-0`);
+}
+
+export function areSpriteSheetsPresent(
+    scene: Scene,
+    assetKey: string,
+    sheetIndices: readonly number[],
+): boolean {
+    return sheetIndices.every((index) => scene.textures.exists(`${assetKey}-${index}`));
+}
+
+/**
+ * Decode only the listed local sheets (keeps the `.spr` in cache). Never dumps every
+ * frame as a PNG data URL — that path OOMs F5 Char / F6 bag on live Canvas Chrome.
+ */
+export function loadSpriteSheetsOnDemand(
+    scene: Scene,
+    asset: AssetData,
+    sheetIndices: readonly number[],
+): Promise<void> {
+    if (asset.assetType !== AssetType.SPRITE || !asset.spriteType) {
+        return Promise.resolve();
+    }
+    const wanted = uniqueNonNegativeInts(sheetIndices);
+    if (wanted.length === 0 || areSpriteSheetsPresent(scene, asset.key, wanted)) {
+        return Promise.resolve();
+    }
+
+    const run = async (): Promise<void> => {
+        const still = wanted.filter((index) => !scene.textures.exists(`${asset.key}-${index}`));
+        if (still.length === 0) {
+            return;
+        }
+        if (!scene.cache.binary.get(asset.key)) {
+            const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+            scene.cache.binary.add(asset.key, arrayBuffer);
+        }
+        const hbFile = new HBSpriteFile(asset.key, asset.spriteType, false, asset.tileStartIndex);
+        await hbFile.load(scene, { sheetIndices: new Set(still) });
+    };
+
+    const chained = (spriteSheetLoadChains.get(asset.key) ?? Promise.resolve())
+        .then(() => enqueueSpriteDecode(run))
+        .catch((error) => {
+            spriteSheetLoadChains.delete(asset.key);
+            throw error;
+        });
+    spriteSheetLoadChains.set(
+        asset.key,
+        chained.then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
+    return chained;
 }
 
 /** Fetches and registers one `.spr` (shared promise per asset key; decode is serialized). */

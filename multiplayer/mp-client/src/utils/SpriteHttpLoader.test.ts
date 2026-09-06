@@ -66,3 +66,13 @@ describe('on-demand sound 404 / alias (source)', () => {
         assert.match(src, /Audio \$\{folder\}\/\$\{fileName\} skipped/);
     });
 });
+
+describe('partial sprite sheet decode (source)', () => {
+    it('loadSpriteSheetsOnDemand never dumps data URLs and keeps a sheet filter', () => {
+        const src = fs.readFileSync(new URL('./SpriteHttpLoader.ts', import.meta.url), 'utf8');
+        assert.match(src, /export function loadSpriteSheetsOnDemand/);
+        assert.match(src, /sheetIndices: new Set\(still\)/);
+        assert.match(src, /new HBSpriteFile\(asset\.key, asset\.spriteType, false/);
+        assert.match(src, /areSpriteSheetsPresent/);
+    });
+});

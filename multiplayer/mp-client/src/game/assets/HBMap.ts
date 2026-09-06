@@ -152,7 +152,8 @@ export class HBMap {
     private spatialGrid: SpatialGrid = new SpatialGrid(TILE_SIZE);
 
     /**
-     * Viewport-streamed Phaser tilemaps keyed by map row Y. Never allocate one layer per world row.
+     * Viewport-streamed Phaser tilemaps keyed by map row Y. Never creates one Phaser tilemap per world row.
+     * Streamed Y rows share one Tilemap; layers keep per-row depth.
      */
     private rowTilemapsByY = new Map<number, Phaser.Tilemaps.Tilemap>();
 
@@ -575,7 +576,28 @@ export class HBMap {
         );
 
         const streamWidth = rect.maxX - rect.minX + 1;
+        const streamHeight = rect.maxY - rect.minY + 1;
         const groundDepthBias = 10;
+
+        // Never creates one Phaser tilemap per world row — one tilemap, one layer per streamed Y.
+        const streamTilemap = scene.make.tilemap({
+            tileWidth: TILE_SIZE,
+            tileHeight: TILE_SIZE,
+            width: streamWidth,
+            height: streamHeight,
+        });
+        const tileset = streamTilemap.addTilesetImage(
+            tilesetKey,
+            tilesetKey,
+            TILE_SIZE,
+            TILE_SIZE,
+            0,
+            0,
+        );
+        if (!tileset) {
+            streamTilemap.destroy();
+            throw new Error('Failed to add tileset for streamed ground');
+        }
 
         for (let y = rect.minY; y <= rect.maxY; y++) {
             const row: number[] = [];
@@ -589,40 +611,28 @@ export class HBMap {
                 row.push(uniqueTile ? uniqueTile.tilesetIndex : -1);
             }
 
-            const rowTilemap = scene.make.tilemap({
-                data: [row],
-                tileWidth: TILE_SIZE,
-                tileHeight: TILE_SIZE,
-                width: streamWidth,
-                height: 1,
-            });
-            const tileset = rowTilemap.addTilesetImage(
-                tilesetKey,
-                tilesetKey,
-                TILE_SIZE,
-                TILE_SIZE,
-                0,
-                0,
+            const layer = streamTilemap.createBlankLayer(
+                `ground-y-${y}`,
+                tileset,
+                rect.minX * TILE_SIZE,
+                y * TILE_SIZE,
+                streamWidth,
+                1,
             );
-            if (!tileset) {
-                rowTilemap.destroy();
-                this.destroyRowTilemaps();
-                throw new Error(`Failed to add tileset for map row ${y}`);
-            }
-            const layer = rowTilemap.createLayer(0, tileset, rect.minX * TILE_SIZE, y * TILE_SIZE);
             if (!layer) {
-                rowTilemap.destroy();
+                streamTilemap.destroy();
                 this.destroyRowTilemaps();
                 throw new Error(`Failed to create tilemap layer for map row ${y}`);
             }
+            layer.putTilesAt(row, 0, 0);
             layer.setDepth(y * DEPTH_MULTIPLIER - groundDepthBias);
-            this.rowTilemapsByY.set(y, rowTilemap);
+            this.rowTilemapsByY.set(y, streamTilemap);
             this.tilemapLayersByY.set(y, layer);
         }
 
         console.log(
-            `Map tiles streamed: ${streamWidth}x${rect.maxY - rect.minY + 1} of ${this.sizeX}x${this.sizeY} ` +
-                `using ${tileKeys.length} unique tiles (${this.rowTilemapsByY.size} Y-sorted rows)` +
+            `Map tiles streamed: ${streamWidth}x${streamHeight} of ${this.sizeX}x${this.sizeY} ` +
+                `using ${tileKeys.length} unique tiles (${this.tilemapLayersByY.size} Y-sorted rows)` +
                 (missingTextureCount || missingFrameCount
                     ? ` [missing textures=${missingTextureCount}, frames=${missingFrameCount}]`
                     : ''),
@@ -746,23 +756,16 @@ export class HBMap {
 
     /** Destroys streamed per-row tilemaps/layers created by {@link paintStreamedGround}. */
     private destroyRowTilemaps(): void {
-        for (const layer of this.tilemapLayersByY.values()) {
-            try {
-                layer.destroy();
-            } catch {
-                /* already destroyed */
-            }
-        }
+        const uniqueMaps = new Set(this.rowTilemapsByY.values());
         this.tilemapLayersByY.clear();
-
-        for (const rowTilemap of this.rowTilemapsByY.values()) {
+        this.rowTilemapsByY.clear();
+        for (const rowTilemap of uniqueMaps) {
             try {
                 rowTilemap.destroy();
             } catch {
                 /* already destroyed */
             }
         }
-        this.rowTilemapsByY.clear();
     }
 
     /**

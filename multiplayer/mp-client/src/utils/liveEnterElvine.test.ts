@@ -7,6 +7,7 @@ import { catalogAmdFileName, registryMapKey } from './mapCatalogLookup';
 import { localTileSheetIndices } from './tileSheetFilter';
 import { parseAmdMapCells } from './mapAmdBinary';
 import { fetchGameAssetArrayBuffer } from './gameAssetHttp';
+import { countSprSheets, pngRgbaByteEstimate, sliceSprSheets } from './sprSheetSlice';
 import {
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
@@ -116,13 +117,30 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(plazaSheets <= 24, `plaza should decode few tile sheets, got ${plazaSheets}`);
 
         let sprBytes = 0;
-        for (const fileName of packs) {
-            const spr = await fetchGameAssetArrayBuffer('sprites', fileName, LIVE_ORIGIN);
+        let selectedPngBytes = 0;
+        let selectedRgbaBytes = 0;
+        let catalogSheetCount = 0;
+        for (const pack of catalog.filter((p) => packs.includes(p.fileName))) {
+            const spr = await fetchGameAssetArrayBuffer('sprites', pack.fileName, LIVE_ORIGIN);
             sprBytes += spr.byteLength;
             const head = new TextDecoder('utf-8').decode(new Uint8Array(spr, 0, Math.min(16, spr.byteLength))).trimStart();
             assert.equal(head.toLowerCase().startsWith('<!doctype') || head.toLowerCase().startsWith('<html'), false);
+            const locals = localTileSheetIndices(pack.tileStartIndex, pack.fileName, indices, resolveKey);
+            catalogSheetCount += countSprSheets(spr);
+            const sliced = sliceSprSheets(spr, new Set(locals));
+            assert.equal(sliced.length, locals.length);
+            for (const sheet of sliced) {
+                selectedPngBytes += sheet.png.byteLength;
+                selectedRgbaBytes += pngRgbaByteEstimate(sheet.png);
+            }
         }
         assert.ok(sprBytes > 0);
         assert.ok(sprBytes < 20 * 1024 * 1024, `plaza pack bytes ${sprBytes} too large for enter`);
+        assert.ok(catalogSheetCount > plazaSheets, `full packs ${catalogSheetCount} sheets vs plaza ${plazaSheets}`);
+        assert.ok(selectedPngBytes < sprBytes, `decoded PNG copies ${selectedPngBytes} must be < packed ${sprBytes}`);
+        assert.ok(
+            selectedRgbaBytes < 48 * 1024 * 1024,
+            `plaza decoded RGBA estimate ${selectedRgbaBytes} too large for enter`,
+        );
     });
 });

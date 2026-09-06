@@ -1,4 +1,4 @@
-import type { Scene } from 'phaser';
+import { CANVAS, type Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import type { PivotFrame, PivotData } from '../../Types';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../../constants/EventNames';
@@ -140,7 +140,13 @@ export class HBSpriteSheet {
         // Build texture key: use custom key if provided, otherwise use {spriteName}-{spriteSheetIndex}
         this.textureKey = customTextureKey ?? `${spriteName}-${spriteSheetIndex}`;
 
-        this.createTexture(scene, spriteSheetImage, frames, exportFramesAsDataUrls, useCanvasTexture);
+        this.createTexture(
+            scene,
+            spriteSheetImage,
+            frames,
+            exportFramesAsDataUrls,
+            useCanvasTexture || scene.game.renderer.type === CANVAS,
+        );
 
         if (exportFramesAsDataUrls) {
             this.extractAllFramesAsDataUrls();
@@ -512,8 +518,9 @@ export class HBSpriteFile {
      * 
      * @param scene - The Phaser scene with access to the binary cache
      * @throws Error if the sprite buffer is not found in cache
+     * @param options.sheetIndices Local sheet indexes to decode (tile packs). Omit to decode every sheet.
      */
-    public async load(scene: Scene): Promise<void> {
+    public async load(scene: Scene, options?: { sheetIndices?: ReadonlySet<number> }): Promise<void> {
         // Load binary from cache using fileName
         const buffer = getBinaryBuffer(scene, this.fileName);
         
@@ -528,24 +535,25 @@ export class HBSpriteFile {
         
         // Process each sprite sheet
         const spriteSheets: HBSpriteSheet[] = [];
+        const sheetFilter = options?.sheetIndices;
         
         for (let spriteSheetIndex = 0; spriteSheetIndex < parsedSprites.length; spriteSheetIndex++) {
+            if (sheetFilter && !sheetFilter.has(spriteSheetIndex)) {
+                continue;
+            }
             const parsedSprite = parsedSprites[spriteSheetIndex];
-            
-            const spriteSheetImage = await this.createImageFromPng(
-                parsedSprite.imageData,
-                this.spriteType !== SpriteType.Tiles && !this.exportFramesAsDataUrls
-            );
+            const useCustomNaming = this.spriteType === SpriteType.Tiles && this.tileStartIndex !== undefined;
+            const customTextureKey = useCustomNaming ? `map-tile-${this.tileStartIndex + spriteSheetIndex}` : undefined;
+            const textureKey = customTextureKey ?? `${spriteName}-${spriteSheetIndex}`;
+            if (scene.textures.exists(textureKey)) {
+                continue;
+            }
+
+            const spriteSheetImage = await this.createImageFromPng(parsedSprite.imageData);
             
             try {
                 // Frames are already SpriteFrame instances from parseSprite
                 const frames = parsedSprite.frames;
-                
-                // Determine texture naming
-                // For tiles with a start index, use map-tile-{index} naming
-                // Otherwise use the default {spriteName}-{spriteSheetIndex} naming
-                const useCustomNaming = this.spriteType === SpriteType.Tiles && this.tileStartIndex !== undefined;
-                const customTextureKey = useCustomNaming ? `map-tile-${this.tileStartIndex + spriteSheetIndex}` : undefined;
                 
                 // Create SpriteSheet with all frames and sprite sheet image
                 // This will create the texture and slice it into frames
@@ -593,8 +601,10 @@ export class HBSpriteFile {
         }
         
         // Register pivot data in Phaser registry (for backward compatibility)
-        const pivotData: PivotData = { spriteSheetPivots };
-        setPivotDataBySpriteName(scene, spriteName, pivotData);
+        if (!sheetFilter) {
+            const pivotData: PivotData = { spriteSheetPivots };
+            setPivotDataBySpriteName(scene, spriteName, pivotData);
+        }
 
         // Create Animation instances if sprite type is not Tiles or Interface
         if (this.spriteType !== SpriteType.Tiles && this.spriteType !== SpriteType.Interface) {
@@ -623,28 +633,22 @@ export class HBSpriteFile {
             this.animations = [];
         }
 
-        // Remove sprite file from cache to free up memory (no longer needed after parsing)
-        scene.cache.binary.remove(this.fileName);
+        // Full loads can drop the .spr buffer. Partial tile-sheet loads keep it so walking
+        // can decode the next local sheets without fetching the pack again.
+        if (!sheetFilter) {
+            scene.cache.binary.remove(this.fileName);
+        }
 
         console.log(`Sprite loaded: ${this.fileName}`, this);
     }
 
     /**
      * Creates an ImageBitmap from PNG image data.
-     * 
-     * @param data - The PNG image data as a Uint8Array
-     * @returns A Promise that resolves to an ImageBitmap
-     * @throws Error if the PNG data cannot be decoded
+     * ImageDecoder/VideoFrame is not used: Canvas-first Phaser closes the VideoFrame after
+     * texture create (`VideoFrame is closed`) and can OOM on enter.
      */
-    private async createImageFromPng(data: Uint8Array, preferDirectTextureSource: boolean): Promise<DecodedSpriteImage> {
+    private async createImageFromPng(data: Uint8Array): Promise<DecodedSpriteImage> {
         try {
-            if (preferDirectTextureSource) {
-                const decodedVideoFrame = await this.tryDecodeWithImageDecoder(data);
-                if (decodedVideoFrame) {
-                    return decodedVideoFrame;
-                }
-            }
-
             const imageBytes = new Uint8Array(data.byteLength);
             imageBytes.set(data);
             const blob = new Blob([imageBytes], { type: 'image/png' });
@@ -657,54 +661,6 @@ export class HBSpriteFile {
             };
         } catch (error) {
             throw new Error(`Failed to decode sprite PNG: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
-    /**
-     * Attempts to decode the PNG with WebCodecs ImageDecoder.
-     * Returns undefined when the API is unavailable or decode fails, so callers can
-     * fall back to the broadly supported createImageBitmap path.
-     */
-    private async tryDecodeWithImageDecoder(data: Uint8Array): Promise<DecodedSpriteImage | undefined> {
-        const ImageDecoderCtor = (globalThis as { ImageDecoder?: new (init: { data: Uint8Array; type: string }) => any }).ImageDecoder;
-
-        if (!ImageDecoderCtor) {
-            return undefined;
-        }
-
-        try {
-            const imageBytes = new Uint8Array(data.byteLength);
-            imageBytes.set(data);
-            const decoder = new ImageDecoderCtor({
-                data: imageBytes,
-                type: 'image/png',
-            });
-            const result = await decoder.decode({ frameIndex: 0 });
-            const frame = result.image as {
-                displayWidth?: number;
-                displayHeight?: number;
-                codedWidth?: number;
-                codedHeight?: number;
-                close(): void;
-            } & CanvasImageSource;
-            const width = frame.displayWidth ?? frame.codedWidth;
-            const height = frame.displayHeight ?? frame.codedHeight;
-
-            decoder.close?.();
-
-            if (!width || !height) {
-                frame.close();
-                return undefined;
-            }
-
-            return {
-                source: frame,
-                width,
-                height,
-                close: () => frame.close(),
-            };
-        } catch {
-            return undefined;
         }
     }
 

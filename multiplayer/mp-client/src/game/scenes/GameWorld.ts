@@ -46,6 +46,7 @@ import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } fro
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
+import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
@@ -558,6 +559,8 @@ export class GameWorld extends Scene {
             initialMapName: this.initialGameWorldState?.mapName,
             initialMusicFile: this.initialGameWorldState?.musicFile,
             playMapMusic: this.playMapMusic,
+            initialFocusTileX: this.initialGameWorldState?.playerX,
+            initialFocusTileY: this.initialGameWorldState?.playerY,
             onBeforeSnapshot: () => {
                 const overlay = this.loadingOverlayController?.getOverlay();
                 const text = this.loadingOverlayController?.getText();
@@ -2416,6 +2419,12 @@ export class GameWorld extends Scene {
         this.syncGroundStatesFromNetworkState();
         this.syncOtherPlayersFromNetworkState();
         this.tryPushWorldTeleportCellsToCurrentMap();
+        // Re-stream around the live player cell (Elvine plaza 149,131). First paint can
+        // otherwise sit on 0,0 while the camera is already on the city hall.
+        if (this.player) {
+            this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
+            void this.mapManager?.syncStreamedView();
+        }
         // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
         // froze the browser (felt like "everything broke"). Pit markers still show as
         // letter labels; thumbs only when a live monster of that type enters view.
@@ -2550,6 +2559,10 @@ export class GameWorld extends Scene {
         this.initialGameWorldState = toRegistryInitialGameWorldState(data);
         setInitialGameWorldState(this.game, this.initialGameWorldState);
         this.mapManager?.setInitialMapName(this.initialGameWorldState.mapName);
+        this.mapManager?.setInitialFocusTile(
+            this.initialGameWorldState.playerX,
+            this.initialGameWorldState.playerY,
+        );
         this.mapManager?.setInitialMusicFile(data.musicFile);
         if (this.playMapMusic && data.musicFile) {
             this.mapManager?.playInitialMusic();
@@ -2723,6 +2736,7 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
+                void this.mapManager?.syncStreamedView();
                 this.handleMapObjectCollisions();
 
                 if (!this.pendingPredictedWorldTransfer && !this.awaitingTransferredWorldState && !this.loadingMap) {
@@ -2777,7 +2791,10 @@ export class GameWorld extends Scene {
     private async runDeferredMapLoad(): Promise<void> {
         try {
             if (shouldLoadMapAssetsOnDemand()) {
-                await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName());
+                await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName(), {
+                    focusTileX: this.initialGameWorldState?.playerX,
+                    focusTileY: this.initialGameWorldState?.playerY,
+                });
             }
 
             runSafeSync('GameWorld:deferredMapLoad', () => {
@@ -3454,7 +3471,7 @@ export class GameWorld extends Scene {
         if (this.monsters.some((m) => m.getMonsterId() === data.monsterId)) {
             return;
         }
-        if (!this.mapManager || this.loadingMap || !this.soundManager) {
+        if (!this.mapManager || !this.displayedMap || !this.soundManager) {
             return;
         }
         if (!this.player) {
@@ -5038,7 +5055,7 @@ export class GameWorld extends Scene {
 function toRegistryInitialGameWorldState(data: InitialGameWorldStateEventData): InitialGameWorldState {
     return {
         gameWorldId: data.gameWorldId,
-        mapName: `${data.mapName}.amd`,
+        mapName: catalogAmdFileName(data.mapName),
         musicFile: data.musicFile,
         playerX: data.playerX,
         playerY: data.playerY,

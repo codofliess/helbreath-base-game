@@ -154,9 +154,9 @@ export const DEFAULT_ANIMATION_FRAME_RATE = 10;
 export const LOAD_MONSTER_ASSETS_ON_DEMAND = true;
 
 /**
- * When true, initial loading skips all `.amd` maps and tile `.spr` packs; the current map
- * and only the tile sheets that map needs are fetched when the GameWorld scene starts.
- * Requires HTTP paths `assets/maps/*` and `assets/sprites/*` (natural fit with `ENABLE_ZIP_LOADING = false`).
+ * When true, initial loading skips all `.amd` maps and tile `.spr` packs; GameWorld fetches the
+ * current `.amd` and **viewport** tile sheets (spawn camera + ring), not every pack the map
+ * references. Requires HTTP paths `assets/maps/*` / `game-assets/maps/*` and matching sprites.
  * ZIP output from `tools/compress-assets.js` omits map/tile entries when this matches Config.
  *
  * Live production must keep this **true**. Preloading every map + tile pack on enter

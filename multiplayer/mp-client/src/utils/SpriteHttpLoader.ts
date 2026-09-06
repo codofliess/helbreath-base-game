@@ -2,6 +2,13 @@ import type { Scene } from 'phaser';
 
 import { AssetType, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
+import {
+    fetchGameAssetArrayBuffer,
+    isHtmlAssetBody,
+    looksLikeAmdMap,
+} from './gameAssetHttp';
+
+export { fetchGameAssetArrayBuffer, isHtmlAssetBody, looksLikeAmdMap };
 
 let spriteDecodeChain: Promise<void> = Promise.resolve();
 const spriteLoadPromises = new Map<string, Promise<void>>();
@@ -18,30 +25,6 @@ export function enqueueSpriteDecode<T>(work: () => Promise<T>): Promise<T> {
         () => undefined,
     );
     return run;
-}
-
-/**
- * Fetches a game binary. Live Hetzner serves packs under `/game-assets/`;
- * Vite/dev and some nginx layouts still use `assets/`.
- */
-export async function fetchGameAssetArrayBuffer(
-    folder: 'sprites' | 'maps' | 'sounds' | 'music',
-    fileName: string,
-): Promise<ArrayBuffer> {
-    const candidates = [
-        `/game-assets/${folder}/${fileName}`,
-        `assets/${folder}/${fileName}`,
-        `/assets/${folder}/${fileName}`,
-    ];
-    let lastStatus = 'no attempt';
-    for (const url of candidates) {
-        const response = await fetch(url);
-        if (response.ok) {
-            return response.arrayBuffer();
-        }
-        lastStatus = `${url} → ${response.status} ${response.statusText}`;
-    }
-    throw new Error(`Failed to fetch ${folder}/${fileName} (${lastStatus})`);
 }
 
 /** True when sheet 0 for this asset key is registered (load finished enough to draw). */

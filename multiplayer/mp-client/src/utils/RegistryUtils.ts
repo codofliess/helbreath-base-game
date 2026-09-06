@@ -27,6 +27,7 @@ import { parseGroundItemDisplaySize } from '../constants/GroundItemDisplay';
 import { NetworkManager } from './NetworkManager';
 import type { Gender, SkinColor, TeleportLocSet } from '../Types';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
+import { mapBaseName, registryMapKey } from './mapCatalogLookup';
 
 /**
  * Typed Phaser registry accessors: managers, binary/minimap cache, pivot tables, and UI flags.
@@ -171,34 +172,27 @@ export function getGameStateManager(game: Game): GameStateManager {
  * @param map - The HBMap instance to store
  */
 export function setMap(scene: Scene, mapKey: string, map: HBMap): void {
-    scene.registry.set(mapKey, map);
+    scene.registry.set(registryMapKey(mapKey), map);
 }
 
 /**
  * Gets a map from the scene's registry based on the map name.
  * Converts map filename (e.g., 'aresden.amd') to registry key (e.g., 'map-aresden').
- * 
- * @param scene - The Phaser scene instance
- * @param mapName - The map filename (e.g., 'aresden.amd')
- * @returns The HBMap instance
- * @throws Error if map is not found in registry
  */
 export function getMap(scene: Scene, mapName: string): HBMap {
-    // Convert map filename to registry key (e.g., 'aresden.amd' -> 'map-aresden')
-    const mapKey = `map-${mapName.replace('.amd', '')}`;
+    const mapKey = registryMapKey(mapName);
     const map = getRegistryValue<HBMap>(scene.registry, mapKey);
 
     if (!map) {
         throw Error(`Map not found in registry: ${mapKey}`);
     }
-    
+
     return map;
 }
 
 /** Same keying as `getMap`, but no throw (e.g. before lazy map registration). */
 export function getMapIfPresent(scene: Scene, mapName: string): HBMap | undefined {
-    const mapKey = `map-${mapName.replace('.amd', '')}`;
-    return getRegistryValue<HBMap>(scene.registry, mapKey);
+    return getRegistryValue<HBMap>(scene.registry, registryMapKey(mapName));
 }
 
 /**
@@ -210,7 +204,7 @@ export function getMapIfPresent(scene: Scene, mapName: string): HBMap | undefine
  * @returns The cached minimap data, or undefined if not found
  */
 export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap | undefined {
-    const cacheKey = `minimap-${mapName.replace('.amd', '')}`;
+    const cacheKey = `minimap-${mapBaseName(mapName)}`;
     return getRegistryValue<CachedMinimap>(scene.registry, cacheKey);
 }
 
@@ -223,7 +217,7 @@ export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap |
  * @param minimap - The minimap data to cache
  */
 export function setCachedMinimap(scene: Scene, mapName: string, minimap: CachedMinimap): void {
-    const cacheKey = `minimap-${mapName.replace('.amd', '')}`;
+    const cacheKey = `minimap-${mapBaseName(mapName)}`;
     scene.registry.set(cacheKey, minimap);
 }
 

@@ -1,5 +1,7 @@
 import { Scene } from 'phaser';
 import { isWindowFocused } from './RegistryUtils';
+import { loadSoundAssetOnDemand } from './SpriteHttpLoader';
+import { resolveSoundAsset } from './soundAlias';
 
 /** Returned by playInLoop/playOnce when playback was skipped (e.g. window not focused). */
 export const SOUND_PLAY_SKIPPED_ID = -1;
@@ -57,20 +59,26 @@ export class SoundManager {
      * @param fileName - The name of the sound file (e.g., 'C10.mp3')
      * @param animationDurationMs - Optional duration of the animation in milliseconds. When provided, sound playback speed will be adjusted to match. When omitted, plays at original duration.
      * @param spatialConfig - Optional spatial audio configuration (pan and distance volume)
-     * @returns Unique sound ID, or {@link SOUND_PLAY_SKIPPED_ID} when playback is skipped (e.g. window not focused)
-     * @throws Error if sound file is not found in cache
+     * @returns Unique sound ID, or {@link SOUND_PLAY_SKIPPED_ID} when playback is skipped (e.g. window not focused).
+     * Missing files are fetched on demand (or skipped after a 404); they do not throw.
      */
     public playInLoop(fileName: string, animationDurationMs?: number, spatialConfig?: SpatialConfig): number {
         if (!this.soundEnabled || !isWindowFocused()) {
             return SOUND_PLAY_SKIPPED_ID;
         }
 
-        // Extract key from filename (remove .mp3 extension)
-        const soundKey = fileName.replace('.mp3', '');
-
-        // Check if the audio exists in cache
+        const { cacheKey: soundKey } = resolveSoundAsset(fileName);
         if (!this.scene.cache.audio.exists(soundKey)) {
-            throw new Error(`[SoundManager] Sound file not found in cache: ${fileName}`);
+            void loadSoundAssetOnDemand(this.scene, soundKey, fileName).then(() => {
+                if (
+                    this.soundEnabled &&
+                    isWindowFocused() &&
+                    this.scene.cache.audio.exists(soundKey)
+                ) {
+                    this.playInLoop(fileName, animationDurationMs, spatialConfig);
+                }
+            });
+            return SOUND_PLAY_SKIPPED_ID;
         }
 
         // Generate unique ID for this sound instance
@@ -235,20 +243,26 @@ export class SoundManager {
      * @param animationDurationMs - Optional duration of the animation in milliseconds. When provided, sound playback speed will be adjusted to match. When omitted, plays at original duration.
      * @param spatialConfig - Optional spatial audio configuration (pan and distance volume)
      * @param onComplete - Optional callback when the sound finishes (for cleanup)
-     * @returns Sound ID for stopping the sound, or {@link SOUND_PLAY_SKIPPED_ID} when playback is skipped (e.g. window not focused)
-     * @throws Error if sound file is not found in cache
+     * @returns Sound ID for stopping the sound, or {@link SOUND_PLAY_SKIPPED_ID} when playback is skipped (e.g. window not focused).
+     * Missing files are fetched on demand (or skipped after a 404); they do not throw.
      */
     public playOnce(fileName: string, animationDurationMs?: number, spatialConfig?: SpatialConfig, onComplete?: (soundId: number) => void): number {
         if (!this.soundEnabled || !isWindowFocused()) {
             return SOUND_PLAY_SKIPPED_ID;
         }
 
-        // Extract key from filename (remove .mp3 extension)
-        const soundKey = fileName.replace('.mp3', '');
-
-        // Check if the audio exists in cache
+        const { cacheKey: soundKey } = resolveSoundAsset(fileName);
         if (!this.scene.cache.audio.exists(soundKey)) {
-            throw new Error(`[SoundManager] Sound file not found in cache: ${fileName}`);
+            void loadSoundAssetOnDemand(this.scene, soundKey, fileName).then(() => {
+                if (
+                    this.soundEnabled &&
+                    isWindowFocused() &&
+                    this.scene.cache.audio.exists(soundKey)
+                ) {
+                    this.playOnce(fileName, animationDurationMs, spatialConfig, onComplete);
+                }
+            });
+            return SOUND_PLAY_SKIPPED_ID;
         }
 
         // Create and play the sound once (not in loop)

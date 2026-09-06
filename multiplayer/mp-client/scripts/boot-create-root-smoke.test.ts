@@ -109,6 +109,15 @@ describe('createRoot boot path (no wallet)', () => {
         assert.ok(rootIdx > hubIdx, 'login hub must open before createRoot');
     });
 
+    it('LoadingScreen defers catalog audio and sprites on the HTTP live path', () => {
+        const src = fs.readFileSync(path.join(clientRoot, 'src/game/scenes/LoadingScreen.ts'), 'utf8');
+        assert.match(src, /LOAD_AUDIO_ON_DEMAND/);
+        assert.match(src, /LOAD_BOOT_SPRITES_ON_DEMAND/);
+        const config = fs.readFileSync(path.join(clientRoot, 'src/Config.ts'), 'utf8');
+        assert.match(config, /export const LOAD_AUDIO_ON_DEMAND = true;/);
+        assert.match(config, /export const LOAD_BOOT_SPRITES_ON_DEMAND = true;/);
+    });
+
     it('walletAuth boot does not throw without a wallet', () => {
         installMinimalBrowser();
         assert.doesNotThrow(() => bootstrapWalletDeepLinkAtBoot());

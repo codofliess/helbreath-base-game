@@ -7,12 +7,15 @@ import {
     isHtmlAssetBody,
     looksLikeAmdMap,
 } from './gameAssetHttp';
+import { resolveSoundAsset } from './soundAlias';
 
 export { fetchGameAssetArrayBuffer, isHtmlAssetBody, looksLikeAmdMap };
 
 let spriteDecodeChain: Promise<void> = Promise.resolve();
 const spriteLoadPromises = new Map<string, Promise<void>>();
 const soundLoadPromises = new Map<string, Promise<void>>();
+const musicLoadPromises = new Map<string, Promise<void>>();
+const failedAudioKeys = new Set<string>();
 
 /**
  * Runs sprite decode/register work one-at-a-time. Parallel `HBSpriteFile.load`
@@ -70,34 +73,84 @@ export function loadSpriteAssetOnDemand(scene: Scene, asset: AssetData): Promise
     return promise;
 }
 
-/** Decodes one sound into Phaser audio cache if missing. */
+async function decodeAudioIntoCache(
+    scene: Scene,
+    folder: 'sounds' | 'music',
+    cacheKey: string,
+    fileName: string,
+    fallbackFileName?: string,
+): Promise<void> {
+    if (failedAudioKeys.has(cacheKey) || scene.cache.audio.exists(cacheKey)) {
+        return;
+    }
+    const soundManager = scene.sound as { context?: AudioContext };
+    const audioContext = soundManager.context;
+    if (!audioContext) {
+        console.warn(`[SpriteHttpLoader] No audio context, skipping ${fileName}`);
+        return;
+    }
+    const names =
+        fallbackFileName && fallbackFileName !== fileName ? [fileName, fallbackFileName] : [fileName];
+    let lastError: unknown;
+    for (const name of names) {
+        try {
+            const arrayBuffer = await fetchGameAssetArrayBuffer(folder, name);
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+            scene.cache.audio.add(cacheKey, audioBuffer);
+            return;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    failedAudioKeys.add(cacheKey);
+    console.warn(`[SpriteHttpLoader] Audio ${folder}/${fileName} skipped (will not retry)`, lastError);
+}
+
+/**
+ * Decodes one sound into Phaser audio cache if missing.
+ * Missing/404 files never throw. `magic.mp3` is optional and falls back to C5.
+ */
 export function loadSoundAssetOnDemand(scene: Scene, key: string, fileName: string): Promise<void> {
-    if (scene.cache.audio.exists(key)) {
+    const resolved = resolveSoundAsset(fileName || key);
+    const cacheKey = resolved.cacheKey;
+    if (scene.cache.audio.exists(cacheKey) || failedAudioKeys.has(cacheKey)) {
         return Promise.resolve();
     }
-    const existing = soundLoadPromises.get(key);
+    const existing = soundLoadPromises.get(cacheKey);
     if (existing) {
         return existing;
     }
 
-    const promise = (async () => {
-        if (scene.cache.audio.exists(key)) {
-            return;
-        }
-        const soundManager = scene.sound as { context?: AudioContext };
-        const audioContext = soundManager.context;
-        if (!audioContext) {
-            console.warn(`[SpriteHttpLoader] No audio context, skipping ${fileName}`);
-            return;
-        }
-        const arrayBuffer = await fetchGameAssetArrayBuffer('sounds', fileName);
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-        scene.cache.audio.add(key, audioBuffer);
-    })().catch((error) => {
-        soundLoadPromises.delete(key);
-        throw error;
+    const promise = decodeAudioIntoCache(
+        scene,
+        'sounds',
+        cacheKey,
+        resolved.fileName,
+        resolved.fallbackFileName,
+    ).finally(() => {
+        soundLoadPromises.delete(cacheKey);
     });
 
-    soundLoadPromises.set(key, promise);
+    soundLoadPromises.set(cacheKey, promise);
+    return promise;
+}
+
+/** Decodes one music track into Phaser audio cache if missing. Failures are non-blocking. */
+export function loadMusicAssetOnDemand(scene: Scene, key: string, fileName: string): Promise<void> {
+    const cacheKey = key.replace(/\.mp3$/i, '');
+    const safeName = fileName.endsWith('.mp3') ? fileName : `${cacheKey}.mp3`;
+    if (scene.cache.audio.exists(cacheKey) || failedAudioKeys.has(cacheKey)) {
+        return Promise.resolve();
+    }
+    const existing = musicLoadPromises.get(cacheKey);
+    if (existing) {
+        return existing;
+    }
+
+    const promise = decodeAudioIntoCache(scene, 'music', cacheKey, safeName).finally(() => {
+        musicLoadPromises.delete(cacheKey);
+    });
+
+    musicLoadPromises.set(cacheKey, promise);
     return promise;
 }

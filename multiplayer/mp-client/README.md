@@ -109,7 +109,7 @@ Live `play.chainlords.net` (Hetzner) serves this dist from **`/opt/chainlords/cl
 
 Entering a city as a fully geared character used to OOM the tab when the client preloaded every map/tile pack, zoomed the camera for a full-world minimap, or registered the full item/monster/effect catalog (including item-pack frame data URLs) before the first GameWorld frame.
 
-World rendering stays camera window + culling ring; this change does not reduce Olympia-quality sprites **in view**. First spell/NPC/bag may hitch once while that pack fetches.
+World rendering stays camera window + culling ring; walking paints a **capped** 56×40 cell window and **evicts** `map-tile-*` sheets that leave it so a long Elvine walk cannot unbounded-decode every pack. This change does not reduce Olympia-quality sprites **in view**. First spell/NPC/bag may hitch once while that pack fetches.
 
 ### Publish static client to Hetzner (PaioPez)
 
@@ -121,14 +121,17 @@ cd /path/to/repo/multiplayer/mp-client
 pnpm install
 pnpm check:live-memory
 # Do not export VITE_GENERATE_MINIMAP
+pnpm test:boot-smoke
+pnpm test:map-stream
 pnpm build
 
 # On Hetzner play host (example — keep a dated backup):
 sudo cp -a /opt/chainlords/client "/opt/chainlords/client.bak-$(date +%Y%m%d-%H%M)"
 # Sync dist contents onto the nginx root. Preserve live `game-assets/` (maps/sprites HTTP).
 sudo rsync -a --delete --exclude game-assets ./dist/ /opt/chainlords/client/
-# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: new hashed JS (not PR #8 `index-DlGsHxOc.js`).
-# Enter traveler as Elon/Martín: character list → Enter World must not Aw Snap 9. Open bag after world is up.
+# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: new hashed JS (not PR #23 `index-BUFv-ezK.js`).
+# Hub without Aw Snap 9. Elvine enter + walk (e.g. 149,131 → 185,117) must not Aw Snap mid-session.
+# `/assets/sounds/magic.mp3` should 200 from dist (tiny committed file); C5 fallback if missing.
 ```
 
 | Flag | Live production | Notes |
@@ -139,6 +142,8 @@ sudo rsync -a --delete --exclude game-assets ./dist/ /opt/chainlords/client/
 | `LOAD_EFFECT_ASSETS_ON_DEMAND` | **true** | Effect catalog not registered at load; first VFX for that pack fetches it. |
 | `LOAD_NPC_ASSETS_ON_DEMAND` | **true** | NPC `.spr` when an NPC enters view. |
 | `LOAD_ITEM_ICON_ASSETS_ON_DEMAND` | **true** | `item-pack` / `item-ground` on bag open or ground pile — no full frame data-URL dump. |
+| `LOAD_AUDIO_ON_DEMAND` | **true** | LoadingScreen does not fetch catalog `.mp3`. `consumptionSound: "magic"` aliases to `C5.mp3`; 404s never stall boot. |
+| `LOAD_BOOT_SPRITES_ON_DEMAND` | **true** | LoadingScreen skips body/UI `.spr`. SELECTCHAR loads paper-dolls after the React hub; HUD sheets load after the map viewport stream. |
 | `ENABLE_ZIP_LOADING` | **false** | Do not decompress a full `assets.zip` into memory on live. |
 | `VITE_GENERATE_MINIMAP` | **unset** → `GENERATE_MINIMAP = false` | Skips full-world WebGL minimap capture. Pre-baked `assets/images/minimaps/*.jpg` still load for `Minimap.PRE_GENERATED`. |
 | `VITE_GENERATE_MINIMAP=1` | snapshot tooling only | Re-enables on-demand full-map capture (can OOM). Use with `DOWNLOAD_MAP_SNAPSHOT` per [`sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`](../../sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md). Do **not** bake this into the Hetzner client. |

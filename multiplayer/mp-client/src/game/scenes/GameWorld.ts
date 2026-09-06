@@ -49,6 +49,7 @@ import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
+import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
 import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
@@ -2359,6 +2360,11 @@ export class GameWorld extends Scene {
                 EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
             }
             this.startDeferredAppearancePrefetch();
+            this.time.delayedCall(2500, () => {
+                void loadWorldDeferredSprites(this).catch((error) => {
+                    console.warn('[GameWorld] Deferred HUD/placeholder sprites failed', error);
+                });
+            });
         } catch (error) {
             // Log full stack — "Map setup failed" without cause hid real bugs (player gear, camera, etc.).
             console.error('[GameWorld] setupMap failed:', error);

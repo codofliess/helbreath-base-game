@@ -40,6 +40,11 @@ const prodVite = read('vite/config.prod.mjs');
 const viteEnv = read('src/vite-env.d.ts');
 
 assert(
+    fs.existsSync(path.join(root, 'public/assets/sounds/magic.mp3')),
+    'public/assets/sounds/magic.mp3 must be committed so live /assets/sounds/magic.mp3 is not a 404 (fetch stays optional/fallback to C5)',
+);
+
+assert(
     /export const LOAD_MAP_ASSETS_ON_DEMAND = true;/.test(config),
     'LOAD_MAP_ASSETS_ON_DEMAND must stay true so live does not preload every .amd / tile .spr',
 );
@@ -67,6 +72,16 @@ assert(
 assert(
     /export const LOAD_ITEM_ICON_ASSETS_ON_DEMAND = true;/.test(config),
     'LOAD_ITEM_ICON_ASSETS_ON_DEMAND must stay true so live does not unpack item-pack/item-ground at load',
+);
+
+assert(
+    /export const LOAD_AUDIO_ON_DEMAND = true;/.test(config),
+    'LOAD_AUDIO_ON_DEMAND must stay true so live does not decode catalog mp3s (or 404 magic.mp3) before Select',
+);
+
+assert(
+    /export const LOAD_BOOT_SPRITES_ON_DEMAND = true;/.test(config),
+    'LOAD_BOOT_SPRITES_ON_DEMAND must stay true so live does not decode body/UI .spr before the React hub',
 );
 
 assert(
@@ -129,8 +144,11 @@ assert(
 assert(
     /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
         /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
-        /export function cameraStreamTileRect/.test(mapViewportStream),
-    'mapViewportStream must cap the painted window (camera + ring, never full .amd)',
+        /export function cameraStreamTileRect/.test(mapViewportStream) &&
+        /export function paintStreamTileRect/.test(mapViewportStream) &&
+        /export function shouldRefreshMapStream/.test(mapViewportStream) &&
+        /export function mapTileKeysToEvict/.test(mapViewportStream),
+    'mapViewportStream must cap the painted window and evict sheets that leave the walk cap',
 );
 
 assert(
@@ -138,6 +156,19 @@ assert(
         /rowTilemapsByY/.test(hbMap) &&
         /Never creates one Phaser tilemap per world row/.test(hbMap),
     'HBMap must stream viewport rows, not one tilemap layer per world Y',
+);
+
+assert(
+    /paintStreamTileRect/.test(mapManager) &&
+        /shouldRefreshMapStream/.test(mapManager) &&
+        /evictUnusedMapTileTextures/.test(mapManager) &&
+        /streamRefreshQueued/.test(mapManager),
+    'MapManager must restream only when the camera leaves the painted cap and evict leftover sheets',
+);
+
+assert(
+    /export function evictUnusedMapTileTextures/.test(mapAssets),
+    'MapAssets must evict map-tile textures outside the current stream keep-set',
 );
 
 assert(
@@ -197,7 +228,9 @@ assert(
 );
 
 assert(
-    /a\.assetType !== AssetType\.MAP && a\.assetType !== AssetType\.TILE_SPRITE/.test(loadingScreen),
+    /LOAD_MAP_ASSETS_ON_DEMAND && \(a\.assetType === AssetType\.MAP \|\| a\.assetType === AssetType\.TILE_SPRITE\)/.test(
+        loadingScreen,
+    ),
     'LoadingScreen must omit MAP and TILE_SPRITE assets when LOAD_MAP_ASSETS_ON_DEMAND is on',
 );
 
@@ -214,6 +247,19 @@ assert(
 );
 
 assert(
+    /Consumption SFX are never eager-registered/.test(assets) &&
+        !/consumptionSounds\.forEach/.test(assets),
+    'getAssets must not enqueue consumptionSound files (magic.mp3 404 / boot decode)',
+);
+
+assert(
+    /LOAD_AUDIO_ON_DEMAND/.test(loadingScreen) &&
+        /LOAD_BOOT_SPRITES_ON_DEMAND/.test(loadingScreen) &&
+        /a\.assetType === AssetType\.SPRITE/.test(loadingScreen),
+    'LoadingScreen must omit MUSIC/SOUND/SPRITE on the HTTP live path',
+);
+
+assert(
     /if \(!LOAD_EFFECT_ASSETS_ON_DEMAND\)/.test(assets) &&
         /if \(!LOAD_NPC_ASSETS_ON_DEMAND\)/.test(assets) &&
         /sprite-item-pack/.test(assets) &&
@@ -223,8 +269,21 @@ assert(
 
 assert(
     /startDeferredAppearancePrefetch/.test(gameWorld) &&
-        /drainPlayerItemAppearancePrefetch/.test(gameWorld),
-    'GameWorld must defer equipped appearance prefetch until after map setup',
+        /drainPlayerItemAppearancePrefetch/.test(gameWorld) &&
+        /loadWorldDeferredSprites/.test(gameWorld),
+    'GameWorld must defer equipped appearance prefetch and HUD sheets until after map setup',
+);
+
+assert(
+    /loadSelectAppearanceSprites/.test(loginScreen),
+    'LoginScreen must load SELECTCHAR paper-dolls after the React hub, not at Boot',
+);
+
+assert(
+    /failedAudioKeys/.test(spriteHttp) &&
+        /will not retry/.test(spriteHttp) &&
+        /resolveSoundAsset/.test(spriteHttp),
+    'Sound fetch must alias magic→C5 and never throw/retry on 404',
 );
 
 assert(

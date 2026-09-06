@@ -190,6 +190,20 @@ export const LOAD_NPC_ASSETS_ON_DEMAND = true;
 export const LOAD_ITEM_ICON_ASSETS_ON_DEMAND = true;
 
 /**
+ * When true, LoadingScreen does not fetch/decode catalog music or SFX (including
+ * `consumptionSound` names). Audio loads on first play. Live must keep this true:
+ * parallel `decodeAudioData` plus a 404 `magic.mp3` was a Canvas Aw Snap 9 path before Select.
+ */
+export const LOAD_AUDIO_ON_DEMAND = true;
+
+/**
+ * When true, LoadingScreen skips remaining catalog `.spr` (bodies, hair, interface data URLs).
+ * SELECTCHAR loads paper-doll packs after the React hub; GameWorld loads HUD sheets after the
+ * map viewport stream. Live must keep this true so hard-refresh does not OOM before Select.
+ */
+export const LOAD_BOOT_SPRITES_ON_DEMAND = true;
+
+/**
  * Phaser texture key for a 1×1 transparent placeholder used while a lazy item appearance `.spr` loads.
  * Registered in {@link Boot}.
  */

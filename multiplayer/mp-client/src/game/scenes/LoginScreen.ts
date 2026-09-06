@@ -38,6 +38,8 @@ import { SelectCharDesk } from '../ui/SelectCharDesk';
 import { CreateCharDesk } from '../ui/CreateCharDesk';
 import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
 import { loadArenaKits } from '../../utils/arenaKits';
+import { LOAD_BOOT_SPRITES_ON_DEMAND } from '../../Config';
+import { loadSelectAppearanceSprites } from '../../utils/bootCatalog';
 
 /**
  * Login screen. Hub is React; after Enter Helbreath World / Arena, Phaser owns the
@@ -55,6 +57,8 @@ export class LoginScreen extends Scene {
     private loginPendingDisconnectHandler: (() => void) | undefined;
     private connectToServerHandler: ((payload: ConnectToServerPayload) => void) | undefined;
     private prefetchPlayerItemAppearanceHandler: ((payload: PlayerItemAppearancePrefetchEventData) => void) | undefined;
+    /** Paper-doll `.spr` load kicked off when leaving the React hub for SELECTCHAR. */
+    private selectAppearanceLoad: Promise<void> | undefined;
 
     constructor() {
         super('LoginScreen');
@@ -320,6 +324,9 @@ export class LoginScreen extends Scene {
         const showSelect = state.isOpen && state.phase === 'play-world' && !this.isConnecting;
         const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
         const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
+        if (showSelect || showCreate || showArena) {
+            this.ensureSelectAppearanceSprites();
+        }
 
         // Activate the incoming desk before hiding the others so shared canvas presentation
         // does not briefly restore 800×600 between SELECTCHAR ↔ Create Character ↔ Arena.
@@ -352,6 +359,21 @@ export class LoginScreen extends Scene {
         if (this.backgroundImage) {
             this.backgroundImage.setVisible(!showSelect && !showCreate && !showArena);
         }
+    }
+
+    /** Paper-doll packs for SELECTCHAR after the React hub (not at Boot). */
+    private ensureSelectAppearanceSprites(): void {
+        if (!LOAD_BOOT_SPRITES_ON_DEMAND || this.selectAppearanceLoad) {
+            return;
+        }
+        this.selectAppearanceLoad = loadSelectAppearanceSprites(this)
+            .then(() => {
+                this.syncDesksFromStore();
+            })
+            .catch((error) => {
+                console.warn('[LoginScreen] Select appearance sprites failed', error);
+                this.selectAppearanceLoad = undefined;
+            });
     }
 
     /** Creates SELECTCHAR / Create / Arena desks and store subscription if missing. */

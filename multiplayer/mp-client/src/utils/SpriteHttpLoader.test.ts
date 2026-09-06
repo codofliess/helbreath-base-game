@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { describe, it } from 'node:test';
 import {
     fetchGameAssetArrayBuffer,
@@ -52,5 +53,16 @@ describe('gameAssetHttp fetch guards', () => {
         } finally {
             globalThis.fetch = originalFetch;
         }
+    });
+});
+
+describe('on-demand sound 404 / alias (source)', () => {
+    it('SpriteHttpLoader aliases sounds and swallows fetch failures', () => {
+        const src = fs.readFileSync(new URL('./SpriteHttpLoader.ts', import.meta.url), 'utf8');
+        assert.match(src, /resolveSoundAsset/);
+        assert.match(src, /failedAudioKeys/);
+        assert.match(src, /will not retry/);
+        assert.match(src, /fallbackFileName/);
+        assert.match(src, /Audio \$\{folder\}\/\$\{fileName\} skipped/);
     });
 });

@@ -15,11 +15,12 @@ import { getMusicManager } from './RegistryUtils';
 import { getMapData } from '../constants/Maps';
 import { Minimap } from '../constants/Assets';
 import { OUT_UI_MINIMAP_CAPTURED, OUT_UI_MINIMAP_LOADING, OUT_UI_SET_SELECTED_MUSIC } from '../constants/EventNames';
-import { loadTileSpritePacksForMapRect } from './MapAssets';
+import { loadTileSpritePacksForMapRect, collectRequiredTileIndices, evictUnusedMapTileTextures } from './MapAssets';
 import {
     cameraStreamTileRect,
     initialFocusStreamRect,
-    mapTileRectContains,
+    paintStreamTileRect,
+    shouldRefreshMapStream,
 } from './mapViewportStream';
 
 export interface MapManagerConfig {
@@ -55,6 +56,7 @@ export class MapManager {
     private initialFocusTileX: number;
     private initialFocusTileY: number;
     private streamInFlight = false;
+    private streamRefreshQueued = false;
     private onBeforeSnapshot?: () => void;
     private onAfterSnapshot?: () => void;
 
@@ -183,10 +185,13 @@ export class MapManager {
     }
 
     /**
-     * Loads tile packs for the camera window (if needed) and paints that rect only.
+     * Loads tile packs for the camera window (if needed) and paints the capped stream rect.
+     * Walking inside the painted cap does not decode extra sheets or rebuild the tileset.
+     * Sheets that leave the cap are evicted so mid-session walk cannot unbounded-decode Elvine.
      */
     public async syncStreamedView(): Promise<void> {
         if (this.streamInFlight) {
+            this.streamRefreshQueued = true;
             return;
         }
         const camera = this.scene.cameras?.main;
@@ -199,7 +204,7 @@ export class MapManager {
         } catch {
             return;
         }
-        const next = cameraStreamTileRect({
+        const needed = cameraStreamTileRect({
             scrollX: camera.scrollX,
             scrollY: camera.scrollY,
             viewWidthPx: camera.width,
@@ -209,17 +214,32 @@ export class MapManager {
             mapSizeY: map.sizeY,
         });
         const current = map.getStreamedRect();
-        if (current && mapTileRectContains(current, next)) {
+        if (!shouldRefreshMapStream(current, needed)) {
             return;
         }
+        const paint = paintStreamTileRect({
+            scrollX: camera.scrollX,
+            scrollY: camera.scrollY,
+            viewWidthPx: camera.width,
+            viewHeightPx: camera.height,
+            zoom: camera.zoom,
+            mapSizeX: map.sizeX,
+            mapSizeY: map.sizeY,
+        });
         this.streamInFlight = true;
+        this.streamRefreshQueued = false;
         try {
-            await loadTileSpritePacksForMapRect(this.scene, map, next);
-            map.syncViewportStream(this.scene, next);
+            await loadTileSpritePacksForMapRect(this.scene, map, paint);
+            map.syncViewportStream(this.scene, paint);
+            evictUnusedMapTileTextures(this.scene, collectRequiredTileIndices(map, paint));
         } catch (error) {
             console.warn('[MapManager] Viewport stream update failed:', error);
         } finally {
             this.streamInFlight = false;
+        }
+        if (this.streamRefreshQueued) {
+            this.streamRefreshQueued = false;
+            await this.syncStreamedView();
         }
     }
 

@@ -11,6 +11,7 @@ import { catalogAmdFileName } from './mapCatalogLookup';
 import { localTileSheetIndices } from './tileSheetFilter';
 import {
     initialFocusStreamRect,
+    mapTileKeysToEvict,
     type MapTileRect,
 } from './mapViewportStream';
 
@@ -181,6 +182,41 @@ export async function loadTileSpritePacksForMapRect(
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
     return tileAssets.length;
+}
+
+function listMapTileTextureKeys(scene: Scene): string[] {
+    const textures = scene.textures as {
+        getTextureKeys?: () => string[];
+        list?: Record<string, unknown>;
+    };
+    if (typeof textures.getTextureKeys === 'function') {
+        return textures.getTextureKeys();
+    }
+    return Object.keys(textures.list ?? {});
+}
+
+/**
+ * Drops Canvas `map-tile-*` sheets that are not in the current stream keep-set.
+ * Walking must not accumulate every Elvine pack sheet for the whole session.
+ */
+export function evictUnusedMapTileTextures(scene: Scene, keepGlobalIndices: ReadonlySet<number>): number {
+    const evict = mapTileKeysToEvict(listMapTileTextureKeys(scene), keepGlobalIndices);
+    let removed = 0;
+    for (const key of evict) {
+        try {
+            if (scene.textures.exists(key)) {
+                scene.textures.remove(key);
+            }
+            scene.registry.remove(`pivots-${key}`);
+            removed += 1;
+        } catch (error) {
+            console.warn(`[MapAssets] Failed to evict ${key}`, error);
+        }
+    }
+    if (removed > 0) {
+        console.log(`[MapAssets] Evicted ${removed} map-tile sheet(s) outside the stream window`);
+    }
+    return removed;
 }
 
 /**

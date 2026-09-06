@@ -185,31 +185,117 @@ describe('multichain auth', () => {
         }
     });
 
-    it('Base challenge and verify stub-deny with a clear error', async () => {
+    it('Base personal_sign / EIP-191 happy path (same verifier as RH)', async () => {
         const auth = loadAuth();
+        const { secretKey } = secp256k1.keygen();
+        const address = auth.canonicalizeAddress('base', evmAddressFromSecret(secretKey)).address;
+
         const app = express();
         app.use(express.json());
         auth.registerAuthRoutes(app);
         const { server, url } = await listen(app);
         try {
             const ch = await jsonReq(url, {
-                path: '/auth/challenge?chainId=base&address=0xb603D6b2e5472beb338CE079a63FEb8663171529',
+                method: 'POST',
+                path: '/auth/challenge',
+                body: { chainId: 'base', address },
             });
-            assert.equal(ch.status, 501);
-            assert.match(ch.json.error, /base auth is not implemented/i);
+            assert.equal(ch.status, 200, JSON.stringify(ch.json));
+            assert.equal(ch.json.chainId, 'base');
+            assert.match(ch.json.message, /chainId=base/);
+            assert.match(ch.json.message, new RegExp(`challengeId=${ch.json.challengeId}`));
+            assert.match(ch.json.message, /expiresAt=/);
 
+            const signature = signPersonal(ch.json.message, secretKey);
             const verify = await jsonReq(url, {
                 method: 'POST',
                 path: '/auth/verify',
                 body: {
                     chainId: 'base',
-                    address: '0xb603D6b2e5472beb338CE079a63FEb8663171529',
-                    challengeId: 'deadbeef',
-                    signature: '0x' + '11'.repeat(65),
+                    address,
+                    challengeId: ch.json.challengeId,
+                    signature,
                 },
             });
-            assert.equal(verify.status, 501);
-            assert.match(verify.json.error, /base auth is not implemented/i);
+            assert.equal(verify.status, 200, JSON.stringify(verify.json));
+            assert.equal(verify.json.success, true);
+            assert.equal(verify.json.actorKind, 'human');
+            assert.deepEqual(verify.json.boundChains, ['base']);
+            assert.equal(auth.verifyToken(address, verify.json.token), true);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('same 0x on rh vs base via HTTP verify is two binds (no steal across chains)', async () => {
+        const auth = loadAuth();
+        const { secretKey } = secp256k1.keygen();
+        const address = auth.canonicalizeAddress('rh', evmAddressFromSecret(secretKey)).address;
+
+        const app = express();
+        app.use(express.json());
+        auth.registerAuthRoutes(app);
+        const { server, url } = await listen(app);
+        try {
+            async function login(chainId) {
+                const ch = await jsonReq(url, {
+                    method: 'POST',
+                    path: '/auth/challenge',
+                    body: { chainId, address },
+                });
+                assert.equal(ch.status, 200, JSON.stringify(ch.json));
+                const signature = signPersonal(ch.json.message, secretKey);
+                return jsonReq(url, {
+                    method: 'POST',
+                    path: '/auth/verify',
+                    body: { chainId, address, challengeId: ch.json.challengeId, signature },
+                });
+            }
+
+            const rh = await login('rh');
+            assert.equal(rh.status, 200, JSON.stringify(rh.json));
+            const base = await login('base');
+            assert.equal(base.status, 200, JSON.stringify(base.json));
+            assert.notEqual(rh.json.playerId, base.json.playerId);
+            assert.deepEqual(rh.json.boundChains, ['rh']);
+            assert.deepEqual(base.json.boundChains, ['base']);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('RH signature cannot satisfy a Base challenge (anti-replay across chainId)', async () => {
+        const auth = loadAuth();
+        const { secretKey } = secp256k1.keygen();
+        const address = auth.canonicalizeAddress('rh', evmAddressFromSecret(secretKey)).address;
+        const app = express();
+        app.use(express.json());
+        auth.registerAuthRoutes(app);
+        const { server, url } = await listen(app);
+        try {
+            const rhCh = await jsonReq(url, {
+                method: 'POST',
+                path: '/auth/challenge',
+                body: { chainId: 'rh', address },
+            });
+            const baseCh = await jsonReq(url, {
+                method: 'POST',
+                path: '/auth/challenge',
+                body: { chainId: 'base', address },
+            });
+            const rhSig = signPersonal(rhCh.json.message, secretKey);
+            const replay = await jsonReq(url, {
+                method: 'POST',
+                path: '/auth/verify',
+                body: {
+                    chainId: 'base',
+                    address,
+                    challengeId: baseCh.json.challengeId,
+                    signature: rhSig,
+                },
+            });
+            assert.equal(replay.status, 401);
+            assert.match(replay.json.error, /Signature verification failed/i);
         } finally {
             server.close();
         }

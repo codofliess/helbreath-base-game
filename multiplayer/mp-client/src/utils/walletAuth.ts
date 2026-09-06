@@ -2,10 +2,14 @@ const DEFAULT_MIDDLEWARE_URL = 'http://localhost:3001';
 const PROD_MIDDLEWARE_URL =
     'https://chainlords-middleware-production.up.railway.app';
 
+/** Middleware `chainId` for challenge+verify. Same 0x on rh vs base is two binds. */
+export type AuthChainId = 'sol' | 'rh' | 'base';
+
 export interface WalletSession {
     wallet: string;
     token: string;
     expiresAt: number;
+    chainId?: AuthChainId;
 }
 
 type PhantomProvider = {
@@ -21,9 +25,68 @@ type PhantomProvider = {
     }>;
 };
 
+type Eip1193Provider = {
+    request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
+    providers?: Eip1193Provider[];
+};
+
 function getPhantom(): PhantomProvider | undefined {
     const w = window as Window & { solana?: PhantomProvider };
     return w.solana?.isPhantom ? w.solana : undefined;
+}
+
+function getInjectedEvm(): Eip1193Provider | undefined {
+    const w = window as Window & {
+        ethereum?: Eip1193Provider;
+        phantom?: { ethereum?: Eip1193Provider };
+    };
+    if (w.ethereum?.providers && w.ethereum.providers.length > 0) {
+        return w.ethereum.providers[0];
+    }
+    if (w.ethereum) {
+        return w.ethereum;
+    }
+    return w.phantom?.ethereum;
+}
+
+export function isAuthChainId(raw: string | null | undefined): raw is AuthChainId {
+    return raw === 'sol' || raw === 'rh' || raw === 'base';
+}
+
+const PREFERRED_CHAIN_KEY = 'helbreath_auth_chain';
+
+export function persistPreferredAuthChain(chainId: AuthChainId): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        sessionStorage.setItem(PREFERRED_CHAIN_KEY, chainId);
+    } catch {
+        // private mode / quota
+    }
+}
+
+/** Landing `?chain=sol|rh|base` or sessionStorage pick for Play Now autologin. */
+export function consumePreferredAuthChain(): AuthChainId | undefined {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = params.get('chain');
+        if (isAuthChainId(fromQuery)) {
+            persistPreferredAuthChain(fromQuery);
+            params.delete('chain');
+            const qs = params.toString();
+            const clean = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+            window.history.replaceState({}, '', clean);
+            return fromQuery;
+        }
+        const stored = sessionStorage.getItem(PREFERRED_CHAIN_KEY);
+        return isAuthChainId(stored) ? stored : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 export function getMiddlewareAuthUrl(): string {
@@ -68,7 +131,11 @@ export function getStoredWalletToken(): string | undefined {
     }
 }
 
-/** Returns the persisted Solana wallet pubkey when the player logged in with Phantom. */
+function looksLikeEvmAddress(value: string): boolean {
+    return /^0x[0-9a-fA-F]{40}$/.test(value);
+}
+
+/** Returns the persisted wallet address from Phantom (sol) or EVM (rh/base) login. */
 export function getStoredWalletPubkey(): string | undefined {
     if (typeof window === 'undefined') {
         return undefined;
@@ -84,6 +151,10 @@ export function getStoredWalletPubkey(): string | undefined {
         const networkId = state.networkId?.trim();
         if (!networkId || networkId.includes('-')) {
             return undefined;
+        }
+
+        if (looksLikeEvmAddress(networkId)) {
+            return networkId;
         }
 
         if (networkId.length >= 32 && networkId.length <= 44) {
@@ -104,13 +175,31 @@ function toBase64(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
-async function requestChallenge(middlewareUrl: string, wallet: string): Promise<{ challenge: string; message: string }> {
-    const challengeRes = await fetch(`${middlewareUrl}/auth/challenge?wallet=${encodeURIComponent(wallet)}`);
+function utf8ToHex(text: string): string {
+    const bytes = new TextEncoder().encode(text);
+    let hex = '0x';
+    for (const byte of bytes) {
+        hex += byte.toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+async function requestChallenge(
+    middlewareUrl: string,
+    chainId: AuthChainId,
+    address: string,
+): Promise<{ challenge: string; challengeId?: string; message: string }> {
+    const qs = new URLSearchParams({
+        chainId,
+        address,
+        wallet: address,
+    });
+    const challengeRes = await fetch(`${middlewareUrl}/auth/challenge?${qs.toString()}`);
     if (!challengeRes.ok) {
         throw new Error(`Failed to request wallet login challenge (${challengeRes.status})`);
     }
 
-    return challengeRes.json() as Promise<{ challenge: string; message: string }>;
+    return challengeRes.json() as Promise<{ challenge: string; challengeId?: string; message: string }>;
 }
 
 async function signChallengeMessage(phantom: PhantomProvider, message: string) {
@@ -123,9 +212,56 @@ async function signChallengeMessage(phantom: PhantomProvider, message: string) {
         : phantom.signMessage(encoded, 'utf8');
 }
 
+async function verifySignature(
+    middlewareUrl: string,
+    chainId: AuthChainId,
+    address: string,
+    challengeId: string,
+    signature: string,
+): Promise<WalletSession> {
+    const verifyRes = await fetch(`${middlewareUrl}/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chainId,
+            address,
+            wallet: address,
+            challenge: challengeId,
+            challengeId,
+            signature,
+        }),
+    });
+
+    if (!verifyRes.ok) {
+        let detail = 'Wallet signature verification failed';
+        try {
+            const errorBody = await verifyRes.json() as { error?: string };
+            if (errorBody.error) {
+                detail = errorBody.error;
+            }
+        } catch {
+            // ignore parse errors
+        }
+        throw new Error(detail);
+    }
+
+    const verifyBody = await verifyRes.json() as {
+        wallet: string;
+        token: string;
+        expiresAt: number;
+    };
+
+    return {
+        wallet: verifyBody.wallet,
+        token: verifyBody.token,
+        expiresAt: verifyBody.expiresAt,
+        chainId,
+    };
+}
+
 /**
  * Persists a verified wallet session into `localStorage.gameState` so hub restore
- * and character-list retries can reuse the seal without another Phantom prompt.
+ * and character-list retries can reuse the seal without another wallet prompt.
  */
 export function persistWalletSession(session: WalletSession): void {
     if (typeof window === 'undefined') {
@@ -142,8 +278,12 @@ export function persistWalletSession(session: WalletSession): void {
                 networkId: session.wallet,
                 authToken: session.token,
                 authExpiresAt: session.expiresAt,
+                authChainId: session.chainId ?? existing.authChainId,
             }),
         );
+        if (session.chainId) {
+            persistPreferredAuthChain(session.chainId);
+        }
     } catch (err) {
         console.warn('[walletAuth] Failed to persist wallet session', err);
     }
@@ -178,6 +318,7 @@ export function peekWalletDeepLink(): WalletDeepLink | null {
             token?: string;
             expiresAt?: number;
             mode?: string;
+            chainId?: string;
         };
         const wallet = parsed.wallet?.trim() ?? '';
         const token = parsed.token?.trim() ?? '';
@@ -195,6 +336,7 @@ export function peekWalletDeepLink(): WalletDeepLink | null {
                     typeof parsed.expiresAt === 'number' && parsed.expiresAt > Date.now()
                         ? parsed.expiresAt
                         : Date.now() + 24 * 60 * 60 * 1000,
+                chainId: isAuthChainId(parsed.chainId) ? parsed.chainId : undefined,
             },
             mode,
         };
@@ -225,6 +367,7 @@ export function consumeWalletDeepLink(): WalletDeepLink | null {
                         token: fromUrl.session.token,
                         expiresAt: fromUrl.session.expiresAt,
                         mode: fromUrl.mode,
+                        chainId: fromUrl.session.chainId,
                     }),
                 );
             } catch {
@@ -266,6 +409,10 @@ export function bootstrapWalletDeepLinkAtBoot(): void {
     try {
         const params = new URLSearchParams(window.location.search);
         const autologin = params.get('autologin') === '1' || params.get('mode') === 'world';
+        const chainFromQuery = params.get('chain');
+        if (isAuthChainId(chainFromQuery)) {
+            persistPreferredAuthChain(chainFromQuery);
+        }
         const link = readDeepLinkFromUrl(true);
 
         if (link) {
@@ -277,6 +424,7 @@ export function bootstrapWalletDeepLinkAtBoot(): void {
                     token: link.session.token,
                     expiresAt: link.session.expiresAt,
                     mode: link.mode,
+                    chainId: link.session.chainId,
                 }),
             );
             console.info('[walletAuth] Bootstrapped deep link at boot (mode=%s)', link.mode);
@@ -284,16 +432,16 @@ export function bootstrapWalletDeepLinkAtBoot(): void {
         }
 
         // Landing fallback when middleware auth cannot run on the marketing origin:
-        // ?mode=world&autologin=1 → client prompts Phantom and opens SELECTCHAR.
+        // ?mode=world&autologin=1 → client prompts the chosen wallet and opens SELECTCHAR.
         if (autologin) {
             sessionStorage.setItem(AUTO_ENTER_WORLD_KEY, '1');
             params.delete('autologin');
             params.delete('mode');
-            // readDeepLinkFromUrl already stripped wallet/token if present; clean leftovers.
+            params.delete('chain');
             const qs = params.toString();
             const clean = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
             window.history.replaceState({}, '', clean);
-            console.info('[walletAuth] Auto-enter World flag set (client will prompt Phantom)');
+            console.info('[walletAuth] Auto-enter World flag set (client will prompt wallet)');
         }
     } catch (err) {
         console.warn('[walletAuth] bootstrapWalletDeepLinkAtBoot failed', err);
@@ -364,24 +512,31 @@ function readDeepLinkFromUrl(stripFromAddressBar: boolean): WalletDeepLink | nul
     const modeRaw = (params.get('mode') ?? 'world').trim().toLowerCase();
     const mode: WalletDeepLink['mode'] =
         modeRaw === 'arena' ? 'arena' : modeRaw === 'hub' ? 'hub' : 'world';
+    const chainRaw = params.get('chain');
 
     if (stripFromAddressBar) {
         params.delete('wallet');
         params.delete('token');
         params.delete('exp');
         params.delete('mode');
+        params.delete('chain');
         const qs = params.toString();
         const clean = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
         window.history.replaceState({}, '', clean);
     }
 
     return {
-        session: { wallet, token, expiresAt },
+        session: {
+            wallet,
+            token,
+            expiresAt,
+            chainId: isAuthChainId(chainRaw) ? chainRaw : undefined,
+        },
         mode,
     };
 }
 
-export async function connectWalletAndAuthenticate(): Promise<WalletSession> {
+async function connectSolanaAndAuthenticate(): Promise<WalletSession> {
     const phantom = getPhantom();
     if (!phantom) {
         throw new Error('Phantom wallet not found. Install it from phantom.app');
@@ -391,13 +546,13 @@ export async function connectWalletAndAuthenticate(): Promise<WalletSession> {
     let wallet = publicKey.toBase58();
     const middlewareUrl = getMiddlewareAuthUrl();
 
-    let challengeBody = await requestChallenge(middlewareUrl, wallet);
+    let challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
     let signed = await signChallengeMessage(phantom, challengeBody.message);
     const signedWallet = signed.publicKey?.toBase58?.() ?? wallet;
 
     if (signedWallet !== wallet) {
         wallet = signedWallet;
-        challengeBody = await requestChallenge(middlewareUrl, wallet);
+        challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
         signed = await signChallengeMessage(phantom, challengeBody.message);
     }
 
@@ -405,40 +560,60 @@ export async function connectWalletAndAuthenticate(): Promise<WalletSession> {
         ? signed.signature
         : new Uint8Array(signed.signature as ArrayLike<number>);
 
-    const verifyRes = await fetch(`${middlewareUrl}/auth/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            wallet,
-            challenge: challengeBody.challenge,
-            signature: toBase64(signatureBytes),
-        }),
-    });
+    const challengeId = challengeBody.challengeId || challengeBody.challenge;
+    return verifySignature(middlewareUrl, 'sol', wallet, challengeId, toBase64(signatureBytes));
+}
 
-    if (!verifyRes.ok) {
-        let detail = 'Wallet signature verification failed';
-        try {
-            const errorBody = await verifyRes.json() as { error?: string };
-            if (errorBody.error) {
-                detail = errorBody.error;
-            }
-        } catch {
-            // ignore parse errors
-        }
-        throw new Error(detail);
+async function connectEvmAndAuthenticate(chainId: 'rh' | 'base'): Promise<WalletSession> {
+    const eth = getInjectedEvm();
+    if (!eth || typeof eth.request !== 'function') {
+        const hint = chainId === 'base'
+            ? 'Install Coinbase Wallet, MetaMask, or Phantom (EVM) for Base.'
+            : 'Install Robinhood Wallet, MetaMask, or another injected EVM wallet for RH Chain.';
+        throw new Error(`No EVM wallet found. ${hint}`);
     }
 
-    const verifyBody = await verifyRes.json() as {
-        wallet: string;
-        token: string;
-        expiresAt: number;
-    };
+    const accounts = await eth.request({ method: 'eth_requestAccounts' });
+    const list = Array.isArray(accounts) ? accounts : [];
+    const address = typeof list[0] === 'string' ? list[0].trim() : '';
+    if (!looksLikeEvmAddress(address)) {
+        throw new Error('EVM wallet did not return a valid address');
+    }
 
-    const session: WalletSession = {
-        wallet: verifyBody.wallet,
-        token: verifyBody.token,
-        expiresAt: verifyBody.expiresAt,
-    };
+    const middlewareUrl = getMiddlewareAuthUrl();
+    const challengeBody = await requestChallenge(middlewareUrl, chainId, address);
+    const hexMessage = utf8ToHex(challengeBody.message);
+    let signature: unknown;
+    try {
+        signature = await eth.request({
+            method: 'personal_sign',
+            params: [hexMessage, address],
+        });
+    } catch {
+        signature = await eth.request({
+            method: 'personal_sign',
+            params: [challengeBody.message, address],
+        });
+    }
+    if (typeof signature !== 'string' || !signature.trim()) {
+        throw new Error('Wallet did not return a personal_sign signature');
+    }
+
+    const challengeId = challengeBody.challengeId || challengeBody.challenge;
+    return verifySignature(middlewareUrl, chainId, address, challengeId, signature.trim());
+}
+
+/**
+ * Connect + challenge + verify for `sol` (Phantom), `rh`, or `base` (EIP-1193 personal_sign).
+ * Reuses existing `/auth/challenge` and `/auth/verify`. No RPC required for verify.
+ */
+export async function connectWalletAndAuthenticate(
+    chainId: AuthChainId = 'sol',
+): Promise<WalletSession> {
+    persistPreferredAuthChain(chainId);
+    const session = chainId === 'sol'
+        ? await connectSolanaAndAuthenticate()
+        : await connectEvmAndAuthenticate(chainId);
     persistWalletSession(session);
     return session;
 }

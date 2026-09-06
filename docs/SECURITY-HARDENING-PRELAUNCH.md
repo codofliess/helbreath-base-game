@@ -94,6 +94,8 @@ Startup logs:
 - `[SECURITY] WARNING: WALLET_AUTH_SECRET is not set` → stop and fix
 - `[SECURITY] GM sandbox locked: only GM_WALLET_ALLOWLIST…` → expected for launch
 
+See [`LIVE-MULTIWALLET-AUTH.md`](./LIVE-MULTIWALLET-AUTH.md) for live Phantom + RH + Base login env (`WALLET_AUTH_SECRET`, `DATABASE_URL`; no RH/Base RPC for `personal_sign`).
+
 ## Files touched
 
 - `Helpers/AdminSecurity.cs` (new)

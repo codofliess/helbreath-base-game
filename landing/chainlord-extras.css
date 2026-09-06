@@ -554,6 +554,36 @@ body {
   color: var(--cl-green-bright);
 }
 
+.play-chain-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 6px 0 4px;
+}
+
+.play-chain-btn {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border: 1px solid rgba(196, 154, 72, 0.55);
+  background: rgba(18, 12, 6, 0.7);
+  color: #e8d8b0;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.play-chain-btn:hover:not(:disabled) {
+  border-color: #e8c878;
+  color: #fff6d8;
+}
+
+.play-chain-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* ----- Live realm stats (green, under Play Now) -----
  * Match Play Now width (240px) and center the block so lines sit under the button.
  * Override styles.css `p { text-align: left }` which was shoving them to the panel edge.
@@ -1108,6 +1138,10 @@ body {
 .cta-row {
   margin: 16px 0 10px !important;
   text-align: center;
+}
+
+.cta-row .cta-primary {
+  margin: 4px;
 }
 
 .cta-primary {

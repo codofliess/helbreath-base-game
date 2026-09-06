@@ -1,6 +1,6 @@
 /**
  * Chain Lords landing:
- * - Play Now → Phantom wallet auth → redirect to client character list
+ * - Play Now → Phantom (sol) / RH Chain / Base wallet auth → redirect to client character list
  * - Live realm stats (World buckets)
  * - EK gallery
  */
@@ -111,12 +111,33 @@
     });
   }
 
-  /* ---------- Phantom wallet → middleware → client character list ---------- */
+  /* ---------- Wallet login → middleware → client character list ---------- */
 
   function getPhantom() {
     var sol = window.solana;
     if (sol && sol.isPhantom) return sol;
     return null;
+  }
+
+  function getInjectedEvm() {
+    var eth = window.ethereum;
+    if (eth && eth.providers && eth.providers.length) return eth.providers[0];
+    if (eth) return eth;
+    if (window.phantom && window.phantom.ethereum) return window.phantom.ethereum;
+    return null;
+  }
+
+  function utf8ToHex(text) {
+    var bytes = new TextEncoder().encode(text);
+    var hex = "0x";
+    for (var i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return hex;
+  }
+
+  function looksLikeEvmAddress(value) {
+    return /^0x[0-9a-fA-F]{40}$/.test(String(value || ""));
   }
 
   function toBase64(bytes) {
@@ -137,17 +158,30 @@
   }
 
   function setPlayBusy(busy) {
-    ["play-now-world", "play-now-world-secondary"].forEach(function (id) {
+    [
+      "play-now-world",
+      "play-now-world-secondary",
+      "play-now-rh",
+      "play-now-base",
+      "play-now-rh-secondary",
+      "play-now-base-secondary",
+    ].forEach(function (id) {
       var btn = document.getElementById(id);
       if (btn) btn.disabled = !!busy;
     });
   }
 
-  async function requestChallenge(middlewareUrl, wallet) {
-    var res = await fetch(
-      middlewareUrl.replace(/\/$/, "") + "/auth/challenge?wallet=" + encodeURIComponent(wallet),
-      { credentials: "omit" }
-    );
+  async function requestChallenge(middlewareUrl, chainId, wallet) {
+    var qs =
+      "chainId=" +
+      encodeURIComponent(chainId) +
+      "&wallet=" +
+      encodeURIComponent(wallet) +
+      "&address=" +
+      encodeURIComponent(wallet);
+    var res = await fetch(middlewareUrl.replace(/\/$/, "") + "/auth/challenge?" + qs, {
+      credentials: "omit",
+    });
     if (!res.ok) {
       throw new Error("Failed to request login challenge (HTTP " + res.status + ")");
     }
@@ -165,17 +199,16 @@
     return phantom.signMessage(encoded, "utf8");
   }
 
-  async function connectWalletAndAuthenticate() {
+  async function connectSolanaAndAuthenticate(middlewareUrl) {
     var phantom = getPhantom();
     if (!phantom) {
       throw new Error("Phantom wallet not found. Install it from phantom.app");
     }
 
-    var middlewareUrl = MIDDLEWARE_URL.replace(/\/$/, "");
     var connected = await phantom.connect();
     var wallet = connected.publicKey.toBase58();
 
-    var challengeBody = await requestChallenge(middlewareUrl, wallet);
+    var challengeBody = await requestChallenge(middlewareUrl, "sol", wallet);
     var signed = await signChallenge(phantom, challengeBody.message);
     var signedWallet =
       signed.publicKey && typeof signed.publicKey.toBase58 === "function"
@@ -184,7 +217,7 @@
 
     if (signedWallet !== wallet) {
       wallet = signedWallet;
-      challengeBody = await requestChallenge(middlewareUrl, wallet);
+      challengeBody = await requestChallenge(middlewareUrl, "sol", wallet);
       signed = await signChallenge(phantom, challengeBody.message);
     }
 
@@ -193,15 +226,62 @@
         ? signed.signature
         : new Uint8Array(signed.signature);
 
+    return postVerify(middlewareUrl, {
+      chainId: "sol",
+      wallet: wallet,
+      address: wallet,
+      challenge: challengeBody.challenge,
+      challengeId: challengeBody.challengeId || challengeBody.challenge,
+      signature: toBase64(signatureBytes),
+    });
+  }
+
+  async function connectEvmAndAuthenticate(middlewareUrl, chainId) {
+    var eth = getInjectedEvm();
+    if (!eth || typeof eth.request !== "function") {
+      throw new Error(
+        chainId === "base"
+          ? "No EVM wallet found. Install Coinbase Wallet, MetaMask, or Phantom (EVM) for Base."
+          : "No EVM wallet found. Install Robinhood Wallet, MetaMask, or another injected EVM wallet for RH Chain."
+      );
+    }
+    var accounts = await eth.request({ method: "eth_requestAccounts" });
+    var address = accounts && accounts[0] ? String(accounts[0]).trim() : "";
+    if (!looksLikeEvmAddress(address)) {
+      throw new Error("EVM wallet did not return a valid address");
+    }
+    var challengeBody = await requestChallenge(middlewareUrl, chainId, address);
+    var signature;
+    try {
+      signature = await eth.request({
+        method: "personal_sign",
+        params: [utf8ToHex(challengeBody.message), address],
+      });
+    } catch (_) {
+      signature = await eth.request({
+        method: "personal_sign",
+        params: [challengeBody.message, address],
+      });
+    }
+    if (!signature) {
+      throw new Error("Wallet did not return a personal_sign signature");
+    }
+    return postVerify(middlewareUrl, {
+      chainId: chainId,
+      wallet: address,
+      address: address,
+      challenge: challengeBody.challenge,
+      challengeId: challengeBody.challengeId || challengeBody.challenge,
+      signature: String(signature),
+    });
+  }
+
+  async function postVerify(middlewareUrl, body) {
     var verifyRes = await fetch(middlewareUrl + "/auth/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "omit",
-      body: JSON.stringify({
-        wallet: wallet,
-        challenge: challengeBody.challenge,
-        signature: toBase64(signatureBytes),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!verifyRes.ok) {
@@ -220,7 +300,17 @@
       wallet: verifyBody.wallet,
       token: verifyBody.token,
       expiresAt: verifyBody.expiresAt,
+      chainId: body.chainId,
     };
+  }
+
+  async function connectWalletAndAuthenticate(chainId) {
+    var middlewareUrl = MIDDLEWARE_URL.replace(/\/$/, "");
+    var chain = chainId || "sol";
+    if (chain === "rh" || chain === "base") {
+      return connectEvmAndAuthenticate(middlewareUrl, chain);
+    }
+    return connectSolanaAndAuthenticate(middlewareUrl);
   }
 
   function buildPlayRedirectUrl(session) {
@@ -229,17 +319,21 @@
     url.searchParams.set("wallet", session.wallet);
     url.searchParams.set("token", session.token);
     url.searchParams.set("mode", "world");
+    if (session.chainId) {
+      url.searchParams.set("chain", session.chainId);
+    }
     if (session.expiresAt) {
       url.searchParams.set("exp", String(session.expiresAt));
     }
     return url.toString();
   }
 
-  function clientAutologinUrl() {
+  function clientAutologinUrl(chainId) {
     var clientOnly = PLAY_URL.replace(/\/$/, "");
     var u = new URL(clientOnly.indexOf("http") === 0 ? clientOnly : "http://" + clientOnly);
     u.searchParams.set("mode", "world");
     u.searchParams.set("autologin", "1");
+    u.searchParams.set("chain", chainId || "sol");
     return u.toString();
   }
 
@@ -269,7 +363,8 @@
     }
   }
 
-  async function handlePlayNow() {
+  async function handlePlayNow(chainId) {
+    var chain = chainId || "sol";
     setPlayBusy(true);
     setPlayStatus("Opening game client…", null);
     try {
@@ -291,7 +386,7 @@
       // cross-origin token handoff from the marketing site.
       if (!isLocalPlayUrl(PLAY_URL)) {
         setPlayStatus("Opening https://play.chainlords.net …", "ok");
-        window.location.assign(clientAutologinUrl());
+        window.location.assign(clientAutologinUrl(chain));
         return;
       }
 
@@ -300,12 +395,14 @@
       var mwIsHttp = /^http:\/\//i.test(MIDDLEWARE_URL);
       if (pageIsHttps && mwIsHttp) {
         setPlayStatus("Opening game client…", "ok");
-        window.location.assign(clientAutologinUrl());
+        window.location.assign(clientAutologinUrl(chain));
         return;
       }
 
-      setPlayStatus("Connecting Phantom…", null);
-      var session = await connectWalletAndAuthenticate();
+      var connectingLabel =
+        chain === "base" ? "Connecting Base wallet…" : chain === "rh" ? "Connecting RH Chain wallet…" : "Connecting Phantom…";
+      setPlayStatus(connectingLabel, null);
+      var session = await connectWalletAndAuthenticate(chain);
       setPlayStatus(
         "Wallet sealed: " +
           session.wallet.slice(0, 4) +
@@ -320,27 +417,29 @@
       }, 120);
     } catch (err) {
       var message = err && err.message ? err.message : "Wallet login failed";
-      // Fallback: open client and let it prompt Phantom (middleware may be down).
+      // Fallback: open client and let it prompt the chosen wallet (middleware may be down).
       setPlayStatus(message + " — opening client…", "error");
       window.setTimeout(function () {
-        window.location.assign(clientAutologinUrl());
+        window.location.assign(clientAutologinUrl(chain));
       }, 500);
     }
   }
 
+  function bindPlayButton(id, chainId) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", function () {
+      void handlePlayNow(chainId);
+    });
+  }
+
   function setupPlayNow() {
-    var primary = document.getElementById("play-now-world");
-    var secondary = document.getElementById("play-now-world-secondary");
-    if (primary) {
-      primary.addEventListener("click", function () {
-        void handlePlayNow();
-      });
-    }
-    if (secondary) {
-      secondary.addEventListener("click", function () {
-        void handlePlayNow();
-      });
-    }
+    bindPlayButton("play-now-world", "sol");
+    bindPlayButton("play-now-world-secondary", "sol");
+    bindPlayButton("play-now-rh", "rh");
+    bindPlayButton("play-now-rh-secondary", "rh");
+    bindPlayButton("play-now-base", "base");
+    bindPlayButton("play-now-base-secondary", "base");
   }
 
   /* ---------- Realm stats (4h rolling — cheap poll) ---------- */
@@ -535,7 +634,7 @@
       worldKicker: "Under the goddess",
       worldTitle: "World",
       playNow: "Play Now",
-      playTitle: "Play Helbreath World — connect Phantom wallet",
+      playTitle: "Play Helbreath World — Phantom, RH Chain, or Base wallet",
       playAria: "Play now — Helbreath World",
       statPlayers4h: "Players ON in last 4hs",
       statEks4h: "EKs in last 4hs",
@@ -545,7 +644,7 @@
       worldKicker: "Bajo la diosa",
       worldTitle: "Mundo",
       playNow: "Jugar ahora",
-      playTitle: "Jugar Helbreath World — conectá Phantom",
+      playTitle: "Jugar Helbreath World — Phantom, RH Chain o Base",
       playAria: "Jugar ahora — Helbreath World",
       statPlayers4h: "Jugadores ON últimas 4h",
       statEks4h: "EKs últimas 4h",
@@ -555,7 +654,7 @@
       worldKicker: "Sob a deusa",
       worldTitle: "Mundo",
       playNow: "Jogar agora",
-      playTitle: "Jogar Helbreath World — conecte Phantom",
+      playTitle: "Jogar Helbreath World — Phantom, RH Chain ou Base",
       playAria: "Jogar agora — Helbreath World",
       statPlayers4h: "Jogadores ON nas últimas 4h",
       statEks4h: "EKs nas últimas 4h",

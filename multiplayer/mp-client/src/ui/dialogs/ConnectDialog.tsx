@@ -37,9 +37,12 @@ import {
     clearWalletDeepLink,
     connectWalletAndAuthenticate,
     consumeAutoEnterWorldFlag,
+    consumePreferredAuthChain,
     consumeWalletDeepLink,
     getStoredWalletPubkey,
     getStoredWalletToken,
+    persistPreferredAuthChain,
+    type AuthChainId,
     releaseAutoEnterWorldLock,
     tryAcquireAutoEnterWorldLock,
 } from '../../utils/walletAuth';
@@ -100,6 +103,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     /** Pending PVP duel invites for this wallet (world names + arena kit names). */
     const [pvpInvites, setPvpInvites] = useState<ArenaPactState[]>([]);
     const [pvpInboxBusy, setPvpInboxBusy] = useState(false);
+    /** Phantom (sol) / RH Chain / Base — same /auth/challenge + /auth/verify. */
+    const [authChain, setAuthChain] = useState<AuthChainId>('sol');
 
     const collectInboxNames = useCallback((): string[] => {
         const wallet = walletSession?.wallet ?? getStoredWalletPubkey();
@@ -310,8 +315,13 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             return;
         }
 
-        console.info('[ConnectDialog] Auto-enter World from landing → Phantom / SELECTCHAR');
-        void handleEnterWorldFromHub()
+        const landingChain = consumePreferredAuthChain();
+        if (landingChain) {
+            setAuthChain(landingChain);
+            persistPreferredAuthChain(landingChain);
+        }
+        console.info('[ConnectDialog] Auto-enter World from landing → wallet / SELECTCHAR');
+        void handleEnterWorldFromHub(landingChain)
             .catch((err) => {
                 console.warn('[ConnectDialog] Auto-enter World failed', err);
             })
@@ -650,14 +660,16 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         } satisfies ConnectToServerPayload);
     };
 
-    const handleWalletConnect = async (): Promise<typeof walletSession> => {
+    const handleWalletConnect = async (chainId: AuthChainId = authChain): Promise<typeof walletSession> => {
         setWalletBusy(true);
         setHubError(undefined);
+        persistPreferredAuthChain(chainId);
+        setAuthChain(chainId);
         try {
-            const session = await connectWalletAndAuthenticate();
+            const session = await connectWalletAndAuthenticate(chainId);
             setConnectWalletSession(session);
             EventBus.emit(TOAST_REQUESTED, {
-                message: `Wallet connected: ${session.wallet.slice(0, 4)}…${session.wallet.slice(-4)}`,
+                message: `Wallet connected (${chainId}): ${session.wallet.slice(0, 4)}…${session.wallet.slice(-4)}`,
                 severity: 'success',
             });
             return session;
@@ -696,13 +708,13 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         window.setTimeout(applyPhase, 50);
     };
 
-    /** One click: Phantom sign (if needed) → classic SELECTCHAR desk. */
-    const handleEnterWorldFromHub = async () => {
+    /** One click: chosen wallet sign (if needed) → classic SELECTCHAR desk. */
+    const handleEnterWorldFromHub = async (chainOverride?: AuthChainId) => {
         setHubError(undefined);
         let session = walletSession;
         let justAuthed = false;
         if (!session) {
-            session = await handleWalletConnect();
+            session = await handleWalletConnect(chainOverride ?? authChain);
             if (!session) {
                 return;
             }
@@ -772,6 +784,34 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                             </p>
                             {walletShort && (
                                 <div className="login-gate-wallet-chip">Seal {walletShort}</div>
+                            )}
+                            {!walletSession && (
+                                <div className="login-hub-wallet-pick" role="group" aria-label="Wallet chain">
+                                    <button
+                                        type="button"
+                                        className={`login-hub-wallet-pick-btn${authChain === 'sol' ? ' is-selected' : ''}`}
+                                        disabled={walletBusy}
+                                        onClick={() => setAuthChain('sol')}
+                                    >
+                                        Phantom
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`login-hub-wallet-pick-btn${authChain === 'rh' ? ' is-selected' : ''}`}
+                                        disabled={walletBusy}
+                                        onClick={() => setAuthChain('rh')}
+                                    >
+                                        RH Chain
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`login-hub-wallet-pick-btn${authChain === 'base' ? ' is-selected' : ''}`}
+                                        disabled={walletBusy}
+                                        onClick={() => setAuthChain('base')}
+                                    >
+                                        Base
+                                    </button>
+                                </div>
                             )}
                             <button
                                 type="button"

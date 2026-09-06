@@ -284,12 +284,17 @@ function recoverEvmAddress(message, signatureEncoded) {
     }
 }
 
-function verifyRhSignature(address, message, signatureEncoded) {
+/** EIP-191 personal_sign recover — same path for `rh` and `base` (no RPC). */
+function verifyEvmSignature(address, message, signatureEncoded) {
     const recovered = recoverEvmAddress(message, signatureEncoded);
     if (!recovered) {
         return false;
     }
     return recovered.toLowerCase() === String(address).toLowerCase();
+}
+
+function verifyRhSignature(address, message, signatureEncoded) {
+    return verifyEvmSignature(address, message, signatureEncoded);
 }
 
 function verifyWalletSignature(chainId, address, message, signatureEncoded) {
@@ -299,8 +304,8 @@ function verifyWalletSignature(chainId, address, message, signatureEncoded) {
     if (chainId === 'sol') {
         return verifySolSignature(address, message, signatureEncoded);
     }
-    if (chainId === 'rh') {
-        return verifyRhSignature(address, message, signatureEncoded);
+    if (isEvmChain(chainId)) {
+        return verifyEvmSignature(address, message, signatureEncoded);
     }
     return false;
 }
@@ -701,13 +706,6 @@ function issueChallenge({ chainId, address, addressKey }) {
     return { challengeId, chainId, address, expiresAt, message };
 }
 
-function baseStubError() {
-    return {
-        success: false,
-        error: 'base auth is not implemented (stub deny). Bind rh and base separately; Base verifier ships later.',
-    };
-}
-
 async function issueSessionResponse(playerId) {
     const player = await getPlayer(playerId);
     if (!player) {
@@ -741,10 +739,6 @@ function registerAuthRoutes(app) {
         const chainId = normalizeChainId(req.query.chainId || req.body?.chainId, { defaultSol: true });
         if (!chainId) {
             res.status(400).json({ success: false, error: 'chainId must be sol, rh, or base' });
-            return;
-        }
-        if (chainId === 'base') {
-            res.status(501).json(baseStubError());
             return;
         }
         const addressRaw = String(
@@ -786,10 +780,6 @@ function registerAuthRoutes(app) {
         const chainId = normalizeChainId(body.chainId, { defaultSol: true });
         if (!chainId) {
             res.status(400).json({ success: false, error: 'chainId must be sol, rh, or base' });
-            return;
-        }
-        if (chainId === 'base') {
-            res.status(501).json(baseStubError());
             return;
         }
 
@@ -965,6 +955,7 @@ module.exports = {
     canonicalizeAddress,
     verifySolSignature,
     verifyRhSignature,
+    verifyEvmSignature,
     recoverEvmAddress,
     hashPersonalMessage,
     bindOrReject,

@@ -46,10 +46,13 @@ import type { InitialGameWorldState } from '../../utils/RegistryUtils';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
-import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
+import { loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
-import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
+import {
+    loadPlayerItemAppearanceOnDemand,
+    setPlayerItemAppearanceDecodeAllowed,
+} from '../../utils/ItemAssets';
 import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
 import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
@@ -388,6 +391,8 @@ export class GameWorld extends Scene {
     private mapSetupWatchdog: Phaser.Time.TimerEvent | undefined = undefined;
     /** Entity `.spr` decode stays closed until tiles/player exist and a short GC gap elapsed. */
     private worldReadyForEntities = false;
+    /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
+    private mapStreamWalkEnabled = false;
     private mapSetupRetryCount = 0;
     /** Cast manager - handles server AoE spell visuals */
     private castManager: CastManager | undefined = undefined;
@@ -499,8 +504,10 @@ export class GameWorld extends Scene {
             this.initializationStarted = false;
             this.loadingMap = true;
             this.worldReadyForEntities = false;
+            this.mapStreamWalkEnabled = false;
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
+            setPlayerItemAppearanceDecodeAllowed(false);
             this.clearMapSetupWatchdog();
 
             this.loadingOverlayController = new LoadingOverlayController(this);
@@ -2367,6 +2374,7 @@ export class GameWorld extends Scene {
             this.pendingLoadedMap = undefined;
             this.loadingMap = true;
             this.worldReadyForEntities = false;
+            this.mapStreamWalkEnabled = false;
             void this.runDeferredMapLoad();
             return;
         }
@@ -2420,7 +2428,7 @@ export class GameWorld extends Scene {
         if (!Number.isFinite(cameraZoom) || cameraZoom < 0.2 || cameraZoom > 2.5) {
             cameraZoom = 1;
         }
-        this.cameraManager?.setZoom(cameraZoom);
+        this.cameraManager?.setZoom(1);
         console.log(`[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Applied saved camera zoom after minimap snapshot:`, savedCameraZoom, '% =', cameraZoom);
 
         // Defer overlay removal using frame-based approach
@@ -2436,25 +2444,31 @@ export class GameWorld extends Scene {
         map.disableServerTeleportCellsHighlight();
         map.disableWaterCellsHighlight();
         this.tryPushWorldTeleportCellsToCurrentMap();
-        // Re-stream around the live player cell (Elvine plaza 149,131). First paint can
-        // otherwise sit on 0,0 while the camera is already on the city hall.
         if (this.player) {
             this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
-            void this.mapManager?.syncStreamedView();
         }
-        // Entity/HUD/appearance decode is the pad-standstill OOM: wait for tile GC before
-        // slime/NPC idle sheets, and do not unpack gamedialog2 dialog packs on enter.
-        this.time.delayedCall(700, () => {
+        // After brief stand: do not dump trees+56×40 restream+NPCs+full gear in one beat.
+        this.time.delayedCall(400, () => {
+            this.cameraManager?.setZoom(cameraZoom);
+        });
+        this.time.delayedCall(5000, () => {
+            void this.enableTreesAfterFirstPaint();
+        });
+        this.time.delayedCall(8000, () => {
             this.worldReadyForEntities = true;
             this.syncMonstersFromNetworkState();
-            this.syncNpcsFromNetworkState();
             this.syncGroundStatesFromNetworkState();
             this.syncOtherPlayersFromNetworkState();
         });
-        this.time.delayedCall(4000, () => {
+        this.time.delayedCall(9000, () => {
+            this.syncNpcsFromNetworkState();
+        });
+        this.time.delayedCall(10000, () => {
+            setPlayerItemAppearanceDecodeAllowed(true);
+            this.player?.startPendingEquippedAppearanceLoads();
             this.startDeferredAppearancePrefetch();
         });
-        this.time.delayedCall(8000, () => {
+        this.time.delayedCall(14000, () => {
             void loadWorldDeferredSprites(this).catch((error) => {
                 console.warn('[GameWorld] Deferred HUD sprites failed', error);
             });
@@ -2770,7 +2784,9 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
-                void this.mapManager?.syncStreamedView();
+                if (this.mapStreamWalkEnabled) {
+                    void this.mapManager?.syncStreamedView();
+                }
                 this.handleMapObjectCollisions();
 
                 if (!this.pendingPredictedWorldTransfer && !this.awaitingTransferredWorldState && !this.loadingMap) {
@@ -2843,7 +2859,12 @@ export class GameWorld extends Scene {
             severity: 'warning',
             autoClose: 6000,
         });
-        if (!this.mapPrepareInFlight && this.mapSetupRetryCount < 2) {
+        // Never decode the plaza a second time while the first paint's map-tile canvases exist
+        // (retry after a slow first paint was a live Aw Snap ×2).
+        if (this.displayedMap || this.pendingLoadedMap || this.mapPrepareInFlight) {
+            return;
+        }
+        if (this.mapSetupRetryCount < 2) {
             this.mapSetupRetryCount += 1;
             this.noteMapSetupProgress();
             void this.runDeferredMapLoad();
@@ -2863,6 +2884,29 @@ export class GameWorld extends Scene {
     }
 
     /**
+     * After first paint GC: decode tree-shadow sheets, instantiate trees, then allow walk restream.
+     */
+    private async enableTreesAfterFirstPaint(): Promise<void> {
+        const map = this.displayedMap;
+        if (!map || !this.mapManager) {
+            this.mapStreamWalkEnabled = true;
+            return;
+        }
+        try {
+            const rect = map.getStreamedRect();
+            if (rect) {
+                await loadTileSpritePacksForMapRect(this, map, rect, undefined, true);
+            }
+            map.renderMapObjects(this, true);
+            map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
+        } catch (error) {
+            console.warn('[GameWorld] Tree pass after first paint failed', error);
+        } finally {
+            this.mapStreamWalkEnabled = true;
+        }
+    }
+
+    /**
      * When map assets load on demand, fetches the current `.amd` and tile packs before the normal minimap path.
      */
     private async runDeferredMapLoad(): Promise<void> {
@@ -2878,13 +2922,13 @@ export class GameWorld extends Scene {
             }
 
             this.noteMapSetupProgress();
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            this.noteMapSetupProgress();
             runSafeSync('GameWorld:deferredMapLoad', () => {
                 this.displayedMap = this.mapManager!.getCurrentMap();
                 this.mapManager!.startMinimapCapture((map) => {
                     runSafeSync('GameWorld:minimapCapture', () => {
                         try {
-                            map.renderMapObjects(this, true); // Third pass (with trees)
-                            // Apply SysMenu detail (hide trees on Low) after objects exist.
                             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
                             this.pendingLoadedMap = map;
                             this.tryFinalizeMapSetup();
@@ -2899,7 +2943,7 @@ export class GameWorld extends Scene {
             });
         } catch (error) {
             console.error('[GameWorld] Map on-demand load failed:', error);
-            if (this.mapSetupRetryCount < 2) {
+            if (this.mapSetupRetryCount < 2 && !this.displayedMap && !this.pendingLoadedMap) {
                 this.mapSetupRetryCount += 1;
                 this.noteMapSetupProgress();
                 console.warn(`[GameWorld] Retrying map prepare (${this.mapSetupRetryCount})`);
@@ -5032,6 +5076,7 @@ export class GameWorld extends Scene {
             this.initializationStarted = false;
             this.loadingMap = true;
             this.worldReadyForEntities = false;
+            this.mapStreamWalkEnabled = false;
             this.clearMapSetupWatchdog();
             this.clearPendingWorldTransfer('shutdown');
             this.initialGameWorldState = undefined;

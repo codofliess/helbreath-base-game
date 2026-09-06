@@ -58,8 +58,8 @@ export class GameAsset {
     /** Re-entrancy guard to prevent infinite recursion when setCurrentFrame triggers ANIMATION_UPDATE */
     private _isHandlingFrameLimit: boolean = false;
 
-    /** Graphics object used for debug visualization */
-    private debugGraphics: GameObjects.Graphics;
+    /** Graphics object used for debug visualization (omitted for map objects on enter). */
+    private debugGraphics: GameObjects.Graphics | undefined;
 
     /** Whether this asset is non-animated (has a fixed frameIndex) */
     private isNonAnimated = false;
@@ -255,9 +255,10 @@ export class GameAsset {
 
         this.visualEffects.setItemEffects(config.effects);
 
-        // Always create debug graphics, but control visibility based on global setting and hover state
-        // Use very high depth (50000) to ensure debug info always renders on top of other sprites
-        this.debugGraphics = scene.add.graphics().setDepth(HIGH_DEPTH);
+        // Map props skip debug Graphics — plaza enter instantiates hundreds of objects.
+        if (!config.mapObject) {
+            this.debugGraphics = scene.add.graphics().setDepth(HIGH_DEPTH);
+        }
 
         // Pointer event listeners for hover detection will be registered only when debug mode is enabled
         // See enableHoverDetection() and disableHoverDetection() methods
@@ -735,7 +736,7 @@ export class GameAsset {
     private updateDebugVisibility(): void {
         const debugEnabled = isDebugModeEnabled(this.scene);
         // Graphics are always visible when debug mode is enabled
-        this.debugGraphics.setVisible(debugEnabled);
+        this.debugGraphics?.setVisible(debugEnabled);
 
         // If debug mode is enabled, update debug graphics (and text if hovering)
         if (debugEnabled) {
@@ -767,7 +768,7 @@ export class GameAsset {
      */
     private updateDebug(frame: Phaser.Animations.AnimationFrame): void {
         // Skip if debug mode is not enabled
-        if (!isDebugModeEnabled(this.scene)) {
+        if (!isDebugModeEnabled(this.scene) || !this.debugGraphics) {
             return;
         }
 
@@ -1514,7 +1515,7 @@ export class GameAsset {
         this.scene.registry.events.off(IN_DEBUG_MODE_CHANGE, this.debugModeChangeHandler);
 
         this.sprite.destroy();
-        this.debugGraphics.destroy();
+        this.debugGraphics?.destroy();
     }
 }
 

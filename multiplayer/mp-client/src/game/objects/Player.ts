@@ -1861,6 +1861,11 @@ export class Player extends GameObject {
         return this.appearanceManager.getHumanSpriteName();
     }
 
+    /** After map settle: decode idle equipped sheets that stayed on the placeholder. */
+    public startPendingEquippedAppearanceLoads(): void {
+        this.appearanceManager.startPendingItemAppearanceLoads();
+    }
+
     /**
      * Resurrection: restores position, HP, shadow, idle state, and resurrection VFX.
      * Always applies even if the local dead flag was desynced (stuck corpse bug).

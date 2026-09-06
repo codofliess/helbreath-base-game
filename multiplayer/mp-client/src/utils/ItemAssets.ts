@@ -22,6 +22,20 @@ const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
 const playerItemAppearanceLoadPromises = new Map<string, Promise<void>>();
 const playerItemAssetLoadPromises = new Map<string, Promise<void>>();
 
+/** Idle-peace facings (and armour idle+near states). Never the whole Hero-kit `.spr` on enter. */
+const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+
+/** False during map first-paint / brief stand so 9 equipped packs cannot join tile GC. */
+let playerItemAppearanceDecodeAllowed = false;
+
+export function setPlayerItemAppearanceDecodeAllowed(allowed: boolean): void {
+    playerItemAppearanceDecodeAllowed = allowed;
+}
+
+export function isPlayerItemAppearanceDecodeAllowed(): boolean {
+    return playerItemAppearanceDecodeAllowed;
+}
+
 /** True when equipped item appearance sprites should be fetched lazily. */
 export function shouldLoadPlayerItemAppearanceOnDemand(): boolean {
     return LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND;
@@ -53,9 +67,14 @@ export function collectEquippedItemAppearanceSpriteBasenamesForPrefetch(
     return [...new Set(out)];
 }
 
-/** True while `loadPlayerItemAppearanceOnDemand` has an unresolved promise for this basename. */
+/** True while any settle/idle appearance decode for this basename is queued. */
 export function isPlayerItemAppearanceLoadInFlight(spriteName: string): boolean {
-    return playerItemAppearanceLoadPromises.has(spriteName);
+    for (const key of playerItemAppearanceLoadPromises.keys()) {
+        if (key === spriteName || key.startsWith(`${spriteName}:`)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -81,20 +100,34 @@ export function isPlayerItemAppearanceLazyEligible(scene: Scene, spriteName: str
     );
 }
 
-/** Fetches and registers one equipped item appearance `.spr` (shared promise per basename). */
-export function loadPlayerItemAppearanceOnDemand(scene: Scene, spriteName: string): Promise<void> {
-    if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || arePlayerItemAppearanceLoaded(scene, spriteName)) {
+export interface LoadPlayerItemAppearanceOptions {
+    /** Local sheet indexes to decode. Defaults to idle 0–7, never the full pack. */
+    sheetIndices?: ReadonlySet<number>;
+}
+
+/** Fetches and registers equipped item appearance sheets (idle by default). */
+export function loadPlayerItemAppearanceOnDemand(
+    scene: Scene,
+    spriteName: string,
+    options?: LoadPlayerItemAppearanceOptions,
+): Promise<void> {
+    if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !playerItemAppearanceDecodeAllowed) {
+        return Promise.resolve();
+    }
+    const sheetIndices = options?.sheetIndices ?? SETTLE_APPEARANCE_SHEETS;
+    if (arePlayerItemAppearanceSheetsLoaded(scene, spriteName, sheetIndices)) {
         return Promise.resolve();
     }
 
-    const existing = playerItemAppearanceLoadPromises.get(spriteName);
+    const promiseKey = `${spriteName}:${[...sheetIndices].sort((a, b) => a - b).join(',')}`;
+    const existing = playerItemAppearanceLoadPromises.get(promiseKey);
     if (existing) {
         return existing;
     }
 
-    console.log(`[PlayerItemAppearanceLoader] Starting fetch for '${spriteName}'`);
+    console.log(`[PlayerItemAppearanceLoader] Starting fetch for '${spriteName}' sheets ${promiseKey}`);
 
-    const promise = loadPlayerItemAppearanceAssets(scene, spriteName)
+    const promise = loadPlayerItemAppearanceAssets(scene, spriteName, sheetIndices)
         .then(() => {
             console.log(`[PlayerItemAppearanceLoader] Loaded item appearance ${spriteName}`);
         })
@@ -102,41 +135,58 @@ export function loadPlayerItemAppearanceOnDemand(scene: Scene, spriteName: strin
             throw error;
         })
         .finally(() => {
-            playerItemAppearanceLoadPromises.delete(spriteName);
+            playerItemAppearanceLoadPromises.delete(promiseKey);
         });
 
-    playerItemAppearanceLoadPromises.set(spriteName, promise);
+    playerItemAppearanceLoadPromises.set(promiseKey, promise);
     return promise;
 }
 
-async function loadPlayerItemAppearanceAssets(scene: Scene, spriteName: string): Promise<void> {
+function arePlayerItemAppearanceSheetsLoaded(
+    scene: Scene,
+    spriteName: string,
+    sheetIndices: ReadonlySet<number>,
+): boolean {
+    const asset = getPlayerItemAppearanceAssetData(spriteName);
+    if (asset.assetType !== AssetType.SPRITE) {
+        return false;
+    }
+    for (const sheet of sheetIndices) {
+        if (!scene.textures.exists(`${asset.key}-${sheet}`)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+async function loadPlayerItemAppearanceAssets(
+    scene: Scene,
+    spriteName: string,
+    sheetIndices: ReadonlySet<number>,
+): Promise<void> {
     const asset = getPlayerItemAppearanceAssetData(spriteName);
     if (asset.assetType !== AssetType.SPRITE) {
         return;
     }
-    if (scene.textures.exists(`${asset.key}-0`)) {
+    if (arePlayerItemAppearanceSheetsLoaded(scene, spriteName, sheetIndices)) {
         return;
     }
 
     const startedAt = performance.now();
-    await loadAssetOnce(scene, asset);
+    await loadAssetOnce(scene, asset, sheetIndices);
     console.log(
         `[PlayerItemAppearanceLoader] Registered ${asset.fileName} in ${(performance.now() - startedAt).toFixed(2)}ms`,
     );
 }
 
-function loadAssetOnce(scene: Scene, asset: AssetData): Promise<void> {
-    if (asset.assetType === AssetType.SPRITE && scene.textures.exists(`${asset.key}-0`)) {
-        return Promise.resolve();
-    }
-
-    const loadKey = `${asset.assetType}:${asset.key}`;
+function loadAssetOnce(scene: Scene, asset: AssetData, sheetIndices: ReadonlySet<number>): Promise<void> {
+    const loadKey = `${asset.assetType}:${asset.key}:${[...sheetIndices].sort((a, b) => a - b).join(',')}`;
     const existing = playerItemAssetLoadPromises.get(loadKey);
     if (existing) {
         return existing;
     }
 
-    const promise = fetchAndRegisterPlayerItemSprite(scene, asset);
+    const promise = fetchAndRegisterPlayerItemSprite(scene, asset, sheetIndices);
     playerItemAssetLoadPromises.set(loadKey, promise);
     return promise.catch((error) => {
         playerItemAssetLoadPromises.delete(loadKey);
@@ -144,20 +194,31 @@ function loadAssetOnce(scene: Scene, asset: AssetData): Promise<void> {
     });
 }
 
-async function fetchAndRegisterPlayerItemSprite(scene: Scene, asset: AssetData): Promise<void> {
+async function fetchAndRegisterPlayerItemSprite(
+    scene: Scene,
+    asset: AssetData,
+    sheetIndices: ReadonlySet<number>,
+): Promise<void> {
     if (!asset.spriteType) {
         throw new Error(`Player item appearance asset ${asset.key} is missing spriteType`);
     }
     const spriteType = asset.spriteType;
+    const missing = [...sheetIndices].filter((index) => !scene.textures.exists(`${asset.key}-${index}`));
+    if (missing.length === 0) {
+        return;
+    }
 
     await enqueueSpriteDecode(async () => {
-        if (scene.textures.exists(`${asset.key}-0`)) {
+        const stillMissing = missing.filter((index) => !scene.textures.exists(`${asset.key}-${index}`));
+        if (stillMissing.length === 0) {
             return;
         }
-        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
-        scene.cache.binary.add(asset.key, arrayBuffer);
+        if (!scene.cache.binary.exists(asset.key)) {
+            const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+            scene.cache.binary.add(asset.key, arrayBuffer);
+        }
 
-        const hbFile = new HBSpriteFile(asset.key, spriteType, asset.exportFramesAsDataUrls || false, asset.tileStartIndex);
-        await hbFile.load(scene);
+        const hbFile = new HBSpriteFile(asset.key, spriteType, false, asset.tileStartIndex);
+        await hbFile.load(scene, { sheetIndices: new Set(stillMissing) });
     });
 }

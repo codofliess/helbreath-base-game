@@ -11,6 +11,18 @@
 export const MAP_STREAM_RING_TILES = 8;
 
 /**
+ * First enter uses a tighter ring than walk. The walk cap (56×40) plus tree shadows
+ * was still enough Canvas textures to Aw Snap during map load before the pad.
+ */
+export const MAP_ENTER_RING_TILES = 4;
+
+/**
+ * Do not rebuild the tileset because walk-ring (8) is a few cells larger than enter-ring (4).
+ * That false restream after a brief stand (56×40 + tree shadows) Aw Snapped before the pad.
+ */
+export const MAP_STREAM_REFRESH_SLACK_TILES = 10;
+
+/**
  * Maximum streamed window. A tiny camera zoom (or a full-map minimap snapshot) must not expand
  * this to the whole world.
  */
@@ -152,17 +164,21 @@ export function initialFocusStreamRect(
     focusTileY: number,
     mapSizeX: number,
     mapSizeY: number,
-    _viewWidthPx = DEFAULT_STREAM_VIEW_WIDTH_PX,
-    _viewHeightPx = DEFAULT_STREAM_VIEW_HEIGHT_PX,
+    viewWidthPx = DEFAULT_STREAM_VIEW_WIDTH_PX,
+    viewHeightPx = DEFAULT_STREAM_VIEW_HEIGHT_PX,
 ): MapTileRect {
-    return tileRectAroundFocus(
-        focusTileX,
-        focusTileY,
-        Math.floor(MAP_STREAM_MAX_WIDTH_TILES / 2),
-        Math.floor(MAP_STREAM_MAX_HEIGHT_TILES / 2),
+    const fx = Number.isFinite(focusTileX) ? focusTileX : 0;
+    const fy = Number.isFinite(focusTileY) ? focusTileY : 0;
+    return cameraStreamTileRect({
+        scrollX: fx * 32 - viewWidthPx / 2,
+        scrollY: fy * 32 - viewHeightPx / 2,
+        viewWidthPx,
+        viewHeightPx,
+        zoom: 1,
         mapSizeX,
         mapSizeY,
-    );
+        ringTiles: MAP_ENTER_RING_TILES,
+    });
 }
 
 /**
@@ -186,9 +202,31 @@ export function paintStreamTileRect(input: CameraStreamInput): MapTileRect {
     );
 }
 
-/** True when the camera+ring is no longer inside the last painted cap (walk far enough to restream). */
-export function shouldRefreshMapStream(painted: MapTileRect | undefined, needed: MapTileRect): boolean {
-    return !painted || !mapTileRectContains(painted, needed);
+/** True when the camera+ring has moved far enough outside the painted window to restream. */
+export function shouldRefreshMapStream(
+    painted: MapTileRect | undefined,
+    needed: MapTileRect,
+    slackTiles = MAP_STREAM_REFRESH_SLACK_TILES,
+): boolean {
+    if (!painted) {
+        return true;
+    }
+    if (mapTileRectContains(painted, needed)) {
+        return false;
+    }
+    const slack = Math.max(0, slackTiles);
+    if (slack === 0) {
+        return true;
+    }
+    return !mapTileRectContains(
+        {
+            minX: painted.minX - slack,
+            minY: painted.minY - slack,
+            maxX: painted.maxX + slack,
+            maxY: painted.maxY + slack,
+        },
+        needed,
+    );
 }
 
 /** Phaser `map-tile-{globalIndex}` keys that are outside the current stream keep-set. */
@@ -216,13 +254,14 @@ export interface MapCellSprites {
 }
 
 /**
- * Ground + object sprite indices inside `rect` only (plus tree-shadow +50).
- * Full-map scans belong in tests, not in the load path.
+ * Ground + object sprite indices inside `rect` only (plus tree-shadow +50 when requested).
+ * Full-map scans belong in tests, not in the load path. First enter skips shadows.
  */
 export function collectSpriteIndicesInRect(
     tiles: ReadonlyArray<ReadonlyArray<MapCellSprites>>,
     rect: MapTileRect,
     isTreeSpriteIndex: (index: number) => boolean,
+    includeTreeShadows = true,
 ): Set<number> {
     const indices = new Set<number>();
     for (let y = rect.minY; y <= rect.maxY; y++) {
@@ -243,9 +282,11 @@ export function collectSpriteIndicesInRect(
             }
         }
     }
-    for (const idx of [...indices]) {
-        if (isTreeSpriteIndex(idx)) {
-            indices.add(idx + 50);
+    if (includeTreeShadows) {
+        for (const idx of [...indices]) {
+            if (isTreeSpriteIndex(idx)) {
+                indices.add(idx + 50);
+            }
         }
     }
     return indices;

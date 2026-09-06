@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+    MAP_ENTER_RING_TILES,
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
+    MAP_STREAM_RING_TILES,
     cameraStreamTileRect,
     collectSpriteIndicesInRect,
     initialFocusStreamRect,
@@ -86,6 +88,20 @@ describe('mapViewportStream', () => {
         assert.ok(mapTileRectContains(rect, { minX: 149, minY: 131, maxX: 149, maxY: 131 }));
         assert.ok(mapTileRectArea(rect) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
         assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
+        const walkPaint = paintStreamTileRect({
+            scrollX: 149 * 32,
+            scrollY: 131 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 400,
+            mapSizeY: 400,
+        });
+        assert.ok(
+            mapTileRectArea(rect) < mapTileRectArea(walkPaint),
+            'first enter must decode a smaller window than the walk paint cap',
+        );
+        assert.ok(MAP_ENTER_RING_TILES < MAP_STREAM_RING_TILES);
     });
 
     it('live Elvine 300×300 .amd cannot paint as one layer per world row', () => {
@@ -106,6 +122,30 @@ describe('mapViewportStream', () => {
         assert.equal(mapTileRectsEqual(rect, rect), true);
     });
 
+    it('standing on enter rect must not restream just because walk-ring is 8 vs enter-ring 4', () => {
+        const painted = initialFocusStreamRect(149, 131, 300, 300);
+        const neededWalkRing = cameraStreamTileRect({
+            scrollX: 149 * 32 - 512,
+            scrollY: 131 * 32 - 288,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+            ringTiles: MAP_STREAM_RING_TILES,
+        });
+        assert.equal(shouldRefreshMapStream(painted, neededWalkRing), false);
+        const far = cameraStreamTileRect({
+            scrollX: 185 * 32,
+            scrollY: 117 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        assert.equal(shouldRefreshMapStream(painted, far), true);
+    });
     it('walking one cell inside the painted cap does not restream', () => {
         const spawn = { scrollX: 149 * 32, scrollY: 131 * 32, viewWidthPx: 1024, viewHeightPx: 576, zoom: 1, mapSizeX: 300, mapSizeY: 300 };
         const painted = paintStreamTileRect(spawn);

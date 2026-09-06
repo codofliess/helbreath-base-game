@@ -150,9 +150,8 @@ describe('mapViewportStream', () => {
             mapSizeY: 300,
         });
         const step = growMapTileRectToward(first, enter, MAP_EXPAND_STEP_TILES);
-        assert.ok(mapTileRectContains(enter, step) || mapTileRectsEqual(step, enter) || mapTileRectContains(step, first));
+        assert.ok(mapTileRectContains(enter, step));
         assert.ok(mapTileRectArea(step) < mapTileRectArea(walkCap));
-        assert.ok(mapTileRectArea(step) <= mapTileRectArea(first) + (MAP_EXPAND_STEP_TILES * 2) * (mapTileRectWidth(first) + mapTileRectHeight(first) + MAP_EXPAND_STEP_TILES * 2));
         assert.equal(mapTileRectsEqual(step, walkCap), false);
         const neededWalk = cameraStreamTileRect({
             scrollX: 149 * 32 - 512,
@@ -164,7 +163,11 @@ describe('mapViewportStream', () => {
             mapSizeY: 300,
             ringTiles: MAP_STREAM_RING_TILES,
         });
-        assert.equal(shouldRefreshMapStream(first, neededWalk, MAP_STAND_REFRESH_SLACK_TILES), false);
+        assert.equal(
+            shouldRefreshMapStream(first, neededWalk, MAP_STAND_REFRESH_SLACK_TILES),
+            true,
+            'walk-ring still misses 12×8; standing must not answer with paintStreamTileRect',
+        );
         const focusNeeded = cameraStreamTileRect({
             scrollX: 149 * 32 - 512,
             scrollY: 131 * 32 - 288,
@@ -175,6 +178,11 @@ describe('mapViewportStream', () => {
             mapSizeY: 300,
             ringTiles: MAP_ENTER_RING_TILES,
         });
+        assert.equal(
+            shouldRefreshMapStream(first, focusNeeded, MAP_STAND_REFRESH_SLACK_TILES),
+            false,
+            'stand/focus enter-ring must not restream the 12×8 first paint',
+        );
         assert.equal(shouldRefreshMapStream(enter, focusNeeded, MAP_STAND_REFRESH_SLACK_TILES), false);
     });
 

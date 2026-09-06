@@ -76,6 +76,13 @@ describe('mapViewportStream', () => {
         assert.equal(withTree.has(3), false);
     });
 
+    it('Elvine city-hall spawn (149,131) stays in a bounded stream window', () => {
+        const rect = initialFocusStreamRect(149, 131, 400, 400);
+        assert.ok(mapTileRectContains(rect, { minX: 149, minY: 131, maxX: 149, maxY: 131 }));
+        assert.ok(mapTileRectArea(rect) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
+        assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
+    });
+
     it('initial spawn focus window stays bounded', () => {
         const rect = initialFocusStreamRect(90, 80, 400, 400);
         assert.ok(mapTileRectContains(rect, { minX: 90, minY: 80, maxX: 90, maxY: 80 }));

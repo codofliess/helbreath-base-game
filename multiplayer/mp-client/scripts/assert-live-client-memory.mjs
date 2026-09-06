@@ -28,6 +28,7 @@ const mapAssets = read('src/utils/MapAssets.ts');
 const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
 const gameWorld = read('src/game/scenes/GameWorld.ts');
+const maps = read('src/constants/Maps.ts');
 const mapViewportStream = read('src/utils/mapViewportStream.ts');
 const spriteHttp = read('src/utils/SpriteHttpLoader.ts');
 const hbSprite = read('src/game/assets/HBSprite.ts');
@@ -137,8 +138,14 @@ assert(
 
 assert(
     /syncStreamedView/.test(gameWorld) &&
-        /focusTileX: this\.initialGameWorldState\?\.playerX/.test(gameWorld),
-    'GameWorld must stream around spawn and update the camera window while walking',
+        /focusTileX: this\.initialGameWorldState\?\.playerX/.test(gameWorld) &&
+        /setInitialFocusTile\(this\.player\.getWorldX/.test(gameWorld),
+    'GameWorld must stream around spawn and re-stream the live player cell after setupMap',
+);
+
+assert(
+    /withAmd/.test(maps) && /mapFile\.toLowerCase\(\) === withAmd\.toLowerCase\(\)/.test(maps),
+    'getMapData must match server map id elvine to catalog elvine.amd (PRE_GENERATED minimap / HUD)',
 );
 
 assert(

@@ -16,9 +16,11 @@ export function getMapNames(): MapData[] {
     }));
 }
 
-/** Looks up `MapData` by `.amd` filename (e.g. `aresden.amd`). */
+/** Looks up `MapData` by map id or `.amd` filename (server sends `elvine`, catalog is `elvine.amd`). */
 export function getMapData(filename: string): MapData | undefined {
-    return getMapNames().find(map => map.mapFile === filename);
+    const file = filename.replace(/^.*[/\\]/, '');
+    const withAmd = file.toLowerCase().endsWith('.amd') ? file : `${file}.amd`;
+    return getMapNames().find((map) => map.mapFile.toLowerCase() === withAmd.toLowerCase());
 }
 
 /** Map picker options: sorted by display label. */

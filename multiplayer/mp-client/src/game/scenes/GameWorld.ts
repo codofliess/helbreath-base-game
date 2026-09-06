@@ -2418,6 +2418,12 @@ export class GameWorld extends Scene {
         this.syncGroundStatesFromNetworkState();
         this.syncOtherPlayersFromNetworkState();
         this.tryPushWorldTeleportCellsToCurrentMap();
+        // Re-stream around the live player cell (Elvine plaza 149,131). First paint can
+        // otherwise sit on 0,0 while the camera is already on the city hall.
+        if (this.player) {
+            this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
+            void this.mapManager?.syncStreamedView();
+        }
         // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
         // froze the browser (felt like "everything broke"). Pit markers still show as
         // letter labels; thumbs only when a live monster of that type enters view.
@@ -3464,7 +3470,7 @@ export class GameWorld extends Scene {
         if (this.monsters.some((m) => m.getMonsterId() === data.monsterId)) {
             return;
         }
-        if (!this.mapManager || this.loadingMap || !this.soundManager) {
+        if (!this.mapManager || !this.displayedMap || !this.soundManager) {
             return;
         }
         if (!this.player) {

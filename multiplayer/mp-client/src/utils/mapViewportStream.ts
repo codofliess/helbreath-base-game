@@ -17,6 +17,13 @@ export const MAP_STREAM_RING_TILES = 8;
 export const MAP_ENTER_RING_TILES = 4;
 
 /**
+ * Frame-0 paint is smaller than enter FOV+ring. Decoding ~40×26 ground+object sheets
+ * before the first Phaser frame still Aw Snaps (~2GB Chrome) — restream/settle never runs.
+ */
+export const MAP_FIRST_PAINT_MAX_WIDTH_TILES = 12;
+export const MAP_FIRST_PAINT_MAX_HEIGHT_TILES = 8;
+
+/**
  * Do not rebuild the tileset because walk-ring (8) is a few cells larger than enter-ring (4).
  * That false restream after a brief stand (56×40 + tree shadows) Aw Snapped before the pad.
  */
@@ -182,6 +189,54 @@ export function initialFocusStreamRect(
 }
 
 /**
+ * Tiny ground window around spawn for the first Phaser paint. Objects, enter-ring
+ * tiles, and walk restream load after this rect has produced a stable frame.
+ */
+export function firstPaintStreamRect(
+    focusTileX: number,
+    focusTileY: number,
+    mapSizeX: number,
+    mapSizeY: number,
+): MapTileRect {
+    const fx = Number.isFinite(focusTileX) ? focusTileX : 0;
+    const fy = Number.isFinite(focusTileY) ? focusTileY : 0;
+    const width = MAP_FIRST_PAINT_MAX_WIDTH_TILES;
+    const height = MAP_FIRST_PAINT_MAX_HEIGHT_TILES;
+    const minX = Math.round(fx) - Math.floor(width / 2);
+    const minY = Math.round(fy) - Math.floor(height / 2);
+    return clampMapTileRect(
+        { minX, minY, maxX: minX + width - 1, maxY: minY + height - 1 },
+        mapSizeX,
+        mapSizeY,
+    );
+}
+
+/** Yields until `count` animation frames (or 16ms ticks when rAF is missing). */
+export function waitForBrowserFrames(count = 2): Promise<void> {
+    const frames = Math.max(1, count);
+    return new Promise((resolve) => {
+        let left = frames;
+        const tick = () => {
+            left -= 1;
+            if (left <= 0) {
+                resolve();
+                return;
+            }
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(tick);
+            } else {
+                setTimeout(tick, 16);
+            }
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(tick);
+        } else {
+            setTimeout(tick, 16);
+        }
+    });
+}
+
+/**
  * Painted/decoded window: always the hard cap around the camera center.
  * `cameraStreamTileRect` is the *needed* camera+ring; walking inside a painted cap
  * must not decode more sheets or rebuild the tileset every cell.
@@ -255,13 +310,14 @@ export interface MapCellSprites {
 
 /**
  * Ground + object sprite indices inside `rect` only (plus tree-shadow +50 when requested).
- * Full-map scans belong in tests, not in the load path. First enter skips shadows.
+ * Full-map scans belong in tests, not in the load path. Frame-0 skips objects and shadows.
  */
 export function collectSpriteIndicesInRect(
     tiles: ReadonlyArray<ReadonlyArray<MapCellSprites>>,
     rect: MapTileRect,
     isTreeSpriteIndex: (index: number) => boolean,
     includeTreeShadows = true,
+    includeObjectSprites = true,
 ): Set<number> {
     const indices = new Set<number>();
     for (let y = rect.minY; y <= rect.maxY; y++) {
@@ -277,7 +333,7 @@ export function collectSpriteIndicesInRect(
             if (tile.sprite >= 0) {
                 indices.add(tile.sprite);
             }
-            if (tile.objectSprite > 0) {
+            if (includeObjectSprites && tile.objectSprite > 0) {
                 indices.add(tile.objectSprite);
             }
         }

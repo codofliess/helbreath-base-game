@@ -10,6 +10,7 @@ import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoad
 import { catalogAmdFileName } from './mapCatalogLookup';
 import { localTileSheetIndices } from './tileSheetFilter';
 import {
+    firstPaintStreamRect,
     initialFocusStreamRect,
     mapTileKeysToEvict,
     type MapTileRect,
@@ -85,12 +86,13 @@ function getTileSpriteAssetForIndex(index: number): AssetData {
 /**
  * Ground and map-object sprite indices inside `rect` (viewport + ring), plus tree-shadow +50.
  * Do not call this without a rect on the load path — a full-map scan plus every `.spr` pack
- * is the previous OOM (Aw Snap 9 on enter).
+ * is the previous OOM (Aw Snap 9 on enter). Frame-0 skips object packs.
  */
 export function collectRequiredTileIndices(
     hbMap: HBMap,
     rect: MapTileRect,
     includeTreeShadows = true,
+    includeObjectSprites = true,
 ): Set<number> {
     const indices = new Set<number>();
     for (let y = rect.minY; y <= rect.maxY; y++) {
@@ -102,7 +104,7 @@ export function collectRequiredTileIndices(
             if (tile.sprite >= 0) {
                 indices.add(tile.sprite);
             }
-            if (tile.objectSprite > 0) {
+            if (includeObjectSprites && tile.objectSprite > 0) {
                 indices.add(tile.objectSprite);
             }
         }
@@ -174,6 +176,10 @@ export interface PrepareMapOptions {
     onProgress?: () => void;
     /** First enter skips tree+50 shadow sheets; walking/tree pass opts back in. */
     includeTreeShadows?: boolean;
+    /** Frame-0 skips object `.spr` packs; plaza props decode after the first stable frame. */
+    includeObjectSprites?: boolean;
+    /** When true, decode the tiny first-paint window instead of enter FOV+ring. */
+    firstPaint?: boolean;
 }
 
 /**
@@ -186,8 +192,9 @@ export async function loadTileSpritePacksForMapRect(
     rect: MapTileRect,
     onProgress?: () => void,
     includeTreeShadows = true,
+    includeObjectSprites = true,
 ): Promise<number> {
-    const indices = collectRequiredTileIndices(hbMap, rect, includeTreeShadows);
+    const indices = collectRequiredTileIndices(hbMap, rect, includeTreeShadows, includeObjectSprites);
     const tileAssets = resolveTileSpriteAssets(indices);
     for (const asset of tileAssets) {
         await ensureTileSpriteSheets(scene, asset, indices);
@@ -251,7 +258,10 @@ export async function prepareMapForGameWorld(
 
     const focusX = options?.focusTileX != null && options.focusTileX >= 0 ? options.focusTileX : 0;
     const focusY = options?.focusTileY != null && options.focusTileY >= 0 ? options.focusTileY : 0;
-    const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+    const firstPaint = options?.firstPaint !== false;
+    const rect = firstPaint
+        ? firstPaintStreamRect(focusX, focusY, map.sizeX, map.sizeY)
+        : initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
     options?.onProgress?.();
     const packCount = await loadTileSpritePacksForMapRect(
         scene,
@@ -259,13 +269,15 @@ export async function prepareMapForGameWorld(
         rect,
         options?.onProgress,
         options?.includeTreeShadows ?? false,
+        options?.includeObjectSprites ?? !firstPaint,
     );
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;
     console.log(
         `[MapAssets] On-demand map ready: ${mapFileName} (${packCount} viewport tile pack(s), ` +
-            `${map.sizeX}x${map.sizeY} world, stream ${rect.minX},${rect.minY}-${rect.maxX},${rect.maxY}) ` +
+            `${map.sizeX}x${map.sizeY} world, ${firstPaint ? 'first-paint' : 'enter'} stream ` +
+            `${rect.minX},${rect.minY}-${rect.maxX},${rect.maxY}) ` +
             `in ${elapsedMs.toFixed(2)}ms`,
     );
     return map;

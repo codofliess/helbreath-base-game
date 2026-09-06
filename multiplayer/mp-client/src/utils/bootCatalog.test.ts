@@ -28,6 +28,8 @@ describe('bootCatalog deferral sets', () => {
         assert.match(src, /sheets: \[6\]/);
         assert.match(src, /sheets: \[0\]/);
         assert.match(src, /loadWorldDeferredSprites/);
+        assert.match(src, /evictUnusedSelectAppearanceSprites/);
+        assert.match(src, /trimSelectAppearanceToIdleSheets/);
         const loadFn = src.slice(src.indexOf('export async function loadWorldDeferredSprites'));
         assert.doesNotMatch(loadFn, /getMonsterPlaceholderAsset/);
         assert.doesNotMatch(src, /exportFramesAsDataUrls: true/);

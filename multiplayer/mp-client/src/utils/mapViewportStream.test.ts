@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
     MAP_ENTER_RING_TILES,
+    MAP_FIRST_PAINT_MAX_HEIGHT_TILES,
+    MAP_FIRST_PAINT_MAX_WIDTH_TILES,
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
     MAP_STREAM_RING_TILES,
     cameraStreamTileRect,
     collectSpriteIndicesInRect,
+    firstPaintStreamRect,
     initialFocusStreamRect,
     mapTileKeysToEvict,
     mapTileRectArea,
@@ -81,6 +84,15 @@ describe('mapViewportStream', () => {
         assert.ok(withTree.has(100));
         assert.ok(withTree.has(150));
         assert.equal(withTree.has(3), false);
+        const groundOnly = collectSpriteIndicesInRect(
+            tiles,
+            { minX: 1, minY: 0, maxX: 1, maxY: 0 },
+            isTreeSpriteIndex,
+            false,
+            false,
+        );
+        assert.ok(groundOnly.has(2));
+        assert.equal(groundOnly.has(100), false);
     });
 
     it('Elvine city-hall spawn (149,131) stays in a bounded stream window', () => {
@@ -102,6 +114,16 @@ describe('mapViewportStream', () => {
             'first enter must decode a smaller window than the walk paint cap',
         );
         assert.ok(MAP_ENTER_RING_TILES < MAP_STREAM_RING_TILES);
+    });
+
+    it('frame-0 first paint is a tiny window, smaller than enter FOV+ring', () => {
+        const first = firstPaintStreamRect(149, 131, 300, 300);
+        const enter = initialFocusStreamRect(149, 131, 300, 300);
+        assert.ok(mapTileRectContains(first, { minX: 149, minY: 131, maxX: 149, maxY: 131 }));
+        assert.ok(mapTileRectWidth(first) <= MAP_FIRST_PAINT_MAX_WIDTH_TILES);
+        assert.ok(mapTileRectHeight(first) <= MAP_FIRST_PAINT_MAX_HEIGHT_TILES);
+        assert.ok(mapTileRectArea(first) < mapTileRectArea(enter));
+        assert.ok(MAP_FIRST_PAINT_MAX_WIDTH_TILES < MAP_STREAM_MAX_WIDTH_TILES);
     });
 
     it('live Elvine 300×300 .amd cannot paint as one layer per world row', () => {

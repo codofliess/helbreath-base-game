@@ -18,7 +18,7 @@ import { OUT_UI_MINIMAP_CAPTURED, OUT_UI_MINIMAP_LOADING, OUT_UI_SET_SELECTED_MU
 import { loadTileSpritePacksForMapRect, collectRequiredTileIndices, evictUnusedMapTileTextures } from './MapAssets';
 import {
     cameraStreamTileRect,
-    initialFocusStreamRect,
+    firstPaintStreamRect,
     paintStreamTileRect,
     shouldRefreshMapStream,
 } from './mapViewportStream';
@@ -156,14 +156,14 @@ export class MapManager {
 
         const focusX = this.initialFocusTileX;
         const focusY = this.initialFocusTileY;
-        const streamRect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        const streamRect = firstPaintStreamRect(focusX, focusY, map.sizeX, map.sizeY);
 
         this.cameraManager?.setBounds(map.sizeX * TILE_SIZE, map.sizeY * TILE_SIZE);
         this.scene.cameras?.main?.centerOn(focusX * TILE_SIZE + TILE_SIZE / 2, focusY * TILE_SIZE + TILE_SIZE / 2);
         this.cameraManager?.setZoom(1);
 
         map.syncViewportStream(this.scene, streamRect);
-        map.renderMapObjects(this.scene, false);
+        // Frame-0: ground only. Plaza objects wait until after the first stable browser frame.
 
         if (this.playMapMusic && this.initialMusicFile) {
             this.playInitialMusic();

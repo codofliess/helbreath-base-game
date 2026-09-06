@@ -26,7 +26,7 @@ import {
 import { SpriteType } from '../game/assets/HBSprite';
 import { EventBus } from '../game/EventBus';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../constants/EventNames';
-import { loadSpriteAssetOnDemand } from './SpriteHttpLoader';
+import { loadSpriteAssetOnDemand, evictSpriteSheetTextures } from './SpriteHttpLoader';
 
 /**
  * Body / underwear / hair packs for SELECTCHAR and Create Character paper-dolls.
@@ -115,6 +115,46 @@ async function loadSpriteList(scene: Scene, assets: AssetData[], label: string):
 /** Sequential decode of SELECTCHAR paper-doll packs (after React hub / when leaving hub). */
 export function loadSelectAppearanceSprites(scene: Scene): Promise<void> {
     return loadSpriteList(scene, getSelectAppearanceAssets(), 'select');
+}
+
+/**
+ * Drops unused SELECTCHAR gender packs before map first-paint so 10 full body `.spr`
+ * canvases are not still resident when plaza tiles decode.
+ */
+export function evictUnusedSelectAppearanceSprites(
+    scene: Scene,
+    keepSpriteNames: readonly string[],
+): number {
+    const keep = new Set(keepSpriteNames.map((n) => n.toLowerCase()));
+    let removed = 0;
+    for (const name of SELECT_APPEARANCE_SPRITE_NAMES) {
+        if (keep.has(name)) {
+            continue;
+        }
+        removed += evictSpriteSheetTextures(scene, `sprite-${name}`, new Set());
+        try {
+            scene.cache.binary.remove(`sprite-${name}`);
+        } catch {
+            /* cache key may not exist */
+        }
+    }
+    if (removed > 0) {
+        console.log(`[bootCatalog] Evicted ${removed} unused SELECTCHAR sheet(s) before map first-paint`);
+    }
+    return removed;
+}
+
+/** Keeps idle facings on the live body pack; combat/death sheets re-decode after first paint. */
+export function trimSelectAppearanceToIdleSheets(
+    scene: Scene,
+    spriteName: string,
+    keepSheets: ReadonlySet<number>,
+): number {
+    const removed = evictSpriteSheetTextures(scene, `sprite-${spriteName}`, keepSheets);
+    if (removed > 0) {
+        console.log(`[bootCatalog] Trimmed ${removed} extra ${spriteName}.spr sheet(s) before map first-paint`);
+    }
+    return removed;
 }
 
 function parseSpriteFrameKey(key: string): { textureKey: string; frame: number } | undefined {

@@ -13,6 +13,7 @@ import {
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
     collectSpriteIndicesInRect,
+    firstPaintStreamRect,
     initialFocusStreamRect,
     mapTileRectArea,
     paintStreamTileRect,
@@ -93,12 +94,15 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.equal(map.tileSize, 10);
 
         const rect = initialFocusStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
+        const firstPaint = firstPaintStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
+        assert.ok(mapTileRectArea(firstPaint) < mapTileRectArea(rect));
         assert.ok(rect.maxX - rect.minX + 1 <= MAP_STREAM_MAX_WIDTH_TILES);
         assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
         assert.ok(mapTileRectArea(rect) < map.sizeX * map.sizeY / 10);
 
         const catalog = tilePacksFromAssetsTs();
         const indices = collectSpriteIndicesInRect(map.tiles, rect, isTreeSpriteIndex, false);
+        const firstPaintGround = collectSpriteIndicesInRect(map.tiles, firstPaint, isTreeSpriteIndex, false, false);
         const packs = resolvePackFileNames(indices, catalog);
         const objectsFirstPaint = countObjectInstances(map.tiles, rect, false);
         const objectsWithTrees = countObjectInstances(map.tiles, rect, true);
@@ -163,6 +167,29 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(
             selectedRgbaBytes < 48 * 1024 * 1024,
             `plaza decoded RGBA estimate ${selectedRgbaBytes} too large for enter`,
+        );
+
+        const firstPaintPacks = resolvePackFileNames(firstPaintGround, catalog);
+        let firstPaintSheets = 0;
+        let firstPaintRgba = 0;
+        for (const pack of catalog.filter((p) => firstPaintPacks.includes(p.fileName))) {
+            const spr = await fetchGameAssetArrayBuffer('sprites', pack.fileName, LIVE_ORIGIN);
+            const locals = localTileSheetIndices(pack.tileStartIndex, pack.fileName, firstPaintGround, resolveKey);
+            firstPaintSheets += locals.length;
+            for (const sheet of sliceSprSheets(spr, new Set(locals))) {
+                firstPaintRgba += pngRgbaByteEstimate(sheet.png);
+            }
+        }
+        assert.ok(firstPaintSheets > 0);
+        assert.ok(firstPaintSheets <= plazaSheets, `frame-0 sheets ${firstPaintSheets} must be <= enter ${plazaSheets}`);
+        assert.ok(firstPaintSheets <= 12, `frame-0 should decode few ground sheets, got ${firstPaintSheets}`);
+        assert.ok(
+            firstPaintRgba < selectedRgbaBytes,
+            `frame-0 RGBA ${firstPaintRgba} must be < enter ${selectedRgbaBytes}`,
+        );
+        assert.ok(
+            firstPaintRgba < 16 * 1024 * 1024,
+            `frame-0 decoded RGBA estimate ${firstPaintRgba} too large for first paint`,
         );
     });
 

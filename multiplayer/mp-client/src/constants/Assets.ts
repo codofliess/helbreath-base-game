@@ -398,18 +398,15 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
         });
     }
 
-    // Add equipped sprites and consumption sounds from ITEMS
+    // Add equipped sprites from ITEMS. Consumption SFX are never eager-registered
+    // (`magic.mp3` is not a file; play path aliases to C5 and loads on demand).
     const equippedSpriteNames = new Set<string>();
-    const consumptionSounds = new Set<string>();
     ITEMS.forEach((item) => {
         if (item.equippedSpriteMale) {
             equippedSpriteNames.add(item.equippedSpriteMale);
         }
         if (item.equippedSpriteFemale) {
             equippedSpriteNames.add(item.equippedSpriteFemale);
-        }
-        if (item.consumptionSound) {
-            consumptionSounds.add(item.consumptionSound);
         }
     });
     if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
@@ -425,17 +422,6 @@ export function getAssets(options?: GetAssetsOptions): AssetData[] {
             }
         });
     }
-
-    // Add consumption sounds from consumable ITEMS
-    consumptionSounds.forEach((soundKey) => {
-        if (!assets.some((a) => a.key === soundKey && a.assetType === AssetType.SOUND)) {
-            assets.push({
-                key: soundKey,
-                fileName: `${soundKey}.mp3`,
-                assetType: AssetType.SOUND
-            });
-        }
-    });
 
     let result = assets;
     if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {

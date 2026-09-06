@@ -70,6 +70,16 @@ assert(
 );
 
 assert(
+    /export const LOAD_AUDIO_ON_DEMAND = true;/.test(config),
+    'LOAD_AUDIO_ON_DEMAND must stay true so live does not decode catalog mp3s (or 404 magic.mp3) before Select',
+);
+
+assert(
+    /export const LOAD_BOOT_SPRITES_ON_DEMAND = true;/.test(config),
+    'LOAD_BOOT_SPRITES_ON_DEMAND must stay true so live does not decode body/UI .spr before the React hub',
+);
+
+assert(
     /export const ENABLE_ZIP_LOADING = false;/.test(config),
     'ENABLE_ZIP_LOADING must stay false on live (zip decompress + register all files OOMs enter)',
 );
@@ -214,6 +224,19 @@ assert(
 );
 
 assert(
+    /Consumption SFX are never eager-registered/.test(assets) &&
+        !/consumptionSounds\.forEach/.test(assets),
+    'getAssets must not enqueue consumptionSound files (magic.mp3 404 / boot decode)',
+);
+
+assert(
+    /LOAD_AUDIO_ON_DEMAND/.test(loadingScreen) &&
+        /LOAD_BOOT_SPRITES_ON_DEMAND/.test(loadingScreen) &&
+        /a\.assetType === AssetType\.SPRITE/.test(loadingScreen),
+    'LoadingScreen must omit MUSIC/SOUND/SPRITE on the HTTP live path',
+);
+
+assert(
     /if \(!LOAD_EFFECT_ASSETS_ON_DEMAND\)/.test(assets) &&
         /if \(!LOAD_NPC_ASSETS_ON_DEMAND\)/.test(assets) &&
         /sprite-item-pack/.test(assets) &&
@@ -223,8 +246,21 @@ assert(
 
 assert(
     /startDeferredAppearancePrefetch/.test(gameWorld) &&
-        /drainPlayerItemAppearancePrefetch/.test(gameWorld),
-    'GameWorld must defer equipped appearance prefetch until after map setup',
+        /drainPlayerItemAppearancePrefetch/.test(gameWorld) &&
+        /loadWorldDeferredSprites/.test(gameWorld),
+    'GameWorld must defer equipped appearance prefetch and HUD sheets until after map setup',
+);
+
+assert(
+    /loadSelectAppearanceSprites/.test(loginScreen),
+    'LoginScreen must load SELECTCHAR paper-dolls after the React hub, not at Boot',
+);
+
+assert(
+    /failedAudioKeys/.test(spriteHttp) &&
+        /will not retry/.test(spriteHttp) &&
+        /resolveSoundAsset/.test(spriteHttp),
+    'Sound fetch must alias magic→C5 and never throw/retry on 404',
 );
 
 assert(

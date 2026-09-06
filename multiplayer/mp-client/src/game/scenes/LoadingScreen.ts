@@ -8,7 +8,7 @@ import { getAssets, AssetType, getCreatePhaseTotalActivities, type AssetData } f
 import { getLoadingBgKey, setItemPackSpriteSheets, setItemPackEmittedTintKeys, setMap } from '../../utils/RegistryUtils';
 import { EventBus } from '../EventBus';
 import { CURRENT_SCENE_READY } from '../../constants/EventNames';
-import { ENABLE_ZIP_LOADING, LOAD_MAP_ASSETS_ON_DEMAND } from '../../Config';
+import { ENABLE_ZIP_LOADING, LOAD_AUDIO_ON_DEMAND, LOAD_BOOT_SPRITES_ON_DEMAND, LOAD_MAP_ASSETS_ON_DEMAND } from '../../Config';
 import { SpriteType } from '../assets/HBSprite';
 
 type LoadingScreenInitData = {
@@ -16,9 +16,8 @@ type LoadingScreenInitData = {
 };
 
 /**
- * Initial loading scene. Displays progress bar while loading a **light** asset set
- * (human bodies first, then hair/underwear, then UI). Maps, tiles, effects, NPCs,
- * item-pack, and equipped gear stay on-demand for live Chrome memory.
+ * Initial loading scene. Live skips maps, tiles, audio, and catalog sprites so the
+ * React hub can paint without Canvas Aw Snap 9. SELECTCHAR and GameWorld fetch packs later.
  * After loading, transitions to LoginScreen.
  */
 export class LoadingScreen extends Scene {
@@ -127,7 +126,7 @@ export class LoadingScreen extends Scene {
         }
 
         this.usingZipLoading = data?.enableZipLoading ?? ENABLE_ZIP_LOADING;
-        this.createPhaseTotalActivities = getCreatePhaseTotalActivities(this.getLoadingAssets());
+        this.createPhaseTotalActivities = Math.max(1, getCreatePhaseTotalActivities(this.getLoadingAssets()));
         
         if (this.usingZipLoading) {
             // For zip loading, we manually control progress in create()
@@ -169,12 +168,22 @@ export class LoadingScreen extends Scene {
 
     private getLoadingAssets(): AssetData[] {
         const all = getAssets();
-        if (!LOAD_MAP_ASSETS_ON_DEMAND) {
-            return all;
-        }
-        return all.filter(
-            (a) => a.assetType !== AssetType.MAP && a.assetType !== AssetType.TILE_SPRITE,
-        );
+        return all.filter((a) => {
+            if (LOAD_MAP_ASSETS_ON_DEMAND && (a.assetType === AssetType.MAP || a.assetType === AssetType.TILE_SPRITE)) {
+                return false;
+            }
+            // ZIP still unpacks catalog audio/sprites; HTTP live defers them past the React hub.
+            if (this.usingZipLoading) {
+                return true;
+            }
+            if (LOAD_AUDIO_ON_DEMAND && (a.assetType === AssetType.MUSIC || a.assetType === AssetType.SOUND)) {
+                return false;
+            }
+            if (LOAD_BOOT_SPRITES_ON_DEMAND && a.assetType === AssetType.SPRITE) {
+                return false;
+            }
+            return true;
+        });
     }
 
     private spriteLoadPriority(asset: AssetData): number {
@@ -300,7 +309,8 @@ export class LoadingScreen extends Scene {
         console.log('═══════════════════════════════════════════════════\n');
         
         // Wait briefly to ensure progress bar renders at 100% before transitioning
-        this.time.delayedCall(300, () => {
+        const settleMs = this.getLoadingAssets().length === 0 ? 0 : 300;
+        this.time.delayedCall(settleMs, () => {
             this.scene.start('LoginScreen');
         });
     }

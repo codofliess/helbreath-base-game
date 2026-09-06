@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { loadMusicAssetOnDemand } from './SpriteHttpLoader';
 
 /**
  * Manages background music playback in the game.
@@ -74,12 +75,13 @@ export class MusicManager {
         // Stop current music if playing
         this.stopPlaybackOnly();
 
-        // Extract key from filename (remove .mp3 extension)
         const musicKey = fileName.replace('.mp3', '');
-
-        // Check if the audio exists in cache
         if (!this.scene.cache.audio.exists(musicKey)) {
-            console.warn(`[MusicManager] Music file not found in cache: ${fileName}`);
+            void loadMusicAssetOnDemand(this.scene, musicKey, fileName).then(() => {
+                if (this.musicEnabled && this.scene.cache.audio.exists(musicKey)) {
+                    this.playMusic(fileName);
+                }
+            });
             return;
         }
 

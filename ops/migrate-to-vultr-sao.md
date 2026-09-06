@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| Source (live) | Hetzner **CX53** `chainlords-cx53-fsn1` (fsn1) · documented IPv4 **`OLD_IP=46.224.129.38`** ([`docs/SESSION-HANDOFF-2026-07-26.md`](../docs/SESSION-HANDOFF-2026-07-26.md), [`ops/ip-swap-to-cx53.sh`](./ip-swap-to-cx53.sh)) |
-| Target (this move) | Vultr **Cloud Compute Regular** · region **`sao` (São Paulo)** · **4 vCPU / 8 GB / 160 GB SSD** · list ~**$40/mo** |
+| Source (live) | Hetzner **CX53** `chainlords-cx53-fsn1` (fsn1) · **~8 vCPU / 32 GB** · documented IPv4 **`OLD_IP=46.224.129.38`** ([`ops/ip-swap-to-cx53.sh`](./ip-swap-to-cx53.sh); older handoff also listed 16 vCPU — treat **8/32** as current ops baseline) |
+| Target SKU | **Under discussion.** Default recommendation: Vultr **Cloud Compute Regular** · region **`sao` (São Paulo)** · **8 vCPU / 32 GB** (~**US$160/mo**) for CX53 parity. See **Sizing**. This PR does **not** provision. |
 | Repo / branch | `codofliess/helbreath-base-game` · **`consolidacion`** |
 | Moves | Game process (`chainlords-game`), traveler static (`nginx` + `/opt/chainlords/client`), server binaries + **`Chars/`** + **`Config/`**, systemd, firewall |
 | Does **not** move | Railway landing (`chainlords.net`), Railway **middleware-node**, Railway **Postgres plugin** (if that is the middleware DB) |
@@ -37,7 +37,19 @@ For Vultr:
 - Do a **warm copy while fsn1 stays serving**, then a **short freeze** (stop game on source → final rsync/dump → start dest → DNS) at GO.
 - Do **not** enable Hetzner **autoscaler / upgrade-hunter / try-upgrade-core** on Vultr (`HCLOUD_TOKEN` would still target Hetzner and can create/destroy EU servers). Copy the units only if you explicitly disable them.
 
-**Capacity note (ops, not a blocker for this doc):** live CX53 was documented as **16 vCPU / 32 GB / 320 GB**. Target is **4 / 8 / 160**. Watch CPU, RAM, and disk after GO; this runbook does not resize or buy extra SKUs.
+---
+
+## Sizing (Vultr `sao` Regular — do not provision in this workstream)
+
+**Target size is under discussion.** Live EU is Hetzner **CX53 (~8 vCPU / 32 GB)**. Martín asked for **stronger than the $40 box** for **~150 concurrent** players. Pick the SKU **before** create; cutover steps below do not change.
+
+| Vultr Regular (`sao`) | List (approx.) | When to use |
+|---|---|---|
+| **8 vCPU / 32 GB** | **~US$160/mo** | **Default.** Parity with live CX53 RAM/CPU class; intended for ~150 online. **Recommend this unless ops explicitly downsizes.** |
+| **6 vCPU / 16 GB** | **~$80/mo** | **Minimum comfortable** if 8/32 is deferred. Not CX53 RAM parity; watch RSS and GC under load. |
+| **4 vCPU / 8 GB** | **~$40/mo** | **Only if sustained online stays &lt;50.** Too small for the ~150-player target. |
+
+Confirm the exact Regular plan name and SSD size in the Vultr console at create time (do not invent disk GB here). After GO, watch `chainlords-game` CPU, RSS, and disk; resize is a **separate** operator action.
 
 ---
 
@@ -68,7 +80,7 @@ Secrets (never commit; copy from **live systemd/env**, not from git examples):
 Do these in this order. Expand checklists below.
 
 0. **Decide Postgres path** on live (`helbreath-postgres` vs Railway `DATABASE_URL`) — **before** freeze.
-1. **Provision** Vultr `sao` Regular 4/8/160 (operator; this PR does not spend). Record **`NEW_IP`**. SSH keys at create.
+1. **Provision** Vultr `sao` Regular **8 vCPU / 32 GB** unless ops picked 6/16 or 4/8 from **Sizing** (operator; this PR does not spend). Record **`NEW_IP`**. SSH keys at create.
 2. **Bootstrap** dest: packages, Docker, nginx, ufw. **No** Hetzner CLI required. **No** game traffic to dest yet.
 3. **Warm rsync** `/opt/chainlords` while **fsn1 game stays up**.
 4. **Install** systemd units + nginx template with `SERVER_IP=NEW_IP`. Copy secrets onto dest unit. **Do not** start `chainlords-game` for public play until freeze (or start only for loopback smoke, then stop).
@@ -112,7 +124,7 @@ Railway middleware Postgres stays on Railway either way ([`docs/PRODUCTION-REPAI
 Create **after** this runbook is approved. Record values; do not commit secrets or live IPs beyond `OLD_IP`.
 
 - [ ] Region: **São Paulo (`sao`)**
-- [ ] Plan: Cloud Compute **Regular** **4 vCPU / 8 GB RAM / 160 GB SSD** (~$40/mo)
+- [ ] Plan: Cloud Compute **Regular** — **default 8 vCPU / 32 GB (~US$160/mo)** (CX53 parity). Alternatives: 6/16 (~$80) minimum comfortable; 4/8 (~$40) only if &lt;50 online. Record the SKU chosen; **do not create the instance from this PR.**
 - [ ] OS: Ubuntu LTS matching source (`lsb_release -a` on `OLD_IP`; CX53-era docs used Ubuntu 24.04 in autoscaler image hints)
 - [ ] **SSH keys** attached at create (same pubkey as `hetzner_chainlords` / current `authorized_keys` on fsn1)
 - [ ] Hostname e.g. `chainlords-play-sao` (cosmetic)
@@ -424,6 +436,7 @@ if [[ "$DEST_IP" == "$OLD_IP" ]]; then echo "refusing DEST_IP=OLD_IP"; exit 1; f
 ## GO checklist (print at freeze)
 
 - [ ] Postgres path decided (§0)
+- [ ] SKU chosen (default **8 vCPU / 32 GB**; not 4/8 unless &lt;50 online)
 - [ ] `NEW_IP` recorded; SSH works
 - [ ] Warm rsync done; `Chars/` + `Config/` + `Server` present
 - [ ] `WALLET_AUTH_SECRET` / `DATABASE_URL` on dest unit (not git examples)

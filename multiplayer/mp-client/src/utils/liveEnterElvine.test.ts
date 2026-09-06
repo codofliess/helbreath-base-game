@@ -143,4 +143,24 @@ describe('live Elvine enter path (HTTP + stream)', () => {
             `plaza decoded RGBA estimate ${selectedRgbaBytes} too large for enter`,
         );
     });
+
+    it('hostile slime idle sheets are a fraction of the full .spr (pad standstill)', async () => {
+        const spr = await fetchGameAssetArrayBuffer('sprites', 'slm.spr', LIVE_ORIGIN);
+        const totalSheets = countSprSheets(spr);
+        assert.ok(totalSheets >= 8, `slime.spr should have idle+combat sheets, got ${totalSheets}`);
+        const idle = sliceSprSheets(spr, new Set([0, 1, 2, 3, 4, 5, 6, 7]));
+        const all = sliceSprSheets(spr);
+        let idleRgba = 0;
+        let allRgba = 0;
+        for (const sheet of idle) {
+            idleRgba += pngRgbaByteEstimate(sheet.png);
+        }
+        for (const sheet of all) {
+            allRgba += pngRgbaByteEstimate(sheet.png);
+        }
+        assert.equal(idle.length, 8);
+        assert.ok(all.length > idle.length, `full slime sheets ${all.length} vs idle 8`);
+        assert.ok(idleRgba < allRgba, `idle RGBA ${idleRgba} must be < full ${allRgba}`);
+        assert.ok(idleRgba * 2 < allRgba || all.length >= 24, 'combat/death sheets must dominate VRAM if decoded eagerly');
+    });
 });

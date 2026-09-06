@@ -65,4 +65,12 @@ describe('on-demand sound 404 / alias (source)', () => {
         assert.match(src, /fallbackFileName/);
         assert.match(src, /Audio \$\{folder\}\/\$\{fileName\} skipped/);
     });
+
+    it('live sprite decode never dumps full-pack data URLs', () => {
+        const src = fs.readFileSync(new URL('./SpriteHttpLoader.ts', import.meta.url), 'utf8');
+        assert.match(src, /Never dumps every frame as a PNG data URL/);
+        assert.doesNotMatch(src, /asset\.exportFramesAsDataUrls === true/);
+        assert.match(src, /sheetIndices/);
+        assert.match(src, /evictSpriteSheetTextures/);
+    });
 });

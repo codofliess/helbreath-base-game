@@ -49,6 +49,7 @@ import { OLYMPIA_DIALOG_SIZE, OLYMPIA_UI_SCALE } from '../../constants/OlympiaUi
 import {
     ITEMS,
     getItemById,
+    getItemSheetIndex,
     ItemTypes,
     getBagItemSpriteKeyWithOverrides,
     RING_SLOT_LEFT,
@@ -376,7 +377,20 @@ export function InventoryDialog({
         if (!scene) {
             return;
         }
-        void loadItemIconAssetsOnDemand(scene).catch((error) => {
+        const packSheets = new Set<number>();
+        for (const item of inventoryDialogStore.state.baggedItems) {
+            const def = getItemById(item.itemId);
+            if (!def) {
+                continue;
+            }
+            const sheet = getItemSheetIndex(def, inventoryDialogStore.state.playerGender ?? Gender.MALE);
+            if (sheet !== undefined) {
+                packSheets.add(sheet);
+            }
+        }
+        void loadItemIconAssetsOnDemand(scene, {
+            packSheets: packSheets.size > 0 ? packSheets : undefined,
+        }).catch((error) => {
             console.warn('[InventoryDialog] Failed to lazy-load item icon packs', error);
         });
     }, [phaserRef]);

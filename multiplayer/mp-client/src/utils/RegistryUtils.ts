@@ -3,7 +3,7 @@ import { MusicManager } from './MusicManager';
 import { GameStateManager } from './GameStateManager';
 import { InventoryManager } from './InventoryManager';
 import { HBMap } from '../game/assets/HBMap';
-import { CachedMinimap, type PivotData } from '../Types';
+import { CachedMinimap, type PivotData, type PivotFrame } from '../Types';
 import type { SoundManager } from './SoundManager';
 import {
     MUSIC_MANAGER_KEY,
@@ -264,6 +264,26 @@ export function setPivotDataByTextureKey(scene: Scene, textureKey: string, pivot
 export function setPivotDataBySpriteName(scene: Scene, spriteName: string, pivotData: PivotData): void {
     const pivotRegistryKey = `pivots-${spriteName}`;
     scene.registry.set(pivotRegistryKey, pivotData);
+}
+
+/**
+ * Merges one sheet's pivots into the sprite cache-key registry entry (`pivots-sprite-slime`).
+ * Partial `.spr` loads must not replace earlier idle/combat sheets.
+ */
+export function mergePivotSheetBySpriteCacheKey(
+    scene: Scene,
+    cacheKey: string,
+    sheetIndex: number,
+    framePivots: PivotFrame[],
+): void {
+    const pivotRegistryKey = `pivots-${cacheKey.toLowerCase()}`;
+    const existing = getRegistryValue<PivotData>(scene.registry, pivotRegistryKey);
+    const next = existing?.spriteSheetPivots ? existing.spriteSheetPivots.slice() : [];
+    while (next.length <= sheetIndex) {
+        next.push([]);
+    }
+    next[sheetIndex] = framePivots;
+    scene.registry.set(pivotRegistryKey, { spriteSheetPivots: next });
 }
 
 /**

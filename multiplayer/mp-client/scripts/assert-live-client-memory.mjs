@@ -33,6 +33,58 @@ const maps = read('src/constants/Maps.ts');
 const mapCatalogLookup = read('src/utils/mapCatalogLookup.ts');
 const mapViewportStream = read('src/utils/mapViewportStream.ts');
 const spriteHttp = read('src/utils/SpriteHttpLoader.ts');
+const monsterAssets = read('src/utils/MonsterAssets.ts');
+const npcAssets = read('src/utils/NpcAssets.ts');
+const effectAssets = read('src/utils/EffectAssets.ts');
+const itemIconAssets = read('src/utils/ItemIconAssets.ts');
+const bootCatalog = read('src/utils/bootCatalog.ts');
+const entitySheetFilter = read('src/utils/entitySheetFilter.ts');
+
+assert(
+    /idleEntitySheetIndices/.test(entitySheetFilter) &&
+        /ENTITY_DEAD_SHEET_BASE = 32/.test(entitySheetFilter),
+    'entitySheetFilter must keep idle 0-7 and exclude death 32+',
+);
+
+assert(
+    /sheetIndices \?\? idleEntitySheetIndices/.test(monsterAssets) &&
+        /false, asset\.tileStartIndex/.test(monsterAssets),
+    'MonsterAssets must decode idle sheets by default and never dump data URLs',
+);
+
+assert(
+    /idleEntitySheetIndices\(\)/.test(npcAssets),
+    'NpcAssets must decode idle sheets only (not full 40-sheet NPC packs on plaza enter)',
+);
+
+assert(
+    /config\.spriteSheetIndex/.test(effectAssets),
+    'EffectAssets must decode only the VFX sheet used by the config',
+);
+
+assert(
+    /LoadItemIconOptions/.test(itemIconAssets) &&
+        /packSheets/.test(itemIconAssets) &&
+        /groundSheets/.test(itemIconAssets),
+    'ItemIconAssets must decode only requested bag/ground sheets',
+);
+
+assert(
+    /WORLD_ENTER_HUD_ASSETS/.test(bootCatalog) &&
+        /sheets: \[6\]/.test(bootCatalog) &&
+        /WORLD_ENTER_HUD_FRAME_KEYS/.test(bootCatalog) &&
+        !/getMonsterPlaceholderAsset\(\)/.test(
+            bootCatalog.slice(bootCatalog.indexOf('export async function loadWorldDeferredSprites')),
+        ),
+    'bootCatalog enter HUD must be cursor + gamedialog2 sheet 6 only, no placeholder pack',
+);
+
+assert(
+    /sheetIndices/.test(spriteHttp) &&
+        /Never dumps every frame as a PNG data URL/.test(spriteHttp) &&
+        /exportFramesAsDataUrls === true/.test(spriteHttp) === false,
+    'SpriteHttpLoader must not dump catalog exportFramesAsDataUrls on the live on-demand path',
+);
 const gameAssetHttp = read('src/utils/gameAssetHttp.ts');
 const hbSprite = read('src/game/assets/HBSprite.ts');
 const hbMap = read('src/game/assets/HBMap.ts');
@@ -207,7 +259,7 @@ assert(
         /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
         /scene\.game\.renderer\.type === CANVAS/.test(hbSprite) &&
         /sheetIndices/.test(hbSprite) &&
-        /Partial tile-sheet loads keep it/.test(hbSprite) &&
+        /Partial loads keep it/.test(hbSprite) &&
         /Yield so Canvas-first Chrome can GC ImageBitmaps/.test(hbSprite) &&
         /sliceSprSheets/.test(hbSprite),
     'HBSprite must not upload VideoFrames then close them; tile packs decode only requested sheets',
@@ -272,6 +324,24 @@ assert(
         /drainPlayerItemAppearancePrefetch/.test(gameWorld) &&
         /loadWorldDeferredSprites/.test(gameWorld),
     'GameWorld must defer equipped appearance prefetch and HUD sheets until after map setup',
+);
+
+assert(
+    /worldReadyForEntities/.test(gameWorld) &&
+        /tickMapSetupWatchdog/.test(gameWorld) &&
+        /noteMapSetupProgress/.test(gameWorld) &&
+        /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
+        /delayedCall\(700/.test(gameWorld) &&
+        /delayedCall\(8000/.test(gameWorld),
+    'GameWorld must fail-soft map timeout, gate entity decode until after tile GC, and delay HUD packs',
+);
+
+assert(
+    /idleEntitySheetIndices/.test(gameWorld) &&
+        /evictMonsterSpriteSheets/.test(gameWorld) &&
+        /evictNpcSpriteSheets/.test(gameWorld) &&
+        /loadingMap \|\| !this\.worldReadyForEntities/.test(gameWorld),
+    'GameWorld must not spawn/decode monsters or NPCs during map setup, and must evict sheets that leave view',
 );
 
 assert(

@@ -10,6 +10,8 @@ import { ShadowManager } from '../../utils/ShadowManager';
 import type { SoundManager, SpatialConfig } from '../../utils/SoundManager';
 import type { MonsterStatesConfig, StateAnimationConfig } from '../../constants/Monsters';
 import { getSpriteFrameHeight } from '../../utils/SpriteUtils';
+import { idleEntitySheetIndices } from '../../utils/entitySheetFilter';
+import { loadMonsterAssetsOnDemand, shouldLoadMonsterAssetsOnDemand } from '../../utils/MonsterAssets';
 import {
     KNOCKBACK_DURATION_MS,
     MONSTER_CORPSE_FADE_ALPHA_STEP,
@@ -825,6 +827,20 @@ export class Monster extends GameObject {
         return this.monsterId;
     }
 
+    public getMonsterSpriteName(): string {
+        return this.monsterSpriteName;
+    }
+
+    /** Idle sheets plus the current anim state's 8 facings — keep-set for eviction. */
+    public getKeepSheetIndices(): Set<number> {
+        const keep = idleEntitySheetIndices();
+        const extraBase = this.getStateAnimationConfig(this.currentState).startSpriteSheet;
+        for (let d = 0; d < 8; d += 1) {
+            keep.add(extraBase + d);
+        }
+        return keep;
+    }
+
     /**
      * Gets the monster's attack damage.
      */
@@ -1389,6 +1405,26 @@ export class Monster extends GameObject {
         }
         if (newState === MonsterState.Move) {
             this.lastMoveSpriteSheetIndex = monsterSpriteSheetIndex;
+        }
+
+        const neededTexture = `sprite-${spriteName}-${monsterSpriteSheetIndex}`;
+        if (
+            shouldLoadMonsterAssetsOnDemand() &&
+            !this.assetsPendingLoad &&
+            !this.scene.textures.exists(neededTexture)
+        ) {
+            const sheets = new Set<number>();
+            for (let d = 0; d < 8; d += 1) {
+                sheets.add(animConfig.startSpriteSheet + d);
+            }
+            void loadMonsterAssetsOnDemand(this.scene, spriteName, { sheetIndices: sheets })
+                .then(() => {
+                    this.switchMonsterState(newState, true);
+                })
+                .catch((error) => {
+                    console.warn(`[Monster] Failed to load sheets for ${spriteName} state ${newState}`, error);
+                });
+            return;
         }
         
         // Switch animation for the monster asset

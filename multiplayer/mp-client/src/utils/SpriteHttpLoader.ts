@@ -78,6 +78,7 @@ async function decodeAudioIntoCache(
     folder: 'sounds' | 'music',
     cacheKey: string,
     fileName: string,
+    fallbackFileName?: string,
 ): Promise<void> {
     if (failedAudioKeys.has(cacheKey) || scene.cache.audio.exists(cacheKey)) {
         return;
@@ -88,19 +89,26 @@ async function decodeAudioIntoCache(
         console.warn(`[SpriteHttpLoader] No audio context, skipping ${fileName}`);
         return;
     }
-    try {
-        const arrayBuffer = await fetchGameAssetArrayBuffer(folder, fileName);
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-        scene.cache.audio.add(cacheKey, audioBuffer);
-    } catch (error) {
-        failedAudioKeys.add(cacheKey);
-        console.warn(`[SpriteHttpLoader] Audio ${folder}/${fileName} skipped (will not retry)`, error);
+    const names =
+        fallbackFileName && fallbackFileName !== fileName ? [fileName, fallbackFileName] : [fileName];
+    let lastError: unknown;
+    for (const name of names) {
+        try {
+            const arrayBuffer = await fetchGameAssetArrayBuffer(folder, name);
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+            scene.cache.audio.add(cacheKey, audioBuffer);
+            return;
+        } catch (error) {
+            lastError = error;
+        }
     }
+    failedAudioKeys.add(cacheKey);
+    console.warn(`[SpriteHttpLoader] Audio ${folder}/${fileName} skipped (will not retry)`, lastError);
 }
 
 /**
  * Decodes one sound into Phaser audio cache if missing.
- * Missing/404 files (and aliases like `magic` → `C5.mp3`) never throw — playback is optional.
+ * Missing/404 files never throw. `magic.mp3` is optional and falls back to C5.
  */
 export function loadSoundAssetOnDemand(scene: Scene, key: string, fileName: string): Promise<void> {
     const resolved = resolveSoundAsset(fileName || key);
@@ -113,7 +121,13 @@ export function loadSoundAssetOnDemand(scene: Scene, key: string, fileName: stri
         return existing;
     }
 
-    const promise = decodeAudioIntoCache(scene, 'sounds', cacheKey, resolved.fileName).finally(() => {
+    const promise = decodeAudioIntoCache(
+        scene,
+        'sounds',
+        cacheKey,
+        resolved.fileName,
+        resolved.fallbackFileName,
+    ).finally(() => {
         soundLoadPromises.delete(cacheKey);
     });
 

@@ -109,7 +109,7 @@ Live `play.chainlords.net` (Hetzner) serves this dist from **`/opt/chainlords/cl
 
 Entering a city as a fully geared character used to OOM the tab when the client preloaded every map/tile pack, zoomed the camera for a full-world minimap, or registered the full item/monster/effect catalog (including item-pack frame data URLs) before the first GameWorld frame.
 
-World rendering stays camera window + culling ring; this change does not reduce Olympia-quality sprites **in view**. First spell/NPC/bag may hitch once while that pack fetches.
+World rendering stays camera window + culling ring; walking paints a **capped** 56×40 cell window and **evicts** `map-tile-*` sheets that leave it so a long Elvine walk cannot unbounded-decode every pack. This change does not reduce Olympia-quality sprites **in view**. First spell/NPC/bag may hitch once while that pack fetches.
 
 ### Publish static client to Hetzner (PaioPez)
 
@@ -129,8 +129,9 @@ pnpm build
 sudo cp -a /opt/chainlords/client "/opt/chainlords/client.bak-$(date +%Y%m%d-%H%M)"
 # Sync dist contents onto the nginx root. Preserve live `game-assets/` (maps/sprites HTTP).
 sudo rsync -a --delete --exclude game-assets ./dist/ /opt/chainlords/client/
-# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: new hashed JS (not PR #8 `index-DlGsHxOc.js`).
-# Enter traveler as Elon/Martín: character list → Enter World must not Aw Snap 9. Open bag after world is up.
+# Hard-refresh play.chainlords.net (Ctrl+Shift+R). Confirm Network: new hashed JS (not PR #23 `index-BUFv-ezK.js`).
+# Hub without Aw Snap 9. Elvine enter + walk (e.g. 149,131 → 185,117) must not Aw Snap mid-session.
+# `/assets/sounds/magic.mp3` should 200 from dist (tiny committed file); C5 fallback if missing.
 ```
 
 | Flag | Live production | Notes |

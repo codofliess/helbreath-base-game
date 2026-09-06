@@ -62,7 +62,7 @@ describe('on-demand sound 404 / alias (source)', () => {
         assert.match(src, /resolveSoundAsset/);
         assert.match(src, /failedAudioKeys/);
         assert.match(src, /will not retry/);
-        assert.match(src, /loadMusicAssetOnDemand/);
+        assert.match(src, /fallbackFileName/);
         assert.match(src, /Audio \$\{folder\}\/\$\{fileName\} skipped/);
     });
 });

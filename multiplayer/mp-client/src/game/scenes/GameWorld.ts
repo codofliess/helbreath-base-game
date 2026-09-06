@@ -2360,8 +2360,10 @@ export class GameWorld extends Scene {
                 EventBus.emit(OUT_UI_SET_SELECTED_MAP, this.gameWorldId);
             }
             this.startDeferredAppearancePrefetch();
-            void loadWorldDeferredSprites(this).catch((error) => {
-                console.warn('[GameWorld] Deferred HUD/placeholder sprites failed', error);
+            this.time.delayedCall(2500, () => {
+                void loadWorldDeferredSprites(this).catch((error) => {
+                    console.warn('[GameWorld] Deferred HUD/placeholder sprites failed', error);
+                });
             });
         } catch (error) {
             // Log full stack — "Map setup failed" without cause hid real bugs (player gear, camera, etc.).

@@ -40,6 +40,11 @@ const prodVite = read('vite/config.prod.mjs');
 const viteEnv = read('src/vite-env.d.ts');
 
 assert(
+    fs.existsSync(path.join(root, 'public/assets/sounds/magic.mp3')),
+    'public/assets/sounds/magic.mp3 must be committed so live /assets/sounds/magic.mp3 is not a 404 (fetch stays optional/fallback to C5)',
+);
+
+assert(
     /export const LOAD_MAP_ASSETS_ON_DEMAND = true;/.test(config),
     'LOAD_MAP_ASSETS_ON_DEMAND must stay true so live does not preload every .amd / tile .spr',
 );
@@ -139,8 +144,11 @@ assert(
 assert(
     /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
         /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
-        /export function cameraStreamTileRect/.test(mapViewportStream),
-    'mapViewportStream must cap the painted window (camera + ring, never full .amd)',
+        /export function cameraStreamTileRect/.test(mapViewportStream) &&
+        /export function paintStreamTileRect/.test(mapViewportStream) &&
+        /export function shouldRefreshMapStream/.test(mapViewportStream) &&
+        /export function mapTileKeysToEvict/.test(mapViewportStream),
+    'mapViewportStream must cap the painted window and evict sheets that leave the walk cap',
 );
 
 assert(
@@ -148,6 +156,19 @@ assert(
         /rowTilemapsByY/.test(hbMap) &&
         /Never creates one Phaser tilemap per world row/.test(hbMap),
     'HBMap must stream viewport rows, not one tilemap layer per world Y',
+);
+
+assert(
+    /paintStreamTileRect/.test(mapManager) &&
+        /shouldRefreshMapStream/.test(mapManager) &&
+        /evictUnusedMapTileTextures/.test(mapManager) &&
+        /streamRefreshQueued/.test(mapManager),
+    'MapManager must restream only when the camera leaves the painted cap and evict leftover sheets',
+);
+
+assert(
+    /export function evictUnusedMapTileTextures/.test(mapAssets),
+    'MapAssets must evict map-tile textures outside the current stream keep-set',
 );
 
 assert(

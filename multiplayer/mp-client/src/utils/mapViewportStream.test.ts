@@ -6,9 +6,14 @@ import {
     cameraStreamTileRect,
     collectSpriteIndicesInRect,
     initialFocusStreamRect,
+    mapTileKeysToEvict,
     mapTileRectArea,
     mapTileRectContains,
+    mapTileRectHeight,
+    mapTileRectWidth,
     mapTileRectsEqual,
+    paintStreamTileRect,
+    shouldRefreshMapStream,
 } from './mapViewportStream';
 
 function isTreeSpriteIndex(spriteIndex: number): boolean {
@@ -99,5 +104,58 @@ describe('mapViewportStream', () => {
         assert.ok(mapTileRectContains(rect, { minX: 90, minY: 80, maxX: 90, maxY: 80 }));
         assert.ok(mapTileRectArea(rect) < 400 * 400);
         assert.equal(mapTileRectsEqual(rect, rect), true);
+    });
+
+    it('walking one cell inside the painted cap does not restream', () => {
+        const spawn = { scrollX: 149 * 32, scrollY: 131 * 32, viewWidthPx: 1024, viewHeightPx: 576, zoom: 1, mapSizeX: 300, mapSizeY: 300 };
+        const painted = paintStreamTileRect(spawn);
+        const neededHere = cameraStreamTileRect(spawn);
+        assert.equal(shouldRefreshMapStream(painted, neededHere), false);
+        const oneCell = { ...spawn, scrollX: 150 * 32, scrollY: 131 * 32 };
+        assert.equal(shouldRefreshMapStream(painted, cameraStreamTileRect(oneCell)), false);
+        assert.ok(mapTileRectWidth(painted) <= MAP_STREAM_MAX_WIDTH_TILES);
+        assert.ok(mapTileRectHeight(painted) <= MAP_STREAM_MAX_HEIGHT_TILES);
+    });
+
+    it('Elvine walk spawn→(185,117) restreams but each paint stays capped', () => {
+        const a = paintStreamTileRect({
+            scrollX: 149 * 32,
+            scrollY: 131 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        const farNeeded = cameraStreamTileRect({
+            scrollX: 185 * 32,
+            scrollY: 117 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        assert.equal(shouldRefreshMapStream(a, farNeeded), true);
+        const b = paintStreamTileRect({
+            scrollX: 185 * 32,
+            scrollY: 117 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        assert.ok(mapTileRectArea(b) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
+        assert.equal(shouldRefreshMapStream(b, farNeeded), false);
+    });
+
+    it('evicts map-tile textures that left the keep-set (unbounded walk decode)', () => {
+        const keep = new Set([10, 11, 150]);
+        const evict = mapTileKeysToEvict(
+            ['map-tile-10', 'map-tile-99', 'sprite-wm-0', 'map-tile-150', '__DEFAULT'],
+            keep,
+        );
+        assert.deepEqual(evict, ['map-tile-99']);
     });
 });

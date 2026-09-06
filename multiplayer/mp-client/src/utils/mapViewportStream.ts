@@ -152,12 +152,62 @@ export function initialFocusStreamRect(
     focusTileY: number,
     mapSizeX: number,
     mapSizeY: number,
-    viewWidthPx = DEFAULT_STREAM_VIEW_WIDTH_PX,
-    viewHeightPx = DEFAULT_STREAM_VIEW_HEIGHT_PX,
+    _viewWidthPx = DEFAULT_STREAM_VIEW_WIDTH_PX,
+    _viewHeightPx = DEFAULT_STREAM_VIEW_HEIGHT_PX,
 ): MapTileRect {
-    const halfW = Math.ceil(viewWidthPx / 32 / 2) + MAP_STREAM_RING_TILES;
-    const halfH = Math.ceil(viewHeightPx / 32 / 2) + MAP_STREAM_RING_TILES;
-    return tileRectAroundFocus(focusTileX, focusTileY, halfW, halfH, mapSizeX, mapSizeY);
+    return tileRectAroundFocus(
+        focusTileX,
+        focusTileY,
+        Math.floor(MAP_STREAM_MAX_WIDTH_TILES / 2),
+        Math.floor(MAP_STREAM_MAX_HEIGHT_TILES / 2),
+        mapSizeX,
+        mapSizeY,
+    );
+}
+
+/**
+ * Painted/decoded window: always the hard cap around the camera center.
+ * `cameraStreamTileRect` is the *needed* camera+ring; walking inside a painted cap
+ * must not decode more sheets or rebuild the tileset every cell.
+ */
+export function paintStreamTileRect(input: CameraStreamInput): MapTileRect {
+    const zoom = input.zoom > 0 && Number.isFinite(input.zoom) ? input.zoom : 1;
+    const worldW = input.viewWidthPx / zoom;
+    const worldH = input.viewHeightPx / zoom;
+    const centerX = Math.floor((input.scrollX + worldW / 2) / 32);
+    const centerY = Math.floor((input.scrollY + worldH / 2) / 32);
+    return tileRectAroundFocus(
+        centerX,
+        centerY,
+        Math.floor(MAP_STREAM_MAX_WIDTH_TILES / 2),
+        Math.floor(MAP_STREAM_MAX_HEIGHT_TILES / 2),
+        input.mapSizeX,
+        input.mapSizeY,
+    );
+}
+
+/** True when the camera+ring is no longer inside the last painted cap (walk far enough to restream). */
+export function shouldRefreshMapStream(painted: MapTileRect | undefined, needed: MapTileRect): boolean {
+    return !painted || !mapTileRectContains(painted, needed);
+}
+
+/** Phaser `map-tile-{globalIndex}` keys that are outside the current stream keep-set. */
+export function mapTileKeysToEvict(
+    textureKeys: readonly string[],
+    keepGlobalIndices: ReadonlySet<number>,
+): string[] {
+    const evict: string[] = [];
+    for (const key of textureKeys) {
+        const match = /^map-tile-(\d+)$/.exec(key);
+        if (!match) {
+            continue;
+        }
+        const idx = Number(match[1]);
+        if (!keepGlobalIndices.has(idx)) {
+            evict.push(key);
+        }
+    }
+    return evict;
 }
 
 export interface MapCellSprites {

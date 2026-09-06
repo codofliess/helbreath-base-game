@@ -39,6 +39,13 @@ const effectAssets = read('src/utils/EffectAssets.ts');
 const itemIconAssets = read('src/utils/ItemIconAssets.ts');
 const bootCatalog = read('src/utils/bootCatalog.ts');
 const entitySheetFilter = read('src/utils/entitySheetFilter.ts');
+const gameAsset = read('src/game/objects/GameAsset.ts');
+assert(
+    /Map props skip debug Graphics/.test(gameAsset) &&
+        /if \(!config\.mapObject\)/.test(gameAsset) &&
+        /this\.debugGraphics = scene\.add\.graphics/.test(gameAsset),
+    'GameAsset must not allocate debug Graphics for every map object on plaza enter',
+);
 
 assert(
     /idleEntitySheetIndices/.test(entitySheetFilter) &&
@@ -189,25 +196,33 @@ assert(
 );
 
 assert(
-    /for \(const asset of tileAssets\)/.test(mapAssets),
-    'prepareMapForGameWorld must load tile packs sequentially (not Promise.all)',
+    /includeTreeShadows \?\? false/.test(mapAssets) &&
+        /includeTreeShadows = true/.test(mapAssets) &&
+        /setTimeout\(resolve, 32\)/.test(mapAssets) &&
+        /for \(const asset of tileAssets\)/.test(mapAssets),
+    'prepareMapForGameWorld must skip tree-shadow sheets on first enter and yield between sequential packs',
 );
 
 assert(
     /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
         /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
+        /MAP_ENTER_RING_TILES = 4/.test(mapViewportStream) &&
+        /ringTiles: MAP_ENTER_RING_TILES/.test(mapViewportStream) &&
         /export function cameraStreamTileRect/.test(mapViewportStream) &&
         /export function paintStreamTileRect/.test(mapViewportStream) &&
         /export function shouldRefreshMapStream/.test(mapViewportStream) &&
         /export function mapTileKeysToEvict/.test(mapViewportStream),
-    'mapViewportStream must cap the painted window and evict sheets that leave the walk cap',
+    'mapViewportStream must cap walk paint, use a tighter enter ring, and evict leftover sheets',
 );
 
 assert(
     /syncViewportStream/.test(hbMap) &&
         /rowTilemapsByY/.test(hbMap) &&
-        /Never creates one Phaser tilemap per world row/.test(hbMap),
-    'HBMap must stream viewport rows, not one tilemap layer per world Y',
+        /Never creates one Phaser tilemap per world row/.test(hbMap) &&
+        /1 ground layer/.test(hbMap) &&
+        /ground-stream/.test(hbMap) &&
+        !/ground-y-\$\{y\}/.test(hbMap),
+    'HBMap must stream one ground layer, not one tilemap layer per world Y',
 );
 
 assert(
@@ -226,8 +241,10 @@ assert(
 assert(
     /syncStreamedView/.test(gameWorld) &&
         /focusTileX: this\.initialGameWorldState\?\.playerX/.test(gameWorld) &&
-        /setInitialFocusTile\(this\.player\.getWorldX/.test(gameWorld),
-    'GameWorld must stream around spawn and re-stream the live player cell after setupMap',
+        /setInitialFocusTile\(this\.player\.getWorldX/.test(gameWorld) &&
+        /enableTreesAfterFirstPaint/.test(gameWorld) &&
+        /mapStreamWalkEnabled/.test(gameWorld),
+    'GameWorld must stream around spawn, delay tree/walk restream until after first paint',
 );
 
 assert(
@@ -331,9 +348,10 @@ assert(
         /tickMapSetupWatchdog/.test(gameWorld) &&
         /noteMapSetupProgress/.test(gameWorld) &&
         /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
-        /delayedCall\(700/.test(gameWorld) &&
-        /delayedCall\(8000/.test(gameWorld),
-    'GameWorld must fail-soft map timeout, gate entity decode until after tile GC, and delay HUD packs',
+        /delayedCall\(4000/.test(gameWorld) &&
+        /delayedCall\(10000/.test(gameWorld) &&
+        /displayedMap \|\| this\.pendingLoadedMap \|\| this\.mapPrepareInFlight/.test(gameWorld),
+    'GameWorld must fail-soft map timeout without retrying a painted map, delay NPC decode, and delay HUD packs',
 );
 
 assert(

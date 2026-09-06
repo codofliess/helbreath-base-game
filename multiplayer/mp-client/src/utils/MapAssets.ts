@@ -87,7 +87,11 @@ function getTileSpriteAssetForIndex(index: number): AssetData {
  * Do not call this without a rect on the load path — a full-map scan plus every `.spr` pack
  * is the previous OOM (Aw Snap 9 on enter).
  */
-export function collectRequiredTileIndices(hbMap: HBMap, rect: MapTileRect): Set<number> {
+export function collectRequiredTileIndices(
+    hbMap: HBMap,
+    rect: MapTileRect,
+    includeTreeShadows = true,
+): Set<number> {
     const indices = new Set<number>();
     for (let y = rect.minY; y <= rect.maxY; y++) {
         for (let x = rect.minX; x <= rect.maxX; x++) {
@@ -103,9 +107,11 @@ export function collectRequiredTileIndices(hbMap: HBMap, rect: MapTileRect): Set
             }
         }
     }
-    for (const idx of [...indices]) {
-        if (isTreeSpriteIndex(idx)) {
-            indices.add(idx + 50);
+    if (includeTreeShadows) {
+        for (const idx of [...indices]) {
+            if (isTreeSpriteIndex(idx)) {
+                indices.add(idx + 50);
+            }
         }
     }
     return indices;
@@ -166,6 +172,8 @@ export interface PrepareMapOptions {
     focusTileY?: number;
     /** Called after each tile pack so map-setup watchdog can tell decode is still alive. */
     onProgress?: () => void;
+    /** First enter skips tree+50 shadow sheets; walking/tree pass opts back in. */
+    includeTreeShadows?: boolean;
 }
 
 /**
@@ -177,13 +185,14 @@ export async function loadTileSpritePacksForMapRect(
     hbMap: HBMap,
     rect: MapTileRect,
     onProgress?: () => void,
+    includeTreeShadows = true,
 ): Promise<number> {
-    const indices = collectRequiredTileIndices(hbMap, rect);
+    const indices = collectRequiredTileIndices(hbMap, rect, includeTreeShadows);
     const tileAssets = resolveTileSpriteAssets(indices);
     for (const asset of tileAssets) {
         await ensureTileSpriteSheets(scene, asset, indices);
         onProgress?.();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 32));
     }
     return tileAssets.length;
 }
@@ -244,7 +253,13 @@ export async function prepareMapForGameWorld(
     const focusY = options?.focusTileY != null && options.focusTileY >= 0 ? options.focusTileY : 0;
     const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
     options?.onProgress?.();
-    const packCount = await loadTileSpritePacksForMapRect(scene, map, rect, options?.onProgress);
+    const packCount = await loadTileSpritePacksForMapRect(
+        scene,
+        map,
+        rect,
+        options?.onProgress,
+        options?.includeTreeShadows ?? false,
+    );
 
     setMap(scene, mapKey, map);
     const elapsedMs = performance.now() - startedAt;

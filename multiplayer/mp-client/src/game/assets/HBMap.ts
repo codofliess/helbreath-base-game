@@ -175,7 +175,7 @@ export class HBMap {
      */
     private rowTilemapsByY = new Map<number, Phaser.Tilemaps.Tilemap>();
 
-    /** Row layers aligned with {@link rowTilemapsByY}; depth = rowY * DEPTH_MULTIPLIER - ground bias. */
+    /** Streamed ground tilemap (one map for the viewport, not one per world row). */
     private tilemapLayersByY = new Map<number, Phaser.Tilemaps.TilemapLayer>();
 
     /** Static map objects currently instantiated (viewport + ring), keyed by `x,y`. */
@@ -374,6 +374,7 @@ export class HBMap {
     /**
      * Paints ground tiles for the current stream rect only (viewport + ring).
      * Never creates one Phaser tilemap per world row — that is the verified OOM on enter.
+     * First paint uses a single ground layer (not one Canvas layer per streamed Y).
      */
     public renderMapTiles(scene: Phaser.Scene, rect?: MapTileRect): Phaser.Tilemaps.Tilemap {
         this.streamTilesEnabled = true;
@@ -404,6 +405,7 @@ export class HBMap {
     /**
      * Instantiates or drops Phaser ground layers + static objects so they match `rect`.
      * Tile `.spr` packs for `rect` must already be loaded (see MapAssets.loadTileSpritePacksForMapRect).
+     * One ground layer for the whole rect (not one Canvas layer per world Y).
      */
     public syncViewportStream(scene: Phaser.Scene, rect: MapTileRect): void {
         if (!this.loaded) {
@@ -577,9 +579,9 @@ export class HBMap {
 
         const streamWidth = rect.maxX - rect.minX + 1;
         const streamHeight = rect.maxY - rect.minY + 1;
-        const groundDepthBias = 10;
 
-        // Never creates one Phaser tilemap per world row — one tilemap, one layer per streamed Y.
+        // One Phaser layer for the whole stream. Per-Y layers (40+ Canvas textures) Aw Snapped
+        // on first paint; ground stays behind players/objects which already use world-Y depth.
         const streamTilemap = scene.make.tilemap({
             tileWidth: TILE_SIZE,
             tileHeight: TILE_SIZE,
@@ -599,13 +601,25 @@ export class HBMap {
             throw new Error('Failed to add tileset for streamed ground');
         }
 
+        const layer = streamTilemap.createBlankLayer(
+            'ground-stream',
+            tileset,
+            rect.minX * TILE_SIZE,
+            rect.minY * TILE_SIZE,
+            streamWidth,
+            streamHeight,
+        );
+        if (!layer) {
+            streamTilemap.destroy();
+            this.destroyRowTilemaps();
+            throw new Error('Failed to create streamed ground layer');
+        }
+
+        const rows: number[][] = [];
         for (let y = rect.minY; y <= rect.maxY; y++) {
             const row: number[] = [];
             for (let x = rect.minX; x <= rect.maxX; x++) {
                 const tile = this.getTile(x, y);
-                if (!tile) {
-                    continue;
-                }
                 if (!tile || tile.sprite < 0) {
                     row.push(-1);
                     continue;
@@ -613,29 +627,16 @@ export class HBMap {
                 const uniqueTile = uniqueTilesMap.get(`${tile.sprite}-${tile.spriteFrame}`);
                 row.push(uniqueTile ? uniqueTile.tilesetIndex : -1);
             }
-
-            const layer = streamTilemap.createBlankLayer(
-                `ground-y-${y}`,
-                tileset,
-                rect.minX * TILE_SIZE,
-                y * TILE_SIZE,
-                streamWidth,
-                1,
-            );
-            if (!layer) {
-                streamTilemap.destroy();
-                this.destroyRowTilemaps();
-                throw new Error(`Failed to create tilemap layer for map row ${y}`);
-            }
-            layer.putTilesAt(row, 0, 0);
-            layer.setDepth(y * DEPTH_MULTIPLIER - groundDepthBias);
-            this.rowTilemapsByY.set(y, streamTilemap);
-            this.tilemapLayersByY.set(y, layer);
+            rows.push(row);
         }
+        layer.putTilesAt(rows, 0, 0);
+        layer.setDepth(0);
+        this.rowTilemapsByY.set(rect.minY, streamTilemap);
+        this.tilemapLayersByY.set(rect.minY, layer);
 
         console.log(
             `Map tiles streamed: ${streamWidth}x${streamHeight} of ${this.sizeX}x${this.sizeY} ` +
-                `using ${tileKeys.length} unique tiles (${this.tilemapLayersByY.size} Y-sorted rows)` +
+                `using ${tileKeys.length} unique tiles (1 ground layer)` +
                 (missingTextureCount || missingFrameCount
                     ? ` [missing textures=${missingTextureCount}, frames=${missingFrameCount}]`
                     : ''),

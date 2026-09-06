@@ -9,11 +9,13 @@ import { parseAmdMapCells } from './mapAmdBinary';
 import { fetchGameAssetArrayBuffer } from './gameAssetHttp';
 import { countSprSheets, pngRgbaByteEstimate, sliceSprSheets } from './sprSheetSlice';
 import {
+    MAP_ENTER_RING_TILES,
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
     collectSpriteIndicesInRect,
     initialFocusStreamRect,
     mapTileRectArea,
+    paintStreamTileRect,
 } from './mapViewportStream';
 
 const LIVE_ORIGIN = 'https://play.chainlords.net';
@@ -57,6 +59,7 @@ function resolvePackFileNames(indices: Set<number>, packs: Array<{ fileName: str
 function countObjectInstances(
     tiles: Array<Array<{ sprite: number; objectSprite: number }>>,
     rect: { minX: number; minY: number; maxX: number; maxY: number },
+    includeTrees: boolean,
 ): number {
     let n = 0;
     for (let y = rect.minY; y <= rect.maxY; y++) {
@@ -67,6 +70,9 @@ function countObjectInstances(
         for (let x = rect.minX; x <= rect.maxX; x++) {
             const ob = row[x]?.objectSprite ?? 0;
             if (ob > 0 && ob !== 6 && ob !== 7 && ob !== 9 && ob !== 24) {
+                if (!includeTrees && isTreeSpriteIndex(ob)) {
+                    continue;
+                }
                 n += 1;
             }
         }
@@ -92,11 +98,27 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(mapTileRectArea(rect) < map.sizeX * map.sizeY / 10);
 
         const catalog = tilePacksFromAssetsTs();
-        const indices = collectSpriteIndicesInRect(map.tiles, rect, isTreeSpriteIndex);
+        const indices = collectSpriteIndicesInRect(map.tiles, rect, isTreeSpriteIndex, false);
         const packs = resolvePackFileNames(indices, catalog);
-        const objects = countObjectInstances(map.tiles, rect);
+        const objectsFirstPaint = countObjectInstances(map.tiles, rect, false);
+        const objectsWithTrees = countObjectInstances(map.tiles, rect, true);
         assert.ok(packs.length <= 8, `plaza should load few packs, got ${packs.join(',')}`);
-        assert.ok(objects < 200, `plaza object instances ${objects} must stay << full map`);
+        assert.ok(objectsFirstPaint < 200, `plaza object instances ${objectsFirstPaint} must stay << full map`);
+        assert.ok(
+            objectsFirstPaint <= objectsWithTrees,
+            'first paint must not instantiate more objects than the tree pass',
+        );
+        const walkPaint = paintStreamTileRect({
+            scrollX: ELVINE_SPAWN_X * 32,
+            scrollY: ELVINE_SPAWN_Y * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: map.sizeX,
+            mapSizeY: map.sizeY,
+        });
+        assert.ok(mapTileRectArea(rect) < mapTileRectArea(walkPaint));
+        assert.ok(MAP_ENTER_RING_TILES < 8);
 
         const resolveKey = (idx: number) => {
             let chosen = catalog[0];

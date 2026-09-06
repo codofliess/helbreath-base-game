@@ -19,8 +19,14 @@ import { loadTileSpritePacksForMapRect, collectRequiredTileIndices, evictUnusedM
 import {
     cameraStreamTileRect,
     firstPaintStreamRect,
+    growMapTileRectToward,
+    MAP_ENTER_RING_TILES,
+    MAP_EXPAND_STEP_TILES,
+    MAP_STAND_REFRESH_SLACK_TILES,
     paintStreamTileRect,
     shouldRefreshMapStream,
+    waitForBrowserFrames,
+    waitMs,
 } from './mapViewportStream';
 
 export interface MapManagerConfig {
@@ -185,11 +191,15 @@ export class MapManager {
     }
 
     /**
-     * Loads tile packs for the camera window (if needed) and paints the capped stream rect.
-     * Walking inside the painted cap does not decode extra sheets or rebuild the tileset.
-     * Sheets that leave the cap are evicted so mid-session walk cannot unbounded-decode Elvine.
+     * Loads tile packs for the camera window (if needed) and paints a grown stream rect.
+     * Standing/focus never jumps to the 56×40 walk cap or rebuilds the full sheet in one tick.
+     * Walking grows toward the cap in {@link MAP_EXPAND_STEP_TILES} steps.
      */
-    public async syncStreamedView(): Promise<void> {
+    public async syncStreamedView(options?: {
+        standingHold?: boolean;
+        includeTreeShadows?: boolean;
+        includeObjectSprites?: boolean;
+    }): Promise<void> {
         if (this.streamInFlight) {
             this.streamRefreshQueued = true;
             return;
@@ -204,42 +214,54 @@ export class MapManager {
         } catch {
             return;
         }
+        const standingHold = options?.standingHold === true;
+        const zoom = standingHold ? 1 : camera.zoom;
         const needed = cameraStreamTileRect({
             scrollX: camera.scrollX,
             scrollY: camera.scrollY,
             viewWidthPx: camera.width,
             viewHeightPx: camera.height,
-            zoom: camera.zoom,
+            zoom,
             mapSizeX: map.sizeX,
             mapSizeY: map.sizeY,
+            ringTiles: standingHold ? MAP_ENTER_RING_TILES : undefined,
         });
         const current = map.getStreamedRect();
-        if (!shouldRefreshMapStream(current, needed)) {
+        const slack = standingHold ? MAP_STAND_REFRESH_SLACK_TILES : undefined;
+        if (!shouldRefreshMapStream(current, needed, slack)) {
             return;
         }
-        const paint = paintStreamTileRect({
+        const walkCap = paintStreamTileRect({
             scrollX: camera.scrollX,
             scrollY: camera.scrollY,
             viewWidthPx: camera.width,
             viewHeightPx: camera.height,
-            zoom: camera.zoom,
+            zoom,
             mapSizeX: map.sizeX,
             mapSizeY: map.sizeY,
         });
+        const target = standingHold ? needed : walkCap;
+        const paint = current
+            ? growMapTileRectToward(current, target, MAP_EXPAND_STEP_TILES)
+            : growMapTileRectToward(needed, target, MAP_EXPAND_STEP_TILES);
+        const includeTrees = options?.includeTreeShadows ?? map.isStreamTreesEnabled();
+        const includeObjects = options?.includeObjectSprites ?? map.isStreamObjectsEnabled();
         this.streamInFlight = true;
         this.streamRefreshQueued = false;
         try {
-            await loadTileSpritePacksForMapRect(this.scene, map, paint);
+            await loadTileSpritePacksForMapRect(this.scene, map, paint, undefined, includeTrees, includeObjects);
             map.syncViewportStream(this.scene, paint);
-            evictUnusedMapTileTextures(this.scene, collectRequiredTileIndices(map, paint));
+            evictUnusedMapTileTextures(this.scene, collectRequiredTileIndices(map, paint, includeTrees, includeObjects));
         } catch (error) {
             console.warn('[MapManager] Viewport stream update failed:', error);
         } finally {
             this.streamInFlight = false;
         }
-        if (this.streamRefreshQueued) {
+        if (this.streamRefreshQueued && !standingHold) {
             this.streamRefreshQueued = false;
-            await this.syncStreamedView();
+            await waitForBrowserFrames(2);
+            await waitMs(64);
+            await this.syncStreamedView(options);
         }
     }
 

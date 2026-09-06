@@ -10,13 +10,18 @@ import { fetchGameAssetArrayBuffer } from './gameAssetHttp';
 import { countSprSheets, pngRgbaByteEstimate, sliceSprSheets } from './sprSheetSlice';
 import {
     MAP_ENTER_RING_TILES,
+    MAP_EXPAND_STEP_TILES,
+    MAP_OBJECT_INSTANTIATE_BATCH,
     MAP_STREAM_MAX_HEIGHT_TILES,
     MAP_STREAM_MAX_WIDTH_TILES,
     collectSpriteIndicesInRect,
     firstPaintStreamRect,
+    growMapTileRectToward,
     initialFocusStreamRect,
     mapTileRectArea,
+    mapTileRectContains,
     paintStreamTileRect,
+    postPaintStreamRect,
 } from './mapViewportStream';
 
 const LIVE_ORIGIN = 'https://play.chainlords.net';
@@ -95,7 +100,13 @@ describe('live Elvine enter path (HTTP + stream)', () => {
 
         const rect = initialFocusStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
         const firstPaint = firstPaintStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
-        assert.ok(mapTileRectArea(firstPaint) < mapTileRectArea(rect));
+        const postPaint = postPaintStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
+        assert.ok(mapTileRectArea(firstPaint) < mapTileRectArea(postPaint));
+        assert.ok(mapTileRectArea(postPaint) < mapTileRectArea(rect));
+        const grown = growMapTileRectToward(firstPaint, rect, MAP_EXPAND_STEP_TILES);
+        assert.ok(mapTileRectArea(grown) < mapTileRectArea(rect) || mapTileRectContains(grown, firstPaint));
+        assert.ok(mapTileRectArea(grown) < MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
+        assert.ok(MAP_OBJECT_INSTANTIATE_BATCH <= 12);
         assert.ok(rect.maxX - rect.minX + 1 <= MAP_STREAM_MAX_WIDTH_TILES);
         assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
         assert.ok(mapTileRectArea(rect) < map.sizeX * map.sizeY / 10);
@@ -105,8 +116,10 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         const firstPaintGround = collectSpriteIndicesInRect(map.tiles, firstPaint, isTreeSpriteIndex, false, false);
         const packs = resolvePackFileNames(indices, catalog);
         const objectsFirstPaint = countObjectInstances(map.tiles, rect, false);
+        const objectsPostPaint = countObjectInstances(map.tiles, postPaint, false);
         const objectsWithTrees = countObjectInstances(map.tiles, rect, true);
         assert.ok(packs.length <= 8, `plaza should load few packs, got ${packs.join(',')}`);
+        assert.ok(objectsPostPaint <= objectsFirstPaint, 'post-paint object window must not exceed enter-ring props');
         assert.ok(objectsFirstPaint < 200, `plaza object instances ${objectsFirstPaint} must stay << full map`);
         assert.ok(
             objectsFirstPaint <= objectsWithTrees,

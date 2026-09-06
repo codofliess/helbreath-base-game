@@ -13,6 +13,8 @@ import {
     firstPaintStreamRect,
     initialFocusStreamRect,
     mapTileKeysToEvict,
+    waitForBrowserFrames,
+    waitMs,
     type MapTileRect,
 } from './mapViewportStream';
 
@@ -193,13 +195,15 @@ export async function loadTileSpritePacksForMapRect(
     onProgress?: () => void,
     includeTreeShadows = true,
     includeObjectSprites = true,
+    yieldMs = 48,
 ): Promise<number> {
     const indices = collectRequiredTileIndices(hbMap, rect, includeTreeShadows, includeObjectSprites);
     const tileAssets = resolveTileSpriteAssets(indices);
     for (const asset of tileAssets) {
         await ensureTileSpriteSheets(scene, asset, indices);
         onProgress?.();
-        await new Promise((resolve) => setTimeout(resolve, 32));
+        await waitForBrowserFrames(1);
+        await waitMs(yieldMs);
     }
     return tileAssets.length;
 }
@@ -270,6 +274,7 @@ export async function prepareMapForGameWorld(
         options?.onProgress,
         options?.includeTreeShadows ?? false,
         options?.includeObjectSprites ?? !firstPaint,
+        firstPaint ? 64 : 48,
     );
 
     setMap(scene, mapKey, map);

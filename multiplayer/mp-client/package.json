@@ -34,7 +34,7 @@
         "compress-assets:best": "node ../../tools/compress-assets.js --ratio=9",
         "lint": "pnpm exec tsc --noEmit",
         "test:boot-smoke": "tsx --test scripts/boot-create-root-smoke.test.ts",
-        "test:map-stream": "tsx --test src/utils/mapViewportStream.test.ts src/utils/SpriteHttpLoader.test.ts src/utils/soundAlias.test.ts src/utils/bootCatalog.test.ts src/constants/Maps.lookup.test.ts src/utils/liveEnterElvine.test.ts src/utils/tileSheetFilter.test.ts src/utils/sprSheetSlice.test.ts src/utils/entitySheetFilter.test.ts",
+        "test:map-stream": "tsx --test src/utils/mapViewportStream.test.ts src/utils/SpriteHttpLoader.test.ts src/utils/soundAlias.test.ts src/utils/bootCatalog.test.ts src/constants/Maps.lookup.test.ts src/utils/liveEnterElvine.test.ts src/utils/tileSheetFilter.test.ts src/utils/sprSheetSlice.test.ts src/utils/entitySheetFilter.test.ts src/utils/duelStreams.test.ts",
         "check:live-memory": "node scripts/assert-live-client-memory.mjs",
         "lint:eslint": "ESLINT_USE_FLAT_CONFIG=false eslint \"src/**/*.{ts,tsx}\""
     },

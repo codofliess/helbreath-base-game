@@ -732,32 +732,31 @@ public static class GamePersistence {
                 if (valid.Count > 0) {
                     return valid;
                 }
+                if (fromDb.Count > 0) {
+                    Console.WriteLine(
+                        $"[Persistence] PostgreSQL list hid {fromDb.Count} incomplete name(s) for wallet={accountWallet[..Math.Min(8, accountWallet.Length)]}…");
+                }
             } catch (Exception ex) {
                 Console.Error.WriteLine($"[Persistence] PostgreSQL list failed for '{accountWallet}': {ex.Message}");
             }
         }
 
-        var fromJson = LoadPlayerJson(charsDirectory, accountWallet, travelerMode);
-        if (fromJson is null) {
-            return Array.Empty<CharacterListEntry>();
+        // DB miss: never skip traveler JSON just because player_mode was omitted.
+        // Traveler clients still must not inherit GM sandbox kits.
+        var fromTravelerJson = TryJsonListEntry(charsDirectory, accountWallet, travelerMode: true);
+        if (travelerMode) {
+            return fromTravelerJson is not null ? [fromTravelerJson] : Array.Empty<CharacterListEntry>();
         }
 
-        var name = string.IsNullOrWhiteSpace(fromJson.CharacterName) ? accountWallet : fromJson.CharacterName.Trim();
-        // Incomplete / auto stubs (e.g. HB_2a4bUA9C with underscore) must not appear as playable.
-        if (!IsValidCharacterNameFormat(name, out _)) {
-            if (travelerMode) {
-                Console.WriteLine(
-                    $"[Persistence] Hiding incomplete traveler save for wallet={accountWallet[..Math.Min(8, accountWallet.Length)]}… name='{name}' (Create Character required).");
-            }
-            return Array.Empty<CharacterListEntry>();
+        var fromGmJson = TryJsonListEntry(charsDirectory, accountWallet, travelerMode: false);
+        if (fromGmJson is not null) {
+            return [fromGmJson];
         }
-        return [
-            EntryFromPersistenceState(
-                fromJson,
-                name,
-                Math.Clamp(fromJson.SlotIndex, 0, 3),
-                Math.Max(0, fromJson.HoursPlayed)),
-        ];
+        if (fromTravelerJson is not null) {
+            return [fromTravelerJson];
+        }
+
+        return Array.Empty<CharacterListEntry>();
     }
 
     /// <summary>
@@ -862,6 +861,27 @@ public static class GamePersistence {
         }
 
         return false;
+    }
+
+    /// <summary>One SELECTCHAR row from <c>Chars/*.json</c> or <c>*.traveler.json</c>, or null if missing/invalid.</summary>
+    static CharacterListEntry? TryJsonListEntry(string charsDirectory, string accountWallet, bool travelerMode) {
+        var fromJson = LoadPlayerJson(charsDirectory, accountWallet, travelerMode);
+        if (fromJson is null) {
+            return null;
+        }
+
+        var name = string.IsNullOrWhiteSpace(fromJson.CharacterName) ? accountWallet : fromJson.CharacterName.Trim();
+        if (!IsValidCharacterNameFormat(name, out _)) {
+            Console.WriteLine(
+                $"[Persistence] Hiding incomplete {(travelerMode ? "traveler" : "character")} save for wallet={accountWallet[..Math.Min(8, accountWallet.Length)]}… name='{name}' (Create Character required).");
+            return null;
+        }
+
+        return EntryFromPersistenceState(
+            fromJson,
+            name,
+            Math.Clamp(fromJson.SlotIndex, 0, 3),
+            Math.Max(0, fromJson.HoursPlayed));
     }
 
     /// <summary>Builds a SELECTCHAR row from a full persistence snapshot (JSON fallback / traveler).</summary>

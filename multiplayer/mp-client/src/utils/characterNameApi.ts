@@ -98,7 +98,7 @@ export async function checkCharacterNameAvailable(
                     characterName: (value.characterName || trimmedName).trim(),
                 });
             } catch (error) {
-                finish(error instanceof Error ? error : new Error('Failed to decode name check.'));
+                console.warn('[characterName] Ignoring undecodable WS frame while waiting for check', error);
             }
         });
 

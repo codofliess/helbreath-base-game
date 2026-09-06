@@ -706,13 +706,46 @@ function issueChallenge({ chainId, address, addressKey }) {
     return { challengeId, chainId, address, expiresAt, message };
 }
 
-async function issueSessionResponse(playerId) {
+/** Dedupe wallet rows for v2 session claims. Address match is exact (Sol base58 is case-sensitive). */
+function mergeSessionWallets(...lists) {
+    const out = [];
+    const seen = new Set();
+    for (const list of lists) {
+        if (!Array.isArray(list)) {
+            continue;
+        }
+        for (const row of list) {
+            const chainId = typeof row?.chainId === 'string' ? row.chainId.trim() : '';
+            const address = typeof row?.address === 'string' ? row.address.trim() : '';
+            if (!chainId || !address) {
+                continue;
+            }
+            const key = `${chainId}:${address}`;
+            if (seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            out.push({ chainId, address });
+        }
+    }
+    return out;
+}
+
+/**
+ * Signs a v2 session. `extraWallets` is the just-verified address so the HMAC
+ * claims are never empty when `wallet_bindings` is missing or lagging.
+ */
+async function issueSessionResponse(playerId, extraWallets = []) {
     const player = await getPlayer(playerId);
     if (!player) {
         return null;
     }
-    const wallets = await listBindings(playerId);
+    const fromStore = await listBindings(playerId);
+    const wallets = mergeSessionWallets(fromStore, extraWallets);
     const boundChains = [...new Set(wallets.map((w) => w.chainId))];
+    if (wallets.length === 0) {
+        console.warn('[auth] Session issued with zero wallet claims (player had no bindings)');
+    }
     const tokenExpiresAt = Date.now() + TOKEN_TTL_MS;
     const token = signSession({
         playerId: player.playerId,
@@ -721,7 +754,7 @@ async function issueSessionResponse(playerId) {
         wallets,
         expiresAtMs: tokenExpiresAt,
     });
-    const primary = wallets[0]?.address || null;
+    const primary = wallets[0]?.address || extraWallets[0]?.address || null;
     return {
         success: true,
         playerId: player.playerId,
@@ -873,7 +906,16 @@ function registerAuthRoutes(app) {
                 playerId = created.playerId;
             }
 
-            const session = await issueSessionResponse(playerId);
+            const session = await issueSessionResponse(playerId, [
+                { chainId, address: canonical.address },
+            ]);
+            if (!session) {
+                res.status(500).json({ success: false, error: 'Auth verify failed' });
+                return;
+            }
+            if (!session.wallet) {
+                session.wallet = canonical.address;
+            }
             res.json(session);
         } catch (err) {
             if (err && err.code === 'SOT_MEM_FORBIDDEN') {
@@ -947,6 +989,7 @@ module.exports = {
     verifyToken,
     parseSession,
     signSession,
+    mergeSessionWallets,
     isWalletAuthRequired,
     requireWalletToken,
     getAuthSecret,

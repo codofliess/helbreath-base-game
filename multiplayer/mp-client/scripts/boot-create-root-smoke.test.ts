@@ -42,17 +42,17 @@ function installMinimalBrowser() {
 }
 
 describe('startGameWithRendererFallback', () => {
-    it('returns AUTO/WebGL game when the first factory succeeds', () => {
+    it('returns the primary renderer when it succeeds', () => {
         const game = startGameWithRendererFallback(
-            () => ({ renderer: 'webgl' }),
+            () => ({ renderer: 'canvas' }),
             () => {
-                throw new Error('canvas should not run');
+                throw new Error('secondary should not run');
             },
         );
-        assert.deepEqual(game, { renderer: 'webgl' });
+        assert.deepEqual(game, { renderer: 'canvas' });
     });
 
-    it('retries Canvas when WebGL abort is thrown', () => {
+    it('retries secondary when WebGL abort is thrown', () => {
         const game = startGameWithRendererFallback(
             () => {
                 throw new Error('Cannot create WebGL context, aborting.');
@@ -76,26 +76,29 @@ describe('startGameWithRendererFallback', () => {
 });
 
 describe('createRoot boot path (no wallet)', () => {
-    it('Phaser config is AUTO with Canvas fallback, not WEBGL-only', () => {
+    it('Phaser boots Canvas first and never requests WEBGL-only', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/game/main.ts'), 'utf8');
-        assert.match(src, /buildGameConfig\(parent, AUTO/);
-        assert.doesNotMatch(src, /\bWEBGL\b/);
+        const canvasIdx = src.indexOf('buildGameConfig(parent, CANVAS');
+        const autoIdx = src.indexOf('buildGameConfig(parent, AUTO');
+        assert.ok(canvasIdx >= 0, 'Canvas must be the primary renderer');
+        assert.ok(autoIdx > canvasIdx, 'AUTO is fallback after Canvas');
+        assert.doesNotMatch(src, /type:\s*WEBGL/);
+        assert.doesNotMatch(src, /buildGameConfig\(parent, WEBGL/);
         assert.match(src, /failIfMajorPerformanceCaveat:\s*false/);
-        assert.match(src, /buildGameConfig\(parent, CANVAS/);
-        assert.match(src, /startGameWithRendererFallback/);
     });
 
-    it('PhaserGame starts after paint and catches StartGame so React hub cannot be rolled back', () => {
+    it('PhaserGame lazy-loads Phaser after paint (no static StartGame import)', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/PhaserGame.tsx'), 'utf8');
-        assert.match(src, /try\s*\{[\s\S]*StartGame/);
+        assert.doesNotMatch(src, /import StartGame from/);
+        assert.match(src, /import\('\.\/game\/main'\)/);
         assert.doesNotMatch(src, /useLayoutEffect\(/);
-        assert.match(src, /game\.current = null/);
     });
 
     it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/App.tsx'), 'utf8');
         assert.match(src, /PhaserMountGuard/);
         assert.match(src, /<PhaserGame /);
+        assert.match(src, /rpg-ui\.css/);
     });
 
     it('main.tsx opens login hub before createRoot', () => {

@@ -105,6 +105,9 @@ export class LoginScreen extends Scene {
 
         // Landing Play Now: ?wallet=&token=&mode=world → character list (SELECTCHAR).
         // Deep-link stays in sessionStorage until desk is shown (Strict Mode safe).
+        const alreadyEnteringWorld =
+            connectDialogStore.state.phase === 'play-world' && connectDialogStore.state.walletSession;
+
         const deepLink = consumeWalletDeepLink();
         if (deepLink) {
             gsm.setWalletSession(
@@ -124,6 +127,9 @@ export class LoginScreen extends Scene {
                 setConnectWalletSession(deepLink.session);
                 openConnectDialogForLogin(gsm.getCharacterName() ?? '');
             }
+        } else if (alreadyEnteringWorld) {
+            // React hub already entered World before Phaser booted — keep SELECTCHAR.
+            console.info('[LoginScreen] Phaser ready under existing play-world phase');
         } else {
             openConnectDialogForLogin(gsm.getCharacterName() ?? '');
         }

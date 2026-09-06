@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import type { Id } from 'react-toastify';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { PhaserMountGuard } from './game/PhaserMountGuard';
+import './ui/rpg-ui.css';
 import { ControlsDialog } from './ui/dialogs/ControlsDialog';
 import { MapDialog } from './ui/dialogs/MapDialog';
 import { CameraDialog } from './ui/dialogs/CameraDialog';

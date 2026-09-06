@@ -1,21 +1,20 @@
 /**
- * Isolates Phaser Game construction so a WebGL abort cannot take down React.
- * Chrome (GPU blocklist, remote desktop, `failIfMajorPerformanceCaveat`) throws
- * `Cannot create WebGL context, aborting` from Phaser's WebGLRenderer.
+ * Isolates Phaser Game construction so a renderer abort cannot take down React.
+ * Phaser throws `Cannot create WebGL context, aborting` when type is WEBGL and
+ * `Features.webGL` is false — call Canvas first so login never takes that path.
  */
-
 export function startGameWithRendererFallback<T>(
-    tryAuto: () => T,
-    retryCanvas: () => T,
+    tryPrimary: () => T,
+    retrySecondary: () => T,
 ): T | null {
     try {
-        return tryAuto();
+        return tryPrimary();
     } catch (err) {
-        console.warn('[StartGame] Phaser AUTO/WebGL failed, retrying Canvas 2D', err);
+        console.warn('[StartGame] Primary renderer failed, retrying fallback', err);
         try {
-            return retryCanvas();
+            return retrySecondary();
         } catch (err2) {
-            console.error('[StartGame] Phaser Canvas fallback failed — React login hub still available', err2);
+            console.error('[StartGame] All Phaser renderers failed — React login hub still available', err2);
             return null;
         }
     }

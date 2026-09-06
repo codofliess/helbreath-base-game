@@ -47,13 +47,14 @@ function buildGameConfig(
 }
 
 /**
- * Creates Phaser without throwing into React. Prefers WebGL via AUTO, then Canvas.
- * Returns null only if both renderers fail — login hub stays mounted.
+ * Creates Phaser without throwing into React.
+ * Canvas 2D first — forcing Phaser's WEBGL renderer throws "Cannot create WebGL context, aborting"
+ * when `Features.webGL` is false (Elon / GPU-blocked Chrome). AUTO is only a fallback.
  */
 const StartGame = (parent: string): Game | null => {
     return startGameWithRendererFallback(
-        () => new Game(buildGameConfig(parent, AUTO, true)),
         () => new Game(buildGameConfig(parent, CANVAS, false)),
+        () => new Game(buildGameConfig(parent, AUTO, false)),
     );
 };
 

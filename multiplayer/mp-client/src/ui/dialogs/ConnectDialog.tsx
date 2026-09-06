@@ -34,13 +34,15 @@ import {
     setPendingArenaPactRespond,
 } from '../store/ArenaPactDialog.store';
 import {
+    PHANTOM_SIGN_PENDING_TOAST,
+    clearStoredWalletAuth,
     clearWalletDeepLink,
     connectWalletAndAuthenticate,
     consumeAutoEnterWorldFlag,
     consumePreferredAuthChain,
     consumeWalletDeepLink,
+    getReusableHubWalletSession,
     getStoredWalletPubkey,
-    getStoredWalletToken,
     persistPreferredAuthChain,
     type AuthChainId,
     releaseAutoEnterWorldLock,
@@ -273,14 +275,9 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         setCharacterName(init.characterName);
 
         if (!walletSession) {
-            const pubkey = getStoredWalletPubkey();
-            const token = getStoredWalletToken();
-            if (pubkey && token) {
-                setConnectWalletSession({
-                    wallet: pubkey,
-                    token,
-                    expiresAt: Date.now() + 60 * 60 * 1000,
-                });
+            const reusable = getReusableHubWalletSession();
+            if (reusable) {
+                setConnectWalletSession(reusable);
             }
         }
     }, [isOpen, defaultCharacterName, lastAttempt, walletSession, host, port]);
@@ -371,11 +368,16 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 setReferralInfo(null);
                 const message = error instanceof Error ? error.message : 'Failed to load characters.';
                 console.warn('[ConnectDialog] Character list failed:', message);
-                // Toast only once per open cycle — effect can re-run on host/port/wallet churn.
+                const chain = walletSession.chainId;
+                if (!chain || chain === 'sol') {
+                    clearStoredWalletAuth();
+                    setConnectWalletSession(null);
+                }
+                setConnectGatePhase('hub');
                 EventBus.emit(TOAST_REQUESTED, {
-                    message,
+                    message: `${message} Use Reconnect / Sign again so Phantom can bind a fresh seal.`,
                     severity: 'warning',
-                    autoClose: 4000,
+                    autoClose: 6000,
                 });
             })
             .finally(() => {
@@ -666,7 +668,19 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         persistPreferredAuthChain(chainId);
         setAuthChain(chainId);
         try {
-            const session = await connectWalletAndAuthenticate(chainId);
+            const session = await connectWalletAndAuthenticate(chainId, {
+                forceFresh: chainId === 'sol',
+                onSignPending:
+                    chainId === 'sol'
+                        ? () => {
+                              EventBus.emit(TOAST_REQUESTED, {
+                                  message: PHANTOM_SIGN_PENDING_TOAST,
+                                  severity: 'info',
+                                  autoClose: 8000,
+                              });
+                          }
+                        : undefined,
+            });
             setConnectWalletSession(session);
             EventBus.emit(TOAST_REQUESTED, {
                 message: `Wallet connected (${chainId}): ${session.wallet.slice(0, 4)}…${session.wallet.slice(-4)}`,
@@ -711,16 +725,25 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     /** One click: chosen wallet sign (if needed) → classic SELECTCHAR desk. */
     const handleEnterWorldFromHub = async (chainOverride?: AuthChainId) => {
         setHubError(undefined);
+        const chain = chainOverride ?? authChain;
         let session = walletSession;
         let justAuthed = false;
-        if (!session) {
-            session = await handleWalletConnect(chainOverride ?? authChain);
+        // Phantom Sol always re-runs challenge+signMessage (Kind skips the popup if a stale token is reused).
+        const mustSign = chain === 'sol' || !session;
+        if (mustSign) {
+            session = await handleWalletConnect(chain);
             if (!session) {
                 return;
             }
             justAuthed = true;
         }
         enterPhaserDeskPhase('play-world', justAuthed);
+    };
+
+    /** Explicit Phantom/EVM rebind when Kind is unlocked but the sign popup never opened. */
+    const handleResignWallet = async () => {
+        setHubError(undefined);
+        await handleWalletConnect(authChain);
     };
 
     const handleEnterArenaFromHub = () => {
@@ -785,34 +808,32 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                             {walletShort && (
                                 <div className="login-gate-wallet-chip">Seal {walletShort}</div>
                             )}
-                            {!walletSession && (
-                                <div className="login-hub-wallet-pick" role="group" aria-label="Wallet chain">
-                                    <button
-                                        type="button"
-                                        className={`login-hub-wallet-pick-btn${authChain === 'sol' ? ' is-selected' : ''}`}
-                                        disabled={walletBusy}
-                                        onClick={() => setAuthChain('sol')}
-                                    >
-                                        Phantom
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`login-hub-wallet-pick-btn${authChain === 'rh' ? ' is-selected' : ''}`}
-                                        disabled={walletBusy}
-                                        onClick={() => setAuthChain('rh')}
-                                    >
-                                        RH Chain
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`login-hub-wallet-pick-btn${authChain === 'base' ? ' is-selected' : ''}`}
-                                        disabled={walletBusy}
-                                        onClick={() => setAuthChain('base')}
-                                    >
-                                        Base
-                                    </button>
-                                </div>
-                            )}
+                            <div className="login-hub-wallet-pick" role="group" aria-label="Wallet chain">
+                                <button
+                                    type="button"
+                                    className={`login-hub-wallet-pick-btn${authChain === 'sol' ? ' is-selected' : ''}`}
+                                    disabled={walletBusy}
+                                    onClick={() => setAuthChain('sol')}
+                                >
+                                    Phantom
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`login-hub-wallet-pick-btn${authChain === 'rh' ? ' is-selected' : ''}`}
+                                    disabled={walletBusy}
+                                    onClick={() => setAuthChain('rh')}
+                                >
+                                    RH Chain
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`login-hub-wallet-pick-btn${authChain === 'base' ? ' is-selected' : ''}`}
+                                    disabled={walletBusy}
+                                    onClick={() => setAuthChain('base')}
+                                >
+                                    Base
+                                </button>
+                            </div>
                             <button
                                 type="button"
                                 className="login-gate-primary-btn login-hub-path-cta"
@@ -821,9 +842,19 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                             >
                                 {walletBusy
                                     ? 'Binding seal…'
-                                    : walletSession
-                                      ? 'Enter Helbreath World'
-                                      : 'Bind seal & enter'}
+                                    : authChain === 'sol'
+                                      ? 'Bind Phantom & enter'
+                                      : walletSession
+                                        ? 'Enter Helbreath World'
+                                        : 'Bind seal & enter'}
+                            </button>
+                            <button
+                                type="button"
+                                className="login-gate-secondary-btn login-hub-resign-btn"
+                                disabled={walletBusy}
+                                onClick={() => void handleResignWallet()}
+                            >
+                                {walletBusy ? 'Waiting for Phantom…' : 'Reconnect / Sign again'}
                             </button>
                         </div>
 

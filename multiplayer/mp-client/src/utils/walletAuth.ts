@@ -14,7 +14,8 @@ export interface WalletSession {
 
 type PhantomProvider = {
     isPhantom?: boolean;
-    connect: () => Promise<{ publicKey: { toBase58: () => string } }>;
+    isConnected?: boolean;
+    connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toBase58: () => string } }>;
     signMessage: (
         message: Uint8Array,
         display?: string,
@@ -25,14 +26,20 @@ type PhantomProvider = {
     }>;
 };
 
+export const PHANTOM_SIGN_PENDING_TOAST = 'Approve the signature in the Phantom extension';
+
 type Eip1193Provider = {
     request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
     providers?: Eip1193Provider[];
 };
 
 function getPhantom(): PhantomProvider | undefined {
-    const w = window as Window & { solana?: PhantomProvider };
-    return w.solana?.isPhantom ? w.solana : undefined;
+    const w = window as Window & {
+        solana?: PhantomProvider;
+        phantom?: { solana?: PhantomProvider };
+    };
+    const injected = w.phantom?.solana ?? w.solana;
+    return injected?.isPhantom ? injected : undefined;
 }
 
 function getInjectedEvm(): Eip1193Provider | undefined {
@@ -103,31 +110,91 @@ export function getMiddlewareAuthUrl(): string {
     return DEFAULT_MIDDLEWARE_URL;
 }
 
+function readStoredGameState(): {
+    authToken?: string;
+    authExpiresAt?: number;
+    networkId?: string;
+    authChainId?: string;
+} | undefined {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    try {
+        const raw = localStorage.getItem('gameState');
+        if (!raw) {
+            return undefined;
+        }
+        return JSON.parse(raw) as {
+            authToken?: string;
+            authExpiresAt?: number;
+            networkId?: string;
+            authChainId?: string;
+        };
+    } catch {
+        return undefined;
+    }
+}
+
+function storedTokenIsExpired(expiresAt: number | undefined): boolean {
+    return typeof expiresAt === 'number' && expiresAt > 0 && expiresAt <= Date.now();
+}
+
 /** Returns the persisted wallet auth token when still valid. */
 export function getStoredWalletToken(): string | undefined {
     if (typeof window === 'undefined') {
         return undefined;
     }
 
+    const state = readStoredGameState();
+    const token = state?.authToken?.trim();
+    if (!token || storedTokenIsExpired(state?.authExpiresAt)) {
+        return undefined;
+    }
+    return token;
+}
+
+/** Chain last persisted with the seal (`sol` / `rh` / `base`). */
+export function getStoredAuthChainId(): AuthChainId | undefined {
+    const raw = readStoredGameState()?.authChainId;
+    return isAuthChainId(raw) ? raw : undefined;
+}
+
+/**
+ * Hub may reuse a verified EVM seal (RH / Base). Phantom Sol must never skip
+ * challenge+signMessage just because `localStorage.gameState` still holds a token.
+ */
+export function getReusableHubWalletSession(): WalletSession | undefined {
+    const token = getStoredWalletToken();
+    const wallet = getStoredWalletPubkey();
+    const chainId = getStoredAuthChainId();
+    if (!token || !wallet || !chainId || chainId === 'sol') {
+        return undefined;
+    }
+    const expiresAt = readStoredGameState()?.authExpiresAt;
+    return {
+        wallet,
+        token,
+        expiresAt:
+            typeof expiresAt === 'number' && expiresAt > Date.now()
+                ? expiresAt
+                : Date.now() + 24 * 60 * 60 * 1000,
+        chainId,
+    };
+}
+
+/** Drops persisted authToken so the next Phantom connect cannot reuse a stale seal. */
+export function clearStoredWalletAuth(): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
     try {
         const raw = localStorage.getItem('gameState');
-        if (!raw) {
-            return undefined;
-        }
-
-        const state = JSON.parse(raw) as { authToken?: string; authExpiresAt?: number };
-        const token = state.authToken?.trim();
-        if (!token) {
-            return undefined;
-        }
-
-        if (typeof state.authExpiresAt === 'number' && state.authExpiresAt > 0 && state.authExpiresAt <= Date.now()) {
-            return undefined;
-        }
-
-        return token;
-    } catch {
-        return undefined;
+        const existing = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        delete existing.authToken;
+        delete existing.authExpiresAt;
+        localStorage.setItem('gameState', JSON.stringify(existing));
+    } catch (err) {
+        console.warn('[walletAuth] Failed to clear stored wallet auth', err);
     }
 }
 
@@ -204,12 +271,17 @@ async function requestChallenge(
 
 async function signChallengeMessage(phantom: PhantomProvider, message: string) {
     const encoded = new TextEncoder().encode(message);
-    return phantom.request
-        ? phantom.request({
+    // Prefer signMessage — Kind/Chrome injects `request` but that path often skips the popup.
+    if (typeof phantom.signMessage === 'function') {
+        return phantom.signMessage(encoded, 'utf8');
+    }
+    if (phantom.request) {
+        return phantom.request({
             method: 'signMessage',
             params: { message: encoded, display: 'utf8' },
-        })
-        : phantom.signMessage(encoded, 'utf8');
+        });
+    }
+    throw new Error('Phantom wallet cannot sign messages');
 }
 
 async function verifySignature(
@@ -545,23 +617,32 @@ function readDeepLinkFromUrl(stripFromAddressBar: boolean): WalletDeepLink | nul
     };
 }
 
-async function connectSolanaAndAuthenticate(): Promise<WalletSession> {
+export type ConnectWalletAuthOptions = {
+    /** Drop any cached token before challenge (always on for Phantom Sol). */
+    forceFresh?: boolean;
+    /** Fired after connect() once signMessage is waiting on the extension UI. */
+    onSignPending?: () => void;
+};
+
+async function connectSolanaAndAuthenticate(onSignPending?: () => void): Promise<WalletSession> {
     const phantom = getPhantom();
     if (!phantom) {
         throw new Error('Phantom wallet not found. Install it from phantom.app');
     }
 
-    const { publicKey } = await phantom.connect();
+    const { publicKey } = await phantom.connect({ onlyIfTrusted: false });
     let wallet = publicKey.toBase58();
     const middlewareUrl = getMiddlewareAuthUrl();
 
     let challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
+    onSignPending?.();
     let signed = await signChallengeMessage(phantom, challengeBody.message);
     const signedWallet = signed.publicKey?.toBase58?.() ?? wallet;
 
     if (signedWallet !== wallet) {
         wallet = signedWallet;
         challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
+        onSignPending?.();
         signed = await signChallengeMessage(phantom, challengeBody.message);
     }
 
@@ -614,14 +695,18 @@ async function connectEvmAndAuthenticate(chainId: 'rh' | 'base'): Promise<Wallet
 
 /**
  * Connect + challenge + verify for `sol` (Phantom), `rh`, or `base` (EIP-1193 personal_sign).
- * Reuses existing `/auth/challenge` and `/auth/verify`. No RPC required for verify.
+ * Phantom Sol always clears a stale token and requires a fresh signMessage.
  */
 export async function connectWalletAndAuthenticate(
     chainId: AuthChainId = 'sol',
+    options?: ConnectWalletAuthOptions,
 ): Promise<WalletSession> {
     persistPreferredAuthChain(chainId);
+    if (chainId === 'sol' || options?.forceFresh) {
+        clearStoredWalletAuth();
+    }
     const session = chainId === 'sol'
-        ? await connectSolanaAndAuthenticate()
+        ? await connectSolanaAndAuthenticate(options?.onSignPending)
         : await connectEvmAndAuthenticate(chainId);
     persistWalletSession(session);
     return session;

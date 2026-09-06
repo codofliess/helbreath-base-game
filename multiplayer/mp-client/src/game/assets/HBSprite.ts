@@ -3,6 +3,7 @@ import { EventBus } from '../EventBus';
 import type { PivotFrame, PivotData } from '../../Types';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../../constants/EventNames';
 import { getBinaryBuffer, setPivotDataByTextureKey, setPivotDataBySpriteName } from '../../utils/RegistryUtils';
+import { sliceSprSheets } from '../../utils/sprSheetSlice';
 import { ITEMS, getItemSheetIndex, getItemSpriteIndex, getTintInventoryEffectColor } from '../../constants/Items';
 import { Gender } from '../../Types';
 
@@ -448,27 +449,6 @@ export class HBAnimation {
     }
 }
 
-/** Size of the header in bytes (sprite count) */
-const HEADER_SIZE = 2;
-
-/**
- * Reads a 16-bit signed integer from a DataView in little-endian format.
- * 
- * @param view - The DataView to read from
- * @param offset - The byte offset to read from
- * @returns The 16-bit signed integer value
- */
-const readInt16 = (view: DataView, offset: number) => view.getInt16(offset, true);
-
-/**
- * Reads a 32-bit signed integer from a DataView in little-endian format.
- * 
- * @param view - The DataView to read from
- * @param offset - The byte offset to read from
- * @returns The 32-bit signed integer value
- */
-const readInt32 = (view: DataView, offset: number) => view.getInt32(offset, true);
-
 /**
  * Represents a Helbreath sprite file containing one or more sprite sheets.
  * Handles loading, parsing, and registering sprite sheets and animations with Phaser.
@@ -530,18 +510,13 @@ export class HBSpriteFile {
         
         // Extract sprite name from file name
         const spriteName = this.fileName.toLowerCase();
-        
-        const parsedSprites = this.parseSprite(buffer, spriteName, this.tileStartIndex);
-        
-        // Process each sprite sheet
-        const spriteSheets: HBSpriteSheet[] = [];
         const sheetFilter = options?.sheetIndices;
-        
-        for (let spriteSheetIndex = 0; spriteSheetIndex < parsedSprites.length; spriteSheetIndex++) {
-            if (sheetFilter && !sheetFilter.has(spriteSheetIndex)) {
-                continue;
-            }
-            const parsedSprite = parsedSprites[spriteSheetIndex];
+        const slices = sliceSprSheets(buffer, sheetFilter);
+
+        const spriteSheets: HBSpriteSheet[] = [];
+
+        for (const slice of slices) {
+            const spriteSheetIndex = slice.sheetIndex;
             const useCustomNaming = this.spriteType === SpriteType.Tiles && this.tileStartIndex !== undefined;
             const customTextureKey = useCustomNaming ? `map-tile-${this.tileStartIndex + spriteSheetIndex}` : undefined;
             const textureKey = customTextureKey ?? `${spriteName}-${spriteSheetIndex}`;
@@ -549,29 +524,39 @@ export class HBSpriteFile {
                 continue;
             }
 
-            const spriteSheetImage = await this.createImageFromPng(parsedSprite.imageData);
-            
+            const frames = slice.frames.map(
+                (frame, f) =>
+                    new HBSpriteFrame(
+                        frame.x,
+                        frame.y,
+                        frame.width,
+                        frame.height,
+                        frame.pivotX,
+                        frame.pivotY,
+                        textureKey,
+                        f,
+                    ),
+            );
+
+            const spriteSheetImage = await this.createImageFromPng(slice.png);
+
             try {
-                // Frames are already SpriteFrame instances from parseSprite
-                const frames = parsedSprite.frames;
-                
-                // Create SpriteSheet with all frames and sprite sheet image
-                // This will create the texture and slice it into frames
                 const spriteSheet = new HBSpriteSheet(
-                    scene, 
-                    spriteName, 
-                    spriteSheetIndex, 
-                    frames, 
-                    spriteSheetImage, 
+                    scene,
+                    spriteName,
+                    spriteSheetIndex,
+                    frames,
+                    spriteSheetImage,
                     this.exportFramesAsDataUrls,
                     this.spriteType === SpriteType.Tiles,
-                    customTextureKey
+                    customTextureKey,
                 );
                 spriteSheets.push(spriteSheet);
             } finally {
-                // Clean up sprite sheet image
                 spriteSheetImage.close();
             }
+            // Yield so Canvas-first Chrome can GC ImageBitmaps between tile sheets (enter OOM).
+            await new Promise((resolve) => setTimeout(resolve, 0));
         }
         
         // Populate spriteSheets
@@ -649,9 +634,7 @@ export class HBSpriteFile {
      */
     private async createImageFromPng(data: Uint8Array): Promise<DecodedSpriteImage> {
         try {
-            const imageBytes = new Uint8Array(data.byteLength);
-            imageBytes.set(data);
-            const blob = new Blob([imageBytes], { type: 'image/png' });
+            const blob = new Blob([data], { type: 'image/png' });
             const imageBitmap = await createImageBitmap(blob);
             return {
                 source: imageBitmap,
@@ -663,92 +646,4 @@ export class HBSpriteFile {
             throw new Error(`Failed to decode sprite PNG: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-
-    /**
-     * Parses a Helbreath sprite file from binary data.
-     * The format consists of:
-     * - Header: sprite count (2 bytes)
-     * - For each sprite: frame count, image length, dimensions, and frame metadata
-     * - PNG image data for each sprite sheet
-     * 
-     * @param buffer - The binary data of the sprite file
-     * @param spriteName - The name of the sprite (used for texture keys)
-     * @param tileStartIndex - Optional starting index for tile texture naming
-     * @returns Array of objects containing sprite frames and PNG image data for each sprite sheet
-     */
-    private parseSprite(buffer: ArrayBuffer, spriteName: string, tileStartIndex?: number): Array<{ frames: HBSpriteFrame[]; imageData: Uint8Array }> {
-        const view = new DataView(buffer);
-        let offset = 0;
-    
-        const spriteCount = readInt16(view, offset);
-        offset += HEADER_SIZE;
-    
-        const spriteFramesBySheet = new Array<HBSpriteFrame[]>(spriteCount);
-        const imageLengths = new Array<number>(spriteCount);
-    
-        for (let i = 0; i < spriteCount; i += 1)
-        {
-            const frameCount = readInt16(view, offset);
-            offset += 2;
-    
-            const imageLength = readInt32(view, offset);
-            offset += 4;
-            imageLengths[i] = imageLength;
-    
-            offset += 4; // width (unused in parser)
-            offset += 4; // height (unused in parser)
-            offset += 1; // startLocation placeholder byte
-    
-            const textureKey = tileStartIndex !== undefined
-                ? `map-tile-${tileStartIndex + i}`
-                : `${spriteName}-${i}`;
-            const frames = new Array<HBSpriteFrame>(frameCount);
-    
-            for (let f = 0; f < frameCount; f += 1)
-            {
-                const left = readInt16(view, offset);
-                offset += 2;
-                const top = readInt16(view, offset);
-                offset += 2;
-                const width = readInt16(view, offset);
-                offset += 2;
-                const height = readInt16(view, offset);
-                offset += 2;
-                const pivotX = readInt16(view, offset);
-                offset += 2;
-                const pivotY = readInt16(view, offset);
-                offset += 2;
-    
-                frames[f] = new HBSpriteFrame(
-                    left,
-                    top,
-                    width,
-                    height,
-                    pivotX,
-                    pivotY,
-                    textureKey,
-                    f
-                );
-            }
-    
-            spriteFramesBySheet[i] = frames;
-        }
-    
-        const sprites = new Array<{ frames: HBSpriteFrame[]; imageData: Uint8Array }>(spriteCount);
-    
-        for (let i = 0; i < spriteCount; i += 1)
-        {
-            offset += 4; // startLocation, not needed for sequential read
-            const imageLength = imageLengths[i];
-            const imageData = new Uint8Array(buffer, offset, imageLength);
-            offset += imageLength;
-    
-            sprites[i] = {
-                frames: spriteFramesBySheet[i],
-                imageData
-            };
-        }
-    
-        return sprites;
-    };
 }

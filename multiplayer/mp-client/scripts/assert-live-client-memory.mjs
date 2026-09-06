@@ -176,8 +176,22 @@ assert(
         /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
         /scene\.game\.renderer\.type === CANVAS/.test(hbSprite) &&
         /sheetIndices/.test(hbSprite) &&
-        /Partial tile-sheet loads keep it/.test(hbSprite),
+        /Partial tile-sheet loads keep it/.test(hbSprite) &&
+        /Yield so Canvas-first Chrome can GC ImageBitmaps/.test(hbSprite) &&
+        /sliceSprSheets/.test(hbSprite),
     'HBSprite must not upload VideoFrames then close them; tile packs decode only requested sheets',
+);
+
+const sprSheetSlice = read('src/utils/sprSheetSlice.ts');
+assert(
+    /export function sliceSprSheets/.test(sprSheetSlice) &&
+        /png: new Uint8Array\(buffer\.slice/.test(sprSheetSlice),
+    'sliceSprSheets must copy only requested sheet PNGs (not views of the full .spr)',
+);
+
+assert(
+    /createBlankLayer/.test(hbMap) && /Never creates one Phaser tilemap per world row/.test(hbMap),
+    'HBMap must use one streamed Tilemap (createBlankLayer per Y), not one Tilemap per row',
 );
 
 assert(

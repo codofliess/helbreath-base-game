@@ -122,6 +122,30 @@ describe('mapViewportStream', () => {
         assert.equal(mapTileRectsEqual(rect, rect), true);
     });
 
+    it('standing on enter rect must not restream just because walk-ring is 8 vs enter-ring 4', () => {
+        const painted = initialFocusStreamRect(149, 131, 300, 300);
+        const neededWalkRing = cameraStreamTileRect({
+            scrollX: 149 * 32 - 512,
+            scrollY: 131 * 32 - 288,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+            ringTiles: MAP_STREAM_RING_TILES,
+        });
+        assert.equal(shouldRefreshMapStream(painted, neededWalkRing), false);
+        const far = cameraStreamTileRect({
+            scrollX: 185 * 32,
+            scrollY: 117 * 32,
+            viewWidthPx: 1024,
+            viewHeightPx: 576,
+            zoom: 1,
+            mapSizeX: 300,
+            mapSizeY: 300,
+        });
+        assert.equal(shouldRefreshMapStream(painted, far), true);
+    });
     it('walking one cell inside the painted cap does not restream', () => {
         const spawn = { scrollX: 149 * 32, scrollY: 131 * 32, viewWidthPx: 1024, viewHeightPx: 576, zoom: 1, mapSizeX: 300, mapSizeY: 300 };
         const painted = paintStreamTileRect(spawn);

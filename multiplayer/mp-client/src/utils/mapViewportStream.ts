@@ -17,6 +17,12 @@ export const MAP_STREAM_RING_TILES = 8;
 export const MAP_ENTER_RING_TILES = 4;
 
 /**
+ * Do not rebuild the tileset because walk-ring (8) is a few cells larger than enter-ring (4).
+ * That false restream after a brief stand (56×40 + tree shadows) Aw Snapped before the pad.
+ */
+export const MAP_STREAM_REFRESH_SLACK_TILES = 10;
+
+/**
  * Maximum streamed window. A tiny camera zoom (or a full-map minimap snapshot) must not expand
  * this to the whole world.
  */
@@ -196,9 +202,31 @@ export function paintStreamTileRect(input: CameraStreamInput): MapTileRect {
     );
 }
 
-/** True when the camera+ring is no longer inside the last painted cap (walk far enough to restream). */
-export function shouldRefreshMapStream(painted: MapTileRect | undefined, needed: MapTileRect): boolean {
-    return !painted || !mapTileRectContains(painted, needed);
+/** True when the camera+ring has moved far enough outside the painted window to restream. */
+export function shouldRefreshMapStream(
+    painted: MapTileRect | undefined,
+    needed: MapTileRect,
+    slackTiles = MAP_STREAM_REFRESH_SLACK_TILES,
+): boolean {
+    if (!painted) {
+        return true;
+    }
+    if (mapTileRectContains(painted, needed)) {
+        return false;
+    }
+    const slack = Math.max(0, slackTiles);
+    if (slack === 0) {
+        return true;
+    }
+    return !mapTileRectContains(
+        {
+            minX: painted.minX - slack,
+            minY: painted.minY - slack,
+            maxX: painted.maxX + slack,
+            maxY: painted.maxY + slack,
+        },
+        needed,
+    );
 }
 
 /** Phaser `map-tile-{globalIndex}` keys that are outside the current stream keep-set. */

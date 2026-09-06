@@ -37,6 +37,7 @@ const monsterAssets = read('src/utils/MonsterAssets.ts');
 const npcAssets = read('src/utils/NpcAssets.ts');
 const effectAssets = read('src/utils/EffectAssets.ts');
 const itemIconAssets = read('src/utils/ItemIconAssets.ts');
+const itemAssets = read('src/utils/ItemAssets.ts');
 const bootCatalog = read('src/utils/bootCatalog.ts');
 const entitySheetFilter = read('src/utils/entitySheetFilter.ts');
 const gameAsset = read('src/game/objects/GameAsset.ts');
@@ -67,6 +68,14 @@ assert(
 assert(
     /config\.spriteSheetIndex/.test(effectAssets),
     'EffectAssets must decode only the VFX sheet used by the config',
+);
+
+assert(
+    /SETTLE_APPEARANCE_SHEETS/.test(itemAssets) &&
+        /sheetIndices: new Set\(stillMissing\)/.test(itemAssets) &&
+        /playerItemAppearanceDecodeAllowed/.test(itemAssets) &&
+        !/hbFile\.load\(scene\);/.test(itemAssets),
+    'ItemAssets must decode idle appearance sheets only after settle, never the full .spr on enter',
 );
 
 assert(
@@ -207,6 +216,7 @@ assert(
     /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
         /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
         /MAP_ENTER_RING_TILES = 4/.test(mapViewportStream) &&
+        /MAP_STREAM_REFRESH_SLACK_TILES = 10/.test(mapViewportStream) &&
         /ringTiles: MAP_ENTER_RING_TILES/.test(mapViewportStream) &&
         /export function cameraStreamTileRect/.test(mapViewportStream) &&
         /export function paintStreamTileRect/.test(mapViewportStream) &&
@@ -348,8 +358,12 @@ assert(
         /tickMapSetupWatchdog/.test(gameWorld) &&
         /noteMapSetupProgress/.test(gameWorld) &&
         /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
-        /delayedCall\(4000/.test(gameWorld) &&
+        /delayedCall\(8000/.test(gameWorld) &&
+        /delayedCall\(9000/.test(gameWorld) &&
         /delayedCall\(10000/.test(gameWorld) &&
+        /delayedCall\(14000/.test(gameWorld) &&
+        /setPlayerItemAppearanceDecodeAllowed\(false\)/.test(gameWorld) &&
+        /setPlayerItemAppearanceDecodeAllowed\(true\)/.test(gameWorld) &&
         /displayedMap \|\| this\.pendingLoadedMap \|\| this\.mapPrepareInFlight/.test(gameWorld),
     'GameWorld must fail-soft map timeout without retrying a painted map, delay NPC decode, and delay HUD packs',
 );

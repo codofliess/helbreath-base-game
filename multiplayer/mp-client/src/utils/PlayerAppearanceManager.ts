@@ -25,6 +25,7 @@ import {
 import { olympiaItemColorToSpriteTint } from '../constants/OlympiaItemName';
 import {
     arePlayerItemAppearanceLoaded,
+    isPlayerItemAppearanceDecodeAllowed,
     loadPlayerItemAppearanceOnDemand,
 } from './ItemAssets';
 import type { ShadowManager } from './ShadowManager';
@@ -400,8 +401,12 @@ export class PlayerAppearanceManager {
     }
 
     /** Start HTTP fetch for every equipped-appearance layer still on the placeholder texture. */
+    public startPendingItemAppearanceLoads(): void {
+        this.kickOffAllPendingItemAppearanceLoads();
+    }
+
     private kickOffAllPendingItemAppearanceLoads(): void {
-        if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+        if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !isPlayerItemAppearanceDecodeAllowed()) {
             return;
         }
         const seen = new Set<string>();
@@ -1152,6 +1157,12 @@ export class PlayerAppearanceManager {
     private scheduleLazyItemAppearanceIfNeeded(sprite: string, asset: GameAsset): boolean {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
             return false;
+        }
+        if (!isPlayerItemAppearanceDecodeAllowed()) {
+            if (!asset.isPendingLazyPlayerItemAppearance()) {
+                asset.retargetPlayerItemAppearanceToPending(this.scene);
+            }
+            return true;
         }
         if (!getItemEquippedAppearanceSpriteNames().has(sprite)) {
             return false;

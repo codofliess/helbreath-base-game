@@ -49,7 +49,10 @@ import { MapManager } from '../../utils/MapManager';
 import { loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
-import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
+import {
+    loadPlayerItemAppearanceOnDemand,
+    setPlayerItemAppearanceDecodeAllowed,
+} from '../../utils/ItemAssets';
 import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
 import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
@@ -504,6 +507,7 @@ export class GameWorld extends Scene {
             this.mapStreamWalkEnabled = false;
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
+            setPlayerItemAppearanceDecodeAllowed(false);
             this.clearMapSetupWatchdog();
 
             this.loadingOverlayController = new LoadingOverlayController(this);
@@ -2443,24 +2447,28 @@ export class GameWorld extends Scene {
         if (this.player) {
             this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
         }
-        // Saved zoom + tree sprites + NPC idle packs after first paint so Canvas can GC.
+        // After brief stand: do not dump trees+56×40 restream+NPCs+full gear in one beat.
         this.time.delayedCall(400, () => {
             this.cameraManager?.setZoom(cameraZoom);
         });
-        this.time.delayedCall(2500, () => {
+        this.time.delayedCall(5000, () => {
             void this.enableTreesAfterFirstPaint();
         });
-        this.time.delayedCall(4000, () => {
+        this.time.delayedCall(8000, () => {
             this.worldReadyForEntities = true;
             this.syncMonstersFromNetworkState();
-            this.syncNpcsFromNetworkState();
             this.syncGroundStatesFromNetworkState();
             this.syncOtherPlayersFromNetworkState();
         });
-        this.time.delayedCall(6000, () => {
-            this.startDeferredAppearancePrefetch();
+        this.time.delayedCall(9000, () => {
+            this.syncNpcsFromNetworkState();
         });
         this.time.delayedCall(10000, () => {
+            setPlayerItemAppearanceDecodeAllowed(true);
+            this.player?.startPendingEquippedAppearanceLoads();
+            this.startDeferredAppearancePrefetch();
+        });
+        this.time.delayedCall(14000, () => {
             void loadWorldDeferredSprites(this).catch((error) => {
                 console.warn('[GameWorld] Deferred HUD sprites failed', error);
             });

@@ -1,9 +1,9 @@
 # Sketch — multi-chain auth adapter (Sol / RH / Base)
 
-**Status:** interfaces + sequence only. **No implementation in this PR.**  
+**Status:** implemented in middleware-node (`sol` ed25519, `rh`+`base` EIP-191 `personal_sign`). Login verify is offline — **no chain RPC required** for challenge/verify.  
 **Normative product lock:** [`ADR-001-MULTICHAIN-AUTH.md`](./ADR-001-MULTICHAIN-AUTH.md).
 
-**Next PR (middleware-only, small):** implement challenge + bind for **Sol + RH** first; **Base stub** (same EVM types, verifier returns “not implemented”). Do not change landing HTML or secrets/`.env` in that PR either unless ops explicitly adds keys.
+Live env + deploy: [`LIVE-MULTIWALLET-AUTH.md`](./LIVE-MULTIWALLET-AUTH.md).
 
 **Mining rewards mechanism: OPEN** (ADR Consequences / Out of scope). This adapter does not issue play-mine claims, ExactOut buybacks, or a `$HELL` mining-vault settle. Token registry stays in the ADR: RH `$HELBREATH` = stake/consumibles; Sol `$HELL` = listing/liquidity secondary.
 
@@ -58,7 +58,7 @@ Invariants:
 Fail-closed GO. Implement these in the next code PR; do not weaken them.
 
 1. **Signed message composition.** `AuthChallenge.message` MUST explicitly include `chainId` + `challengeId` + expiry. Verifier checks the recovered signature against that exact string. A Sol signature must not satisfy an RH challenge (and vice versa); a reused `challengeId` after expiry or consume is deny.
-2. **EVM address per chain.** The same `0x` address on `rh` and `base` is two separate `WalletBinding` rows. `UNIQUE` is `(chainId, address)`, not `address` alone. Binding RH does not imply Base (Base remains stub until its verifier ships).
+2. **EVM address per chain.** The same `0x` address on `rh` and `base` is two separate `WalletBinding` rows. `UNIQUE` is `(chainId, address)`, not `address` alone. Binding RH does not imply Base.
 3. **Actor enrollment.** Public register defaults to `human`. Bot enrollment is a **gated + rate-limited** route (admin or dedicated enroll), not a flag the client can set on verify. Signature alone cannot flip `actorKind` or attach to another `playerId`.
 
 ---
@@ -69,7 +69,7 @@ Middleware (SoT) owns these ports. Game server validates the issued session; it 
 
 ```ts
 interface ChallengeIssuer {
-  /** Fail-closed if chain RPC/config required for this chain is missing. */
+  /** Login issue is offline (no RPC). Fail-closed on address/chainId shape only. */
   issue(chainId: ChainId, address: string): Promise<AuthChallenge>;
 }
 
@@ -112,11 +112,11 @@ interface PlayerSoT {
 
 Per-chain `SignatureVerifier` instances:
 
-| Chain | Verifier | First impl PR |
-|-------|----------|----------------|
-| `sol` | ed25519 over Phantom login message | **implement** |
-| `rh` | EVM (personal_sign / EIP-191) over challenge message | **implement** |
-| `base` | same EVM interface | **stub** (`501` / deny) |
+| Chain | Verifier | Status |
+|-------|----------|--------|
+| `sol` | ed25519 over Phantom login message | **live** |
+| `rh` | EVM (personal_sign / EIP-191) over challenge message | **live** |
+| `base` | same EVM interface as RH (`chainId=base` in the signed message) | **live** |
 
 ---
 
@@ -181,9 +181,9 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
 |-----------|-----------------------------------------------|-----------|
 | `WALLET_AUTH_SECRET` missing | **Deny** (no tokens, no verify success). Never `ALLOW_INSECURE_AUTH=1`. | Deny unless explicitly local-only exception already documented in prelaunch hardening — **not** for RH/Base public traffic. |
 | `MARKET_SYNC_SECRET` missing | **Deny** market sync / side door. | Same fail-closed if those routes are hit. |
-| Sol RPC key/url missing when Sol verify needs RPC | **Deny** `sol` challenge/verify (do not skip signature check). | Deny that chain. |
-| RH RPC key/url missing when RH verify needs RPC | **Deny** `rh` challenge/verify. | Deny that chain. |
-| Base stub | **Deny** `base` verify (`not implemented`). | Deny. |
+| Sol RPC key/url missing | **Not required for SIWS login** (offline ed25519). Required for mint/drops only. | Same. |
+| RH / Base RPC | **Not required for login** (offline EIP-191 `personal_sign`). | Same. |
+| Base verify | Same EIP-191 path as RH; fail-closed on bad/expired challenge. | Same. |
 | Challenge `message` missing `chainId` / `challengeId` / expiry | **Deny** verify (do not accept legacy challenge-only strings in prod). | Deny. |
 | Challenge expired / reused | **Deny**. | Deny. |
 | Signature valid but `actorKind` in body | **Ignore body**; use SoT. Attempt to change kind → **Deny** unless gated bot-enroll. | Same. |
@@ -194,12 +194,12 @@ No double-mint / ownership races: persist bind with `INSERT … UNIQUE (chain_id
 
 ---
 
-## Explicit next PR
+## Implementation status
 
-**Middleware-only, small:**
+Shipped in middleware-node + traveler hub + landing Play Now:
 
-1. Generalize challenge issue to `(chainId, address)` without a shared signing secret across chains. **`message` includes `chainId` + `challengeId` + expiry.**
-2. Keep Sol ed25519 verifier; add RH EVM verifier.
-3. Player SoT + bind: `playerId`, `actorKind`, unique `(chainId, address)` bindings (rh vs base `0x` are separate); session JWT/cookie with `playerId + actorKind + boundChains`. Public register = `human`; **bot enroll gated + rate-limited**.
-4. **Base:** types + route stub that fail-closes.
-5. No landing HTML. No secrets/`.env` in git. No arenas / US migrate / ExactOut buyback or airdrop / mining-vault settle. **Mining rewards mechanism: OPEN.**
+1. Challenge issue is `(chainId, address)` with no shared signing secret across chains. **`message` includes `chainId` + `challengeId` + expiry.**
+2. Sol ed25519 + RH/Base EIP-191 `personal_sign` (offline; no RPC).
+3. Player SoT + bind: `playerId`, `actorKind`, unique `(chainId, address)` bindings (rh vs base `0x` are separate); HMAC session v2 with `playerId + actorKind + boundChains`. Public register = `human`; **bot enroll gated + rate-limited**.
+4. Landing/client: Phantom (`sol`), injected EVM for `rh` and `base`.
+5. No arenas / US migrate / ExactOut buyback. **Mining rewards mechanism: OPEN.**

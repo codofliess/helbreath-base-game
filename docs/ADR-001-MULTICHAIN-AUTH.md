@@ -43,7 +43,7 @@ Copy constraint for all product/comms that mention the primary token: say **“R
 |-----------|----------------|--------------|
 | `sol` | Challenge-response, ed25519 (Phantom) | Base58 pubkey |
 | `rh` | Challenge-response, EVM personal-sign / equivalent | EIP-55 checksum `0x…` |
-| `base` | Same EVM verifier as RH (stub in first impl PR) | EIP-55 checksum `0x…` |
+| `base` | Same EVM verifier as RH (EIP-191 `personal_sign`, live) | EIP-55 checksum `0x…` |
 
 A player **may bind multiple wallets** (any mix of chains) to **one** `playerId`. Binding is an authenticated SoT write, not “whoever signs this address owns that character.”
 
@@ -78,7 +78,7 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 1. **Per-chain challenge-response.** Challenge is issued for `(chainId, address)`. Verifier is chain-specific. No shared secret across chains; HMAC `WALLET_AUTH_SECRET` only signs **server-issued sessions**, never player keys.
 2. **Anti-replay (signed message).** `AuthChallenge.message` **MUST** explicitly include `chainId` + `challengeId` + expiry so a signature cannot be replayed across protocols/chains.
-3. **Secrets fail-closed.** Missing `WALLET_AUTH_SECRET`, `MARKET_SYNC_SECRET`, or required chain RPC keys → **deny**. Never `ALLOW_INSECURE_AUTH=1` in production (matches [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md)).
+3. **Secrets fail-closed.** Missing `WALLET_AUTH_SECRET` or `MARKET_SYNC_SECRET` → **deny**. Login verify does not require chain RPC. Never `ALLOW_INSECURE_AUTH=1` in production (matches [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md)).
 4. **Bind without races.** Unique `(chainId, address)` → at most one `playerId` **on that chain**. Same `0x` on `rh` vs `base` = two binds. Bind/login is transactional (lease or unique constraint); concurrent bind of the same `(chainId, address)` cannot mint two players or steal an existing one.
 5. **`human|bot` not forgeable via signature.** Verifier output is `{ chainId, address }`. SoT applies `actorKind` from the player row (or registration/admin input), never from client-claimed flags. Public register → `human`; bot enroll is gated + rate-limited.
 6. **No impersonation.** Login of a bound wallet resumes that `playerId`. Unbound wallet may **create** a new player (with `actorKind` from registration path) or **bind** to the **currently authenticated** session’s `playerId` — not to an arbitrary id supplied in the body.
@@ -102,14 +102,14 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 **Operational**
 
-- Production must have `WALLET_AUTH_SECRET` and `MARKET_SYNC_SECRET` (and RH/Sol RPC as those verifiers go live). Misconfig = 503/deny, not open auth.
+- Production must have `WALLET_AUTH_SECRET` and `MARKET_SYNC_SECRET`. Login verify for Sol/RH/Base is **offline** (ed25519 / EIP-191); **no RH/Base RPC is required** for `personal_sign`. Solana RPC remains for mint/drops, not SIWS. Misconfig = 503/deny, not open auth.
 - Session payload must carry `playerId`, `actorKind`, and the set of bound chains so the game server does not trust a raw wallet string as identity.
 - NFT and stake features must resolve **player → bound address on that chain**, not “whichever wallet the client sent.”
 
 **Risks / follow-ups**
 
-- First code PR implements challenge + bind for **Sol + RH** only; Base verifier is a stub (see sketch).
-- That PR must honor Cruchi notes: signed `message` includes `chainId` + `challengeId` + expiry; `rh`/`base` same `0x` = two binds; public register `human`, bot enroll gated + rate-limited.
+- Base challenge+verify is live (same EIP-191 path as RH). Same `0x` on `rh` vs `base` remains two binds.
+- Cruchi notes: signed `message` includes `chainId` + `challengeId` + expiry; public register `human`, bot enroll gated + rate-limited.
 - Existing Sol-only tokens (`X-Wallet-Token` keyed by wallet) must migrate to player-scoped sessions in that PR — not in this docs PR.
 
 ---
@@ -123,7 +123,7 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 | **Do not promote** | Solana | (legacy mint) | `A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ` | Retired Path mint. Do not use in UI, posts, or auth examples. |
 | NFT collection | `sol` | Helbreath collection | (existing Sol collection mints / trees — ops runbook) | Bound via Sol wallet on `playerId`. |
 | NFT collection | `rh` | Helbreath collection | (RH collection contract when deployed) | Same player; no double-mint vs Sol/Base. |
-| NFT collection | `base` | Helbreath collection | (Base collection contract when deployed) | Stub until Base auth ships. |
+| NFT collection | `base` | Helbreath collection | (Base collection contract when deployed) | Bound via Base wallet on `playerId`. |
 | **Mining rewards mechanism** | — | — | — | **OPEN** / deferred. Not a rail. Not ExactOut buyback. Not a fixed `$HELL` mining-vault settle. |
 
 Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63FEb8663171529` (see sketch). Token **registry** (stake vs listing contracts) is locked; mining-settle is not.
@@ -139,5 +139,5 @@ Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63
 | **ExactOut airdrop / ExactOut buyback** | Not the product path. Out of this ADR; do not implement as mining settle. |
 | **Mining / play-mine claim / ~30% supply buy for rewards** | **OPEN.** Not locked. Do not treat a fixed `$HELL` mining-vault settle as decided. |
 | **Play-incentive redesign** (rewards that are not token farming) | TBD by Martín later; deferred from this ADR. |
-| Middleware implementation | Next PR: challenge + bind for Sol + RH; Base stub. This ADR is docs only. |
+| Middleware implementation | Challenge+bind for Sol + RH + Base is in middleware-node; this ADR remains the product lock. |
 | Landing HTML, secrets, `.env` | Unchanged by this decision record. |

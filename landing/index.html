@@ -95,7 +95,7 @@
               type="button"
               id="play-now-world"
               class="play-now-btn"
-              title="Play Helbreath World — connect Phantom wallet"
+              title="Play Helbreath World — Phantom, RH Chain, or Base wallet"
               aria-label="Play now — Helbreath World"
               data-i18n-title="playTitle"
               data-i18n-aria="playAria"
@@ -103,6 +103,10 @@
               <span class="play-now-btn-label" data-i18n="playNow">Play Now</span>
             </button>
             <p id="play-now-status" class="play-now-status" aria-live="polite"></p>
+            <div class="play-chain-row" role="group" aria-label="Other wallets">
+              <button type="button" class="play-chain-btn" id="play-now-rh">RH Chain wallet</button>
+              <button type="button" class="play-chain-btn" id="play-now-base">Base wallet</button>
+            </div>
 
             <div class="realm-stats" aria-live="polite">
               <p class="online-count"><span data-i18n="statPlayers4h">Players ON in last 4hs</span>: <span id="stat-online-4h">0</span></p>
@@ -305,13 +309,19 @@
             </div>
             <div class="postcontent">
               <p class="play-intro">
-                Click <strong>Play Now</strong> (left panel or below), connect
-                <strong>Phantom</strong>, and enter the character list — up to four heroes under
-                Aresden and Elendiel.
+                Click <strong>Play Now</strong> (Phantom / Solana), <strong>RH Chain wallet</strong>, or
+                <strong>Base wallet</strong> — then enter the character list (up to four heroes under
+                Aresden and Elendiel). Login is a signature only; no funds move until you choose to spend.
               </p>
               <p class="cta-row">
                 <button type="button" class="cta-primary" id="play-now-world-secondary">
-                  Play Now — Wallet Login
+                  Play Now — Phantom
+                </button>
+                <button type="button" class="cta-primary" id="play-now-rh-secondary">
+                  RH Chain wallet
+                </button>
+                <button type="button" class="cta-primary" id="play-now-base-secondary">
+                  Base wallet
                 </button>
               </p>
 
@@ -343,8 +353,9 @@
                     <strong>never</strong> ask for them.
                   </li>
                   <li>
-                    <strong>Unlock Phantom → Play Now</strong> on this site → approve the signature
-                    (login only; no spend until you choose to). You land on the character list.
+                    <strong>Unlock your wallet → Play Now</strong> (Phantom, RH Chain, or Base) → approve
+                    the signature (login only; no spend until you choose to). You land on the character list.
+                    RH Chain and Base use an injected EVM wallet (<code>personal_sign</code>); Phantom is Solana.
                   </li>
                   <li>
                     Optional: pin Phantom, use a strong device password / hardware wallet for larger

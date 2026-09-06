@@ -7060,6 +7060,43 @@ body:not(.game-world-active):not(.helbreath-game-active) .testnet-hud {
     cursor: default;
 }
 
+.login-hub-wallet-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 10px;
+    justify-content: center;
+}
+
+.login-hub-wallet-pick-btn {
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 6px 9px;
+    border: 1px solid rgba(196, 154, 72, 0.45);
+    background: rgba(20, 12, 6, 0.55);
+    color: #d8c8a0;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.login-hub-wallet-pick-btn:hover:not(:disabled) {
+    border-color: #c9a84c;
+    color: #fff6d8;
+}
+
+.login-hub-wallet-pick-btn.is-selected {
+    border-color: #e8c878;
+    background: rgba(106, 72, 32, 0.85);
+    color: #fff6d8;
+}
+
+.login-hub-wallet-pick-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .login-gate-secondary-btn {
     display: inline-block;
     width: 100%;

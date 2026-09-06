@@ -52,12 +52,12 @@ Usar solo `.env.example` como plantilla. **Nunca** commitear `.env`, `.game-auth
 |----------|-----|------|
 | `DATABASE_URL` | Mismo Postgres que el game server | Obligatorio |
 | `WALLET_AUTH_SECRET` | HMAC de tokens SIWS (`X-Wallet-Token`) | Obligatorio; **mismo valor** que el server C# |
+| `SOLANA_RPC_URL` | RPC (mainnet-beta / dedicado) | Obligatorio **para mint/drops**; **no** para login (SIWS / EIP-191 son offline) |
 | `ADMIN_API_KEY` | Torneos admin (no mint) | Recomendado |
 | `GAME_AUTHORITY_SECRET` | Keypair mint authority (bs58 secret) | Obligatorio en prod; no depender del archivo local |
 | `HELBREATH_COLLECTION_MINT` / `HELBREATH_MERKLE_TREE` | Colección Rare | Obligatorio si `onchain` |
 | `HELBREATH_LEGENDARY_COLLECTION_MINT` / `HELBREATH_LEGENDARY_MERKLE_TREE` | Colección Legendary (`super_rare`) | Obligatorio si `onchain` |
 | `HELBREATH_MINT_MODE` | `onchain` \| `simulate` | `onchain` en prod real; `simulate` apaga txs |
-| `SOLANA_RPC_URL` | RPC (mainnet-beta / dedicado) | Obligatorio; preferir RPC pago |
 | `MIDDLEWARE_PUBLIC_URL` | Base URL pública de metadata | Obligatorio (HTTPS estable) |
 | `PORT` | Default `3001` | Según deploy |
 

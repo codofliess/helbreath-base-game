@@ -28,6 +28,7 @@ const mapAssets = read('src/utils/MapAssets.ts');
 const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
 const gameWorld = read('src/game/scenes/GameWorld.ts');
+const loginScreen = read('src/game/scenes/LoginScreen.ts');
 const maps = read('src/constants/Maps.ts');
 const mapCatalogLookup = read('src/utils/mapCatalogLookup.ts');
 const mapViewportStream = read('src/utils/mapViewportStream.ts');
@@ -150,6 +151,14 @@ assert(
         /catalogAmdFileName/.test(mapCatalogLookup) &&
         /mapFile\.toLowerCase\(\) === withAmd\.toLowerCase\(\)/.test(mapCatalogLookup),
     'getMapData must match server map id elvine to catalog elvine.amd (PRE_GENERATED minimap / HUD)',
+);
+
+assert(
+    /catalogAmdFileName\(data\.mapName\)/.test(loginScreen) &&
+        /catalogAmdFileName\(data\.mapName\)/.test(gameWorld) &&
+        !/`\$\{data\.mapName\}\.amd`/.test(loginScreen) &&
+        !/`\$\{data\.mapName\}\.amd`/.test(gameWorld),
+    'IGWS mapName must use catalogAmdFileName (never append .amd onto elvine.amd)',
 );
 
 assert(

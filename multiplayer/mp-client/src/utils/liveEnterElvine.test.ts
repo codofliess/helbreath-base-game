@@ -1,0 +1,108 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { catalogAmdFileName, registryMapKey } from './mapCatalogLookup';
+import { parseAmdMapCells } from './mapAmdBinary';
+import { fetchGameAssetArrayBuffer } from './gameAssetHttp';
+import {
+    MAP_STREAM_MAX_HEIGHT_TILES,
+    MAP_STREAM_MAX_WIDTH_TILES,
+    collectSpriteIndicesInRect,
+    initialFocusStreamRect,
+    mapTileRectArea,
+} from './mapViewportStream';
+
+const LIVE_ORIGIN = 'https://play.chainlords.net';
+const ELVINE_SPAWN_X = 149;
+const ELVINE_SPAWN_Y = 131;
+
+function isTreeSpriteIndex(spriteIndex: number): boolean {
+    return spriteIndex >= 100 && spriteIndex <= 145;
+}
+
+function tilePacksFromAssetsTs(): Array<{ fileName: string; tileStartIndex: number }> {
+    const assetsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../constants/Assets.ts');
+    const src = fs.readFileSync(assetsPath, 'utf8');
+    const packs: Array<{ fileName: string; tileStartIndex: number }> = [];
+    const re =
+        /fileName: '([^']+\.spr)', assetType: AssetType\.TILE_SPRITE, spriteType: SpriteType\.Tiles, tileStartIndex: (\d+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+        packs.push({ fileName: m[1], tileStartIndex: Number(m[2]) });
+    }
+    packs.sort((a, b) => a.tileStartIndex - b.tileStartIndex);
+    return packs;
+}
+
+function resolvePackFileNames(indices: Set<number>, packs: Array<{ fileName: string; tileStartIndex: number }>): string[] {
+    const used = new Set<string>();
+    for (const idx of indices) {
+        let chosen = packs[0];
+        for (const pack of packs) {
+            if (pack.tileStartIndex <= idx) {
+                chosen = pack;
+            } else {
+                break;
+            }
+        }
+        used.add(chosen.fileName);
+    }
+    return [...used];
+}
+
+function countObjectInstances(
+    tiles: Array<Array<{ sprite: number; objectSprite: number }>>,
+    rect: { minX: number; minY: number; maxX: number; maxY: number },
+): number {
+    let n = 0;
+    for (let y = rect.minY; y <= rect.maxY; y++) {
+        const row = tiles[y];
+        if (!row) {
+            continue;
+        }
+        for (let x = rect.minX; x <= rect.maxX; x++) {
+            const ob = row[x]?.objectSprite ?? 0;
+            if (ob > 0 && ob !== 6 && ob !== 7 && ob !== 9 && ob !== 24) {
+                n += 1;
+            }
+        }
+    }
+    return n;
+}
+
+describe('live Elvine enter path (HTTP + stream)', () => {
+    it('registers elvine.amd (not HTML / not elvine.amd.amd) and streams plaza packs only', async () => {
+        assert.equal(catalogAmdFileName('elvine'), 'elvine.amd');
+        assert.equal(catalogAmdFileName('elvine.amd.amd'), 'elvine.amd');
+        assert.equal(registryMapKey('elvine'), 'map-elvine');
+
+        const buffer = await fetchGameAssetArrayBuffer('maps', catalogAmdFileName('elvine'), LIVE_ORIGIN);
+        const map = parseAmdMapCells(buffer);
+        assert.equal(map.sizeX, 300);
+        assert.equal(map.sizeY, 300);
+        assert.equal(map.tileSize, 10);
+
+        const rect = initialFocusStreamRect(ELVINE_SPAWN_X, ELVINE_SPAWN_Y, map.sizeX, map.sizeY);
+        assert.ok(rect.maxX - rect.minX + 1 <= MAP_STREAM_MAX_WIDTH_TILES);
+        assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
+        assert.ok(mapTileRectArea(rect) < map.sizeX * map.sizeY / 10);
+
+        const indices = collectSpriteIndicesInRect(map.tiles, rect, isTreeSpriteIndex);
+        const packs = resolvePackFileNames(indices, tilePacksFromAssetsTs());
+        const objects = countObjectInstances(map.tiles, rect);
+        assert.ok(packs.length <= 8, `plaza should load few packs, got ${packs.join(',')}`);
+        assert.ok(objects < 200, `plaza object instances ${objects} must stay << full map`);
+
+        let sprBytes = 0;
+        for (const fileName of packs) {
+            const spr = await fetchGameAssetArrayBuffer('sprites', fileName, LIVE_ORIGIN);
+            sprBytes += spr.byteLength;
+            const head = new TextDecoder('utf-8').decode(new Uint8Array(spr, 0, Math.min(16, spr.byteLength))).trimStart();
+            assert.equal(head.toLowerCase().startsWith('<!doctype') || head.toLowerCase().startsWith('<html'), false);
+        }
+        assert.ok(sprBytes > 0);
+        assert.ok(sprBytes < 20 * 1024 * 1024, `plaza pack bytes ${sprBytes} too large for enter`);
+    });
+});

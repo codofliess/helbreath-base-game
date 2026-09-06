@@ -26,13 +26,20 @@ export function looksLikeAmdMap(buffer: ArrayBuffer): boolean {
 export async function fetchGameAssetArrayBuffer(
     folder: 'sprites' | 'maps' | 'sounds' | 'music',
     fileName: string,
+    assetOrigin = '',
 ): Promise<ArrayBuffer> {
     const safeName = fileName.replace(/^.*[/\\]/, '');
-    const candidates = [
-        `/game-assets/${folder}/${safeName}`,
-        `/assets/${folder}/${safeName}`,
-        `assets/${folder}/${safeName}`,
-    ];
+    const prefix = assetOrigin.replace(/\/$/, '');
+    const candidates = prefix
+        ? [
+              `${prefix}/game-assets/${folder}/${safeName}`,
+              `${prefix}/assets/${folder}/${safeName}`,
+          ]
+        : [
+              `/game-assets/${folder}/${safeName}`,
+              `/assets/${folder}/${safeName}`,
+              `assets/${folder}/${safeName}`,
+          ];
     let lastStatus = 'no attempt';
     for (const url of candidates) {
         const response = await fetch(url);

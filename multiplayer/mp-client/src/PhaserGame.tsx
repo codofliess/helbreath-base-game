@@ -1,15 +1,14 @@
-import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react';
+import { forwardRef, useEffect, useRef } from 'react';
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import StartGame from './game/main';
 import { EventBus } from './game/EventBus';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
 import { setWindowFocused } from './utils/RegistryUtils';
 import './ui/rpg-ui.css';
 
 /**
- * Hosts the Phaser canvas in React: bootstraps `StartGame`, forwards scene ref to parents,
- * and optionally suppresses pointer delivery to Phaser after dialog-driven `IN_UI_SUPPRESS_POINTER_INPUT`.
+ * Hosts the Phaser canvas in React. Phaser is loaded lazily after the login hub paints
+ * so a WebGL abort cannot empty `#root`. Canvas 2D is the primary renderer.
  */
 
 export interface IRefPhaserGame
@@ -29,25 +28,51 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
 
-    useLayoutEffect(() =>
+    // Hub paints first. Phaser is a dynamic import so WebGL abort cannot block createRoot.
+    useEffect(() =>
     {
-        if (game.current === null)
-        {
+        let cancelled = false;
+        let paintFrame = 0;
 
-            game.current = StartGame("game-container");
+        const bootPhaser = () => {
+            void (async () => {
+                try {
+                    const { default: StartGame } = await import('./game/main');
+                    if (cancelled || game.current !== null) {
+                        return;
+                    }
+                    game.current = StartGame('game-container');
+                } catch (err) {
+                    console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
+                    game.current = null;
+                }
 
-            if (typeof ref === 'function')
-            {
-                ref({ game: game.current, scene: null });
-            } else if (ref)
-            {
-                ref.current = { game: game.current, scene: null };
-            }
+                if (cancelled) {
+                    if (game.current) {
+                        game.current.destroy(true);
+                        game.current = null;
+                    }
+                    return;
+                }
 
-        }
+                if (typeof ref === 'function')
+                {
+                    ref({ game: game.current, scene: null });
+                } else if (ref)
+                {
+                    ref.current = { game: game.current, scene: null };
+                }
+            })();
+        };
+
+        paintFrame = window.requestAnimationFrame(() => {
+            paintFrame = window.requestAnimationFrame(bootPhaser);
+        });
 
         return () =>
         {
+            cancelled = true;
+            window.cancelAnimationFrame(paintFrame);
             if (game.current)
             {
                 game.current.destroy(true);

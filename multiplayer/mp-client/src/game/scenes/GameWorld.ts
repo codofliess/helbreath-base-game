@@ -1,7 +1,7 @@
 import { Scene } from 'phaser';
 import { GameAsset } from '../objects/GameAsset';
 import { GroundItem } from '../objects/GroundItem';
-import { DEFAULT_GEAR } from '../../utils/PlayerAppearanceManager';
+import { DEFAULT_GEAR, PlayerAppearanceManager } from '../../utils/PlayerAppearanceManager';
 import { Player } from '../objects/Player';
 import { Monster } from '../objects/Monster';
 import { ArrowProjectile, isProjectileTarget } from '../effects/ArrowProjectile';
@@ -48,12 +48,13 @@ import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
+import { initialFocusStreamRect, waitForBrowserFrames } from '../../utils/mapViewportStream';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import {
     loadPlayerItemAppearanceOnDemand,
     setPlayerItemAppearanceDecodeAllowed,
 } from '../../utils/ItemAssets';
-import { loadWorldDeferredSprites } from '../../utils/bootCatalog';
+import { evictUnusedSelectAppearanceSprites, loadWorldDeferredSprites, trimSelectAppearanceToIdleSheets } from '../../utils/bootCatalog';
 import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
@@ -393,6 +394,8 @@ export class GameWorld extends Scene {
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
     private mapStreamWalkEnabled = false;
+    /** Enter-ring tiles + plaza objects load after the first stable browser frame. */
+    private mapExpandAfterFirstPaint: Promise<void> | undefined;
     private mapSetupRetryCount = 0;
     /** Cast manager - handles server AoE spell visuals */
     private castManager: CastManager | undefined = undefined;
@@ -505,6 +508,7 @@ export class GameWorld extends Scene {
             this.loadingMap = true;
             this.worldReadyForEntities = false;
             this.mapStreamWalkEnabled = false;
+            this.mapExpandAfterFirstPaint = undefined;
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
             setPlayerItemAppearanceDecodeAllowed(false);
@@ -2447,6 +2451,7 @@ export class GameWorld extends Scene {
         if (this.player) {
             this.mapManager?.setInitialFocusTile(this.player.getWorldX(), this.player.getWorldY());
         }
+        this.mapExpandAfterFirstPaint = this.expandMapAfterFirstPaint();
         // After brief stand: do not dump trees+56×40 restream+NPCs+full gear in one beat.
         this.time.delayedCall(400, () => {
             this.cameraManager?.setZoom(cameraZoom);
@@ -2884,9 +2889,37 @@ export class GameWorld extends Scene {
     }
 
     /**
+     * After the tiny ground first-paint produces a real browser frame: decode enter-ring
+     * tiles + object packs, instantiate plaza props. Must not run during prepareMap.
+     */
+    private async expandMapAfterFirstPaint(): Promise<void> {
+        await waitForBrowserFrames(2);
+        const map = this.displayedMap;
+        if (!map || !this.mapManager) {
+            return;
+        }
+        const focusX = this.player?.getWorldX() ?? this.initialGameWorldState?.playerX ?? 0;
+        const focusY = this.player?.getWorldY() ?? this.initialGameWorldState?.playerY ?? 0;
+        const rect = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        try {
+            await loadTileSpritePacksForMapRect(this, map, rect, () => this.noteMapSetupProgress(), false, true);
+            map.syncViewportStream(this, rect);
+            map.renderMapObjects(this, false);
+            map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
+        } catch (error) {
+            console.warn('[GameWorld] Enter-ring expand after first paint failed', error);
+        }
+    }
+
+    /**
      * After first paint GC: decode tree-shadow sheets, instantiate trees, then allow walk restream.
      */
     private async enableTreesAfterFirstPaint(): Promise<void> {
+        try {
+            await this.mapExpandAfterFirstPaint;
+        } catch {
+            /* expand already logged */
+        }
         const map = this.displayedMap;
         if (!map || !this.mapManager) {
             this.mapStreamWalkEnabled = true;
@@ -2895,7 +2928,7 @@ export class GameWorld extends Scene {
         try {
             const rect = map.getStreamedRect();
             if (rect) {
-                await loadTileSpritePacksForMapRect(this, map, rect, undefined, true);
+                await loadTileSpritePacksForMapRect(this, map, rect, undefined, true, true);
             }
             map.renderMapObjects(this, true);
             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
@@ -2913,11 +2946,23 @@ export class GameWorld extends Scene {
         this.mapPrepareInFlight = true;
         this.noteMapSetupProgress();
         try {
+            const gender = playerDialogStore.state.gender;
+            const skinColor = playerDialogStore.state.skinColor;
+            const human = PlayerAppearanceManager.getHumanSpriteName(gender, skinColor);
+            const hair = gender === Gender.MALE ? 'mhr' : 'whr';
+            const undies = gender === Gender.MALE ? 'mpt' : 'wpt';
+            evictUnusedSelectAppearanceSprites(this, [human, hair, undies]);
+            trimSelectAppearanceToIdleSheets(this, human, idleEntitySheetIndices());
+            await waitForBrowserFrames(1);
+
             if (shouldLoadMapAssetsOnDemand()) {
                 await prepareMapForGameWorld(this, this.mapManager!.getCurrentMapName(), {
                     focusTileX: this.initialGameWorldState?.playerX,
                     focusTileY: this.initialGameWorldState?.playerY,
                     onProgress: () => this.noteMapSetupProgress(),
+                    firstPaint: true,
+                    includeObjectSprites: false,
+                    includeTreeShadows: false,
                 });
             }
 

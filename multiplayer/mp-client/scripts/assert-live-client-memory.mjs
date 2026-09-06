@@ -89,6 +89,8 @@ assert(
     /WORLD_ENTER_HUD_ASSETS/.test(bootCatalog) &&
         /sheets: \[6\]/.test(bootCatalog) &&
         /WORLD_ENTER_HUD_FRAME_KEYS/.test(bootCatalog) &&
+        /evictUnusedSelectAppearanceSprites/.test(bootCatalog) &&
+        /trimSelectAppearanceToIdleSheets/.test(bootCatalog) &&
         !/getMonsterPlaceholderAsset\(\)/.test(
             bootCatalog.slice(bootCatalog.indexOf('export async function loadWorldDeferredSprites')),
         ),
@@ -206,23 +208,30 @@ assert(
 
 assert(
     /includeTreeShadows \?\? false/.test(mapAssets) &&
+        /includeObjectSprites \?\? !firstPaint/.test(mapAssets) &&
+        /firstPaintStreamRect/.test(mapAssets) &&
         /includeTreeShadows = true/.test(mapAssets) &&
+        /includeObjectSprites = true/.test(mapAssets) &&
         /setTimeout\(resolve, 32\)/.test(mapAssets) &&
         /for \(const asset of tileAssets\)/.test(mapAssets),
-    'prepareMapForGameWorld must skip tree-shadow sheets on first enter and yield between sequential packs',
+    'prepareMapForGameWorld must skip tree-shadow and object sheets on first paint and yield between sequential packs',
 );
 
 assert(
     /MAP_STREAM_MAX_WIDTH_TILES = 56/.test(mapViewportStream) &&
         /MAP_STREAM_RING_TILES = 8/.test(mapViewportStream) &&
         /MAP_ENTER_RING_TILES = 4/.test(mapViewportStream) &&
+        /MAP_FIRST_PAINT_MAX_WIDTH_TILES = 12/.test(mapViewportStream) &&
+        /MAP_FIRST_PAINT_MAX_HEIGHT_TILES = 8/.test(mapViewportStream) &&
         /MAP_STREAM_REFRESH_SLACK_TILES = 10/.test(mapViewportStream) &&
         /ringTiles: MAP_ENTER_RING_TILES/.test(mapViewportStream) &&
+        /export function firstPaintStreamRect/.test(mapViewportStream) &&
+        /export function waitForBrowserFrames/.test(mapViewportStream) &&
         /export function cameraStreamTileRect/.test(mapViewportStream) &&
         /export function paintStreamTileRect/.test(mapViewportStream) &&
         /export function shouldRefreshMapStream/.test(mapViewportStream) &&
         /export function mapTileKeysToEvict/.test(mapViewportStream),
-    'mapViewportStream must cap walk paint, use a tighter enter ring, and evict leftover sheets',
+    'mapViewportStream must cap walk paint, use a tiny first-paint window, tighter enter ring, and evict leftover sheets',
 );
 
 assert(
@@ -236,11 +245,12 @@ assert(
 );
 
 assert(
-    /paintStreamTileRect/.test(mapManager) &&
+    /firstPaintStreamRect/.test(mapManager) &&
+        /Frame-0: ground only/.test(mapManager) &&
         /shouldRefreshMapStream/.test(mapManager) &&
         /evictUnusedMapTileTextures/.test(mapManager) &&
         /streamRefreshQueued/.test(mapManager),
-    'MapManager must restream only when the camera leaves the painted cap and evict leftover sheets',
+    'MapManager must paint a tiny ground-only first window, restream later, and evict leftover sheets',
 );
 
 assert(
@@ -252,9 +262,15 @@ assert(
     /syncStreamedView/.test(gameWorld) &&
         /focusTileX: this\.initialGameWorldState\?\.playerX/.test(gameWorld) &&
         /setInitialFocusTile\(this\.player\.getWorldX/.test(gameWorld) &&
+        /expandMapAfterFirstPaint/.test(gameWorld) &&
+        /waitForBrowserFrames/.test(gameWorld) &&
+        /evictUnusedSelectAppearanceSprites/.test(gameWorld) &&
+        /trimSelectAppearanceToIdleSheets/.test(gameWorld) &&
+        /firstPaint: true/.test(gameWorld) &&
+        /includeObjectSprites: false/.test(gameWorld) &&
         /enableTreesAfterFirstPaint/.test(gameWorld) &&
         /mapStreamWalkEnabled/.test(gameWorld),
-    'GameWorld must stream around spawn, delay tree/walk restream until after first paint',
+    'GameWorld must first-paint tiny ground, evict unused SELECTCHAR packs, then expand after rAF',
 );
 
 assert(

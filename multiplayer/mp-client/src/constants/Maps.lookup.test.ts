@@ -23,5 +23,9 @@ describe('map catalog lookup (server id → .amd → registry)', () => {
         assert.equal(registryMapKey('elvine'), 'map-elvine');
         assert.equal(registryMapKey('elvine.amd'), 'map-elvine');
         assert.equal(registryMapKey('map-elvine'), 'map-elvine');
+        assert.equal(catalogAmdFileName('elvine.amd.amd'), 'elvine.amd');
+        assert.equal(findMapByServerId('elvine.amd.amd', CATALOG)?.mapFile, 'elvine.amd');
+        assert.equal(registryMapKey('elvine.amd.amd'), 'map-elvine');
+        assert.equal(registryMapKey('map-elvine.amd'), 'map-elvine');
     });
 });

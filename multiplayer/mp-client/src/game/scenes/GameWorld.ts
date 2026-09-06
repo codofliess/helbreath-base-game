@@ -46,6 +46,7 @@ import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } fro
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
+import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import { loadPlayerItemAppearanceOnDemand } from '../../utils/ItemAssets';
 import { areItemIconAssetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
@@ -5054,7 +5055,7 @@ export class GameWorld extends Scene {
 function toRegistryInitialGameWorldState(data: InitialGameWorldStateEventData): InitialGameWorldState {
     return {
         gameWorldId: data.gameWorldId,
-        mapName: `${data.mapName}.amd`,
+        mapName: catalogAmdFileName(data.mapName),
         musicFile: data.musicFile,
         playerX: data.playerX,
         playerY: data.playerY,

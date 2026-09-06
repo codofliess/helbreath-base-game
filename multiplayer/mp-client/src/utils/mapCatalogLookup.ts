@@ -3,9 +3,21 @@
  * the scene registry key is `map-elvine`.
  */
 
+/** Bare map id: strips path, repeated `.amd`, and a `map-` prefix. */
+export function mapBaseName(filename: string): string {
+    let base = filename.replace(/^.*[/\\]/, '').trim();
+    while (/\.amd$/i.test(base)) {
+        base = base.slice(0, -4);
+    }
+    if (/^map-/i.test(base)) {
+        base = base.slice(4);
+    }
+    return base;
+}
+
 export function catalogAmdFileName(filename: string): string {
-    const file = filename.replace(/^.*[/\\]/, '');
-    return file.toLowerCase().endsWith('.amd') ? file : `${file}.amd`;
+    const base = mapBaseName(filename);
+    return base ? `${base}.amd` : filename.replace(/^.*[/\\]/, '');
 }
 
 export function findMapByServerId<T extends { mapFile: string }>(
@@ -17,6 +29,5 @@ export function findMapByServerId<T extends { mapFile: string }>(
 }
 
 export function registryMapKey(mapName: string): string {
-    const base = mapName.replace(/^.*[/\\]/, '').replace(/\.amd$/i, '');
-    return base.startsWith('map-') ? base : `map-${base}`;
+    return `map-${mapBaseName(mapName)}`;
 }

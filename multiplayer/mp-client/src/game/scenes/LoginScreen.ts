@@ -31,6 +31,7 @@ import {
     setConnectWalletSession,
 } from '../../ui/store/ConnectDialog.store';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
+import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { clearWalletDeepLink, consumeWalletDeepLink, getStoredWalletPubkey } from '../../utils/walletAuth';
 import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentation';
 import { SelectCharDesk } from '../ui/SelectCharDesk';
@@ -195,7 +196,7 @@ export class LoginScreen extends Scene {
                 gsm.setCharacterName(payload.characterName);
                 setInitialGameWorldState(this.game, {
                     gameWorldId: data.gameWorldId,
-                    mapName: `${data.mapName}.amd`,
+                    mapName: catalogAmdFileName(data.mapName),
                     musicFile: data.musicFile || undefined,
                     playerX: data.playerX,
                     playerY: data.playerY,

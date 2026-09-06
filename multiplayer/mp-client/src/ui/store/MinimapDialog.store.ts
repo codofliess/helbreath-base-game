@@ -3,6 +3,7 @@ import { createDialogStore } from './utils';
 import { CachedMinimap } from '../../Types';
 import { Minimap } from '../../constants/Assets';
 import { convertWorldPosToPixelPos } from '../../utils/CoordinateUtils';
+import { mapBaseName } from '../../utils/mapCatalogLookup';
 import { OUT_MAP_LOADED, OUT_UI_MINIMAP_CAPTURED, OUT_UI_MINIMAP_LOADING } from '../../constants/EventNames';
 
 export interface MinimapLoadingPayload {
@@ -152,7 +153,7 @@ EventBus.on(OUT_MAP_LOADED, () => {
     if (!payload || payload.minimap !== Minimap.PRE_GENERATED) {
         return;
     }
-    applyPreGenerated(payload.mapName.replace('.amd', ''), payload);
+    applyPreGenerated(mapBaseName(payload.mapName), payload);
 });
 
 EventBus.on(OUT_UI_MINIMAP_CAPTURED, (data: CachedMinimap) => {

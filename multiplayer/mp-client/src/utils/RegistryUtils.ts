@@ -27,7 +27,7 @@ import { parseGroundItemDisplaySize } from '../constants/GroundItemDisplay';
 import { NetworkManager } from './NetworkManager';
 import type { Gender, SkinColor, TeleportLocSet } from '../Types';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
-import { registryMapKey } from './mapCatalogLookup';
+import { mapBaseName, registryMapKey } from './mapCatalogLookup';
 
 /**
  * Typed Phaser registry accessors: managers, binary/minimap cache, pivot tables, and UI flags.
@@ -204,7 +204,7 @@ export function getMapIfPresent(scene: Scene, mapName: string): HBMap | undefine
  * @returns The cached minimap data, or undefined if not found
  */
 export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap | undefined {
-    const cacheKey = `minimap-${mapName.replace('.amd', '')}`;
+    const cacheKey = `minimap-${mapBaseName(mapName)}`;
     return getRegistryValue<CachedMinimap>(scene.registry, cacheKey);
 }
 
@@ -217,7 +217,7 @@ export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap |
  * @param minimap - The minimap data to cache
  */
 export function setCachedMinimap(scene: Scene, mapName: string, minimap: CachedMinimap): void {
-    const cacheKey = `minimap-${mapName.replace('.amd', '')}`;
+    const cacheKey = `minimap-${mapBaseName(mapName)}`;
     scene.registry.set(cacheKey, minimap);
 }
 

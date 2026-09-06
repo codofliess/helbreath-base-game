@@ -176,7 +176,8 @@ assert(
         /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
         /scene\.game\.renderer\.type === CANVAS/.test(hbSprite) &&
         /sheetIndices/.test(hbSprite) &&
-        /Partial tile-sheet loads keep it/.test(hbSprite),
+        /Partial tile-sheet loads keep it/.test(hbSprite) &&
+        /Yield so Canvas-first Chrome can GC ImageBitmaps/.test(hbSprite),
     'HBSprite must not upload VideoFrames then close them; tile packs decode only requested sheets',
 );
 

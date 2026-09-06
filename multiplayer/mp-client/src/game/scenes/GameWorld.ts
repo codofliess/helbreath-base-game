@@ -2294,6 +2294,7 @@ export class GameWorld extends Scene {
                         error,
                     );
                 }
+                await new Promise((resolve) => setTimeout(resolve, 0));
             }
         } finally {
             this.playerItemAppearancePrefetchRunning = false;

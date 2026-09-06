@@ -572,6 +572,8 @@ export class HBSpriteFile {
                 // Clean up sprite sheet image
                 spriteSheetImage.close();
             }
+            // Yield so Canvas-first Chrome can GC ImageBitmaps between tile sheets (enter OOM).
+            await new Promise((resolve) => setTimeout(resolve, 0));
         }
         
         // Populate spriteSheets

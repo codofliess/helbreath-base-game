@@ -43,16 +43,12 @@ export class HBMapTile {
     /** Whether this tile is water */
     public readonly isWater: boolean;
 
-    /** Whether this tile is occupied by a game object */
-    public occupiedByGameObject: boolean = false;
-
-    /**
-     * Creates a new HBMapTile instance by parsing tile data.
-     * 
-     * @param view - The shared map buffer view
-     * @param offset - The tile's byte offset within the shared map buffer
-     */
-    constructor(view: DataView, offset: number) {
+    constructor(
+        view: DataView,
+        offset: number,
+        private readonly occupiedFlags?: Uint8Array,
+        private readonly occupiedIndex = -1,
+    ) {
         this.sprite = view.getInt16(offset, true);
         this.spriteFrame = view.getInt16(offset + 2, true);
         this.objectSprite = view.getInt16(offset + 4, true);
@@ -67,6 +63,19 @@ export class HBMapTile {
         this.isTeleport = (flags & 0x40) !== 0;       // Bit 6: 1 = teleport
         // Bit 5 (0x20): set when farming is allowed on this tile (unlike bit 7 move, where set = blocked).
         this.isFarmingAllowed = (flags & 0x20) !== 0;
+    }
+
+    get occupiedByGameObject(): boolean {
+        if (this.occupiedFlags && this.occupiedIndex >= 0) {
+            return this.occupiedFlags[this.occupiedIndex] !== 0;
+        }
+        return false;
+    }
+
+    set occupiedByGameObject(value: boolean) {
+        if (this.occupiedFlags && this.occupiedIndex >= 0) {
+            this.occupiedFlags[this.occupiedIndex] = value ? 1 : 0;
+        }
     }
 }
 
@@ -87,8 +96,17 @@ export class HBMap {
     /** Size of each tile data in bytes */
     public tileSize = 0;
 
-    /** 2D array of map tiles [y][x] */
+    /**
+     * Empty on purpose: enter used to allocate one HBMapTile per world cell (300×300 Elvine).
+     * Use {@link getTile}. Occupancy lives in {@link occupiedFlags}.
+     */
     public tiles: HBMapTile[][] = [];
+
+    /** Backing `.amd` bytes after the 256-byte header. */
+    private tileData: DataView | undefined;
+
+    /** Dynamic actor occupancy, one byte per cell (not 90k object fields). */
+    private occupiedFlags = new Uint8Array(0);
 
     /** Whether the map has been successfully loaded */
     private loaded = false;
@@ -225,13 +243,7 @@ export class HBMap {
     private parseMap(buffer: ArrayBuffer): void {
         const bytes = new Uint8Array(buffer);
         const view = new DataView(buffer);
-        let offset = 0;
-
-        // Read header (256 bytes)
-        const headerBytes = bytes.subarray(offset, offset + 256);
-        offset += 256;
-
-        // Convert header to ASCII string and parse
+        const headerBytes = bytes.subarray(0, 256);
         const headerText = ASCII_DECODER.decode(headerBytes);
         this.parseHeader(headerText);
 
@@ -240,22 +252,9 @@ export class HBMap {
             throw new Error(`Invalid map dimensions: ${this.sizeX}x${this.sizeY}, tileSize: ${this.tileSize}`);
         }
 
-        // Initialize tiles array
-        const tiles = new Array<HBMapTile[]>(this.sizeY);
-
-        // Read tile data (row-major order: Y then X)
-        for (let y = 0; y < this.sizeY; y++) {
-            const row = new Array<HBMapTile>(this.sizeX);
-
-            for (let x = 0; x < this.sizeX; x++) {
-                row[x] = new HBMapTile(view, offset);
-                offset += this.tileSize;
-            }
-
-            tiles[y] = row;
-        }
-
-        this.tiles = tiles;
+        this.tileData = view;
+        this.occupiedFlags = new Uint8Array(this.sizeX * this.sizeY);
+        this.tiles = [];
     }
 
     /**
@@ -303,10 +302,12 @@ export class HBMap {
      * @returns The tile at the specified coordinates, or undefined if out of bounds
      */
     public getTile(x: number, y: number): HBMapTile | undefined {
-        if (y < 0 || y >= this.sizeY || x < 0 || x >= this.sizeX) {
+        if (y < 0 || y >= this.sizeY || x < 0 || x >= this.sizeX || !this.tileData) {
             return undefined;
         }
-        return this.tiles[y][x];
+        const occupiedIndex = y * this.sizeX + x;
+        const offset = 256 + occupiedIndex * this.tileSize;
+        return new HBMapTile(this.tileData, offset, this.occupiedFlags, occupiedIndex);
     }
 
     /**
@@ -338,11 +339,7 @@ export class HBMap {
         if (!this.loaded) {
             return;
         }
-        for (let y = 0; y < this.sizeY; y++) {
-            for (let x = 0; x < this.sizeX; x++) {
-                this.tiles[y][x].occupiedByGameObject = false;
-            }
-        }
+        this.occupiedFlags.fill(0);
         if (this.isNonMovableCellsHighlightEnabled && this.sceneRef) {
             this.refreshNonMovableCellsHighlight(this.sceneRef);
         }
@@ -437,7 +434,10 @@ export class HBMap {
 
         for (let y = rect.minY; y <= rect.maxY; y++) {
             for (let x = rect.minX; x <= rect.maxX; x++) {
-                const tile = this.tiles[y]?.[x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
                 if (!tile || tile.sprite < 0) {
                     continue;
                 }
@@ -602,7 +602,10 @@ export class HBMap {
         for (let y = rect.minY; y <= rect.maxY; y++) {
             const row: number[] = [];
             for (let x = rect.minX; x <= rect.maxX; x++) {
-                const tile = this.tiles[y]?.[x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
                 if (!tile || tile.sprite < 0) {
                     row.push(-1);
                     continue;
@@ -663,7 +666,10 @@ export class HBMap {
         const wanted = new Set<string>();
         for (let y = rect.minY; y <= rect.maxY; y++) {
             for (let x = rect.minX; x <= rect.maxX; x++) {
-                const tile = this.tiles[y]?.[x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
                 if (!tile || tile.objectSprite <= 0) {
                     continue;
                 }
@@ -854,7 +860,10 @@ export class HBMap {
         // Draw static non-movable cells (only cells that are permanently blocked by map data)
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
 
                 // Only draw permanently non-movable tiles (red)
                 if (!tile.isMoveAllowed) {
@@ -904,7 +913,10 @@ export class HBMap {
         // Redraw only occupied cells
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
 
                 // Only draw occupied cells that are otherwise movable (orange)
                 if (tile.occupiedByGameObject && tile.isMoveAllowed) {
@@ -991,7 +1003,10 @@ export class HBMap {
         // Iterate through all map tiles and highlight teleport ones
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
 
                 // Check if this tile is a teleport location
                 if (tile.isTeleport) {
@@ -1124,7 +1139,10 @@ export class HBMap {
         // Iterate through all map tiles and highlight water ones
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
 
                 // Check if this tile is water
                 if (tile.isWater) {
@@ -1193,7 +1211,10 @@ export class HBMap {
         // Iterate through all map tiles and highlight farmable ones
         for (let y = 0; y < this.sizeY; y++) {
             for (let x = 0; x < this.sizeX; x++) {
-                const tile = this.tiles[y][x];
+                const tile = this.getTile(x, y);
+                if (!tile) {
+                    continue;
+                }
 
                 // Check if farming is allowed on this tile
                 if (tile.isFarmingAllowed) {

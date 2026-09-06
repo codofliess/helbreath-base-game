@@ -10,7 +10,6 @@ import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoad
 import { catalogAmdFileName } from './mapCatalogLookup';
 import { localTileSheetIndices } from './tileSheetFilter';
 import {
-    collectSpriteIndicesInRect,
     initialFocusStreamRect,
     type MapTileRect,
 } from './mapViewportStream';
@@ -88,7 +87,27 @@ function getTileSpriteAssetForIndex(index: number): AssetData {
  * is the previous OOM (Aw Snap 9 on enter).
  */
 export function collectRequiredTileIndices(hbMap: HBMap, rect: MapTileRect): Set<number> {
-    return collectSpriteIndicesInRect(hbMap.tiles, rect, isTreeSpriteIndex);
+    const indices = new Set<number>();
+    for (let y = rect.minY; y <= rect.maxY; y++) {
+        for (let x = rect.minX; x <= rect.maxX; x++) {
+            const tile = hbMap.getTile(x, y);
+            if (!tile) {
+                continue;
+            }
+            if (tile.sprite >= 0) {
+                indices.add(tile.sprite);
+            }
+            if (tile.objectSprite > 0) {
+                indices.add(tile.objectSprite);
+            }
+        }
+    }
+    for (const idx of [...indices]) {
+        if (isTreeSpriteIndex(idx)) {
+            indices.add(idx + 50);
+        }
+    }
+    return indices;
 }
 
 export function resolveTileSpriteAssets(indices: Set<number>): AssetData[] {

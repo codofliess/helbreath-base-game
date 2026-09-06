@@ -207,7 +207,9 @@ assert(
 );
 
 assert(
-    /a\.assetType !== AssetType\.MAP && a\.assetType !== AssetType\.TILE_SPRITE/.test(loadingScreen),
+    /LOAD_MAP_ASSETS_ON_DEMAND && \(a\.assetType === AssetType\.MAP \|\| a\.assetType === AssetType\.TILE_SPRITE\)/.test(
+        loadingScreen,
+    ),
     'LoadingScreen must omit MAP and TILE_SPRITE assets when LOAD_MAP_ASSETS_ON_DEMAND is on',
 );
 

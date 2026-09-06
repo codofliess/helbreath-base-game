@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { catalogAmdFileName, registryMapKey } from './mapCatalogLookup';
+import { localTileSheetIndices } from './tileSheetFilter';
 import { parseAmdMapCells } from './mapAmdBinary';
 import { fetchGameAssetArrayBuffer } from './gameAssetHttp';
 import {
@@ -89,11 +90,30 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(rect.maxY - rect.minY + 1 <= MAP_STREAM_MAX_HEIGHT_TILES);
         assert.ok(mapTileRectArea(rect) < map.sizeX * map.sizeY / 10);
 
+        const catalog = tilePacksFromAssetsTs();
         const indices = collectSpriteIndicesInRect(map.tiles, rect, isTreeSpriteIndex);
-        const packs = resolvePackFileNames(indices, tilePacksFromAssetsTs());
+        const packs = resolvePackFileNames(indices, catalog);
         const objects = countObjectInstances(map.tiles, rect);
         assert.ok(packs.length <= 8, `plaza should load few packs, got ${packs.join(',')}`);
         assert.ok(objects < 200, `plaza object instances ${objects} must stay << full map`);
+
+        const resolveKey = (idx: number) => {
+            let chosen = catalog[0];
+            for (const pack of catalog) {
+                if (pack.tileStartIndex <= idx) {
+                    chosen = pack;
+                } else {
+                    break;
+                }
+            }
+            return chosen.fileName;
+        };
+        let plazaSheets = 0;
+        for (const pack of catalog.filter((p) => packs.includes(p.fileName))) {
+            plazaSheets += localTileSheetIndices(pack.tileStartIndex, pack.fileName, indices, resolveKey).length;
+        }
+        assert.ok(plazaSheets > 0);
+        assert.ok(plazaSheets <= 24, `plaza should decode few tile sheets, got ${plazaSheets}`);
 
         let sprBytes = 0;
         for (const fileName of packs) {

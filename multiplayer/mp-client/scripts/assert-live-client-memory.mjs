@@ -115,9 +115,10 @@ assert(
 
 assert(
     /export async function prepareMapForGameWorld/.test(mapAssets) &&
-        /resolveTileSpriteAssets\(collectRequiredTileIndices\(hbMap, rect\)\)/.test(mapAssets) &&
+        /ensureTileSpriteSheets/.test(mapAssets) &&
+        /sheetIndices/.test(mapAssets) &&
         /initialFocusStreamRect/.test(mapAssets),
-    'prepareMapForGameWorld must load only viewport tile packs (spawn camera + ring)',
+    'prepareMapForGameWorld must decode only viewport tile sheets (not every sheet in the .spr pack)',
 );
 
 assert(
@@ -173,8 +174,10 @@ assert(
 assert(
     !/tryDecodeWithImageDecoder/.test(hbSprite) &&
         /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
-        /scene\.game\.renderer\.type === CANVAS/.test(hbSprite),
-    'HBSprite must not upload VideoFrames then close them (Canvas-first VideoFrame closed / OOM)',
+        /scene\.game\.renderer\.type === CANVAS/.test(hbSprite) &&
+        /sheetIndices/.test(hbSprite) &&
+        /Partial tile-sheet loads keep it/.test(hbSprite),
+    'HBSprite must not upload VideoFrames then close them; tile packs decode only requested sheets',
 );
 
 assert(

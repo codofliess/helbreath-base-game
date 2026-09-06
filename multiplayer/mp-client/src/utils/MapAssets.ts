@@ -4,10 +4,11 @@ import { LOAD_MAP_ASSETS_ON_DEMAND } from '../Config';
 import { ASSETS, AssetType, Minimap, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
 import { HBMap } from '../game/assets/HBMap';
-import { setMap } from './RegistryUtils';
+import { getBinaryBuffer, setMap } from './RegistryUtils';
 import { isTreeSpriteIndex } from './SpriteUtils';
 import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
 import { catalogAmdFileName } from './mapCatalogLookup';
+import { localTileSheetIndices } from './tileSheetFilter';
 import {
     collectSpriteIndicesInRect,
     initialFocusStreamRect,
@@ -99,38 +100,44 @@ export function resolveTileSpriteAssets(indices: Set<number>): AssetData[] {
     return [...byKey.values()];
 }
 
-async function loadTileSpritePackOnce(scene: Scene, asset: AssetData): Promise<void> {
-    const promises = getTilePackPromises(scene);
-    const existing = promises.get(asset.key);
-    if (existing) {
-        return existing;
-    }
-
+async function ensureTileSpriteSheets(scene: Scene, asset: AssetData, globalIndices: Set<number>): Promise<void> {
     const start = asset.tileStartIndex ?? 0;
-    if (scene.textures.exists(`map-tile-${start}`)) {
-        return Promise.resolve();
+    const locals = localTileSheetIndices(start, asset.key, globalIndices, (idx) => getTileSpriteAssetForIndex(idx).key);
+    const missing = locals.filter((local) => !scene.textures.exists(`map-tile-${start + local}`));
+    if (missing.length === 0) {
+        return;
     }
 
-    const promise = enqueueSpriteDecode(async () => {
+    const promises = getTilePackPromises(scene);
+    const run = async (): Promise<void> => {
+        const stillMissing = locals.filter((local) => !scene.textures.exists(`map-tile-${start + local}`));
+        if (stillMissing.length === 0) {
+            return;
+        }
         if (!asset.spriteType) {
             throw new Error(`[MapAssets] Tile asset ${asset.key} is missing spriteType`);
         }
-        const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
-        scene.cache.binary.add(asset.key, arrayBuffer);
+        if (!getBinaryBuffer(scene, asset.key)) {
+            const arrayBuffer = await fetchGameAssetArrayBuffer('sprites', asset.fileName);
+            scene.cache.binary.add(asset.key, arrayBuffer);
+        }
         const hbFile = new HBSpriteFile(
             asset.key,
             asset.spriteType,
             asset.exportFramesAsDataUrls || false,
             asset.tileStartIndex,
         );
-        await hbFile.load(scene);
-    }).catch((error) => {
-        promises.delete(asset.key);
-        throw error;
-    });
+        await hbFile.load(scene, { sheetIndices: new Set(stillMissing) });
+    };
 
-    promises.set(asset.key, promise);
-    return promise;
+    const chained = (promises.get(asset.key) ?? Promise.resolve())
+        .then(() => enqueueSpriteDecode(run))
+        .catch((error) => {
+            promises.delete(asset.key);
+            throw error;
+        });
+    promises.set(asset.key, chained.then(() => undefined, () => undefined));
+    return chained;
 }
 
 export interface PrepareMapOptions {
@@ -148,9 +155,10 @@ export async function loadTileSpritePacksForMapRect(
     hbMap: HBMap,
     rect: MapTileRect,
 ): Promise<number> {
-    const tileAssets = resolveTileSpriteAssets(collectRequiredTileIndices(hbMap, rect));
+    const indices = collectRequiredTileIndices(hbMap, rect);
+    const tileAssets = resolveTileSpriteAssets(indices);
     for (const asset of tileAssets) {
-        await loadTileSpritePackOnce(scene, asset);
+        await ensureTileSpriteSheets(scene, asset, indices);
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
     return tileAssets.length;

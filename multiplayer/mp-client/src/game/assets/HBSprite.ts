@@ -518,8 +518,9 @@ export class HBSpriteFile {
      * 
      * @param scene - The Phaser scene with access to the binary cache
      * @throws Error if the sprite buffer is not found in cache
+     * @param options.sheetIndices Local sheet indexes to decode (tile packs). Omit to decode every sheet.
      */
-    public async load(scene: Scene): Promise<void> {
+    public async load(scene: Scene, options?: { sheetIndices?: ReadonlySet<number> }): Promise<void> {
         // Load binary from cache using fileName
         const buffer = getBinaryBuffer(scene, this.fileName);
         
@@ -534,21 +535,25 @@ export class HBSpriteFile {
         
         // Process each sprite sheet
         const spriteSheets: HBSpriteSheet[] = [];
+        const sheetFilter = options?.sheetIndices;
         
         for (let spriteSheetIndex = 0; spriteSheetIndex < parsedSprites.length; spriteSheetIndex++) {
+            if (sheetFilter && !sheetFilter.has(spriteSheetIndex)) {
+                continue;
+            }
             const parsedSprite = parsedSprites[spriteSheetIndex];
-            
+            const useCustomNaming = this.spriteType === SpriteType.Tiles && this.tileStartIndex !== undefined;
+            const customTextureKey = useCustomNaming ? `map-tile-${this.tileStartIndex + spriteSheetIndex}` : undefined;
+            const textureKey = customTextureKey ?? `${spriteName}-${spriteSheetIndex}`;
+            if (scene.textures.exists(textureKey)) {
+                continue;
+            }
+
             const spriteSheetImage = await this.createImageFromPng(parsedSprite.imageData);
             
             try {
                 // Frames are already SpriteFrame instances from parseSprite
                 const frames = parsedSprite.frames;
-                
-                // Determine texture naming
-                // For tiles with a start index, use map-tile-{index} naming
-                // Otherwise use the default {spriteName}-{spriteSheetIndex} naming
-                const useCustomNaming = this.spriteType === SpriteType.Tiles && this.tileStartIndex !== undefined;
-                const customTextureKey = useCustomNaming ? `map-tile-${this.tileStartIndex + spriteSheetIndex}` : undefined;
                 
                 // Create SpriteSheet with all frames and sprite sheet image
                 // This will create the texture and slice it into frames
@@ -596,8 +601,10 @@ export class HBSpriteFile {
         }
         
         // Register pivot data in Phaser registry (for backward compatibility)
-        const pivotData: PivotData = { spriteSheetPivots };
-        setPivotDataBySpriteName(scene, spriteName, pivotData);
+        if (!sheetFilter) {
+            const pivotData: PivotData = { spriteSheetPivots };
+            setPivotDataBySpriteName(scene, spriteName, pivotData);
+        }
 
         // Create Animation instances if sprite type is not Tiles or Interface
         if (this.spriteType !== SpriteType.Tiles && this.spriteType !== SpriteType.Interface) {
@@ -626,8 +633,11 @@ export class HBSpriteFile {
             this.animations = [];
         }
 
-        // Remove sprite file from cache to free up memory (no longer needed after parsing)
-        scene.cache.binary.remove(this.fileName);
+        // Full loads can drop the .spr buffer. Partial tile-sheet loads keep it so walking
+        // can decode the next local sheets without fetching the pack again.
+        if (!sheetFilter) {
+            scene.cache.binary.remove(this.fileName);
+        }
 
         console.log(`Sprite loaded: ${this.fileName}`, this);
     }

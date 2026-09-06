@@ -37,7 +37,7 @@ import {
     setShowSpeakerLanguageTag,
 } from './ui/store/ChatTranslation.store';
 import { isTravelerPlayerMode } from './utils/playerMode';
-import { installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
+import { ensureLoginHubOpenAtBoot, installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
 import { captureReferralFromUrl } from './utils/referral';
 import { EventBus } from './game/EventBus';
 
@@ -60,6 +60,8 @@ import './utils/bagDropRouting';
 
 // Landing Play Now: capture ?wallet=&token=&mode=world before any scene boots.
 bootstrapWalletDeepLinkAtBoot();
+// Hub must paint even if Phaser WebGL/Canvas never starts (empty #root was the prod symptom).
+ensureLoginHubOpenAtBoot();
 
 installConnectDialogDevHooks();
 installSkillDialogDevHooks();

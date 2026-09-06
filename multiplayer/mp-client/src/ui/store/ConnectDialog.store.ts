@@ -59,6 +59,17 @@ export const setConnectDialogOpen = (isOpen: boolean) => {
     setConnectDialogOpenBase(isOpen);
 };
 
+/**
+ * React-first boot: open the wallet hub before Phaser Boot/LoginScreen.
+ * LoginScreen may call {@link openConnectDialogForLogin} again once the canvas is ready.
+ */
+export function ensureLoginHubOpenAtBoot(): void {
+    if (connectDialogStore.state.isOpen) {
+        return;
+    }
+    openConnectDialogForLogin('');
+}
+
 /** Opens the login hub for a fresh login (clears last-attempt restore; keeps wallet if still valid). */
 export const openConnectDialogForLogin = (defaultCharacterName: string) => {
     connectDialogStore.setState((state) => ({

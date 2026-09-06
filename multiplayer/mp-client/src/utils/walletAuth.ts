@@ -90,7 +90,7 @@ export function consumePreferredAuthChain(): AuthChainId | undefined {
 }
 
 export function getMiddlewareAuthUrl(): string {
-    const fromEnv = (import.meta.env.VITE_MIDDLEWARE_URL ?? '').toString().trim();
+    const fromEnv = (import.meta.env?.VITE_MIDDLEWARE_URL ?? '').toString().trim();
     if (fromEnv.length > 0) {
         return fromEnv;
     }

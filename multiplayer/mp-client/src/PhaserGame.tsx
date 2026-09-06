@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react';
+import { forwardRef, useEffect, useRef } from 'react';
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import StartGame from './game/main';
@@ -8,8 +8,9 @@ import { setWindowFocused } from './utils/RegistryUtils';
 import './ui/rpg-ui.css';
 
 /**
- * Hosts the Phaser canvas in React: bootstraps `StartGame`, forwards scene ref to parents,
- * and optionally suppresses pointer delivery to Phaser after dialog-driven `IN_UI_SUPPRESS_POINTER_INPUT`.
+ * Hosts the Phaser canvas in React: bootstraps `StartGame` (WebGL → Canvas, never throws),
+ * forwards scene ref to parents, and optionally suppresses pointer delivery to Phaser after
+ * dialog-driven `IN_UI_SUPPRESS_POINTER_INPUT`.
  */
 
 export interface IRefPhaserGame
@@ -29,12 +30,17 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
 
-    useLayoutEffect(() =>
+    // After first React paint (login hub). useLayoutEffect would roll back #root on WebGL abort.
+    useEffect(() =>
     {
         if (game.current === null)
         {
-
-            game.current = StartGame("game-container");
+            try {
+                game.current = StartGame('game-container');
+            } catch (err) {
+                console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
+                game.current = null;
+            }
 
             if (typeof ref === 'function')
             {

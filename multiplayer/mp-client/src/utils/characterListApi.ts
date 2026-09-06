@@ -39,7 +39,7 @@ export interface ReferralListInfo {
     alreadyAttributed: boolean;
 }
 
-const LIST_TIMEOUT_MS = 5_000;
+const LIST_TIMEOUT_MS = 15_000;
 
 /** Normalize city citizenship for SELECTCHAR seals. */
 export function normalizeCitizenshipSide(
@@ -124,6 +124,7 @@ export async function fetchCharacterList(
             try {
                 const message = ServerMessage.decode(new Uint8Array(event.data));
                 if (message.payload?.$case !== 'characterListResponse') {
+                    // Join bootstrap (worlds/monsters lists) can arrive first; wait for the desk payload.
                     return;
                 }
                 const body = message.payload.value;
@@ -165,7 +166,7 @@ export async function fetchCharacterList(
                     referral,
                 });
             } catch (error) {
-                finish(error instanceof Error ? error : new Error('Failed to decode character list.'));
+                console.warn('[characterList] Ignoring undecodable WS frame while waiting for list', error);
             }
         });
 

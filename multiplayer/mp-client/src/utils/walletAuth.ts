@@ -246,15 +246,24 @@ async function verifySignature(
     }
 
     const verifyBody = await verifyRes.json() as {
-        wallet: string;
-        token: string;
-        expiresAt: number;
+        wallet?: string | null;
+        token?: string;
+        expiresAt?: number;
     };
 
+    const resolvedWallet = (verifyBody.wallet || address).trim();
+    const token = (verifyBody.token ?? '').trim();
+    if (!resolvedWallet || !token) {
+        throw new Error('Wallet verification did not return a session');
+    }
+
     return {
-        wallet: verifyBody.wallet,
-        token: verifyBody.token,
-        expiresAt: verifyBody.expiresAt,
+        wallet: resolvedWallet,
+        token,
+        expiresAt:
+            typeof verifyBody.expiresAt === 'number' && verifyBody.expiresAt > Date.now()
+                ? verifyBody.expiresAt
+                : Date.now() + 24 * 60 * 60 * 1000,
         chainId,
     };
 }

@@ -23,6 +23,10 @@ public static class NetworkPriority {
             ServerMessage.PayloadOneofCase.InitialGameWorldState => Class.High,
             ServerMessage.PayloadOneofCase.WorldsList => Class.High,
             ServerMessage.PayloadOneofCase.MonstersList => Class.High,
+            // SELECTCHAR / hub pre-world replies must not sit behind catalog dumps.
+            ServerMessage.PayloadOneofCase.CharacterListResponse => Class.High,
+            ServerMessage.PayloadOneofCase.CharacterNameCheckResponse => Class.High,
+            ServerMessage.PayloadOneofCase.ArenaPactListResponse => Class.High,
 
             // Movement / presence
             ServerMessage.PayloadOneofCase.PlayerMoved => Class.High,

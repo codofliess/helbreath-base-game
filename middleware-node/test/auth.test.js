@@ -349,9 +349,55 @@ describe('multichain auth', () => {
         const other = await auth.registerPlayer('human');
         const steal = await auth.bindOrReject(other.playerId, 'rh', addr.address, addr.addressKey);
         assert.equal(steal.ok, false);
-        assert.equal(steal.status, 409);
+            assert.equal(steal.status, 409);
         const listed = await auth.listBindings(human.playerId);
         assert.equal(listed.length, 2);
         assert.deepEqual(listed.map((w) => w.chainId).sort(), ['base', 'rh']);
+    });
+
+    it('mergeSessionWallets keeps the verified address when store bindings are empty', () => {
+        const auth = loadAuth();
+        const merged = auth.mergeSessionWallets(
+            [],
+            [{ chainId: 'sol', address: '4R7FsyC85Yic3hGz7yWAt7HbV5A1qtC7UQi13Hsv5r7K' }],
+        );
+        assert.deepEqual(merged, [
+            { chainId: 'sol', address: '4R7FsyC85Yic3hGz7yWAt7HbV5A1qtC7UQi13Hsv5r7K' },
+        ]);
+    });
+
+    it('Sol verify token wallets include the signed address', async () => {
+        const auth = loadAuth();
+        const kp = nacl.sign.keyPair();
+        const wallet = bs58.encode(kp.publicKey);
+
+        const app = express();
+        app.use(express.json());
+        auth.registerAuthRoutes(app);
+        const { server, url } = await listen(app);
+        try {
+            const ch = await jsonReq(url, {
+                path: `/auth/challenge?chainId=sol&wallet=${encodeURIComponent(wallet)}`,
+            });
+            const msgBytes = new TextEncoder().encode(ch.json.message);
+            const sig = nacl.sign.detached(msgBytes, kp.secretKey);
+            const verify = await jsonReq(url, {
+                method: 'POST',
+                path: '/auth/verify',
+                body: {
+                    chainId: 'sol',
+                    wallet,
+                    challenge: ch.json.challengeId,
+                    signature: Buffer.from(sig).toString('base64'),
+                },
+            });
+            assert.equal(verify.status, 200, JSON.stringify(verify.json));
+            assert.equal(verify.json.wallet, wallet);
+            const session = auth.parseSession(verify.json.token);
+            assert.ok(session.wallets.some((w) => w.address === wallet && w.chainId === 'sol'));
+            assert.deepEqual(session.boundChains, ['sol']);
+        } finally {
+            server.close();
+        }
     });
 });

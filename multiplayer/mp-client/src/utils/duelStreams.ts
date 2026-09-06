@@ -133,11 +133,16 @@ export interface PublicDuel {
 function gameHttpBase(): string {
     // Same host as game WS by default (play.chainlords.net nginx proxies /api).
     try {
-        const proto = window.location.protocol === 'https:' ? 'https' : 'http';
-        return `${proto}//${window.location.host}`;
+        return httpOriginFromPage(window.location.protocol, window.location.host);
     } catch {
         return 'https://play.chainlords.net';
     }
+}
+
+/** Builds an http(s) origin from a page protocol + host. Exported for tests. */
+export function httpOriginFromPage(protocol: string, host: string): string {
+    const tls = protocol === 'https:' || protocol === 'https';
+    return `${tls ? 'https' : 'http'}://${host}`;
 }
 
 export async function fetchUpcomingDuels(): Promise<PublicDuel[]> {

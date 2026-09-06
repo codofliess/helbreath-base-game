@@ -471,8 +471,8 @@ app.Map("/ws", async context => {
                 destination.SpawnY));
     }
 
-    EnqueueOutgoingMessage(worldsListMessage);
-    EnqueueOutgoingMessage(monstersListMessage);
+    // Do not dump WorldsList/MonstersList on pre-world sockets (character list / name check).
+    // Those catalogs go out only after AuthenticateRequest succeeds.
 
     try {
         while (webSocket.State == WebSocketState.Open) {
@@ -509,6 +509,11 @@ app.Map("/ws", async context => {
                 if (clientMessage.PayloadCase == ClientMessage.PayloadOneofCase.CharacterListRequest) {
                     var listReq = clientMessage.CharacterListRequest;
                     if (!WalletAuthValidator.TryValidate(listReq.Id.Trim(), listReq.AuthToken, out var listAuthError)) {
+                        var rejectPreview = string.IsNullOrEmpty(listReq.Id)
+                            ? "?"
+                            : listReq.Id.Trim()[..Math.Min(8, listReq.Id.Trim().Length)];
+                        Console.WriteLine(
+                            $"[Server] CharacterList auth failed wallet={rejectPreview}…: {listAuthError}");
                         RequestDisconnect(listAuthError);
                         return;
                     }
@@ -524,6 +529,8 @@ app.Map("/ws", async context => {
                         charsDirectory,
                         wallet,
                         listTravelerMode);
+                    Console.WriteLine(
+                        $"[Server] CharacterList wallet={wallet[..Math.Min(8, wallet.Length)]}… traveler={listTravelerMode} slots={entries.Count}");
                     var listResponse = new CharacterListResponse();
                     string? bestName = null;
                     var bestScore = -1;
@@ -707,7 +714,7 @@ app.Map("/ws", async context => {
                 int? authInt = authReq.HasIntel ? authReq.Intel : null;
                 int? authMag = authReq.HasMag ? authReq.Mag : null;
                 int? authChr = authReq.HasChr ? authReq.Chr : null;
-                if (!TryAuthenticatePlayer(
+                    if (!TryAuthenticatePlayer(
                     authReq.Id,
                     authReq.CharacterName,
                     authReq.AuthToken,
@@ -719,6 +726,11 @@ app.Map("/ws", async context => {
                     out authenticatedSession,
                     out var isReconnect,
                     out var authenticationError)) {
+                    var authPreview = string.IsNullOrEmpty(authReq.Id)
+                        ? "?"
+                        : authReq.Id.Trim()[..Math.Min(8, authReq.Id.Trim().Length)];
+                    Console.WriteLine(
+                        $"[Server] Authenticate failed wallet={authPreview}…: {authenticationError}");
                     RequestDisconnect(authenticationError);
                     return;
                 }
@@ -818,6 +830,8 @@ app.Map("/ws", async context => {
                     session.RequestDisconnect = RequestDisconnect;
                     session.RequestWorldChange = RequestWorldChange;
                 }
+                EnqueueOutgoingMessage(worldsListMessage);
+                EnqueueOutgoingMessage(monstersListMessage);
                 var authArenaKitJson = authReq.HasArenaKitJson && !string.IsNullOrWhiteSpace(authReq.ArenaKitJson)
                     ? authReq.ArenaKitJson
                     : null;

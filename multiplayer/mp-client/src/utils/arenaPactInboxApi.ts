@@ -77,7 +77,7 @@ export async function fetchArenaPactInbox(
                 }
                 finish(undefined, message.payload.value.matches ?? []);
             } catch (error) {
-                finish(error instanceof Error ? error : new Error('Failed to decode PVP inbox.'));
+                console.warn('[arenaPactInbox] Ignoring undecodable WS frame while waiting for inbox', error);
             }
         });
 

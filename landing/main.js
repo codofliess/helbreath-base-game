@@ -907,25 +907,25 @@
       });
     }
 
-    var btn = document.getElementById("hell-mint-copy");
-    if (!btn) return;
-    var mint = btn.getAttribute("data-mint") || "";
-    btn.addEventListener("click", function () {
-      function copied() {
-        btn.classList.add("is-copied");
-        btn.textContent = "Copied";
-        window.setTimeout(function () {
-          btn.classList.remove("is-copied");
-          btn.textContent = "Copy";
-        }, 1800);
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(mint).then(copied).catch(function () {
+    document.querySelectorAll(".hell-mint-copy").forEach(function (btn) {
+      var mint = btn.getAttribute("data-mint") || "";
+      btn.addEventListener("click", function () {
+        function copied() {
+          btn.classList.add("is-copied");
+          btn.textContent = "Copied";
+          window.setTimeout(function () {
+            btn.classList.remove("is-copied");
+            btn.textContent = "Copy";
+          }, 1800);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(mint).then(copied).catch(function () {
+            window.prompt("CA", mint);
+          });
+        } else {
           window.prompt("CA", mint);
-        });
-      } else {
-        window.prompt("CA", mint);
-      }
+        }
+      });
     });
   }
 

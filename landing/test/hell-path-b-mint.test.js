@@ -20,36 +20,46 @@ describe('Path B $HELL mint on landing + listing pack', () => {
   const html = fs.readFileSync(indexPath, 'utf8');
   const listing = fs.readFileSync(listingPath, 'utf8');
 
-  it('hero uses live Pons HELBREATH CA, curve, Pons, and Blockscout', () => {
+  it('hero primary is Pons HELBREATH; Sol 4Sk2 is secondary listing', () => {
     const hellStart = html.indexOf('id="hell"');
     const hellEnd = html.indexOf('id="cl-tv"', hellStart);
     assert.ok(hellStart > 0 && hellEnd > hellStart);
     const hell = html.slice(hellStart, hellEnd);
-    assert.match(hell, new RegExp(PONS_CA));
-    assert.match(hell, new RegExp(CURVE));
+    const primaryEnd = hell.indexOf('hell-live-listing-kicker');
+    assert.ok(primaryEnd > 0);
+    const primary = hell.slice(0, primaryEnd);
+    const listing = hell.slice(primaryEnd);
+    assert.match(primary, new RegExp(PONS_CA));
+    assert.match(primary, new RegExp(CURVE));
     assert.match(hell, /Hell is what you leave still/);
-    assert.match(hell, /HELBREATH · Pons · Robinhood Chain/);
-    assert.match(hell, new RegExp(PONS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    assert.match(hell, new RegExp(EXPLORER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(primary, /Primary · \$HELBREATH · RH Chain \/ Pons/);
+    assert.match(primary, new RegExp(PONS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(primary, new RegExp(EXPLORER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(primary.includes(SOLANA_MINT), false);
+    assert.equal(primary.includes('solscan.io'), false);
+    assert.match(listing, /Listing · \$HELL · Solana/);
+    assert.match(listing, new RegExp(SOLANA_MINT));
+    assert.match(listing, new RegExp(POOL));
+    assert.match(listing, /solscan\.io\/token\/4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq/);
+    assert.match(listing, /dexscreener\.com\/solana\/ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx/);
     assert.match(hell, /branding\/abaddon-icon\/discord-server-icon\.png/);
-    assert.equal(hell.includes(SOLANA_MINT), false);
-    assert.equal(hell.includes('solscan.io'), false);
-    assert.equal(hell.includes('dexscreener.com/solana'), false);
-    assert.equal(hell.includes('dexscreener.com/robinhood'), false);
+    assert.match(
+      hell,
+      /Game property runs as NFTs on RH Chain, Solana, and Base \(collections per chain\)/,
+    );
     assert.equal(hell.includes(OLD_MINT), false);
     assert.equal(hell.includes('A782'), false);
     assert.equal(/listed on Robinhood/i.test(hell), false);
+    assert.equal(/\$HELL is live on Solana/i.test(hell), false);
+    assert.equal(hell.includes('creator tax'), false);
   });
 
-  it('news post points at Pons CA + curve, not the Solana mint / DexScreener', () => {
+  it('news post keeps Pons primary and Sol listing secondary', () => {
     const newsStart = html.indexOf('id="news"');
     const newsEnd = html.indexOf('id="features"', newsStart);
     assert.ok(newsStart > 0 && newsEnd > newsStart);
     const news = html.slice(newsStart, newsEnd);
-    assert.equal(news.includes(SOLANA_MINT), false);
-    assert.equal(news.includes('solscan.io'), false);
-    assert.equal(news.includes('dexscreener.com/solana'), false);
-    assert.match(news, /HELBREATH · Pons/);
+    assert.match(news, /\$HELBREATH · RH Chain \/ Pons/);
     assert.match(news, /0xb603D6b2e5472beb338CE079a63FEb8663171529/);
     assert.match(news, /0xd3335A347ccB25F377247A8a4bc9855f7E12d91f/);
     assert.match(
@@ -60,21 +70,36 @@ describe('Path B $HELL mint on landing + listing pack', () => {
       news,
       /robinhoodchain\.blockscout\.com\/token\/0xb603D6b2e5472beb338CE079a63FEb8663171529/,
     );
+    assert.match(news, /Solana listing \(secondary\)/);
+    assert.match(news, new RegExp(SOLANA_MINT));
+    assert.match(news, new RegExp(POOL));
+    assert.match(news, /solscan\.io\/token\/4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq/);
+    assert.match(news, /dexscreener\.com\/solana\/ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx/);
     assert.match(news, /x\.com\/ChainLordsHQ/);
     assert.match(news, /discord\.gg\/F4NwwbfKtj/);
     assert.match(news, /play\.chainlords\.net/);
     assert.match(news, /TokenLaunched/);
-    assert.match(news, /no Uni V4 pool \/ DexScreener robinhood pair yet/);
+    assert.match(news, /Still on the Pons bonding curve/);
+    assert.match(
+      news,
+      /Game property runs as NFTs on RH Chain, Solana, and Base \(collections per chain\)/,
+    );
+    assert.match(news, /not a Robinhood\s+brokerage listing/);
+    assert.equal(/listed on Robinhood/i.test(news), false);
+    assert.equal(/\$HELL is live on Solana/i.test(news), false);
+    assert.equal(news.includes('creator tax'), false);
+    assert.equal(news.includes(OLD_MINT), false);
   });
 
-  it('does not advertise failed Path A or Solana 4Sk2 as the live mint in hero/news', () => {
+  it('does not advertise failed Path A mint; 4Sk2 is listing only', () => {
     const hell = html.slice(html.indexOf('id="hell"'), html.indexOf('id="cl-tv"'));
     const news = html.slice(html.indexOf('id="news"'), html.indexOf('id="features"'));
     assert.equal(html.includes(OLD_MINT), false);
-    assert.equal(hell.includes(SOLANA_MINT), false);
-    assert.equal(news.includes(SOLANA_MINT), false);
     assert.match(hell, new RegExp(PONS_CA));
+    assert.match(hell, new RegExp(SOLANA_MINT));
     assert.match(news, new RegExp(PONS_CA));
+    assert.match(news, new RegExp(SOLANA_MINT));
+    assert.match(html, /data-mint="0xb603D6b2e5472beb338CE079a63FEb8663171529"/);
   });
 
   it('listing pack uses Path B mint and does not claim leftover already in A782', () => {

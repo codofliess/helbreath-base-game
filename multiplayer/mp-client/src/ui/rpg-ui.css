@@ -7112,6 +7112,23 @@ body:not(.game-world-active):not(.helbreath-game-active) .testnet-hud {
     color: #fff0c8;
 }
 
+.login-hub-resign-btn {
+    margin-top: 8px;
+    max-width: 280px;
+    cursor: pointer;
+}
+
+.login-hub-path-portal .login-hub-resign-btn {
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.login-hub-resign-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .login-gate-choice-row {
     display: flex;
     flex-direction: column;

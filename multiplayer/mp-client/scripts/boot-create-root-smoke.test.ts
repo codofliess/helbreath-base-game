@@ -127,3 +127,23 @@ describe('createRoot boot path (no wallet)', () => {
         assert.equal(consumePreferredAuthChain(), undefined);
     });
 });
+
+describe('hub Phantom sign path (source)', () => {
+    it('ConnectDialog always re-authenticates Phantom Sol and surfaces the extension toast', () => {
+        const src = fs.readFileSync(path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'), 'utf8');
+        assert.match(src, /const mustSign = chain === 'sol' \|\| !session;/);
+        assert.match(src, /Reconnect \/ Sign again/);
+        assert.match(src, /PHANTOM_SIGN_PENDING_TOAST/);
+        assert.match(src, /getReusableHubWalletSession/);
+        assert.doesNotMatch(src, /getStoredWalletToken\(\)/);
+    });
+
+    it('walletAuth prefers Phantom signMessage and clears stale Sol tokens', () => {
+        const src = fs.readFileSync(path.join(clientRoot, 'src/utils/walletAuth.ts'), 'utf8');
+        assert.match(src, /Approve the signature in the Phantom extension/);
+        assert.match(src, /phantom\.signMessage\(encoded, 'utf8'\)/);
+        assert.match(src, /clearStoredWalletAuth\(\)/);
+        assert.match(src, /onlyIfTrusted: false/);
+        assert.match(src, /w\.phantom\?\.solana \?\? w\.solana/);
+    });
+});

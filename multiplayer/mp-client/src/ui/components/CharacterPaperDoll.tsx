@@ -67,13 +67,12 @@ export function CharacterPaperDoll() {
     const hairStyleIndex = useStore(playerDialogStore, (s) => s.hairStyleIndex);
     const spriteFrameMap = useStore(appStore, (s) => s.spriteFrameMap);
 
-    // Re-capture avatar whenever looks/gear change (bursts while textures load).
+    // One recapture + a single delayed retry. The old 7-shot burst decoded gear .spr
+    // / data-URLs repeatedly and Aw Snap 9'd F5 Char on live (item appearance on-demand).
     useEffect(() => {
         EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
-        const bursts = [80, 250, 600, 1200, 2200, 4000].map((ms) =>
-            window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), ms),
-        );
-        return () => bursts.forEach((id) => window.clearTimeout(id));
+        const later = window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), 800);
+        return () => window.clearTimeout(later);
     }, [genderLook, skinColor, underwearColorIndex, hairStyleIndex, equippedItems]);
 
     const resolveSlotItem = useCallback(

@@ -745,18 +745,16 @@ export class GameWorld extends Scene {
                     playerDialogStore.state.underwearColorIndex;
                 const equipped = inv?.equippedItems ?? {};
 
-                // 1) Prefer live map pixels first (even 1 layer = body) — most reliable for F5.
+                // Live map pixels first. Do NOT also idle-rebuild when live already composited:
+                // capturePaperDollBodyLayers loads missing gear .spr + canvas data-URLs and is a
+                // known Chrome Aw Snap 9 (OOM) spike on F5 Char (Elon playtest).
                 const liveLayers = this.player?.getVisibleSpritesForPaperDoll?.() ?? [];
+                let liveOk = false;
                 if (this.player && liveLayers.length >= 1) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
+                    liveOk = capturePaperDollFromLivePlayer(this, this.player, true);
                 }
-
-                // 2) Idle-south rebuild (fills gear when packs finish loading; upgrades nude→geared).
-                capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
-
-                // 3) Live again if multi-layer (gear) so F5 matches the world character.
-                if (this.player && liveLayers.length >= 2) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
+                if (!liveOk) {
+                    capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
                 }
             } catch (err) {
                 console.warn('[GameWorld] paper-doll capture failed', err);

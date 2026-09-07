@@ -915,9 +915,6 @@ export class SelectCharDesk {
 
     public setVisible(visible: boolean): void {
         if (visible === this.visible) {
-            if (visible) {
-                this.refreshSlotTexts();
-            }
             return;
         }
         this.visible = visible;
@@ -927,7 +924,9 @@ export class SelectCharDesk {
             this.applyCanvasPresentation(true);
             holdLoginDeskCanvasPresentation(this.scene, 1500);
             this.attachKeyboard();
-            // Layout after presentation settles (avoid resize thrash).
+            // Paint now (store slots may already be on this.slots) then again after presentation.
+            this.rebuild();
+            this.startMenuWalkAnimation();
             window.requestAnimationFrame(() => {
                 if (!this.visible) {
                     return;
@@ -961,7 +960,16 @@ export class SelectCharDesk {
                     s.name === slots[i]?.name &&
                     s.level === slots[i]?.level,
             );
-        this.slots = slots;
+        this.slots = slots.slice();
+        if (slots.length > 0) {
+            console.info(
+                '[SelectCharDesk] setCharacterSlots slots=%d names=%s visible=%s rebuild=%s',
+                slots.length,
+                slots.map((s) => s.name).join(','),
+                this.visible,
+                this.visible && !same,
+            );
+        }
         if (this.visible && !same) {
             this.rebuild();
         } else {
@@ -1225,7 +1233,11 @@ export class SelectCharDesk {
                     this.heroMetaText?.setText('Create Character to fill this slot').setVisible(true);
                 }
             }
-            this.refreshSlotPreview(i, occupied, selected);
+            try {
+                this.refreshSlotPreview(i, occupied, selected);
+            } catch (err) {
+                console.warn('[SelectCharDesk] Menu preview failed; keeping name/level text', err);
+            }
         }
         this.refreshDetailPanel();
         this.refreshWalletRow();

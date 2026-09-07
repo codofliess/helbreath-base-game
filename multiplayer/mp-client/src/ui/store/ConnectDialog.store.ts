@@ -2,7 +2,11 @@ import { createDialogStore } from './utils';
 import type { WalletSession } from '../../utils/walletAuth';
 import type { CharacterSlotSummary, ReferralListInfo } from '../../utils/characterListApi';
 import { EventBus } from '../../game/EventBus';
-import { IN_UI_CONNECT_TO_SERVER, OUT_UI_SELECTCHAR_ACTION } from '../../constants/EventNames';
+import {
+    IN_UI_CHARACTER_SLOTS_UPDATED,
+    IN_UI_CONNECT_TO_SERVER,
+    OUT_UI_SELECTCHAR_ACTION,
+} from '../../constants/EventNames';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
@@ -144,13 +148,16 @@ export const setConnectWalletSession = (walletSession: WalletSession | null) => 
 
 /** Occupied SELECTCHAR rows are sticky: empty updates never wipe a list already received. */
 export const setCharacterSlots = (characterSlots: CharacterSlotSummary[]) => {
+    let nextSlots = characterSlots;
     connectDialogStore.setState((state) => {
         if (characterSlots.length === 0 && state.characterSlots.length > 0) {
             console.warn('[connectDialog] Refusing to wipe occupied CharacterList with an empty update');
+            nextSlots = state.characterSlots;
             return state;
         }
         return { ...state, characterSlots };
     });
+    EventBus.emit(IN_UI_CHARACTER_SLOTS_UPDATED, nextSlots);
 };
 
 export const setReferralInfo = (referralInfo: ReferralListInfo | null) => {

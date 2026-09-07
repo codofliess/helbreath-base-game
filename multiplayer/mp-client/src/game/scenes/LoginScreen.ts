@@ -12,6 +12,7 @@ import {
 import {
     CURRENT_SCENE_READY,
     INITIAL_GAME_WORLD_STATE_RECEIVED,
+    IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
     OUT_UI_SET_SELECTED_MAP,
     PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED,
@@ -35,6 +36,7 @@ import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { clearWalletDeepLink, consumeWalletDeepLink, getStoredWalletPubkey } from '../../utils/walletAuth';
 import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentation';
 import { SelectCharDesk } from '../ui/SelectCharDesk';
+import { applyStoreToSelectCharDesk } from '../ui/selectCharDeskSync';
 import { CreateCharDesk } from '../ui/CreateCharDesk';
 import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
 import { loadArenaKits } from '../../utils/arenaKits';
@@ -51,6 +53,7 @@ export class LoginScreen extends Scene {
     private createCharDesk: CreateCharDesk | undefined;
     private arenaSelectCharDesk: ArenaSelectCharDesk | undefined;
     private storeUnsubscribe: (() => void) | undefined;
+    private characterSlotsUpdatedHandler: (() => void) | undefined;
     private isConnecting = false;
     private pendingInitialGameWorldStateListener: ((data: InitialGameWorldStateEventData) => void) | undefined;
     /** When set, login is waiting for initial state after TCP connect; auth failure closes the socket first. */
@@ -153,11 +156,14 @@ export class LoginScreen extends Scene {
         // Safety: never leave a black stage if SELECTCHAR failed to appear.
         this.time.delayedCall(2000, () => {
             const st = connectDialogStore.state;
-            if (st.isOpen && st.phase === 'play-world' && !this.selectCharDesk) {
+            if (!st.isOpen || st.phase !== 'play-world' || this.isConnecting) {
+                return;
+            }
+            if (!this.selectCharDesk) {
                 console.warn('[LoginScreen] SELECTCHAR missing after deep link — rebuilding desks');
                 this.ensureDesks();
-                this.syncDesksFromStore();
             }
+            this.syncDesksFromStore();
         });
 
         const handleConnectToServer = async (payload: ConnectToServerPayload) => {
@@ -330,34 +336,46 @@ export class LoginScreen extends Scene {
 
         // Activate the incoming desk before hiding the others so shared canvas presentation
         // does not briefly restore 800×600 between SELECTCHAR ↔ Create Character ↔ Arena.
-        if (showCreate && createDesk) {
-            createDesk.setVisible(true, state.selectedSlotIndex);
-            selectDesk?.setVisible(false);
-            arenaDesk?.setVisible(false);
-        } else if (showSelect && selectDesk) {
-            selectDesk.setVisible(true);
-            createDesk?.setVisible(false);
-            arenaDesk?.setVisible(false);
-            selectDesk.setCharacterSlots(state.characterSlots);
-            selectDesk.setSelectedSlotIndex(state.selectedSlotIndex);
-            selectDesk.setLoading(state.characterListLoading);
-        } else if (showArena && arenaDesk) {
-            arenaDesk.setVisible(true);
-            selectDesk?.setVisible(false);
-            createDesk?.setVisible(false);
-            // Pre-Ready arena kits — same CL full-bleed list as World SELECTCHAR.
-            const wallet =
-                state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || undefined;
-            arenaDesk.setKits(loadArenaKits(wallet));
-            arenaDesk.setSelectedDeskIndex(state.arenaDeskIndex);
-        } else {
-            selectDesk?.setVisible(false);
-            createDesk?.setVisible(false);
-            arenaDesk?.setVisible(false);
-        }
+        try {
+            if (showCreate && createDesk) {
+                createDesk.setVisible(true, state.selectedSlotIndex);
+                selectDesk?.setVisible(false);
+                arenaDesk?.setVisible(false);
+            } else if (showSelect && selectDesk) {
+                applyStoreToSelectCharDesk(selectDesk, {
+                    characterSlots: state.characterSlots,
+                    selectedSlotIndex: state.selectedSlotIndex,
+                    characterListLoading: state.characterListLoading,
+                });
+                createDesk?.setVisible(false);
+                arenaDesk?.setVisible(false);
+                if (state.characterSlots.length > 0) {
+                    const names = state.characterSlots.map((s) => s.name).join(',');
+                    console.info(
+                        '[LoginScreen] SELECTCHAR desk sync slots=%d names=%s',
+                        state.characterSlots.length,
+                        names,
+                    );
+                }
+            } else if (showArena && arenaDesk) {
+                arenaDesk.setVisible(true);
+                selectDesk?.setVisible(false);
+                createDesk?.setVisible(false);
+                const wallet =
+                    state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || undefined;
+                arenaDesk.setKits(loadArenaKits(wallet));
+                arenaDesk.setSelectedDeskIndex(state.arenaDeskIndex);
+            } else {
+                selectDesk?.setVisible(false);
+                createDesk?.setVisible(false);
+                arenaDesk?.setVisible(false);
+            }
 
-        if (this.backgroundImage) {
-            this.backgroundImage.setVisible(!showSelect && !showCreate && !showArena);
+            if (this.backgroundImage) {
+                this.backgroundImage.setVisible(!showSelect && !showCreate && !showArena);
+            }
+        } catch (err) {
+            console.error('[LoginScreen] SELECTCHAR desk sync failed', err);
         }
     }
 
@@ -405,6 +423,12 @@ export class LoginScreen extends Scene {
                 this.syncDesksFromStore();
             });
         }
+        if (!this.characterSlotsUpdatedHandler) {
+            this.characterSlotsUpdatedHandler = () => {
+                this.syncDesksFromStore();
+            };
+            EventBus.on(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
+        }
     }
 
     /** Destroys desk GameObjects and restores canvas; keeps the store subscription for reconnect. */
@@ -421,6 +445,10 @@ export class LoginScreen extends Scene {
     private teardownDesks(): void {
         this.storeUnsubscribe?.();
         this.storeUnsubscribe = undefined;
+        if (this.characterSlotsUpdatedHandler) {
+            EventBus.off(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
+            this.characterSlotsUpdatedHandler = undefined;
+        }
         this.destroyDeskInstances();
     }
 

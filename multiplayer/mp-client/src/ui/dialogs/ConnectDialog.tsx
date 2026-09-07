@@ -82,6 +82,7 @@ import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
 import { HubWorldRankingButtons } from '../components/HubWorldRankingButtons';
+import { SelectCharOccupiedReactOverlay } from '../components/SelectCharOccupiedReactOverlay';
 
 interface ConnectDialogProps {
     zIndex?: number;
@@ -105,6 +106,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         walletSession,
         characterSlots,
         selectedSlotIndex,
+        characterListLoading,
     } = useStore(connectDialogStore, (s) => s);
 
     const [, setCharacterName] = useState('');
@@ -893,9 +895,19 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         ? `${walletSession.wallet.slice(0, 4)}…${walletSession.wallet.slice(-4)}`
         : undefined;
 
-    // Phaser owns SELECTCHAR / Create Character / Arena — no React chrome over the classic desks.
-    if (phase === 'play-world' || phase === 'create-char' || phase === 'arena-lobby') {
+    // Phaser owns Create Character / Arena desks. SELECTCHAR keeps a React occupied overlay
+    // from this same store so KindGem is not stuck on Empty Phaser shells.
+    if (phase === 'create-char' || phase === 'arena-lobby') {
         return null;
+    }
+    if (phase === 'play-world') {
+        return (
+            <SelectCharOccupiedReactOverlay
+                zIndex={zIndex}
+                characterSlots={characterSlots}
+                characterListLoading={characterListLoading}
+            />
+        );
     }
 
     return (

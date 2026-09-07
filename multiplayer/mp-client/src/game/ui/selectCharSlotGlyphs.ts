@@ -46,6 +46,24 @@ export function projectDeskPointToCss(
 
 export const SELECTCHAR_OCCUPIED_OVERLAY_ID = 'selectchar-occupied-labels';
 
+/** React ConnectDialog overlay — KindGem-visible even if Phaser applyPaintedSlotRows never runs. */
+export const SELECTCHAR_REACT_OCCUPIED_ID = 'selectchar-react-occupied';
+
+const REACT_OCCUPIED_BANNER_PREFIX = 'ConnectDialog React SELECTCHAR occupied';
+
+/**
+ * Banner KindGem can read without Phaser Text. Occupied names are always in the
+ * string; empty store still proves the React paint path mounted.
+ */
+export function buildSelectCharReactOccupiedBanner(rows: SlotGlyphRow[]): string {
+    const occupied = rows.filter((row) => row?.occupied);
+    if (occupied.length === 0) {
+        return `${REACT_OCCUPIED_BANNER_PREFIX} — waiting`;
+    }
+    const names = occupied.map((row) => `${row.name} ${row.lev}`).join(' · ');
+    return `${REACT_OCCUPIED_BANNER_PREFIX} ${names}`;
+}
+
 /** HTML for occupied KindGem labels (DOM sits above Phaser Canvas). */
 export function occupiedSlotOverlayInnerHtml(rows: SlotGlyphRow[]): string {
     const parts: string[] = [];

@@ -192,7 +192,7 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 35;
+    z-index: 10039;
 }
 #selectchar-occupied-labels .sc-slot-glyph {
     position: absolute;
@@ -211,6 +211,57 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     line-height: 1.2;
 }
 #selectchar-occupied-labels .sc-slot-glyph__lev {
+    font-size: 16px;
+    color: #e0b45a;
+    line-height: 1.2;
+}
+
+/* React ConnectDialog occupied overlay — same store as Painted SELECTCHAR. */
+#selectchar-react-occupied,
+.selectchar-react-occupied {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10040;
+}
+.selectchar-react-occupied__banner {
+    position: absolute;
+    left: 50%;
+    top: 0.35cm;
+    transform: translateX(-50%);
+    max-width: min(92vw, 720px);
+    padding: 8px 16px;
+    background: rgba(58, 40, 16, 0.94);
+    border: 1px solid rgba(224, 180, 90, 0.85);
+    color: #f0e0c0;
+    font-family: Spectral, Georgia, serif;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    text-shadow: 0 1px 2px #000;
+    white-space: nowrap;
+}
+.selectchar-react-occupied__slot {
+    position: absolute;
+    min-width: 140px;
+    padding: 4px 8px 6px;
+    background: rgba(58, 40, 16, 0.94);
+    border: 1px solid rgba(224, 180, 90, 0.75);
+    color: #f0e0c0;
+    font-family: Spectral, Georgia, serif;
+    text-shadow: 0 1px 2px #000;
+    white-space: nowrap;
+}
+.selectchar-react-occupied__slot[data-react-slot="0"] { left: calc(3.5cm + 7%); top: calc(2cm + 26%); }
+.selectchar-react-occupied__slot[data-react-slot="1"] { left: calc(3.5cm + 20%); top: calc(2cm + 26%); }
+.selectchar-react-occupied__slot[data-react-slot="2"] { left: calc(3.5cm + 33%); top: calc(2cm + 26%); }
+.selectchar-react-occupied__slot[data-react-slot="3"] { left: calc(3.5cm + 46%); top: calc(2cm + 26%); }
+.selectchar-react-occupied__name {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.selectchar-react-occupied__lev {
     font-size: 16px;
     color: #e0b45a;
     line-height: 1.2;

@@ -119,6 +119,23 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(glyphs, /occupiedSlotOverlayInnerHtml/);
         assert.match(glyphs, /selectchar-occupied-labels/);
+        assert.match(glyphs, /selectchar-react-occupied/);
+        assert.match(glyphs, /ConnectDialog React SELECTCHAR occupied/);
+        const overlay = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/SelectCharOccupiedReactOverlay.tsx'),
+            'utf8',
+        );
+        assert.match(overlay, /ConnectDialog React SELECTCHAR occupied/);
+        assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_ID/);
+        const connect = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'),
+            'utf8',
+        );
+        assert.match(connect, /SelectCharOccupiedReactOverlay/);
+        assert.doesNotMatch(
+            connect,
+            /phase === 'play-world' \|\| phase === 'create-char' \|\| phase === 'arena-lobby'/,
+        );
     });
 
     it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
@@ -192,5 +209,7 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /setCharacterSlots/);
         assert.match(entry, /applyPaintedSlotRows/);
         assert.match(entry, /selectchar-occupied-labels/);
+        assert.match(entry, /selectchar-react-occupied/);
+        assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
     });
 });

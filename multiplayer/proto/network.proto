@@ -1672,7 +1672,7 @@ message MonsterKillEntry {
   int64 kills = 3;
   // Olympia specialty: level from kills only (150*L^2 or species base_kills*L^2).
   int32 specialty_level = 4;
-  // specialty_level + stake bonus levels (floor(staked/100k)*10).
+  // specialty_level + stake bonus levels (floor($HELBREATH/20k) on every group).
   int32 effective_level = 5;
   // Kills required to reach specialty_level+1 (from kill base only).
   int64 next_kills = 6;
@@ -1718,7 +1718,7 @@ message ProgressionState {
   int32 majestic_points = 15;
   // Chain Lords Block Level: when true, new exp → majestic instead of leveling.
   bool level_blocked = 16;
-  // Mock / ledger $HELL staked on this wallet (utility; no yield). Specialty uses floor(staked/100k)*10.
+  // Ledger $HELBREATH staked on this character (utility; no yield). Expertise uses floor(staked/20k) on every group.
   int64 staked_hell = 17;
   // Olympia m_iHungerStatus 0–100 (100 = full).
   int32 hunger = 18;
@@ -1800,7 +1800,7 @@ message MonsterKillsUpdated {
   string monster_name = 2;
   int64 kills = 3;
   int64 total_kills = 4;
-  // Specialty snapshot for this species after the kill (same fields as MonsterKillEntry).
+  // Specialty snapshot for this species after the kill (group kill level + $HELBREATH stake).
   int32 specialty_level = 5;
   int32 effective_level = 6;
   int64 next_kills = 7;

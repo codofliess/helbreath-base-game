@@ -28,11 +28,11 @@ export interface MonsterKillRow {
     kills: number;
     /** Specialty tier from kills only (real tier). */
     specialtyLevel: number;
-    /** Real tier + stake bonus levels (final with staking). */
+    /** Group kill level + $HELBREATH stake bonus (final with staking). */
     effectiveLevel: number;
     /** Kills required for next real specialty level. */
     nextKills: number;
-    /** floor(staked/100k)*10 applied to every species. */
+    /** floor($HELBREATH/20k) applied to every monster group. */
     stakeBonusLevels: number;
     /** Compact bonus summary at effective level. */
     bonusSummary: string;
@@ -69,7 +69,7 @@ interface ProgressionStoreState {
     /** Chain Lords Block Level: new exp → majestic instead of levels. */
     levelBlocked: boolean;
     totalKills: number;
-    /** Wallet mock/ledger $HELL staked for specialty offset. */
+    /** Character ledger $HELBREATH staked for Olympia group expertise. */
     stakedHell: number;
     killsByMonsterId: Record<number, MonsterKillRow>;
     milestones: MilestoneRow[];

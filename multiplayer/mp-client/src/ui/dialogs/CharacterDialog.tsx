@@ -23,6 +23,7 @@ import {
     TOAST_REQUESTED,
 } from '../../constants/EventNames';
 import { BEGINNER_PATH_UI_ACTION } from '../../constants/BeginnerPathQuests';
+import { HELBREATH_TOKEN_TICKER, helbreathStakeBonusLevels } from '../../constants/HelbreathStake';
 import {
     characterDialogStore,
     setCharacterSubPanel,
@@ -587,7 +588,7 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
     const top = killRows[0];
     const stakeBonus =
         killRows.find((r) => r.stakeBonusLevels > 0)?.stakeBonusLevels ??
-        Math.floor(Math.max(0, progression.stakedHell) / 100_000);
+        helbreathStakeBonusLevels(progression.stakedHell);
 
     return (
         <CharacterSubPanelShell
@@ -599,8 +600,8 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
             <p className="character-subpanel-body" style={{ marginBottom: 6, fontSize: 12 }}>
                 Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                 {' · '}
-                Stake: <strong>{progression.stakedHell.toLocaleString()}</strong>
-                {stakeBonus > 0 ? ` (+${stakeBonus} final)` : ' · 100k $HELL = +1 final tier'}
+                Stake {HELBREATH_TOKEN_TICKER}: <strong>{progression.stakedHell.toLocaleString()}</strong>
+                {stakeBonus > 0 ? ` (+${stakeBonus} all groups)` : ' · 20k = +1 all groups'}
             </p>
             {top ? (
                 <p className="character-subpanel-body" style={{ marginBottom: 6, fontSize: 12 }}>

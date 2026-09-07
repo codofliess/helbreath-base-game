@@ -504,14 +504,22 @@ describe('production index-*.js (when dist exists)', () => {
         assert.doesNotMatch(entry, /gameWorldCanvasPresentation/);
         assert.doesNotMatch(entry, /ConnectDialog React SELECTCHAR occupied/);
         assert.doesNotMatch(entry, /OCCUPIED Elon Lev\.150/);
-        const occupiedChunk = files.some((f) => {
-            if (!f.endsWith('.js') || /^index-/.test(f)) {
-                return false;
-            }
-            const src = fs.readFileSync(path.join(distAssets, f), 'utf8');
-            return src.includes('OCCUPIED Elon Lev.150') && src.includes('ConnectDialog React SELECTCHAR occupied');
-        });
-        assert.equal(occupiedChunk, true, 'Occupied Elon banner must live in a post-seal lazy chunk, not hub index');
+        const occupiedElon = files.some(
+            (f) =>
+                !/^index-/.test(f) &&
+                f.endsWith('.js') &&
+                fs.readFileSync(path.join(distAssets, f), 'utf8').includes('OCCUPIED Elon Lev.150'),
+        );
+        const occupiedLog = files.some(
+            (f) =>
+                !/^index-/.test(f) &&
+                f.endsWith('.js') &&
+                fs.readFileSync(path.join(distAssets, f), 'utf8').includes(
+                    'ConnectDialog React SELECTCHAR occupied',
+                ),
+        );
+        assert.equal(occupiedElon, true, 'Occupied Elon banner must live in a post-seal lazy chunk, not hub index');
+        assert.equal(occupiedLog, true, 'Occupied paint log must live in a post-seal lazy chunk, not hub index');
         const html = fs.readFileSync(path.join(clientRoot, 'dist/index.html'), 'utf8');
         assert.doesNotMatch(html, /modulepreload[^>]+(?:phaser-|PhaserGame|gameWorldCanvasPresentation)/i);
     });

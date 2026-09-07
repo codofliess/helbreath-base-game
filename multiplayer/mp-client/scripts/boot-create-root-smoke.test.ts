@@ -127,6 +127,7 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(overlay, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_ID/);
+        assert.match(overlay, /createPortal/);
         const connect = fs.readFileSync(
             path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'),
             'utf8',

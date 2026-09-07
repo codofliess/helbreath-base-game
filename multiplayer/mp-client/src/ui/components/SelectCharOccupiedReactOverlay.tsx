@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { selectCharWarn } from '../../utils/selectCharTrace';
 import { paintSelectCharSlotRows } from '../../game/ui/selectCharDeskSync';
 import {
@@ -64,13 +65,13 @@ export function SelectCharOccupiedReactOverlay({
         });
     }, [banner, characterListLoading, occupiedNames]);
 
-    return (
+    return createPortal(
         <div
             id={SELECTCHAR_REACT_OCCUPIED_ID}
             className="selectchar-react-occupied"
             data-selectchar-react-occupied="1"
             data-occupied-count={occupied.length}
-            style={{ zIndex: zIndex + 22 }}
+            style={{ zIndex: Math.max(zIndex + 22, 10040) }}
             aria-live="polite"
         >
             <div className="selectchar-react-occupied__banner" data-selectchar-react-banner="1">
@@ -87,6 +88,7 @@ export function SelectCharOccupiedReactOverlay({
                     <div className="selectchar-react-occupied__lev">{row.lev}</div>
                 </div>
             ))}
-        </div>
+        </div>,
+        document.body,
     );
 }

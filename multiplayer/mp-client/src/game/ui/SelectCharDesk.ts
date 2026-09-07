@@ -30,6 +30,7 @@ import {
 } from './menuCharacterPreview';
 import { Direction } from '../../utils/CoordinateUtils';
 import { getStoredWalletPubkey, getStoredWalletToken } from '../../utils/walletAuth';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CHAIN_LORDS_BRAND } from './charUiMode';
 import { getItemById } from '../../constants/Items';
 import { OLYMPIA_SUPER_RARE_ITEM_IDS } from '../../utils/olympiaDropRules';
@@ -115,6 +116,7 @@ export class SelectCharDesk {
     private visible = false;
     private canvasPresentationActive = false;
     private scaleRefreshFrame: number | undefined;
+    private layoutRaf: number | undefined;
     private ignoreActionsUntilMs = 0;
     private keyHandler: ((event: KeyboardEvent) => void) | undefined;
     private menuFrame = 0;
@@ -948,32 +950,34 @@ export class SelectCharDesk {
 
     public setCharacterSlots(slots: CharacterSlotSummary[]): void {
         if (slots.length === 0 && this.slots.length > 0) {
-            console.warn('[SelectCharDesk] Ignoring empty CharacterList wipe; keeping occupied slots');
+            selectCharWarn('SelectCharDesk Ignoring empty CharacterList wipe; keeping occupied slots');
             return;
         }
-        const prev = this.slots;
-        const same =
-            prev.length === slots.length &&
-            prev.every(
-                (s, i) =>
-                    s.slotIndex === slots[i]?.slotIndex &&
-                    s.name === slots[i]?.name &&
-                    s.level === slots[i]?.level,
-            );
-        this.slots = slots.slice();
-        if (slots.length > 0) {
-            console.info(
-                '[SelectCharDesk] setCharacterSlots slots=%d names=%s visible=%s rebuild=%s',
-                slots.length,
-                slots.map((s) => s.name).join(','),
-                this.visible,
-                this.visible && !same,
-            );
-        }
-        if (this.visible && !same) {
+        const normalized = slots.map((row) => ({
+            ...row,
+            slotIndex: Number(row.slotIndex),
+        }));
+        this.slots = normalized;
+        selectCharWarn(
+            'SelectCharDesk setCharacterSlots slots=%d names=%s visible=%s',
+            normalized.length,
+            normalized.map((s) => s.name).join(',') || '(empty)',
+            this.visible,
+        );
+        if (this.visible) {
             this.rebuild();
         } else {
             this.refreshSlotTexts();
+        }
+    }
+
+    public getCharacterSlots(): CharacterSlotSummary[] {
+        return this.slots.slice();
+    }
+
+    public forceRebuild(): void {
+        if (this.visible) {
+            this.rebuild();
         }
     }
 
@@ -1025,6 +1029,9 @@ export class SelectCharDesk {
         window.removeEventListener('resize', this.onWindowResize);
         if (this.scaleRefreshFrame !== undefined) {
             window.cancelAnimationFrame(this.scaleRefreshFrame);
+        }
+        if (this.layoutRaf !== undefined) {
+            window.cancelAnimationFrame(this.layoutRaf);
         }
         this.closeWalletPanel();
         this.stopMenuWalkAnimation();
@@ -1198,7 +1205,7 @@ export class SelectCharDesk {
     }
 
     private slotForIndex(index: number): CharacterSlotSummary | undefined {
-        return this.slots.find((s) => s.slotIndex === index);
+        return this.slots.find((s) => Number(s.slotIndex) === index);
     }
 
     private refreshSlotTexts(): void {
@@ -1403,11 +1410,11 @@ export class SelectCharDesk {
     }
 
     private scheduleLayout(): void {
-        if (this.scaleRefreshFrame !== undefined) {
-            window.cancelAnimationFrame(this.scaleRefreshFrame);
+        if (this.layoutRaf !== undefined) {
+            window.cancelAnimationFrame(this.layoutRaf);
         }
-        this.scaleRefreshFrame = window.requestAnimationFrame(() => {
-            this.scaleRefreshFrame = undefined;
+        this.layoutRaf = window.requestAnimationFrame(() => {
+            this.layoutRaf = undefined;
             if (this.visible) {
                 this.rebuild();
             }

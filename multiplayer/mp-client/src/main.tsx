@@ -39,7 +39,7 @@ import {
 import { isTravelerPlayerMode } from './utils/playerMode';
 import { ensureLoginHubOpenAtBoot, installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
 import { captureReferralFromUrl } from './utils/referral';
-import { EventBus } from './game/EventBus';
+import { announcePlayClientEntry, unregisterStaleServiceWorkers } from './utils/selectCharTrace';
 
 // First-touch ?ref=CODE → localStorage for AuthenticateRequest.referral_code
 captureReferralFromUrl();
@@ -57,6 +57,9 @@ import './ui/store/Progression.store';
 import './ui/store/SystemLog.store';
 import './ui/store/MinimapEntities.store';
 import './utils/bagDropRouting';
+
+announcePlayClientEntry();
+unregisterStaleServiceWorkers();
 
 // Landing Play Now: capture ?wallet=&token=&mode=world before any scene boots.
 bootstrapWalletDeepLinkAtBoot();

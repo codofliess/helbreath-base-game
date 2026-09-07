@@ -6,12 +6,35 @@ export interface SelectCharDeskPaintTarget {
     setVisible(visible: boolean): void;
     setSelectedSlotIndex(index: number): void;
     setLoading(loading: boolean): void;
+    getCharacterSlots?(): CharacterSlotSummary[];
+    forceRebuild?(): void;
 }
 
 export interface SelectCharStorePaintState {
     characterSlots: CharacterSlotSummary[];
     selectedSlotIndex: number;
     characterListLoading: boolean;
+}
+
+/**
+ * Occupied rows win: EventBus payload, then React store, then CharacterList WS cache.
+ * LoginScreen must not re-read an empty store after a late Phaser boot missed the emit.
+ */
+export function resolveSelectCharSlotsForPaint(
+    eventSlots: CharacterSlotSummary[] | undefined,
+    storeSlots: CharacterSlotSummary[],
+    cachedSlots: CharacterSlotSummary[],
+): CharacterSlotSummary[] {
+    if (eventSlots && eventSlots.length > 0) {
+        return eventSlots;
+    }
+    if (storeSlots.length > 0) {
+        return storeSlots;
+    }
+    if (cachedSlots.length > 0) {
+        return cachedSlots;
+    }
+    return storeSlots;
 }
 
 /**
@@ -30,6 +53,11 @@ export function applyStoreToSelectCharDesk(
     desk.setCharacterSlots(state.characterSlots);
     desk.setSelectedSlotIndex(state.selectedSlotIndex);
     desk.setLoading(state.characterListLoading);
+    const painted = desk.getCharacterSlots?.() ?? state.characterSlots;
+    if (selectCharDeskIsMissingOccupiedSlots(state.characterSlots, painted)) {
+        desk.setCharacterSlots(state.characterSlots);
+        desk.forceRebuild?.();
+    }
 }
 
 /** True when the Phaser desk is missing an occupied row the React store already has. */
@@ -47,7 +75,7 @@ export function selectCharDeskIsMissingOccupiedSlots(
         (row) =>
             !deskSlots.some(
                 (desk) =>
-                    desk.slotIndex === row.slotIndex &&
+                    Number(desk.slotIndex) === Number(row.slotIndex) &&
                     desk.name === row.name &&
                     desk.level === row.level,
             ),

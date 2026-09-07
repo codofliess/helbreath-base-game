@@ -2,6 +2,7 @@ import { createDialogStore } from './utils';
 import type { WalletSession } from '../../utils/walletAuth';
 import type { CharacterSlotSummary, ReferralListInfo } from '../../utils/characterListApi';
 import { EventBus } from '../../game/EventBus';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import {
     IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
@@ -158,6 +159,13 @@ export const setCharacterSlots = (characterSlots: CharacterSlotSummary[]) => {
         return { ...state, characterSlots };
     });
     EventBus.emit(IN_UI_CHARACTER_SLOTS_UPDATED, nextSlots);
+    if (nextSlots.length > 0) {
+        selectCharWarn(
+            'EventBus setCharacterSlots slots=%d names=%s',
+            nextSlots.length,
+            nextSlots.map((s) => s.name).join(','),
+        );
+    }
 };
 
 export const setReferralInfo = (referralInfo: ReferralListInfo | null) => {

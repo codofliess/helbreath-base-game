@@ -36,7 +36,14 @@ import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import { clearWalletDeepLink, consumeWalletDeepLink, getStoredWalletPubkey } from '../../utils/walletAuth';
 import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentation';
 import { SelectCharDesk } from '../ui/SelectCharDesk';
-import { applyStoreToSelectCharDesk } from '../ui/selectCharDeskSync';
+import {
+    applyStoreToSelectCharDesk,
+    resolveSelectCharSlotsForPaint,
+    selectCharDeskIsMissingOccupiedSlots,
+} from '../ui/selectCharDeskSync';
+import { peekCachedOccupiedCharacterList } from '../../utils/characterListApi';
+import type { CharacterSlotSummary } from '../../utils/characterListApi';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CreateCharDesk } from '../ui/CreateCharDesk';
 import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
 import { loadArenaKits } from '../../utils/arenaKits';
@@ -53,7 +60,7 @@ export class LoginScreen extends Scene {
     private createCharDesk: CreateCharDesk | undefined;
     private arenaSelectCharDesk: ArenaSelectCharDesk | undefined;
     private storeUnsubscribe: (() => void) | undefined;
-    private characterSlotsUpdatedHandler: (() => void) | undefined;
+    private characterSlotsUpdatedHandler: ((slots?: CharacterSlotSummary[]) => void) | undefined;
     private isConnecting = false;
     private pendingInitialGameWorldStateListener: ((data: InitialGameWorldStateEventData) => void) | undefined;
     /** When set, login is waiting for initial state after TCP connect; auth failure closes the socket first. */
@@ -137,6 +144,7 @@ export class LoginScreen extends Scene {
             }
         } else if (alreadyEnteringWorld) {
             // React hub already entered World before Phaser booted — keep SELECTCHAR.
+            setConnectDialogOpen(true);
             console.info('[LoginScreen] Phaser ready under existing play-world phase');
         } else {
             openConnectDialogForLogin(gsm.getCharacterName() ?? '');
@@ -153,10 +161,22 @@ export class LoginScreen extends Scene {
             }
         });
         this.time.delayedCall(900, () => this.syncDesksFromStore());
+        // CharacterList often settles after the first paint; keep pulling cache/store onto the desk.
+        this.time.addEvent({
+            delay: 250,
+            repeat: 16,
+            callback: () => {
+                const st = connectDialogStore.state;
+                if (st.phase !== 'play-world' || this.isConnecting) {
+                    return;
+                }
+                this.syncDesksFromStore();
+            },
+        });
         // Safety: never leave a black stage if SELECTCHAR failed to appear.
         this.time.delayedCall(2000, () => {
             const st = connectDialogStore.state;
-            if (!st.isOpen || st.phase !== 'play-world' || this.isConnecting) {
+            if (st.phase !== 'play-world' || this.isConnecting) {
                 return;
             }
             if (!this.selectCharDesk) {
@@ -308,7 +328,7 @@ export class LoginScreen extends Scene {
     }
 
     /** Mirrors connectDialogStore desk phases onto Phaser SELECTCHAR / Create / Arena. */
-    private syncDesksFromStore(): void {
+    private syncDesksFromStore(eventSlots?: CharacterSlotSummary[]): void {
         // Recreate after destroyDeskInstances (connect attempt) — never leave play-world with
         // hub unmounted and no desks (black login-selectchar stage / empty camera).
         if (!this.selectCharDesk || !this.createCharDesk || !this.arenaSelectCharDesk) {
@@ -327,7 +347,10 @@ export class LoginScreen extends Scene {
         }
 
         const state = connectDialogStore.state;
-        const showSelect = state.isOpen && state.phase === 'play-world' && !this.isConnecting;
+        if (state.phase === 'play-world' && !state.isOpen && !this.isConnecting) {
+            setConnectDialogOpen(true);
+        }
+        const showSelect = state.phase === 'play-world' && !this.isConnecting;
         const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
         const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
         if (showSelect || showCreate || showArena) {
@@ -342,19 +365,38 @@ export class LoginScreen extends Scene {
                 selectDesk?.setVisible(false);
                 arenaDesk?.setVisible(false);
             } else if (showSelect && selectDesk) {
+                const wallet =
+                    state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || '';
+                const cached = wallet ? peekCachedOccupiedCharacterList(wallet)?.slots ?? [] : [];
+                const characterSlots = resolveSelectCharSlotsForPaint(
+                    eventSlots,
+                    state.characterSlots,
+                    cached,
+                );
                 applyStoreToSelectCharDesk(selectDesk, {
-                    characterSlots: state.characterSlots,
+                    characterSlots,
                     selectedSlotIndex: state.selectedSlotIndex,
                     characterListLoading: state.characterListLoading,
                 });
+                const deskSlots = selectDesk.getCharacterSlots();
+                if (selectCharDeskIsMissingOccupiedSlots(characterSlots, deskSlots)) {
+                    selectDesk.setCharacterSlots(characterSlots);
+                    selectDesk.forceRebuild();
+                }
                 createDesk?.setVisible(false);
                 arenaDesk?.setVisible(false);
-                if (state.characterSlots.length > 0) {
-                    const names = state.characterSlots.map((s) => s.name).join(',');
-                    console.info(
-                        '[LoginScreen] SELECTCHAR desk sync slots=%d names=%s',
-                        state.characterSlots.length,
+                if (characterSlots.length > 0) {
+                    const names = characterSlots.map((s) => s.name).join(',');
+                    selectCharWarn(
+                        'LoginScreen SELECTCHAR desk sync slots=%d names=%s',
+                        characterSlots.length,
                         names,
+                    );
+                } else {
+                    selectCharWarn(
+                        'LoginScreen SELECTCHAR desk sync slots=0 (empty shells) loading=%s store=%d',
+                        state.characterListLoading,
+                        state.characterSlots.length,
                     );
                 }
             } else if (showArena && arenaDesk) {
@@ -424,8 +466,8 @@ export class LoginScreen extends Scene {
             });
         }
         if (!this.characterSlotsUpdatedHandler) {
-            this.characterSlotsUpdatedHandler = () => {
-                this.syncDesksFromStore();
+            this.characterSlotsUpdatedHandler = (slots?: CharacterSlotSummary[]) => {
+                this.syncDesksFromStore(Array.isArray(slots) ? slots : undefined);
             };
             EventBus.on(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
         }

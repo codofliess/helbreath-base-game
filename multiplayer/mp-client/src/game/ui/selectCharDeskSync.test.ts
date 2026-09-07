@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
     applyStoreToSelectCharDesk,
+    resolveSelectCharSlotsForPaint,
     selectCharDeskIsMissingOccupiedSlots,
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
@@ -59,6 +60,14 @@ class FakeDesk implements SelectCharDeskPaintTarget {
         this.calls.push(`loading:${loading}`);
     }
 
+    getCharacterSlots(): CharacterSlotSummary[] {
+        return this.slots.slice();
+    }
+
+    forceRebuild(): void {
+        this.calls.push('rebuild');
+    }
+
     flushDeferredRebuild(): void {
         if (this.deferredRebuildSlots) {
             this.slots = this.deferredRebuildSlots.slice();
@@ -101,6 +110,30 @@ describe('applyStoreToSelectCharDesk', () => {
         assert.equal(desk.slots[0]?.name, 'Elon');
         assert.equal(desk.loading, false);
         assert.equal(desk.selected, 0);
+    });
+});
+
+describe('resolveSelectCharSlotsForPaint', () => {
+    it('prefers EventBus payload, then store, then CharacterList cache', () => {
+        const cached = [{ ...elon, name: 'Cached' }];
+        const store = [{ ...elon, name: 'Store' }];
+        const event = [{ ...elon, name: 'Event' }];
+        assert.equal(resolveSelectCharSlotsForPaint(event, store, cached)[0]?.name, 'Event');
+        assert.equal(resolveSelectCharSlotsForPaint([], store, cached)[0]?.name, 'Store');
+        assert.equal(resolveSelectCharSlotsForPaint(undefined, [], cached)[0]?.name, 'Cached');
+        assert.equal(resolveSelectCharSlotsForPaint(undefined, [], []).length, 0);
+    });
+
+    it('paints cache Elon when the store is still empty (late LoginScreen)', () => {
+        const desk = new FakeDesk();
+        const slots = resolveSelectCharSlotsForPaint(undefined, [], [elon]);
+        applyStoreToSelectCharDesk(desk, {
+            characterSlots: slots,
+            selectedSlotIndex: 0,
+            characterListLoading: false,
+        });
+        assert.equal(desk.slots[0]?.name, 'Elon');
+        assert.equal(desk.visible, true);
     });
 });
 

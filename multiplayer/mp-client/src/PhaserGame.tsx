@@ -2,13 +2,20 @@ import { forwardRef, useEffect, useRef } from 'react';
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { EventBus } from './game/EventBus';
+import StartGame from './game/main';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
 import { setWindowFocused } from './utils/RegistryUtils';
 import './ui/rpg-ui.css';
 
 /**
- * Hosts the Phaser canvas in React. Phaser is loaded lazily after the login hub paints
- * so a WebGL abort cannot empty `#root`. Canvas 2D is the primary renderer.
+ * Hosts the Phaser canvas in React. StartGame is a static import so production
+ * Rollup keeps LoginScreen / SelectCharDesk / EventBus in the same entry chunk as
+ * ConnectDialog.store. A dynamic `import('./game/main')` emitted `main-*.js` with a
+ * second `EventBus` instance, so React slot emits never reached Phaser, and the
+ * hashed `index-*.js` lacked SELECTCHAR desk-sync strings.
+ *
+ * Phaser still starts after two animation frames so the React hub can paint first.
+ * Canvas 2D is the primary renderer; StartGame failures leave `#root` intact.
  */
 
 export interface IRefPhaserGame
@@ -28,41 +35,38 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
 
-    // Hub paints first. Phaser is a dynamic import so WebGL abort cannot block createRoot.
+    // Hub paints first (rAF). Game module is static so EventBus is not split.
     useEffect(() =>
     {
         let cancelled = false;
         let paintFrame = 0;
 
         const bootPhaser = () => {
-            void (async () => {
-                try {
-                    const { default: StartGame } = await import('./game/main');
-                    if (cancelled || game.current !== null) {
-                        return;
-                    }
-                    game.current = StartGame('game-container');
-                } catch (err) {
-                    console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
-                    game.current = null;
-                }
-
-                if (cancelled) {
-                    if (game.current) {
-                        game.current.destroy(true);
-                        game.current = null;
-                    }
+            try {
+                if (cancelled || game.current !== null) {
                     return;
                 }
+                game.current = StartGame('game-container');
+            } catch (err) {
+                console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
+                game.current = null;
+            }
 
-                if (typeof ref === 'function')
-                {
-                    ref({ game: game.current, scene: null });
-                } else if (ref)
-                {
-                    ref.current = { game: game.current, scene: null };
+            if (cancelled) {
+                if (game.current) {
+                    game.current.destroy(true);
+                    game.current = null;
                 }
-            })();
+                return;
+            }
+
+            if (typeof ref === 'function')
+            {
+                ref({ game: game.current, scene: null });
+            } else if (ref)
+            {
+                ref.current = { game: game.current, scene: null };
+            }
         };
 
         paintFrame = window.requestAnimationFrame(() => {

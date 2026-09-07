@@ -110,6 +110,15 @@ function slotForIndex(slots: CharacterSlotSummary[], index: number): CharacterSl
     return slots.find((s) => s.slotIndex === index);
 }
 
+function focusHighestLevelTraveler(slots: CharacterSlotSummary[]): CharacterSlotSummary | undefined {
+    const top = highestLevelOccupiedSlot(slots);
+    if (!top) {
+        return undefined;
+    }
+    setSelectedSlotIndex(top.slotIndex);
+    return top;
+}
+
 /**
  * Login gate: hub (World | Goddesses | Arena portals).
  * World SELECTCHAR / Create Character / Arena kits are React desks (wallet stays on the hub).
@@ -382,12 +391,15 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 if (cached && cached.slots.length > 0 && !alreadyPainted) {
                     setCharacterSlots(cached.slots);
                     setReferralInfo(cached.referral ?? null);
-                    const firstOccupied = highestLevelOccupiedSlot(cached.slots) ?? cached.slots[0];
-                    setSelectedSlotIndex(firstOccupied.slotIndex);
+                    const firstOccupied = focusHighestLevelTraveler(cached.slots) ?? cached.slots[0];
                     setCharacterName(firstOccupied.name);
                 } else if (slots.length > 0) {
                     // Late Phaser LoginScreen missed the first emit — replay occupied rows.
                     EventBus.emit(IN_UI_CHARACTER_SLOTS_UPDATED, slots);
+                    const firstOccupied = focusHighestLevelTraveler(slots);
+                    if (firstOccupied) {
+                        setCharacterName(firstOccupied.name);
+                    }
                 }
                 setCharacterListLoading(false);
                 selectCharWarn(
@@ -402,8 +414,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     if (result.slots.length > 0) {
                         setCharacterSlots(result.slots);
                         setReferralInfo(result.referral ?? null);
-                        const firstOccupied = highestLevelOccupiedSlot(result.slots) ?? result.slots[0];
-                        setSelectedSlotIndex(firstOccupied.slotIndex);
+                        const firstOccupied = focusHighestLevelTraveler(result.slots) ?? result.slots[0];
                         setCharacterName(firstOccupied.name);
                         if (connectDialogStore.state.phase === 'create-char') {
                             setConnectGatePhase('play-world');
@@ -448,6 +459,10 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     if (cachedOccupied && cachedOccupied.slots.length > 0) {
                         setCharacterSlots(cachedOccupied.slots);
                         setReferralInfo(cachedOccupied.referral ?? null);
+                        const firstOccupied = focusHighestLevelTraveler(cachedOccupied.slots);
+                        if (firstOccupied) {
+                            setCharacterName(firstOccupied.name);
+                        }
                         console.warn(
                             '[ConnectDialog] Character list error; restoring buffered occupied slots',
                             error,

@@ -144,6 +144,34 @@ export function paintExplorerSelectCharRows(slots: CharacterSlotSummary[]): Sele
     return rows;
 }
 
+/** Stable id for the occupied set so Explorer can re-focus the leftmost (highest) traveler. */
+export function explorerOccupiedFingerprint(slots: CharacterSlotSummary[]): string {
+    return sortOccupiedSlotsByLevelDesc(slots)
+        .map((row) => `${row.slotIndex}:${row.name}:${row.level}`)
+        .join('|');
+}
+
+/**
+ * Arrow keys stay on occupied travelers (highest already left). Empty shells are
+ * mouse / Create Character only — Right from the last player does not wrap.
+ */
+export function nextOccupiedExplorerIndex(
+    rows: SelectCharSlotPaintRow[],
+    from: number,
+    delta: number,
+): number {
+    const occupied = rows
+        .map((row, index) => ({ row, index }))
+        .filter((entry) => entry.row.occupied);
+    if (occupied.length === 0) {
+        return Math.max(0, Math.min(Math.max(rows.length - 1, 0), from + delta));
+    }
+    const pos = occupied.findIndex((entry) => entry.index === from);
+    const start = pos >= 0 ? pos : 0;
+    const next = Math.max(0, Math.min(occupied.length - 1, start + delta));
+    return occupied[next].index;
+}
+
 /** Prefer the store selection when that card is occupied; otherwise the highest-level occupied card. */
 export function resolveSelectCharSelectedIndex(
     slots: CharacterSlotSummary[],

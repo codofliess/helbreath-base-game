@@ -12,6 +12,7 @@ import {
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
+import { highestLevelOccupiedSlot } from '../../game/ui/selectCharDeskSync';
 
 /**
  * Login gate phase:
@@ -184,12 +185,16 @@ export function takePendingWorldEnter(): ConnectToServerPayload | null {
  * unmounts without a desk phase — avoids a black empty stage after Phantom.
  */
 export const enterPlayWorldPhase = (walletSession: WalletSession) => {
-    connectDialogStore.setState((state) => ({
-        ...state,
-        isOpen: true,
-        walletSession,
-        phase: 'play-world',
-    }));
+    connectDialogStore.setState((state) => {
+        const top = highestLevelOccupiedSlot(state.characterSlots);
+        return {
+            ...state,
+            isOpen: true,
+            walletSession,
+            phase: 'play-world',
+            selectedSlotIndex: top?.slotIndex ?? state.selectedSlotIndex,
+        };
+    });
 };
 
 export const setConnectWalletSession = (walletSession: WalletSession | null) => {

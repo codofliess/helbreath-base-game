@@ -6,6 +6,8 @@ import {
     OUT_UI_SELECTCHAR_BACK,
 } from '../../constants/EventNames';
 import {
+    explorerOccupiedFingerprint,
+    nextOccupiedExplorerIndex,
     paintExplorerSelectCharRows,
     unusedDeskSlotIndex,
 } from '../../game/ui/selectCharDeskSync';
@@ -14,24 +16,28 @@ import { connectDialogStore, setSelectedSlotIndex } from '../store/ConnectDialog
 
 /**
  * React Explorer SELECTCHAR. Highest-level traveler sits on the left and is
- * selected for Enter. Arrow keys move right/left; Start uses server slotIndex.
+ * selected for Enter. Arrow keys move among occupied cards; Start uses server slotIndex.
  */
 export function SelectCharReactDesk() {
     const characterSlots = useStore(connectDialogStore, (s) => s.characterSlots);
-    const selectedSlotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const loading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(connectDialogStore, (s) => s.walletSession?.wallet);
     const rows = useMemo(() => paintExplorerSelectCharRows(characterSlots), [characterSlots]);
     const emptyServerSlot = unusedDeskSlotIndex(characterSlots);
+    const occupiedKey = useMemo(
+        () => explorerOccupiedFingerprint(characterSlots),
+        [characterSlots],
+    );
     const [visualIndex, setVisualIndex] = useState(0);
     const deskRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const match = rows.findIndex((row) => row.occupied?.slotIndex === selectedSlotIndex);
-        if (match >= 0) {
-            setVisualIndex(match);
+        setVisualIndex(0);
+        const top = rows[0]?.occupied;
+        if (top) {
+            setSelectedSlotIndex(top.slotIndex);
         }
-    }, [rows, selectedSlotIndex]);
+    }, [occupiedKey, rows]);
 
     const selectedRow = rows[visualIndex];
     const selectedOccupied = selectedRow?.occupied;
@@ -45,6 +51,13 @@ export function SelectCharReactDesk() {
             setSelectedSlotIndex(row?.occupied?.slotIndex ?? emptyServerSlot);
         },
         [emptyServerSlot, rows],
+    );
+
+    const stepOccupied = useCallback(
+        (delta: number) => {
+            selectVisual(nextOccupiedExplorerIndex(rows, visualIndex, delta));
+        },
+        [rows, selectVisual, visualIndex],
     );
 
     const startSelected = useCallback(() => {
@@ -77,12 +90,12 @@ export function SelectCharReactDesk() {
             }
             if (event.key === 'ArrowRight') {
                 event.preventDefault();
-                selectVisual(visualIndex + 1);
+                stepOccupied(1);
                 return;
             }
             if (event.key === 'ArrowLeft') {
                 event.preventDefault();
-                selectVisual(visualIndex - 1);
+                stepOccupied(-1);
                 return;
             }
             if (event.key === 'Enter') {
@@ -99,7 +112,7 @@ export function SelectCharReactDesk() {
             document.body.classList.remove('login-selectchar-active');
             window.removeEventListener('keydown', onKey);
         };
-    }, [createOnEmpty, selectVisual, selectedOccupied, startSelected, visualIndex]);
+    }, [createOnEmpty, selectedOccupied, startSelected, stepOccupied]);
 
     const walletShort = wallet
         ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}`

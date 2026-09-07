@@ -157,6 +157,9 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(desk, /SelectCharDesk painted slot texts/);
         assert.match(sync, /paintSelectCharSlotRows/);
+        assert.match(sync, /paintExplorerSelectCharRows/);
+        assert.match(sync, /nextOccupiedExplorerIndex/);
+        assert.match(sync, /highestLevelOccupiedSlot/);
         assert.match(sync, /forceRebuild/);
         assert.match(sync, /applyPaintedSlotRows/);
         assert.doesNotMatch(desk, /writeSlotCardTexts/);
@@ -202,6 +205,7 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(reactDesk, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
         assert.match(reactDesk, /SelectCharReactDesk/);
         assert.match(reactDesk, /paintExplorerSelectCharRows/);
+        assert.match(reactDesk, /nextOccupiedExplorerIndex/);
         assert.match(reactDesk, /ArrowRight/);
         assert.match(overlay, /occupiedNames.includes\('Elon'\)/);
         assert.doesNotMatch(overlay, /selectchar-react-occupied__slot/);
@@ -211,6 +215,7 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(store, /phase === 'entering-world'/);
         assert.match(store, /phaserWorldSession/);
+        assert.match(store, /highestLevelOccupiedSlot/);
         assert.doesNotMatch(
             store,
             /return state\.phase === 'play-world' \|\| state\.phase === 'create-char' \|\| state\.phase === 'arena-lobby'/,

@@ -4,7 +4,9 @@ import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
     applyStoreToSelectCharDesk,
     formatSelectCharOccupiedLev,
+    explorerOccupiedFingerprint,
     highestLevelOccupiedSlot,
+    nextOccupiedExplorerIndex,
     paintExplorerSelectCharRows,
     paintSelectCharSlotRows,
     resolveSelectCharSelectedIndex,
@@ -180,6 +182,11 @@ describe('paintExplorerSelectCharRows', () => {
         assert.equal(rows[1]?.occupied?.slotIndex, 0);
         assert.equal(rows[2]?.name, 'Empty');
         assert.equal(highestLevelOccupiedSlot([beba, co2])?.name, 'Co2');
+        assert.equal(explorerOccupiedFingerprint([beba, co2]), '1:Co2:150|0:BebaMaster:1');
+        assert.equal(nextOccupiedExplorerIndex(rows, 0, 1), 1);
+        assert.equal(nextOccupiedExplorerIndex(rows, 1, 1), 1);
+        assert.equal(nextOccupiedExplorerIndex(rows, 1, -1), 0);
+        assert.equal(nextOccupiedExplorerIndex(rows, 2, 1), 1);
     });
 });
 

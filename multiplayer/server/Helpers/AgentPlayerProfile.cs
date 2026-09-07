@@ -77,7 +77,7 @@ public static class AgentPlayerProfile {
 
     /// <summary>
     /// Drops unknown ids. Client writes (<paramref name="grantOnly"/>) may only keep free grant packs —
-    /// paid buy_nft / stake slots come from <see cref="AgentSkillShop"/>, not AuthenticateRequest.
+    /// paid buy_nft slots come from <see cref="AgentSkillShop"/>, not AuthenticateRequest.
     /// </summary>
     public static PersistedAgentSkillSlot[] SanitizeSkills(
         IEnumerable<PersistedAgentSkillSlot>? slots,

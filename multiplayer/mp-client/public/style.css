@@ -251,7 +251,7 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     line-height: 1.2;
     text-align: center;
     text-shadow: none;
-    white-space: nowrap;
+    white-space: normal;
     overflow: visible;
     clip: auto;
     clip-path: none;

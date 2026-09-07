@@ -242,6 +242,14 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(createPanel, /Friend&apos;s referral/);
         assert.doesNotMatch(createPanel, /str: 14/);
         assert.doesNotMatch(createPanel, /gender: 'male',\s*skinColor: 'light'/);
+        const rpgUi = fs.readFileSync(path.join(clientRoot, 'src/ui/rpg-ui.css'), 'utf8');
+        const createFrame = rpgUi.slice(rpgUi.indexOf('.login-desk-frame--createchar'));
+        assert.match(createFrame, /display:\s*flex/);
+        assert.match(createFrame, /height:\s*auto/);
+        assert.doesNotMatch(
+            createFrame.slice(0, 600),
+            /\.createchar-react-body\s*\{\s*position:\s*absolute/,
+        );
     });
 
     it('App mounts PhaserGame only after seal and guards render throws', () => {

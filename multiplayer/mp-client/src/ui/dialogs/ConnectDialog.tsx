@@ -4,7 +4,6 @@ import { EventBus } from '../../game/EventBus';
 import { selectCharWarn } from '../../utils/selectCharTrace';
 import {
     IN_UI_CHARACTER_SLOTS_UPDATED,
-    IN_UI_CONNECT_TO_SERVER,
     IN_UI_SUPPRESS_POINTER_INPUT,
     OUT_UI_ARENA_ACTION,
     OUT_UI_ARENA_BACK,
@@ -21,11 +20,11 @@ import {
 import {
     connectDialogStore,
     enterPlayWorldPhase,
+    beginEnteringWorld,
     setArenaDeskIndex,
     setCharacterListLoading,
     setCharacterSlots,
     setReferralInfo,
-    setConnectDialogOpen,
     setConnectGatePhase,
     setConnectWalletSession,
     setLastConnectAttempt,
@@ -83,6 +82,9 @@ import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
 import { HubWorldRankingButtons } from '../components/HubWorldRankingButtons';
 import { SelectCharOccupiedReactOverlay } from '../components/SelectCharOccupiedReactOverlay';
+import { SelectCharReactDesk } from '../components/SelectCharReactDesk';
+import { ArenaReactLobby } from '../components/ArenaReactLobby';
+import { CreateCharReactPanel } from '../components/CreateCharReactPanel';
 import { yieldForWalletUi } from '../../game/phaserWalletPark';
 
 interface ConnectDialogProps {
@@ -209,7 +211,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             mapId: invite.mapId,
         });
         openArenaPactWithKit(kitJson, found.kit.name, invite.mapId || 'colosseum');
-        EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+        beginEnteringWorld({
             host,
             port,
             characterName: found.kit.name,
@@ -227,7 +229,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             chr: 10,
             walletSession,
             arenaKitJson: kitJson,
-        } satisfies ConnectToServerPayload);
+        });
         EventBus.emit(TOAST_REQUESTED, {
             message:
                 mode === 'honor'
@@ -587,7 +589,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 if (payload.kind === 'enter-bleeding') {
                     const skin =
                         existing.skinColor === 1 ? 'tanned' : existing.skinColor === 2 ? 'dark' : 'light';
-                    EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+                    beginEnteringWorld({
                         host: getDefaultGameHost(),
                         port: getDefaultGamePort(),
                         characterName: existing.name,
@@ -717,8 +719,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             port,
             slotIndex: opts.slotIndex,
         });
-        setConnectDialogOpen(false);
-        EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+        beginEnteringWorld({
             host,
             port,
             characterName: trimmedName,
@@ -736,7 +737,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             chr: opts.chr,
             walletSession: sessionToUse,
             arenaKitJson: opts.arenaKitJson,
-        } satisfies ConnectToServerPayload);
+        });
     };
 
     const handleWalletConnect = async (
@@ -779,31 +780,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         }
     };
 
-    /**
-     * Opens a Phaser desk after the hub. Phantom close often synthesizes a late click and
-     * a focus/layout pass — suppress long enough, then enter play-world atomically so the
-     * hub never unmounts without SELECTCHAR phase (avoids a stuck black stage).
-     */
-    const enterPhaserDeskPhase = (phase: 'play-world' | 'arena-lobby', afterWalletAuth: boolean) => {
-        EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, afterWalletAuth ? 1200 : 400);
-        const applyPhase = () => {
-            if (phase === 'play-world') {
-                const session = connectDialogStore.state.walletSession;
-                if (session) {
-                    enterPlayWorldPhase(session);
-                    return;
-                }
-            }
-            setConnectGatePhase(phase);
-        };
-        if (!afterWalletAuth) {
-            applyPhase();
-            return;
-        }
-        window.setTimeout(applyPhase, 50);
-    };
-
-    /** One click: chosen wallet sign (if needed) → classic SELECTCHAR desk. */
+    /** One click: chosen wallet sign (if needed) → React SELECTCHAR (no Phaser). */
     const handleEnterWorldFromHub = async (chainOverride?: AuthChainId) => {
         const chain = chainOverride ?? authChain;
         const storeSession = connectDialogStore.state.walletSession;
@@ -889,7 +866,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         }
         setHubError(undefined);
         setArenaDeskIndex(0);
-        enterPhaserDeskPhase('arena-lobby', false);
+        setConnectGatePhase('arena-lobby');
     };
 
     if (!isOpen) {
@@ -900,19 +877,27 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         ? `${walletSession.wallet.slice(0, 4)}…${walletSession.wallet.slice(-4)}`
         : undefined;
 
-    // Phaser owns Create Character / Arena desks. SELECTCHAR keeps a React occupied overlay
-    // from this same store so KindGem is not stuck on Empty Phaser shells.
-    if (phase === 'create-char' || phase === 'arena-lobby') {
-        return null;
+    // React owns SELECTCHAR / Create / Arena until Start (entering-world).
+    if (phase === 'create-char') {
+        return <CreateCharReactPanel />;
+    }
+    if (phase === 'arena-lobby') {
+        return <ArenaReactLobby />;
     }
     if (phase === 'play-world') {
         return (
-            <SelectCharOccupiedReactOverlay
-                zIndex={zIndex}
-                characterSlots={characterSlots}
-                characterListLoading={characterListLoading}
-            />
+            <>
+                <SelectCharReactDesk />
+                <SelectCharOccupiedReactOverlay
+                    zIndex={zIndex}
+                    characterSlots={characterSlots}
+                    characterListLoading={characterListLoading}
+                />
+            </>
         );
+    }
+    if (phase === 'entering-world') {
+        return null;
     }
 
     return (

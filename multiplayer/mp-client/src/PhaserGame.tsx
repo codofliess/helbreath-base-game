@@ -12,11 +12,10 @@ import './ui/rpg-ui.css';
 export type { IRefPhaserGame } from './game/phaserHubTypes';
 
 /**
- * Hosts the Phaser canvas in React **after** a successful wallet seal.
+ * Hosts the Phaser canvas in React **after Start** (`entering-world`).
  *
- * Do not static-import `./game/main`. PR #47 delayed `new Game()` until desk phase but
- * still evaluated Phaser on the hub (EventBus + StartGame graph). KindGem Phantom overlay
- * then Aw Snapped Chrome Error 9 before signMessage (firmas=0). StartGame is a dynamic
+ * Do not static-import `./game/main`. SELECTCHAR / Arena are React so KindGem
+ * Occupied smoke and Arena clicks do not load WebGL. StartGame is a dynamic
  * import so the hub chunk never constructs Canvas/WebGL.
  */
 
@@ -36,7 +35,12 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
     const gatePhase = useStore(connectDialogStore, (s) => s.phase);
     const walletSession = useStore(connectDialogStore, (s) => s.walletSession);
-    const allowPhaser = shouldConstructPhaserAfterSeal({ phase: gatePhase, walletSession });
+    const phaserWorldSession = useStore(connectDialogStore, (s) => s.phaserWorldSession);
+    const allowPhaser = shouldConstructPhaserAfterSeal({
+        phase: gatePhase,
+        walletSession,
+        phaserWorldSession,
+    });
 
     useEffect(() =>
     {

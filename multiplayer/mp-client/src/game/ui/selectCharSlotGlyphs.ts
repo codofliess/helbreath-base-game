@@ -57,6 +57,9 @@ export const SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID = 'selectchar-kindgem-occupie
 /** Visible KindGem occupied prefix — live string is `OCCUPIED Elon Lev.150`. */
 export const SELECTCHAR_KINDGEM_OCCUPIED_PREFIX = 'OCCUPIED';
 
+/** Slot status KindGem OCR looks for next to Elon / Lev.150 (Explorer). */
+export const SELECTCHAR_OCCUPIED_SLOT_LABEL = 'Occupied';
+
 /** Dist + KindGem cut: exact occupied banner for Elon lv150. */
 export const SELECTCHAR_KINDGEM_ELON_LV150_TEXT = 'OCCUPIED Elon Lev.150';
 
@@ -584,6 +587,7 @@ export function occupiedSlotOverlayInnerHtml(rows: SlotGlyphRow[]): string {
         const lev = escapeOverlayText(row.lev);
         parts.push(
             `<div class="sc-slot-glyph" data-slot="${i}" data-occupied="1">` +
+                `<div class="sc-slot-glyph__status">${SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>` +
                 `<div class="sc-slot-glyph__name">${name}</div>` +
                 `<div class="sc-slot-glyph__lev">${lev}</div>` +
                 `</div>`,
@@ -609,9 +613,19 @@ export function paintSlotGlyphCanvas(ctx: SlotGlyphCanvas, row: SlotGlyphRow): s
     ctx.textBaseline = 'top';
     ctx.font = 'bold 18px Spectral, Georgia, serif';
     ctx.fillStyle = occupied ? '#f0e0c0' : '#cbb892';
+    if (occupied) {
+        ctx.font = 'bold 12px Spectral, Georgia, serif';
+        ctx.fillText(SELECTCHAR_OCCUPIED_SLOT_LABEL, 8, 2);
+        ctx.font = 'bold 16px Spectral, Georgia, serif';
+        ctx.fillText(row.name, 8, 16);
+        ctx.font = '14px Spectral, Georgia, serif';
+        ctx.fillStyle = '#e0b45a';
+        ctx.fillText(row.lev, 8, 36);
+        return [SELECTCHAR_OCCUPIED_SLOT_LABEL, row.name, row.lev];
+    }
     ctx.fillText(row.name, 8, 6);
     ctx.font = '16px Spectral, Georgia, serif';
-    ctx.fillStyle = occupied ? '#e0b45a' : '#cbb892';
+    ctx.fillStyle = '#cbb892';
     ctx.fillText(row.lev, 8, 30);
     return [row.name, row.lev];
 }

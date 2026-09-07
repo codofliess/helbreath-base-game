@@ -14,8 +14,8 @@ import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 
 /**
  * Login gate phase:
- * - hub — World | Goddesses | Arena; equal entry portals
- * - play-world — Phaser SELECTCHAR desk (ND_SELECTCHAR)
+ * - hub — React-only World | Goddesses | Arena (no Phaser/WebGL until seal)
+ * - play-world — Phaser SELECTCHAR desk after a successful wallet seal
  * - create-char — Phaser Create Character desk (ND_NEWCHAR) for an empty slot
  * - arena-lobby — Phaser Arena SELECTCHAR desk (kits 160/90)
  */
@@ -115,6 +115,16 @@ export const setConnectGatePhase = (phase: ConnectGatePhase) => {
     }
     connectDialogStore.setState((state) => ({ ...state, phase }));
 };
+
+/** Phaser/WebGL only after a successful seal AND a desk phase. Hub stays React-only. */
+export function shouldConstructPhaserAfterSeal(
+    state: Pick<ConnectDialogState, 'phase' | 'walletSession'> = connectDialogStore.state,
+): boolean {
+    if (!state.walletSession) {
+        return false;
+    }
+    return state.phase === 'play-world' || state.phase === 'create-char' || state.phase === 'arena-lobby';
+}
 
 /**
  * Opens SELECTCHAR in one store write (wallet + play-world) so the hub never

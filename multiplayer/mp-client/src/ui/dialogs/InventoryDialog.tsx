@@ -93,7 +93,7 @@ import { quoteOlympiaSellGold } from '../../utils/olympiaSellPrice';
 import { formatOlympiaCompactAmount } from '../../utils/olympiaFormat';
 import { getOlympiaItemPriceCatalog } from '../../utils/olympiaItemPriceCatalog';
 import { isPostTestNftMintEligible } from '../../utils/olympiaDropRules';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { loadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { Gender } from '../../Types';
 import type { ItemDropLogEntry } from '../store/ItemDrops.store';

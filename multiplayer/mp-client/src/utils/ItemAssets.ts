@@ -1,4 +1,4 @@
-import type { Scene } from 'phaser';
+import type { PhaserSceneLike } from '../game/phaserHubTypes';
 
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { AssetType, getItemEquippedAppearanceSpriteNames, getPlayerItemAppearanceAssetData, type AssetData } from '../constants/Assets';
@@ -81,7 +81,7 @@ export function isPlayerItemAppearanceLoadInFlight(spriteName: string): boolean 
  * True when the `.spr` for this basename has finished registering with Phaser (not merely sheet 0).
  * During `HBSpriteFile.load`, sheet 0 can appear before higher indices; treat that window as not loaded.
  */
-export function arePlayerItemAppearanceLoaded(scene: Scene, spriteName: string): boolean {
+export function arePlayerItemAppearanceLoaded(scene: PhaserSceneLike, spriteName: string): boolean {
     const asset = getPlayerItemAppearanceAssetData(spriteName);
     if (asset.assetType !== AssetType.SPRITE || !scene.textures.exists(`${asset.key}-0`)) {
         return false;
@@ -92,7 +92,7 @@ export function arePlayerItemAppearanceLoaded(scene: Scene, spriteName: string):
 /**
  * True when {@link GameAsset} should use the pending placeholder at construction instead of a concrete sheet texture.
  */
-export function isPlayerItemAppearanceLazyEligible(scene: Scene, spriteName: string): boolean {
+export function isPlayerItemAppearanceLazyEligible(scene: PhaserSceneLike, spriteName: string): boolean {
     return (
         LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND &&
         getItemEquippedAppearanceSpriteNames().has(spriteName) &&
@@ -107,7 +107,7 @@ export interface LoadPlayerItemAppearanceOptions {
 
 /** Fetches and registers equipped item appearance sheets (idle by default). */
 export function loadPlayerItemAppearanceOnDemand(
-    scene: Scene,
+    scene: PhaserSceneLike,
     spriteName: string,
     options?: LoadPlayerItemAppearanceOptions,
 ): Promise<void> {
@@ -143,7 +143,7 @@ export function loadPlayerItemAppearanceOnDemand(
 }
 
 function arePlayerItemAppearanceSheetsLoaded(
-    scene: Scene,
+    scene: PhaserSceneLike,
     spriteName: string,
     sheetIndices: ReadonlySet<number>,
 ): boolean {
@@ -160,7 +160,7 @@ function arePlayerItemAppearanceSheetsLoaded(
 }
 
 async function loadPlayerItemAppearanceAssets(
-    scene: Scene,
+    scene: PhaserSceneLike,
     spriteName: string,
     sheetIndices: ReadonlySet<number>,
 ): Promise<void> {
@@ -179,7 +179,7 @@ async function loadPlayerItemAppearanceAssets(
     );
 }
 
-function loadAssetOnce(scene: Scene, asset: AssetData, sheetIndices: ReadonlySet<number>): Promise<void> {
+function loadAssetOnce(scene: PhaserSceneLike, asset: AssetData, sheetIndices: ReadonlySet<number>): Promise<void> {
     const loadKey = `${asset.assetType}:${asset.key}:${[...sheetIndices].sort((a, b) => a - b).join(',')}`;
     const existing = playerItemAssetLoadPromises.get(loadKey);
     if (existing) {
@@ -195,7 +195,7 @@ function loadAssetOnce(scene: Scene, asset: AssetData, sheetIndices: ReadonlySet
 }
 
 async function fetchAndRegisterPlayerItemSprite(
-    scene: Scene,
+    scene: PhaserSceneLike,
     asset: AssetData,
     sheetIndices: ReadonlySet<number>,
 ): Promise<void> {

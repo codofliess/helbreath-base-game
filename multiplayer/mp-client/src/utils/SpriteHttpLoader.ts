@@ -1,4 +1,4 @@
-import type { Scene } from 'phaser';
+import type { PhaserSceneLike } from '../game/phaserHubTypes';
 
 import { AssetType, type AssetData } from '../constants/Assets';
 import { HBSpriteFile } from '../game/assets/HBSprite';
@@ -36,13 +36,13 @@ export function enqueueSpriteDecode<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /** True when sheet 0 for this asset key is registered (load finished enough to draw). */
-export function areSpriteSheetLoaded(scene: Scene, assetKey: string): boolean {
+export function areSpriteSheetLoaded(scene: PhaserSceneLike, assetKey: string): boolean {
     return scene.textures.exists(`${assetKey}-0`);
 }
 
 /** True when every requested local sheet exists as `assetKey-{n}`. */
 export function areSpriteSheetsLoaded(
-    scene: Scene,
+    scene: PhaserSceneLike,
     assetKey: string,
     sheetIndices?: ReadonlySet<number>,
 ): boolean {
@@ -57,7 +57,7 @@ export function areSpriteSheetsLoaded(
     return true;
 }
 
-function listSceneTextureKeys(scene: Scene): string[] {
+function listSceneTextureKeys(scene: PhaserSceneLike): string[] {
     const textures = scene.textures as {
         getTextureKeys?: () => string[];
         list?: Record<string, unknown>;
@@ -72,7 +72,7 @@ function listSceneTextureKeys(scene: Scene): string[] {
  * Drops Canvas textures + Phaser animations for one sprite cache key outside the keep-set.
  */
 export function evictSpriteSheetTextures(
-    scene: Scene,
+    scene: PhaserSceneLike,
     assetKey: string,
     keepLocalSheets: ReadonlySet<number>,
 ): number {
@@ -107,7 +107,7 @@ export function evictSpriteSheetTextures(
  * Never dumps every frame as a PNG data URL — that OOMs the live Canvas hub / pad enter.
  */
 export function loadSpriteAssetOnDemand(
-    scene: Scene,
+    scene: PhaserSceneLike,
     asset: AssetData,
     options?: LoadSpriteOnDemandOptions,
 ): Promise<void> {
@@ -154,7 +154,7 @@ export function loadSpriteAssetOnDemand(
 }
 
 async function decodeAudioIntoCache(
-    scene: Scene,
+    scene: PhaserSceneLike,
     folder: 'sounds' | 'music',
     cacheKey: string,
     fileName: string,
@@ -190,7 +190,7 @@ async function decodeAudioIntoCache(
  * Decodes one sound into Phaser audio cache if missing.
  * Missing/404 files never throw. `magic.mp3` is optional and falls back to C5.
  */
-export function loadSoundAssetOnDemand(scene: Scene, key: string, fileName: string): Promise<void> {
+export function loadSoundAssetOnDemand(scene: PhaserSceneLike, key: string, fileName: string): Promise<void> {
     const resolved = resolveSoundAsset(fileName || key);
     const cacheKey = resolved.cacheKey;
     if (scene.cache.audio.exists(cacheKey) || failedAudioKeys.has(cacheKey)) {
@@ -216,7 +216,7 @@ export function loadSoundAssetOnDemand(scene: Scene, key: string, fileName: stri
 }
 
 /** Decodes one music track into Phaser audio cache if missing. Failures are non-blocking. */
-export function loadMusicAssetOnDemand(scene: Scene, key: string, fileName: string): Promise<void> {
+export function loadMusicAssetOnDemand(scene: PhaserSceneLike, key: string, fileName: string): Promise<void> {
     const cacheKey = key.replace(/\.mp3$/i, '');
     const safeName = fileName.endsWith('.mp3') ? fileName : `${cacheKey}.mp3`;
     if (scene.cache.audio.exists(cacheKey) || failedAudioKeys.has(cacheKey)) {

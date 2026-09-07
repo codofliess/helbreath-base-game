@@ -1,4 +1,4 @@
-import { Scene } from 'phaser';
+import type { Scene } from 'phaser';
 import { loadMusicAssetOnDemand } from './SpriteHttpLoader';
 
 /**

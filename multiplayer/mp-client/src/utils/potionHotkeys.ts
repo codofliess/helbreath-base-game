@@ -1,4 +1,4 @@
-import type { Game } from 'phaser';
+import type { PhaserGameLike } from '../game/phaserHubTypes';
 import { EventBus } from '../game/EventBus';
 import { ITEM_CONSUMED_REQUESTED, TOAST_REQUESTED } from '../constants/EventNames';
 import { getItemById, ItemTypes, type InventoryItem } from '../constants/Items';
@@ -20,15 +20,15 @@ const POTION_PRIORITY: Record<'red' | 'blue' | 'green', { ids: number[]; label: 
 export type QuickPotionKind = keyof typeof POTION_PRIORITY;
 
 /** Optional Phaser game for live bag snapshot; keyboard/UI may omit it. */
-let preferredGame: Game | null = null;
+let preferredGame: PhaserGameLike | null = null;
 
 /** Called from HotkeyBar / GameWorld so pot clicks can read the live bag. */
-export function setQuickPotionGame(game: Game | null | undefined): void {
+export function setQuickPotionGame(game: PhaserGameLike | null | undefined): void {
     preferredGame = game ?? null;
 }
 
 /** Phaser game last registered for hotkeys (Page Up SA, pots, …). */
-export function getQuickPotionGame(): Game | null {
+export function getQuickPotionGame(): PhaserGameLike | null {
     return preferredGame;
 }
 

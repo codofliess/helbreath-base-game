@@ -28,7 +28,7 @@ import {
     isPlayerItemAppearanceDecodeAllowed,
     loadPlayerItemAppearanceOnDemand,
 } from './ItemAssets';
-import type { ShadowManager } from './ShadowManager';
+import { getHumanSpriteName as getHumanSpriteNameLook, resolveGearFromEquippedItems as resolveGearFromEquippedItemsLook } from './playerAppearanceLook';
 
 export enum PlayerState {
     IdlePeaceMode = 0,
@@ -437,11 +437,7 @@ export class PlayerAppearanceManager {
     }
 
     public static getHumanSpriteName(gender: Gender, skinColor: SkinColor = SkinColor.Light): string {
-        const spriteMap: Record<Gender, Record<SkinColor, string>> = {
-            [Gender.MALE]: { [SkinColor.Light]: 'wm', [SkinColor.Tanned]: 'ym', [SkinColor.Dark]: 'bm' },
-            [Gender.FEMALE]: { [SkinColor.Light]: 'ww', [SkinColor.Tanned]: 'yw', [SkinColor.Dark]: 'bw' },
-        };
-        return spriteMap[gender][skinColor];
+        return getHumanSpriteNameLook(gender, skinColor);
     }
 
     public static resolveGearFromEquippedItems(

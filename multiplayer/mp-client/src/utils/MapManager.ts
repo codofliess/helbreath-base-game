@@ -10,8 +10,9 @@ import {
 } from '../Config';
 import { EventBus } from '../game/EventBus';
 import { DOWNLOAD_MAP_SNAPSHOT, GENERATE_MINIMAP, MAP_SNAPSHOT_SHRINK_MULTIPLIER } from '../Config';
-import { getMap, getCachedMinimap, setCachedMinimap } from './RegistryUtils';
-import { getMusicManager } from './RegistryUtils';
+import { getCachedMinimap, setCachedMinimap } from './RegistryUtils';
+import { getMap } from './mapRegistry';
+import { getMusicManager } from './musicManagerRegistry';
 import { getMapData } from '../constants/Maps';
 import { Minimap } from '../constants/Assets';
 import { OUT_UI_MINIMAP_CAPTURED, OUT_UI_MINIMAP_LOADING, OUT_UI_SET_SELECTED_MUSIC } from '../constants/EventNames';

@@ -1,5 +1,3 @@
-import { Events } from 'phaser';
-
 export type ToastSeverity = 'info' | 'success' | 'warning' | 'error';
 
 export interface ToastRequestedEvent {
@@ -11,18 +9,78 @@ export interface ToastRequestedEvent {
     trackForLogoutDismiss?: boolean;
 }
 
-type HelbreathEventBusGlobal = typeof globalThis & {
-    __helbreathEventBus?: Events.EventEmitter;
-};
+type EventHandler = (...args: any[]) => void;
 
 /**
- * Phaser EventEmitter for cross-component communication.
- * Used to emit events between React UI, Phaser scenes, and game objects.
+ * Tiny EventEmitter used by React hub and Phaser scenes.
  *
- * Pinned on `globalThis` so a Rollup/circular-import second evaluation cannot
- * construct a separate bus (live index-CxnG158Y.js still emitted two
- * `new Events.EventEmitter` expressions; only one binding was used).
+ * Must not import `phaser`. KindGem + Phantom overlay OOM (Chrome Aw Snap 9) if the hub
+ * evaluates Phaser/WebGL before the seal. Pinned on `globalThis` so a later game chunk
+ * cannot construct a second bus.
  */
+class HelbreathEventBus {
+    private readonly listeners = new Map<string | symbol, Set<EventHandler>>();
+
+    public on(event: string | symbol, fn: EventHandler): this {
+        let set = this.listeners.get(event);
+        if (!set) {
+            set = new Set();
+            this.listeners.set(event, set);
+        }
+        set.add(fn);
+        return this;
+    }
+
+    public addListener(event: string | symbol, fn: EventHandler): this {
+        return this.on(event, fn);
+    }
+
+    public once(event: string | symbol, fn: EventHandler): this {
+        const wrap: EventHandler = (...args) => {
+            this.off(event, wrap);
+            fn(...args);
+        };
+        return this.on(event, wrap);
+    }
+
+    public off(event: string | symbol, fn?: EventHandler): this {
+        if (!fn) {
+            this.listeners.delete(event);
+            return this;
+        }
+        this.listeners.get(event)?.delete(fn);
+        return this;
+    }
+
+    public removeListener(event: string | symbol, fn?: EventHandler): this {
+        return this.off(event, fn);
+    }
+
+    public emit(event: string | symbol, ...args: unknown[]): boolean {
+        const set = this.listeners.get(event);
+        if (!set || set.size === 0) {
+            return false;
+        }
+        for (const fn of [...set]) {
+            fn(...args);
+        }
+        return true;
+    }
+
+    public removeAllListeners(event?: string | symbol): this {
+        if (event === undefined) {
+            this.listeners.clear();
+        } else {
+            this.listeners.delete(event);
+        }
+        return this;
+    }
+}
+
+type HelbreathEventBusGlobal = typeof globalThis & {
+    __helbreathEventBus?: HelbreathEventBus;
+};
+
 const eventBusRoot = globalThis as HelbreathEventBusGlobal;
 export const EventBus = eventBusRoot.__helbreathEventBus
-    ?? (eventBusRoot.__helbreathEventBus = new Events.EventEmitter());
+    ?? (eventBusRoot.__helbreathEventBus = new HelbreathEventBus());

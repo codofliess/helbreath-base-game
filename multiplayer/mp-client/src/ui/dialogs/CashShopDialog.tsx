@@ -20,7 +20,7 @@ import {
     setCashShopStatusMessage,
 } from '../store/CashShopDialog.store';
 import { getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { appStore } from '../store/App.store';
 import { getItemById, getItemInventorySpriteKeyWithOverrides } from '../../constants/Items';
 import { Gender } from '../../Types';

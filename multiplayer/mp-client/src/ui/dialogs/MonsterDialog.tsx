@@ -24,7 +24,7 @@ import {
     MONSTER_DIALOG_MAX_ATTACK_RECOVERY_MS,
     MONSTER_DIALOG_ATTACK_RECOVERY_SLIDER_INVERT_SUM,
 } from '../../Config';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 
 interface MonsterDialogProps {

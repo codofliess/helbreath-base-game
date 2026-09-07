@@ -19,7 +19,7 @@ import {
     shopDialogStore,
 } from '../store/ShopDialog.store';
 import { getNetworkManager, getInventoryManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 
 interface ShopDialogProps {
     position: { x: number; y: number };

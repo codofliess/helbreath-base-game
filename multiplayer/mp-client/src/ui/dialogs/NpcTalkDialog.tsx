@@ -15,7 +15,7 @@ import {
 } from '../store/NpcTalkDialog.store';
 import { progressionStore } from '../store/Progression.store';
 import { getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { EventBus } from '../../game/EventBus';
 import { SERVER_CITY_NPC_SERVICE_RESULT } from '../../constants/EventNames';
 

@@ -7,7 +7,7 @@ import {
     SKILL_MAX_LEVEL,
 } from '../../constants/OlympiaSkills';
 import { DIALOG_SCROLL_THUMB, SKILL_DIALOG_BG, SKILL_DIALOG_TITLE } from '../../constants/SpriteKeys';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
 import { appStore } from '../store/App.store';

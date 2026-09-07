@@ -13,6 +13,23 @@ const phasermsg = () => {
         buildStart() {
             process.stdout.write(`Building for production...\n`);
         },
+        generateBundle(_opts, bundle) {
+            for (const [file, chunk] of Object.entries(bundle)) {
+                if (chunk.type !== 'chunk' || !chunk.isEntry) {
+                    continue;
+                }
+                if (!file.includes('index')) {
+                    continue;
+                }
+                const staticPhaser = (chunk.imports ?? []).some((id) => id.includes('phaser'));
+                const codeHasPhaser = /from["']\.\/phaser-/.test(chunk.code ?? '');
+                if (staticPhaser || codeHasPhaser) {
+                    throw new Error(
+                        `Hub index chunk must not static-import Phaser (KindGem Error 9). ${file} imports=${JSON.stringify(chunk.imports)}`,
+                    );
+                }
+            }
+        },
         buildEnd() {
             const line = '---------------------------------------------------------';
             const msg = `❤️❤️❤️ Tell us about your game! - games@phaser.io ❤️❤️❤️`;
@@ -54,8 +71,8 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             output: {
-                // Phaser library only. Do not async-split src/game/main — that
-                // duplicates EventBus and moves SELECTCHAR desk-sync out of index-*.js.
+                // Phaser stays in its own chunk and must not load until StartGame
+                // (post-seal). EventBus is Phaser-free so index-*.js can boot the hub.
                 manualChunks: {
                     phaser: ['phaser'],
                 },

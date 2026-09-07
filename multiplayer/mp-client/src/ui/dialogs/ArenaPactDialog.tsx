@@ -18,7 +18,7 @@ import {
 } from '../../constants/EventNames';
 import { ARENA_MAPS } from '../../constants/ArenaKitCatalog';
 import type { ArenaPactListResponse, ArenaPactState } from '../../proto/generated/network';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { connectDialogStore } from '../store/ConnectDialog.store';

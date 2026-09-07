@@ -96,13 +96,33 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(src, /failIfMajorPerformanceCaveat:\s*false/);
     });
 
-    it('PhaserGame static-imports StartGame so SELECTCHAR desk-sync stays in index-*.js', () => {
-        const src = fs.readFileSync(path.join(clientRoot, 'src/PhaserGame.tsx'), 'utf8');
-        assert.match(src, /^import StartGame from '\.\/game\/main';/m);
-        assert.doesNotMatch(src, /await import\('\.\/game\/main'\)/);
-        assert.doesNotMatch(src, /useLayoutEffect\(/);
-        assert.match(src, /gatePhase === 'hub'/);
-        assert.match(src, /parkPhaserForWalletUi|setLivePhaserGame/);
+    it('hub does not evaluate Phaser: EventBus is Phaser-free and StartGame is post-seal', () => {
+        const eventBus = fs.readFileSync(path.join(clientRoot, 'src/game/EventBus.ts'), 'utf8');
+        assert.doesNotMatch(eventBus, /from ['"]phaser['"]/);
+        assert.doesNotMatch(eventBus, /Events\.EventEmitter/);
+        const phaserGame = fs.readFileSync(path.join(clientRoot, 'src/PhaserGame.tsx'), 'utf8');
+        assert.doesNotMatch(phaserGame, /^import StartGame from '\.\/game\/main';/m);
+        assert.match(phaserGame, /import\('\.\/game\/main'\)/);
+        assert.match(phaserGame, /shouldConstructPhaserAfterSeal/);
+        assert.doesNotMatch(phaserGame, /ToastContainer/);
+        const app = fs.readFileSync(path.join(clientRoot, 'src/App.tsx'), 'utf8');
+        assert.match(app, /lazy\(async \(\) => \{/);
+        assert.match(app, /import\('\.\/PhaserGame'\)/);
+        assert.match(app, /mountPhaserAfterSeal/);
+        assert.match(app, /ToastContainer/);
+        assert.match(app, /from '\.\/game\/phaserHubTypes'/);
+        assert.doesNotMatch(app, /from ['"]\.\/PhaserGame['"]/);
+        const registry = fs.readFileSync(path.join(clientRoot, 'src/utils/RegistryUtils.ts'), 'utf8');
+        assert.match(registry, /from '\.\.\/game\/phaserHubTypes'/);
+        assert.doesNotMatch(registry, /from ['"]phaser['"]/);
+        assert.doesNotMatch(registry, /from '\.\.\/game\/assets\/HBMap'/);
+        assert.doesNotMatch(registry, /from '\.\/MusicManager'/);
+        const coords = fs.readFileSync(path.join(clientRoot, 'src/utils/CoordinateUtils.ts'), 'utf8');
+        assert.match(coords, /from '\.\.\/constants\/TileSize'/);
+        assert.doesNotMatch(coords, /import \{ TILE_SIZE \} from '\.\.\/game\/assets\/HBMap'/);
+        assert.doesNotMatch(coords, /Phaser\.Math/);
+        const sprite = fs.readFileSync(path.join(clientRoot, 'src/game/assets/HBSprite.ts'), 'utf8');
+        assert.doesNotMatch(sprite, /import \{ CANVAS/);
     });
 
     it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {
@@ -165,10 +185,11 @@ describe('createRoot boot path (no wallet)', () => {
         );
     });
 
-    it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
+    it('App mounts PhaserGame only after seal and guards render throws', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/App.tsx'), 'utf8');
         assert.match(src, /PhaserMountGuard/);
         assert.match(src, /<PhaserGame /);
+        assert.match(src, /mountPhaserAfterSeal &&/);
         assert.match(src, /rpg-ui\.css/);
     });
 
@@ -419,31 +440,20 @@ describe('hub Phantom sign path (source)', () => {
 });
 
 describe('production index-*.js (when dist exists)', () => {
-    it('hard-gates SELECTCHAR desk-sync in the entry chunk and forbids a main-* EventBus split', () => {
+    it('keeps Phaser out of the hub entry chunk so KindGem can seal without Error 9', () => {
         const distAssets = path.join(clientRoot, 'dist/assets');
         if (!fs.existsSync(distAssets)) {
             return;
         }
         const files = fs.readdirSync(distAssets);
         const indexFiles = files.filter((f) => /^index-.*\.js$/.test(f));
-        const mainFiles = files.filter((f) => /^main-.*\.js$/.test(f));
         assert.equal(indexFiles.length, 1, `expected one index-*.js, got ${indexFiles.join(',')}`);
-        assert.equal(mainFiles.length, 0, `EventBus split main-* chunk must not exist: ${mainFiles.join(',')}`);
         const entry = fs.readFileSync(path.join(distAssets, indexFiles[0]), 'utf8');
-        assert.match(entry, /SELECTCHAR desk sync/);
-        assert.match(entry, /painted slot texts/);
-        assert.match(entry, /setCharacterSlots/);
-        assert.match(entry, /applyPaintedSlotRows/);
-        assert.match(entry, /selectchar-occupied-labels/);
-        assert.match(entry, /selectchar-react-occupied/);
-        assert.match(entry, /selectchar-kindgem-occupied-banner/);
+        assert.doesNotMatch(entry, /Cannot create WebGL context, aborting/);
+        assert.doesNotMatch(entry, /buildGameConfig\(parent/);
+        assert.doesNotMatch(entry, /from["']\.\/phaser-/);
         assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
-        assert.match(entry, /React SELECTCHAR occupied painted names=/);
-        assert.match(entry, /React SELECTCHAR occupied DOM textContent=/);
-        assert.match(entry, /React SELECTCHAR KindGem visible=/);
         assert.match(entry, /OCCUPIED Elon Lev\.150/);
         assert.match(entry, /selectchar-kindgem-occupied-banner/);
-        assert.match(entry, /parentOverflow/);
-        assert.match(entry, /document\.body/);
     });
 });

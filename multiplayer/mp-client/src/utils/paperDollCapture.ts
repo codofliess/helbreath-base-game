@@ -1,6 +1,4 @@
-import type { GameObjects, Scene } from 'phaser';
 import { Gender, SkinColor, type PivotFrame } from '../Types';
-import { PlayerAppearanceManager } from './PlayerAppearanceManager';
 import { EventBus } from '../game/EventBus';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../constants/EventNames';
 import { ItemTypes, type EquipmentSlot, type InventoryItem } from '../constants/Items';
@@ -11,6 +9,45 @@ import {
     arePlayerItemAppearanceLoaded,
 } from './ItemAssets';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
+import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
+
+type PaperDollScene = {
+    registry: { get: (key: string) => unknown };
+    textures: {
+        exists: (key: string) => boolean;
+        get: (key: string) => {
+            get: (frame: string | number) => {
+                source?: unknown;
+                cutWidth: number;
+                cutHeight: number;
+                cutX: number;
+                cutY: number;
+            };
+            getSourceImage: () => CanvasImageSource;
+        };
+        getTextureKeys?: () => string[];
+        list?: Record<string, unknown>;
+    };
+};
+
+type PaperDollSprite = {
+    texture?: {
+        key?: string;
+        source?: Array<{ image?: CanvasImageSource }>;
+        getSourceImage?: () => CanvasImageSource;
+    };
+    frame?: {
+        name?: string | number;
+        cutWidth: number;
+        cutHeight: number;
+        cutX: number;
+        cutY: number;
+    };
+    visible?: boolean;
+    alpha?: number;
+    x?: number;
+    y?: number;
+};
 
 /** React spriteFrameMap keys for F5 paper-doll. */
 export const PAPERDOLL_BODY_KEY = 'paperdoll-body';
@@ -21,7 +58,7 @@ export const PAPERDOLL_COMPOSITE_KEY = 'paperdoll-composite';
 
 /** Minimal player surface for live map capture (avoids circular imports with Player). */
 export interface PaperDollLivePlayer {
-    getVisibleSpritesForPaperDoll(): Array<{ sprite: GameObjects.Sprite; spriteName: string }>;
+    getVisibleSpritesForPaperDoll(): Array<{ sprite: PaperDollSprite; spriteName: string }>;
     getGender(): Gender;
     getHumanSpriteName(): string;
 }
@@ -95,7 +132,7 @@ function resolveIdleTexture(
 }
 
 function getPivotFrame(
-    scene: Scene,
+    scene: PaperDollScene,
     spriteName: string,
     spriteSheetIndex: number,
     frameIndex: number,
@@ -115,7 +152,7 @@ function getPivotFrame(
 }
 
 function extractFrameToCanvas(
-    scene: Scene,
+    scene: PaperDollScene,
     texKey: string,
     frameIndex: number,
 ): { canvas: HTMLCanvasElement; cutW: number; cutH: number } | undefined {
@@ -157,7 +194,7 @@ function extractFrameToCanvas(
     }
 }
 
-function extractFrameDataUrl(scene: Scene, texKey: string, frameIndex: number): string | undefined {
+function extractFrameDataUrl(scene: PaperDollScene, texKey: string, frameIndex: number): string | undefined {
     const extracted = extractFrameToCanvas(scene, texKey, frameIndex);
     if (!extracted) {
         return undefined;
@@ -202,14 +239,14 @@ function buildCompositeLayers(
     underwearColorIndex: number,
     equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
 ): CompositeLayer[] {
-    const human = PlayerAppearanceManager.getHumanSpriteName(gender, skinColor);
+    const human = getHumanSpriteName(gender, skinColor);
     const hair = gender === Gender.MALE ? 'mhr' : 'whr';
     const underwear = gender === Gender.MALE ? 'mpt' : 'wpt';
     const underPack = Math.max(0, Math.min(7, underwearColorIndex)) * 12;
     const hairPack =
         Math.max(0, Math.min(7, hairStyleIndex === 2 ? 0 : hairStyleIndex)) * 12;
 
-    const resolved = PlayerAppearanceManager.resolveGearFromEquippedItems(
+    const resolved = resolveGearFromEquippedItems(
         {
             human,
             underwear,
@@ -310,7 +347,7 @@ function buildCompositeLayers(
     return layers;
 }
 
-function compositeIdleSouth(scene: Scene, layers: CompositeLayer[]): string | undefined {
+function compositeIdleSouth(scene: PaperDollScene, layers: CompositeLayer[]): string | undefined {
     type Placed = {
         canvas: HTMLCanvasElement;
         x: number;
@@ -422,7 +459,7 @@ function equipHash(
  * Prefer this over rebuilt idle-south layers — store skin/hair can lag and produce a wrong mannequin.
  */
 export function capturePaperDollFromLivePlayer(
-    scene: Scene,
+    _scene: PaperDollScene,
     player: PaperDollLivePlayer,
     force = false,
 ): boolean {
@@ -458,7 +495,7 @@ export function capturePaperDollFromLivePlayer(
     return true;
 }
 
-function extractSpriteFrameDataUrl(sprite: GameObjects.Sprite): string | undefined {
+function extractSpriteFrameDataUrl(sprite: PaperDollSprite): string | undefined {
     try {
         const texture = sprite.texture;
         const frame = sprite.frame;
@@ -473,7 +510,7 @@ function extractSpriteFrameDataUrl(sprite: GameObjects.Sprite): string | undefin
             return undefined;
         }
         ctx.imageSmoothingEnabled = false;
-        const source = texture.getSourceImage() as CanvasImageSource;
+        const source = texture.getSourceImage?.() as CanvasImageSource;
         ctx.drawImage(
             source,
             frame.cutX,
@@ -494,7 +531,7 @@ function extractSpriteFrameDataUrl(sprite: GameObjects.Sprite): string | undefin
 /**
  * Composite live Phaser sprites (same pixels as on the map) into a single data URL.
  */
-function compositePhaserSprites(sprites: GameObjects.Sprite[]): string | undefined {
+function compositePhaserSprites(sprites: PaperDollSprite[]): string | undefined {
     type Placed = { canvas: HTMLCanvasElement; x: number; y: number; w: number; h: number };
     const placed: Placed[] = [];
     let minX = Infinity;
@@ -503,7 +540,7 @@ function compositePhaserSprites(sprites: GameObjects.Sprite[]): string | undefin
     let maxY = -Infinity;
 
     for (const spr of sprites) {
-        if (!spr.visible || spr.alpha < 0.05) {
+        if (spr.visible === false || (spr.alpha ?? 1) < 0.05) {
             continue;
         }
         const frame = spr.frame;
@@ -523,7 +560,7 @@ function compositePhaserSprites(sprites: GameObjects.Sprite[]): string | undefin
                 continue;
             }
             ctx.imageSmoothingEnabled = false;
-            const source = tex.getSourceImage() as CanvasImageSource;
+            const source = tex.getSourceImage?.() as CanvasImageSource;
             ctx.drawImage(
                 source,
                 frame.cutX,
@@ -536,8 +573,8 @@ function compositePhaserSprites(sprites: GameObjects.Sprite[]): string | undefin
                 frame.cutHeight,
             );
             // GameAsset uses origin (0,0); sprite.x/y already include pivot offset → top-left of frame.
-            const x = spr.x;
-            const y = spr.y;
+            const x = spr.x ?? 0;
+            const y = spr.y ?? 0;
             placed.push({ canvas, x, y, w: frame.cutWidth, h: frame.cutHeight });
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
@@ -583,7 +620,7 @@ function compositePhaserSprites(sprites: GameObjects.Sprite[]): string | undefin
  * Prefer {@link capturePaperDollFromLivePlayer} when the local Player exists.
  */
 export function capturePaperDollBodyLayers(
-    scene: Scene,
+    scene: PaperDollScene,
     gender: Gender,
     skinColor: SkinColor,
     hairStyleIndex: number,
@@ -596,7 +633,7 @@ export function capturePaperDollBodyLayers(
         return;
     }
 
-    const human = PlayerAppearanceManager.getHumanSpriteName(gender, skinColor);
+    const human = getHumanSpriteName(gender, skinColor);
     const hair = gender === Gender.MALE ? 'mhr' : 'whr';
     const underwear = gender === Gender.MALE ? 'mpt' : 'wpt';
 
@@ -614,7 +651,7 @@ export function capturePaperDollBodyLayers(
     // Last resort: any loaded texture whose key starts with sprite-{human}-
     if (!bodyUrl && scene.textures) {
         try {
-            const tex = scene.textures as Phaser.Textures.TextureManager & {
+            const tex = scene.textures as {
                 getTextureKeys?: () => string[];
                 list?: Record<string, unknown>;
             };

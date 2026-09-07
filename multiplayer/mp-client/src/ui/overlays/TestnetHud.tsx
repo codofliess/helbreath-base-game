@@ -18,7 +18,7 @@ import {
     TESTNET_X_HANDLE,
 } from '../../constants/TestnetCredits';
 import { getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import '../rpg-ui.css';
 
 interface TestnetHudProps {

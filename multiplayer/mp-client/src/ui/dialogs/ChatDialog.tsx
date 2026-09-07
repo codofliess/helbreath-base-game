@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_SUPPRESS_POINTER_INPUT } from '../../constants/EventNames';
 import { getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import {
     chatDialogStore,
     filterChatMessages,

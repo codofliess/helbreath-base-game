@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { toast } from 'react-toastify';
 import { TOURNAMENT_DIALOG_BG } from '../../constants/SpriteKeys';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { isTravelerPlayerMode } from '../../utils/playerMode';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { OlympiaDialogShell } from '../components/OlympiaDialogShell';

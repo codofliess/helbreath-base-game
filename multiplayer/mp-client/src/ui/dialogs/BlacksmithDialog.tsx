@@ -18,7 +18,7 @@ import {
     blacksmithDialogStore,
 } from '../store/BlacksmithDialog.store';
 import { getNetworkManager, getInventoryManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 
 interface BlacksmithDialogProps {
     position: { x: number; y: number };

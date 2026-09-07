@@ -80,6 +80,8 @@ export const IN_UI_CHANGE_GRACE_PERIOD = 'ui-change-grace-period';
 export const IN_UI_SUPPRESS_POINTER_INPUT = 'ui-suppress-pointer-input';
 /** React → Phaser (login): connect to game server. Payload: ConnectToServerPayload */
 export const IN_UI_CONNECT_TO_SERVER = 'ui-connect-to-server';
+/** React store → Phaser: CharacterList rows changed (SELECTCHAR must re-paint). Payload: CharacterSlotSummary[] */
+export const IN_UI_CHARACTER_SLOTS_UPDATED = 'ui-character-slots-updated';
 /** Phaser SELECTCHAR → React: Start / Create on occupied or empty slot. Payload: SelectCharActionPayload */
 export const OUT_UI_SELECTCHAR_ACTION = 'ui-selectchar-action';
 /** Phaser SELECTCHAR → React: Exit / back to hub. */

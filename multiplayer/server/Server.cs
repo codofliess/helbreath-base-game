@@ -430,6 +430,8 @@ app.Map("/ws", async context => {
         receiveCts,
         sendCts.Token);
     var isConnectedToGameWorld = false;
+    // After CharacterListResponse the client paints SELECTCHAR (no AuthenticateRequest on this socket).
+    var characterListResponseSent = false;
 
     void EnqueueOutgoingMessage(ServerMessage responseMessage) {
         if (!usePriorityQueue) {
@@ -476,7 +478,9 @@ app.Map("/ws", async context => {
 
     try {
         while (webSocket.State == WebSocketState.Open) {
-            var receiveToken = isConnectedToGameWorld ? receiveCts.Token : authenticationTimeoutCts.Token;
+            var receiveToken = isConnectedToGameWorld || characterListResponseSent
+                ? receiveCts.Token
+                : authenticationTimeoutCts.Token;
             var (messageType, payload) = await ReceiveMessageAsync(webSocket, receiveBuffer, messageScratch, receiveToken);
             if (messageType == WebSocketMessageType.Close) {
                 await SendCloseFrameAsync(
@@ -591,7 +595,9 @@ app.Map("/ws", async context => {
                     }
 
                     EnqueueOutgoingMessage(new ServerMessage { CharacterListResponse = listResponse });
-                    // Stay pre-world so the client can AuthenticateRequest with the chosen slot.
+                    characterListResponseSent = true;
+                    // Stay pre-world so the client can AuthenticateRequest with the chosen slot
+                    // (usually a new WS). Do not keep the ping-auth timer on this list-only socket.
                     continue;
                 }
 
@@ -898,6 +904,7 @@ app.Map("/ws", async context => {
             await RouteClientPacketAsync(authenticatedSession!, clientMessage, receiveCts.Token);
         }
     } catch (OperationCanceledException) when (!isConnectedToGameWorld &&
+        !characterListResponseSent &&
         authenticationTimeoutCts.IsCancellationRequested &&
         !receiveCts.IsCancellationRequested) {
         RequestDisconnect("Authentication request not received in time.");

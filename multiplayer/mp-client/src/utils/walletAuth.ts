@@ -162,6 +162,58 @@ export function getStoredAuthChainId(): AuthChainId | undefined {
     return isAuthChainId(raw) ? raw : undefined;
 }
 
+/** Verified Phantom session for this tab — survives React remount; never restored from localStorage. */
+let inMemorySolSession: WalletSession | undefined;
+/** True while Bind / Aresden / Elendiel is running connect+sign. */
+let hubWorldEnterLock = false;
+/** Swallow Phantom ghost clicks after a successful hub sign. */
+let hubWorldEnterQuietUntil = 0;
+
+export function peekInMemorySolSession(): WalletSession | undefined {
+    const token = inMemorySolSession?.token?.trim() ?? '';
+    const wallet = inMemorySolSession?.wallet?.trim() ?? '';
+    if (!token || !wallet) {
+        return undefined;
+    }
+    if (inMemorySolSession && storedTokenIsExpired(inMemorySolSession.expiresAt)) {
+        return undefined;
+    }
+    return inMemorySolSession;
+}
+
+export function rememberInMemorySolSession(session: WalletSession): void {
+    inMemorySolSession = session;
+}
+
+export function clearInMemorySolSession(): void {
+    inMemorySolSession = undefined;
+}
+
+/**
+ * Whether overlapping Bind / Aresden / Elendiel / Kind ghost clicks should be ignored.
+ * Reconnect / Sign again does not use this lock.
+ */
+export function tryBeginHubWorldEnter(): boolean {
+    if (hubWorldEnterLock) {
+        return false;
+    }
+    hubWorldEnterLock = true;
+    return true;
+}
+
+export function finishHubWorldEnter(): void {
+    hubWorldEnterLock = false;
+    hubWorldEnterQuietUntil = Date.now() + 2500;
+}
+
+export function abortHubWorldEnter(): void {
+    hubWorldEnterLock = false;
+}
+
+export function isHubWorldEnterQuiet(): boolean {
+    return hubWorldEnterLock || Date.now() < hubWorldEnterQuietUntil;
+}
+
 /**
  * True when World enter must open Phantom (no in-memory seal yet, or chain switched).
  * A just-verified hub session is enough for CharacterList — do not prompt a second sign.
@@ -172,15 +224,44 @@ export function needsWalletSignForWorldEnter(
     chainId: AuthChainId,
     session: WalletSession | null | undefined,
 ): boolean {
-    const wallet = session?.wallet?.trim() ?? '';
-    const token = session?.token?.trim() ?? '';
+    const effective =
+        session?.token?.trim() && session.wallet?.trim()
+            ? session
+            : chainId === 'sol'
+              ? peekInMemorySolSession()
+              : session;
+    const wallet = effective?.wallet?.trim() ?? '';
+    const token = effective?.token?.trim() ?? '';
     if (!wallet || !token) {
         return true;
     }
-    if (session?.chainId && session.chainId !== chainId) {
+    if (effective?.chainId && effective.chainId !== chainId) {
         return true;
     }
     return false;
+}
+
+/**
+ * Hub Phantom policy: reuse the in-memory Sol session unless Reconnect forces a fresh sign.
+ * Second and third Connect clicks after a successful verify must not call signMessage.
+ */
+export function resolveHubPhantomAuthAction(
+    chainId: AuthChainId,
+    options: { forceFresh?: boolean } | undefined,
+    inMemory: WalletSession | undefined = peekInMemorySolSession(),
+): 'reuse-memory' | 'sign' {
+    if (chainId !== 'sol') {
+        return 'sign';
+    }
+    if (options?.forceFresh) {
+        return 'sign';
+    }
+    const wallet = inMemory?.wallet?.trim() ?? '';
+    const token = inMemory?.token?.trim() ?? '';
+    if (wallet && token && !storedTokenIsExpired(inMemory?.expiresAt)) {
+        return 'reuse-memory';
+    }
+    return 'sign';
 }
 
 /**
@@ -767,16 +848,40 @@ async function connectEvmAndAuthenticate(chainId: 'rh' | 'base'): Promise<Wallet
 
 /**
  * Connect + challenge + verify for `sol` (Phantom), `rh`, or `base` (EIP-1193 personal_sign).
- * Phantom Sol always clears a stale token and requires a fresh signMessage.
- * Overlapping hub clicks share one in-flight Sol auth so Kind cannot open a second popup.
+ * Phantom Sol always clears a stale token and requires a fresh signMessage unless this tab
+ * already verified a Sol session. Overlapping hub clicks share one in-flight Sol auth.
  */
 let solAuthInFlight: Promise<WalletSession> | undefined;
+let solSignRequestCount = 0;
+
+/** Test helper: how many times this tab entered Phantom signMessage for Sol. */
+export function peekSolSignRequestCount(): number {
+    return solSignRequestCount;
+}
+
+export function resetWalletAuthClientStateForTests(): void {
+    inMemorySolSession = undefined;
+    hubWorldEnterLock = false;
+    hubWorldEnterQuietUntil = 0;
+    solAuthInFlight = undefined;
+    solSignRequestCount = 0;
+}
 
 export async function connectWalletAndAuthenticate(
     chainId: AuthChainId = 'sol',
     options?: ConnectWalletAuthOptions,
 ): Promise<WalletSession> {
     persistPreferredAuthChain(chainId);
+    if (resolveHubPhantomAuthAction(chainId, options) === 'reuse-memory') {
+        const reused = peekInMemorySolSession();
+        if (reused) {
+            console.info(
+                '[walletAuth] Reusing in-memory Sol session (no signMessage) wallet=%s…',
+                reused.wallet.slice(0, 8),
+            );
+            return reused;
+        }
+    }
     if (chainId === 'sol' && solAuthInFlight) {
         return solAuthInFlight;
     }
@@ -784,10 +889,19 @@ export async function connectWalletAndAuthenticate(
         if (chainId === 'sol' || options?.forceFresh) {
             clearStoredWalletAuth();
         }
+        if (chainId === 'sol' && options?.forceFresh) {
+            clearInMemorySolSession();
+        }
+        if (chainId === 'sol') {
+            solSignRequestCount += 1;
+        }
         const session = chainId === 'sol'
             ? await connectSolanaAndAuthenticate(options?.onSignPending)
             : await connectEvmAndAuthenticate(chainId);
         persistWalletSession(session);
+        if (chainId === 'sol') {
+            rememberInMemorySolSession(session);
+        }
         return session;
     })();
     if (chainId === 'sol') {

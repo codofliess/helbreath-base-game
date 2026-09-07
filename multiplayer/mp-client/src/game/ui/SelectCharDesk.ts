@@ -948,6 +948,10 @@ export class SelectCharDesk {
     }
 
     public setCharacterSlots(slots: CharacterSlotSummary[]): void {
+        if (slots.length === 0 && this.slots.length > 0) {
+            console.warn('[SelectCharDesk] Ignoring empty CharacterList wipe; keeping occupied slots');
+            return;
+        }
         const prev = this.slots;
         const same =
             prev.length === slots.length &&

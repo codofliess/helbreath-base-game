@@ -104,6 +104,7 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(phaserGame, /^import StartGame from '\.\/game\/main';/m);
         assert.match(phaserGame, /import\('\.\/game\/main'\)/);
         assert.match(phaserGame, /shouldConstructPhaserAfterSeal/);
+        assert.doesNotMatch(phaserGame, /from ['"]phaser['"]/);
         assert.doesNotMatch(phaserGame, /ToastContainer/);
         const app = fs.readFileSync(path.join(clientRoot, 'src/App.tsx'), 'utf8');
         assert.match(app, /lazy\(async \(\) => \{/);
@@ -112,6 +113,10 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(app, /ToastContainer/);
         assert.match(app, /from '\.\/game\/phaserHubTypes'/);
         assert.doesNotMatch(app, /from ['"]\.\/PhaserGame['"]/);
+        assert.doesNotMatch(app, /from ['"]\.\/ui\/components\/HotkeyBar['"]/);
+        assert.doesNotMatch(app, /from ['"]\.\/ui\/dialogs\/ControlsDialog['"]/);
+        assert.match(app, /import\('\.\/ui\/components\/HotkeyBar'\)/);
+        assert.match(app, /import\('\.\/ui\/dialogs\/ControlsDialog'\)/);
         const registry = fs.readFileSync(path.join(clientRoot, 'src/utils/RegistryUtils.ts'), 'utf8');
         assert.match(registry, /from '\.\.\/game\/phaserHubTypes'/);
         assert.doesNotMatch(registry, /from ['"]phaser['"]/);
@@ -125,19 +130,31 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(sprite, /import \{ CANVAS/);
         const vite = fs.readFileSync(path.join(clientRoot, 'vite/config.prod.mjs'), 'utf8');
         assert.doesNotMatch(vite, /phaser:\s*\[\s*['"]phaser['"]\s*\]/);
+        assert.match(vite, /resolveDependencies/);
+        assert.match(vite, /isPhaserPreloadId/);
+        const mainGame = fs.readFileSync(path.join(clientRoot, 'src/game/main.ts'), 'utf8');
+        assert.match(mainGame, /shouldConstructPhaserAfterSeal/);
+        assert.match(mainGame, /Refusing Phaser\/WebGL construct before entering-world/);
     });
 
-    it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {
+    it('LoginScreen is connect-only and never constructs Phaser SELECTCHAR desks', () => {
         const login = fs.readFileSync(
             path.join(clientRoot, 'src/game/scenes/LoginScreen.ts'),
             'utf8',
         );
+        assert.match(login, /Phaser ready for queued world enter \(no SELECTCHAR desks\)/);
+        assert.doesNotMatch(login, /from ['"]\.\.\/ui\/SelectCharDesk['"]/);
+        assert.doesNotMatch(login, /from ['"]\.\.\/ui\/CreateCharDesk['"]/);
+        assert.doesNotMatch(login, /from ['"]\.\.\/ui\/ArenaSelectCharDesk['"]/);
+        assert.doesNotMatch(login, /loadSelectAppearanceSprites/);
+        assert.doesNotMatch(login, /ensureDesks/);
+        assert.doesNotMatch(login, /syncDesksFromStore/);
+        assert.doesNotMatch(login, /alreadyEnteringWorld/);
         const desk = fs.readFileSync(path.join(clientRoot, 'src/game/ui/SelectCharDesk.ts'), 'utf8');
         const sync = fs.readFileSync(
             path.join(clientRoot, 'src/game/ui/selectCharDeskSync.ts'),
             'utf8',
         );
-        assert.match(login, /LoginScreen SELECTCHAR desk sync/);
         assert.match(desk, /SelectCharDesk painted slot texts/);
         assert.match(sync, /paintSelectCharSlotRows/);
         assert.match(sync, /forceRebuild/);
@@ -207,6 +224,9 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(connect, /SelectCharOccupiedReactOverlay/);
         assert.match(connect, /SelectCharReactDesk/);
         assert.match(connect, /ArenaReactLobby/);
+        assert.match(connect, /import\('\.\.\/components\/SelectCharReactDesk'\)/);
+        assert.match(connect, /import\('\.\.\/components\/ArenaReactLobby'\)/);
+        assert.doesNotMatch(connect, /from ['"]\.\.\/components\/SelectCharReactDesk['"]/);
         assert.match(connect, /beginEnteringWorld/);
         assert.doesNotMatch(
             connect,
@@ -481,8 +501,26 @@ describe('production index-*.js (when dist exists)', () => {
         assert.doesNotMatch(entry, /Cannot create WebGL context, aborting/);
         assert.doesNotMatch(entry, /buildGameConfig\(parent/);
         assert.doesNotMatch(entry, /from["']\.\/phaser-/);
-        assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
-        assert.match(entry, /OCCUPIED Elon Lev\.150/);
-        assert.match(entry, /selectchar-kindgem-occupied-banner/);
+        assert.doesNotMatch(entry, /gameWorldCanvasPresentation/);
+        assert.doesNotMatch(entry, /ConnectDialog React SELECTCHAR occupied/);
+        assert.doesNotMatch(entry, /OCCUPIED Elon Lev\.150/);
+        const occupiedElon = files.some(
+            (f) =>
+                !/^index-/.test(f) &&
+                f.endsWith('.js') &&
+                fs.readFileSync(path.join(distAssets, f), 'utf8').includes('OCCUPIED Elon Lev.150'),
+        );
+        const occupiedLog = files.some(
+            (f) =>
+                !/^index-/.test(f) &&
+                f.endsWith('.js') &&
+                fs.readFileSync(path.join(distAssets, f), 'utf8').includes(
+                    'ConnectDialog React SELECTCHAR occupied',
+                ),
+        );
+        assert.equal(occupiedElon, true, 'Occupied Elon banner must live in a post-seal lazy chunk, not hub index');
+        assert.equal(occupiedLog, true, 'Occupied paint log must live in a post-seal lazy chunk, not hub index');
+        const html = fs.readFileSync(path.join(clientRoot, 'dist/index.html'), 'utf8');
+        assert.doesNotMatch(html, /modulepreload[^>]+(?:phaser-|PhaserGame|gameWorldCanvasPresentation)/i);
     });
 });

@@ -1,8 +1,7 @@
 import { forwardRef, useEffect, useRef } from 'react';
 import { useStore } from '@tanstack/react-store';
-import type { Game, Scene } from 'phaser';
 import { EventBus } from './game/EventBus';
-import type { IRefPhaserGame, PhaserGameLike } from './game/phaserHubTypes';
+import type { IRefPhaserGame, PhaserGameLike, PhaserSceneLike } from './game/phaserHubTypes';
 import { isPhaserParkedForWalletUi, setLivePhaserGame } from './game/phaserWalletPark';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
 import { connectDialogStore, shouldConstructPhaserAfterSeal } from './ui/store/ConnectDialog.store';
@@ -14,23 +13,23 @@ export type { IRefPhaserGame } from './game/phaserHubTypes';
 /**
  * Hosts the Phaser canvas in React **after Start** (`entering-world`).
  *
- * Do not static-import `./game/main`. SELECTCHAR / Arena are React so KindGem
- * Occupied smoke and Arena clicks do not load WebGL. StartGame is a dynamic
- * import so the hub chunk never constructs Canvas/WebGL.
+ * Do not static-import `./game/main` or `phaser`. SELECTCHAR / Arena are React
+ * so KindGem Occupied smoke and Arena clicks do not load WebGL. StartGame is a
+ * dynamic import so the hub chunk never constructs Canvas/WebGL.
  */
 
 interface IProps
 {
-    currentActiveScene?: (scene_instance: Scene) => void
+    currentActiveScene?: (scene_instance: PhaserSceneLike) => void
 }
 
-function asHubGame(g: Game | null): PhaserGameLike | null {
-    return g as unknown as PhaserGameLike | null;
+function asHubGame(g: PhaserGameLike | null): PhaserGameLike | null {
+    return g;
 }
 
 export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame({ currentActiveScene }, ref)
 {
-    const game = useRef<Game | null>(null);
+    const game = useRef<PhaserGameLike | null>(null);
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
     const gatePhase = useStore(connectDialogStore, (s) => s.phase);
@@ -60,8 +59,8 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
                     if (!shouldConstructPhaserAfterSeal()) {
                         return;
                     }
-                    game.current = mod.default('game-container');
-                    setLivePhaserGame(asHubGame(game.current));
+                    game.current = asHubGame(mod.default('game-container') as PhaserGameLike | null);
+                    setLivePhaserGame(game.current);
                 } catch (err) {
                     console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
                     game.current = null;
@@ -208,11 +207,13 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
             
             // Save pre-mute master volume only while it is still audible. A second blur while
             // already muted would otherwise record 0 and the focus fade would never recover.
-            const master = game.current.sound.volume;
+            const master = game.current.sound?.volume ?? 0;
             if (master > 0) {
                 savedVolume = master;
             }
-            game.current.sound.volume = 0;
+            if (game.current.sound) {
+                game.current.sound.volume = 0;
+            }
         };
 
         const handleWindowFocus = () => {
@@ -231,7 +232,9 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
                 
                 console.log('[PhaserGame] Starting audio fade-in');
                 // Ensure volume starts at 0
-                game.current.sound.volume = 0;
+                if (game.current.sound) {
+                    game.current.sound.volume = 0;
+                }
                 
                 // Gradually fade in over 300ms (30 steps of 10ms each)
                 const steps = 30;
@@ -240,7 +243,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
                 
                 fadeInterval = window.setInterval(() => {
                     currentStep++;
-                    if (game.current && currentStep <= steps) {
+                    if (game.current?.sound && currentStep <= steps) {
                         const progress = currentStep / steps;
                         game.current.sound.volume = savedVolume * progress;
                     }
@@ -280,11 +283,12 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
     useEffect(() =>
     {
-        const onCurrentSceneReady = (scene_instance: Scene) =>
+        const onCurrentSceneReady = (scene_instance: PhaserSceneLike) =>
         {
-            if (scene_instance.scene.key === 'GameWorld') {
+            const sceneKey = scene_instance?.scene?.key;
+            if (sceneKey === 'GameWorld') {
                 document.body.classList.add('helbreath-game-active');
-            } else if (scene_instance.scene.key === 'LoginScreen') {
+            } else if (sceneKey === 'LoginScreen') {
                 document.body.classList.remove('helbreath-game-active');
             }
 

@@ -5,6 +5,7 @@ import { LoadingScreen } from './scenes/LoadingScreen';
 import { LoginScreen } from './scenes/LoginScreen';
 import { FXAAPostFX } from './pipelines/FXAAPostFX';
 import { startGameWithRendererFallback } from './startGameWithRendererFallback';
+import { shouldConstructPhaserAfterSeal } from '../ui/store/ConnectDialog.store';
 
 function buildGameConfig(
     parent: string,
@@ -52,6 +53,10 @@ function buildGameConfig(
  * when `Features.webGL` is false (Elon / GPU-blocked Chrome). AUTO is only a fallback.
  */
 const StartGame = (parent: string): Game | null => {
+    if (!shouldConstructPhaserAfterSeal()) {
+        console.error('[StartGame] Refusing Phaser/WebGL construct before entering-world');
+        return null;
+    }
     return startGameWithRendererFallback(
         () => new Game(buildGameConfig(parent, CANVAS, false)),
         () => new Game(buildGameConfig(parent, AUTO, false)),

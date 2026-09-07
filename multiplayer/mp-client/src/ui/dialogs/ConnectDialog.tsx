@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import { selectCharWarn } from '../../utils/selectCharTrace';
@@ -81,11 +81,25 @@ import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
 import { HubWorldRankingButtons } from '../components/HubWorldRankingButtons';
-import { SelectCharOccupiedReactOverlay } from '../components/SelectCharOccupiedReactOverlay';
-import { SelectCharReactDesk } from '../components/SelectCharReactDesk';
-import { ArenaReactLobby } from '../components/ArenaReactLobby';
-import { CreateCharReactPanel } from '../components/CreateCharReactPanel';
 import { yieldForWalletUi } from '../../game/phaserWalletPark';
+
+/** Post-seal desks — keep them off the hub connect chunk so Phantom can seal (Error9=NO / firmas≥1). */
+const SelectCharOccupiedReactOverlay = lazy(async () => {
+    const mod = await import('../components/SelectCharOccupiedReactOverlay');
+    return { default: mod.SelectCharOccupiedReactOverlay };
+});
+const SelectCharReactDesk = lazy(async () => {
+    const mod = await import('../components/SelectCharReactDesk');
+    return { default: mod.SelectCharReactDesk };
+});
+const ArenaReactLobby = lazy(async () => {
+    const mod = await import('../components/ArenaReactLobby');
+    return { default: mod.ArenaReactLobby };
+});
+const CreateCharReactPanel = lazy(async () => {
+    const mod = await import('../components/CreateCharReactPanel');
+    return { default: mod.CreateCharReactPanel };
+});
 
 interface ConnectDialogProps {
     zIndex?: number;
@@ -97,8 +111,8 @@ function slotForIndex(slots: CharacterSlotSummary[], index: number): CharacterSl
 
 /**
  * Login gate: hub (World | Goddesses | Arena portals).
- * World SELECTCHAR / Create Character / Arena kits are Phaser-only desks (wallet stays on the hub).
- * Host/port are hardcoded under the hood (never shown on World flow).
+ * World SELECTCHAR / Create Character / Arena kits are React desks (wallet stays on the hub).
+ * Phaser boots only on Start. Host/port are hardcoded under the hood.
  */
 export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     const {
@@ -821,7 +835,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             }
             EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, justAuthed ? 1200 : 400);
             if (justAuthed) {
-                // Let Phantom/KindGem close before LoginScreen allocates SELECTCHAR desks.
+                // Let Phantom/KindGem close before the React Explorer desk paints.
                 await yieldForWalletUi();
             }
             enterPlayWorldPhase(session);
@@ -879,21 +893,29 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
 
     // React owns SELECTCHAR / Create / Arena until Start (entering-world).
     if (phase === 'create-char') {
-        return <CreateCharReactPanel />;
+        return (
+            <Suspense fallback={null}>
+                <CreateCharReactPanel />
+            </Suspense>
+        );
     }
     if (phase === 'arena-lobby') {
-        return <ArenaReactLobby />;
+        return (
+            <Suspense fallback={null}>
+                <ArenaReactLobby />
+            </Suspense>
+        );
     }
     if (phase === 'play-world') {
         return (
-            <>
+            <Suspense fallback={null}>
                 <SelectCharReactDesk />
                 <SelectCharOccupiedReactOverlay
                     zIndex={zIndex}
                     characterSlots={characterSlots}
                     characterListLoading={characterListLoading}
                 />
-            </>
+            </Suspense>
         );
     }
     if (phase === 'entering-world') {

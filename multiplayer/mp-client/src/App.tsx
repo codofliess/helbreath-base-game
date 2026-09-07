@@ -13,7 +13,15 @@ const PhaserGame = lazy(async () => {
     const mod = await import('./PhaserGame');
     return { default: mod.PhaserGame };
 });
-import { ControlsDialog } from './ui/dialogs/ControlsDialog';
+/** World HUD only. Static import pulled `gameWorldCanvasPresentation` (inlined Phaser) onto hub index. */
+const ControlsDialog = lazy(async () => {
+    const mod = await import('./ui/dialogs/ControlsDialog');
+    return { default: mod.ControlsDialog };
+});
+const HotkeyBar = lazy(async () => {
+    const mod = await import('./ui/components/HotkeyBar');
+    return { default: mod.HotkeyBar };
+});
 import { MapDialog } from './ui/dialogs/MapDialog';
 import { CameraDialog } from './ui/dialogs/CameraDialog';
 import { AssetDebugOverlay } from './ui/overlays/AssetDebugOverlay';
@@ -43,7 +51,6 @@ import { CastDialog } from './ui/dialogs/CastDialog';
 import { PlayerDialog } from './ui/dialogs/PlayerDialog';
 import { CharacterDialog } from './ui/dialogs/CharacterDialog';
 import { InventoryDialog } from './ui/dialogs/InventoryDialog';
-import { HotkeyBar } from './ui/components/HotkeyBar';
 import { ItemDialog } from './ui/dialogs/ItemDialog';
 import { ServerDialog } from './ui/dialogs/ServerDialog';
 import { PerformanceDialog } from './ui/dialogs/PerformanceDialog';
@@ -376,7 +383,7 @@ function App()
     }, [travelerMode]);
 
     /**
-     * SELECTCHAR / Create Character live on LoginScreen. If isMapLoaded stayed true after
+     * SELECTCHAR / Create Character live on React ConnectDialog. If isMapLoaded stayed true after
      * a prior world session, HotkeyBar + dock would paint under/over the classic desk.
      * Reset world HUD ownership whenever we leave GameWorld.
      */
@@ -1148,12 +1155,14 @@ function App()
                 )}
                 
                 {showControlsDialog && !travelerMode && (
-                    <ControlsDialog
-                        position={dialogPosition}
-                        phaserRef={phaserRef}
-                        zIndex={dialogZIndex}
-                        onBringToFront={() => bringDialogToFront('main-dialog')}
-                    />
+                    <Suspense fallback={null}>
+                        <ControlsDialog
+                            position={dialogPosition}
+                            phaserRef={phaserRef}
+                            zIndex={dialogZIndex}
+                            onBringToFront={() => bringDialogToFront('main-dialog')}
+                        />
+                    </Suspense>
                 )}
                 
                 {showMapDialog && !travelerMode && (
@@ -1372,7 +1381,11 @@ function App()
                     phaserRef={phaserRef}
                 />
                 
-                {showWorldHud && <HotkeyBar phaserRef={phaserRef} />}
+                {showWorldHud && (
+                    <Suspense fallback={null}>
+                        <HotkeyBar phaserRef={phaserRef} />
+                    </Suspense>
+                )}
                 {showFullWorldChrome && <HudTutorialOverlay />}
                 {showFullWorldChrome && <QuestTrackerHud />}
                 {/* System log: duel-only strip in slim (DC, bag, kills) — still useful. */}

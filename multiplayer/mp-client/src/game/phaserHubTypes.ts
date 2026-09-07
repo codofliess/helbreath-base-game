@@ -16,6 +16,7 @@ export type PhaserGameLike = {
         wake: (resetTime?: boolean) => void;
     };
     input: { enabled: boolean };
+    sound?: { volume: number };
     destroy: (removeCanvas: boolean, noReturn?: boolean) => void;
     scale?: {
         width?: number;

@@ -201,6 +201,10 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(reactDesk, /Explorer/);
         assert.match(reactDesk, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
         assert.match(reactDesk, /SelectCharReactDesk/);
+        assert.match(reactDesk, /paintExplorerSelectCharRows/);
+        assert.match(reactDesk, /ArrowRight/);
+        assert.match(overlay, /occupiedNames.includes\('Elon'\)/);
+        assert.doesNotMatch(overlay, /selectchar-react-occupied__slot/);
         const store = fs.readFileSync(
             path.join(clientRoot, 'src/ui/store/ConnectDialog.store.ts'),
             'utf8',

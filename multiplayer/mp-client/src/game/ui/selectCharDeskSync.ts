@@ -91,7 +91,60 @@ export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCh
     return rows;
 }
 
-/** Prefer the store selection when that card is occupied; otherwise the first occupied card. */
+/** Occupied travelers, highest level first (ties by name). Server slotIndex is unchanged. */
+export function sortOccupiedSlotsByLevelDesc(
+    slots: CharacterSlotSummary[],
+): CharacterSlotSummary[] {
+    return namedOccupiedCharacterSlots(slots).slice().sort((a, b) => {
+        if (b.level !== a.level) {
+            return b.level - a.level;
+        }
+        return a.name.localeCompare(b.name);
+    });
+}
+
+export function highestLevelOccupiedSlot(
+    slots: CharacterSlotSummary[],
+): CharacterSlotSummary | undefined {
+    return sortOccupiedSlotsByLevelDesc(slots)[0];
+}
+
+export function unusedDeskSlotIndex(slots: CharacterSlotSummary[]): number {
+    const used = new Set(namedOccupiedCharacterSlots(slots).map((row) => row.slotIndex));
+    for (let i = 0; i < 4; i++) {
+        if (!used.has(i)) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Explorer cards: highest level on the left, empties on the right.
+ * `occupied.slotIndex` stays the server desk so Start / Create still claim the right slot.
+ */
+export function paintExplorerSelectCharRows(slots: CharacterSlotSummary[]): SelectCharSlotPaintRow[] {
+    const ranked = sortOccupiedSlotsByLevelDesc(slots);
+    const rows: SelectCharSlotPaintRow[] = [];
+    for (const occupied of ranked) {
+        if (rows.length >= 4) {
+            break;
+        }
+        const displayName =
+            occupied.name.length > 16 ? `${occupied.name.slice(0, 15)}…` : occupied.name;
+        rows.push({
+            name: displayName,
+            lev: formatSelectCharOccupiedLev(occupied.level, occupied.rebirth),
+            occupied,
+        });
+    }
+    while (rows.length < 4) {
+        rows.push({ name: 'Empty', lev: 'Create Character', occupied: undefined });
+    }
+    return rows;
+}
+
+/** Prefer the store selection when that card is occupied; otherwise the highest-level occupied card. */
 export function resolveSelectCharSelectedIndex(
     slots: CharacterSlotSummary[],
     selectedSlotIndex: number,
@@ -104,7 +157,7 @@ export function resolveSelectCharSelectedIndex(
     if (normalized.some((s) => s.slotIndex === selected)) {
         return selected;
     }
-    return normalized[0].slotIndex;
+    return highestLevelOccupiedSlot(normalized)?.slotIndex ?? normalized[0].slotIndex;
 }
 
 /**

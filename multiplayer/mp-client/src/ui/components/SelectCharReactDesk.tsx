@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import {
@@ -6,39 +6,112 @@ import {
     OUT_UI_SELECTCHAR_BACK,
 } from '../../constants/EventNames';
 import {
-    paintSelectCharSlotRows,
-    resolveSelectCharSelectedIndex,
+    paintExplorerSelectCharRows,
+    unusedDeskSlotIndex,
 } from '../../game/ui/selectCharDeskSync';
 import { SELECTCHAR_OCCUPIED_SLOT_LABEL } from '../../game/ui/selectCharSlotGlyphs';
 import { connectDialogStore, setSelectedSlotIndex } from '../store/ConnectDialog.store';
 
 /**
- * React Explorer SELECTCHAR. Occupied + name + level are DOM text so KindGem
- * does not need Phaser desks (those OOMed Chrome Error 9 after PR #48).
+ * React Explorer SELECTCHAR. Highest-level traveler sits on the left and is
+ * selected for Enter. Arrow keys move right/left; Start uses server slotIndex.
  */
 export function SelectCharReactDesk() {
     const characterSlots = useStore(connectDialogStore, (s) => s.characterSlots);
     const selectedSlotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const loading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(connectDialogStore, (s) => s.walletSession?.wallet);
-    const rows = paintSelectCharSlotRows(characterSlots);
-    const selected = resolveSelectCharSelectedIndex(characterSlots, selectedSlotIndex);
-    const selectedOccupied = !!rows[selected]?.occupied;
+    const rows = useMemo(() => paintExplorerSelectCharRows(characterSlots), [characterSlots]);
+    const emptyServerSlot = unusedDeskSlotIndex(characterSlots);
+    const [visualIndex, setVisualIndex] = useState(0);
+    const deskRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const match = rows.findIndex((row) => row.occupied?.slotIndex === selectedSlotIndex);
+        if (match >= 0) {
+            setVisualIndex(match);
+        }
+    }, [rows, selectedSlotIndex]);
+
+    const selectedRow = rows[visualIndex];
+    const selectedOccupied = selectedRow?.occupied;
     const hasEmpty = rows.some((row) => !row.occupied);
+
+    const selectVisual = useCallback(
+        (index: number) => {
+            const next = Math.max(0, Math.min(3, index));
+            setVisualIndex(next);
+            const row = rows[next];
+            setSelectedSlotIndex(row?.occupied?.slotIndex ?? emptyServerSlot);
+        },
+        [emptyServerSlot, rows],
+    );
+
+    const startSelected = useCallback(() => {
+        if (!selectedOccupied) {
+            return;
+        }
+        EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
+            kind: 'start',
+            slotIndex: selectedOccupied.slotIndex,
+        });
+    }, [selectedOccupied]);
+
+    const createOnEmpty = useCallback(() => {
+        if (!hasEmpty) {
+            return;
+        }
+        EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
+            kind: 'create',
+            slotIndex: emptyServerSlot,
+        });
+    }, [emptyServerSlot, hasEmpty]);
 
     useEffect(() => {
         document.body.classList.add('login-selectchar-active');
+        deskRef.current?.focus();
+        const onKey = (event: KeyboardEvent) => {
+            const target = event.target;
+            if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+                return;
+            }
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                selectVisual(visualIndex + 1);
+                return;
+            }
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                selectVisual(visualIndex - 1);
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (selectedOccupied) {
+                    startSelected();
+                } else {
+                    createOnEmpty();
+                }
+            }
+        };
+        window.addEventListener('keydown', onKey);
         return () => {
             document.body.classList.remove('login-selectchar-active');
+            window.removeEventListener('keydown', onKey);
         };
-    }, []);
+    }, [createOnEmpty, selectVisual, selectedOccupied, startSelected, visualIndex]);
 
     const walletShort = wallet
         ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}`
         : '';
 
     return (
-        <div className="login-desk-gate" data-dialog-id="selectchar-react-desk">
+        <div
+            ref={deskRef}
+            className="login-desk-gate"
+            data-dialog-id="selectchar-react-desk"
+            tabIndex={0}
+        >
             <div className="login-desk-frame login-desk-frame--fallback">
                 <div className="login-desk-brand">
                     <span className="login-desk-brand-kicker">Helbreath</span>
@@ -49,14 +122,14 @@ export function SelectCharReactDesk() {
                         const occupied = !!row.occupied;
                         return (
                             <button
-                                key={slotIndex}
+                                key={`${row.occupied?.slotIndex ?? 'empty'}-${slotIndex}-${row.name}`}
                                 type="button"
                                 role="listitem"
                                 className={`login-desk-slot${occupied ? '' : ' is-empty'}${
-                                    slotIndex === selected ? ' is-selected' : ''
+                                    slotIndex === visualIndex ? ' is-selected' : ''
                                 }`}
                                 data-occupied={occupied ? '1' : '0'}
-                                onClick={() => setSelectedSlotIndex(slotIndex)}
+                                onClick={() => selectVisual(slotIndex)}
                             >
                                 {occupied ? (
                                     <>
@@ -79,20 +152,16 @@ export function SelectCharReactDesk() {
                         {loading
                             ? 'Loading character list…'
                             : selectedOccupied
-                              ? `${SELECTCHAR_OCCUPIED_SLOT_LABEL} — ${rows[selected].name} ${rows[selected].lev}`
+                              ? `${SELECTCHAR_OCCUPIED_SLOT_LABEL} — ${selectedOccupied.name} ${selectedRow.lev}`
                               : 'Empty slot — Create Character'}
                     </p>
+                    <p className="login-desk-nft-note">← → switch · Enter starts the selected traveler</p>
                     <div className="login-desk-actions">
                         <button
                             type="button"
                             className="login-gate-primary-btn"
                             disabled={!selectedOccupied}
-                            onClick={() =>
-                                EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
-                                    kind: 'start',
-                                    slotIndex: selected,
-                                })
-                            }
+                            onClick={startSelected}
                         >
                             Start
                         </button>
@@ -100,13 +169,7 @@ export function SelectCharReactDesk() {
                             type="button"
                             className="login-gate-secondary-btn"
                             disabled={!hasEmpty}
-                            onClick={() => {
-                                const empty = rows.findIndex((r) => !r.occupied);
-                                EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
-                                    kind: 'create',
-                                    slotIndex: empty >= 0 ? empty : selected,
-                                });
-                            }}
+                            onClick={createOnEmpty}
                         >
                             Create Character
                         </button>

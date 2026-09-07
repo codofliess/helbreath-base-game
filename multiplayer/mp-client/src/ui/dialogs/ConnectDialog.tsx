@@ -64,6 +64,7 @@ import {
 } from '../../utils/characterListApi';
 import { declineArenaPactFromHub, fetchArenaPactInbox } from '../../utils/arenaPactInboxApi';
 import type { ArenaPactState } from '../../proto/generated/network';
+import { highestLevelOccupiedSlot } from '../../game/ui/selectCharDeskSync';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { type ArenaDeskIndex } from '../../utils/tournamentBuilds';
@@ -381,7 +382,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 if (cached && cached.slots.length > 0 && !alreadyPainted) {
                     setCharacterSlots(cached.slots);
                     setReferralInfo(cached.referral ?? null);
-                    const firstOccupied = cached.slots[0];
+                    const firstOccupied = highestLevelOccupiedSlot(cached.slots) ?? cached.slots[0];
                     setSelectedSlotIndex(firstOccupied.slotIndex);
                     setCharacterName(firstOccupied.name);
                 } else if (slots.length > 0) {
@@ -401,7 +402,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     if (result.slots.length > 0) {
                         setCharacterSlots(result.slots);
                         setReferralInfo(result.referral ?? null);
-                        const firstOccupied = result.slots[0];
+                        const firstOccupied = highestLevelOccupiedSlot(result.slots) ?? result.slots[0];
                         setSelectedSlotIndex(firstOccupied.slotIndex);
                         setCharacterName(firstOccupied.name);
                         if (connectDialogStore.state.phase === 'create-char') {

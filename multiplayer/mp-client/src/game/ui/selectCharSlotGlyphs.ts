@@ -93,7 +93,7 @@ export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'font-family:Georgia,serif!important;max-width:90vw!important;min-width:280px!important;' +
     'min-height:44px!important;width:max-content!important;height:auto!important;' +
     'padding:12px 20px!important;text-align:center!important;border:2px solid #3a2810!important;' +
-    'box-sizing:border-box!important;white-space:nowrap!important;';
+    'box-sizing:border-box!important;white-space:normal!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
 let stickyNamedOccupiedBanner = '';

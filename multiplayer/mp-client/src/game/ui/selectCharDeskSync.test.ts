@@ -4,6 +4,8 @@ import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
     applyStoreToSelectCharDesk,
     formatSelectCharOccupiedLev,
+    highestLevelOccupiedSlot,
+    paintExplorerSelectCharRows,
     paintSelectCharSlotRows,
     resolveSelectCharSelectedIndex,
     resolveSelectCharSlotsForPaint,
@@ -164,6 +166,20 @@ describe('selectCharDeskIsMissingOccupiedSlots', () => {
         assert.equal(selectCharDeskIsMissingOccupiedSlots([elon], []), true);
         assert.equal(selectCharDeskIsMissingOccupiedSlots([elon], [elon]), false);
         assert.equal(selectCharDeskIsMissingOccupiedSlots([], []), false);
+    });
+});
+
+describe('paintExplorerSelectCharRows', () => {
+    it('puts the highest-level traveler on the left and keeps server slotIndex', () => {
+        const beba: CharacterSlotSummary = { ...elon, slotIndex: 0, name: 'BebaMaster', level: 1 };
+        const co2: CharacterSlotSummary = { ...elon, slotIndex: 1, name: 'Co2', level: 150 };
+        const rows = paintExplorerSelectCharRows([beba, co2]);
+        assert.equal(rows[0]?.name, 'Co2');
+        assert.equal(rows[0]?.occupied?.slotIndex, 1);
+        assert.equal(rows[1]?.name, 'BebaMaster');
+        assert.equal(rows[1]?.occupied?.slotIndex, 0);
+        assert.equal(rows[2]?.name, 'Empty');
+        assert.equal(highestLevelOccupiedSlot([beba, co2])?.name, 'Co2');
     });
 });
 

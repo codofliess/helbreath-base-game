@@ -1,7 +1,7 @@
 /** Collective $HELBREATH pledged by guild members — not pending $HELL, not personal Olympia. */
 
 export const GUILD_STAKE_TOKEN = '$HELBREATH';
-export const GUILD_STAKE_PER_LEVEL = 20_000;
+export const GUILD_STAKE_PER_LEVEL = 1_000_000;
 export const GUILD_MAX_LEVEL = 40;
 export const GUILD_ACTIVITY_POINTS_PER_LEVEL = 100;
 export const GUILD_CONTRIBUTION_WEIGHT = 1;

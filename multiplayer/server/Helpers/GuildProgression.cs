@@ -4,13 +4,13 @@ using System.Text.Json.Serialization;
 namespace Server.Helpers;
 
 /// <summary>
-/// Guild level = activity (contribution, EKs, gold, majestics) + floor(member $HELBREATH / 20k).
+/// Guild level = activity (contribution, EKs, gold, majestics) + floor(member $HELBREATH / 1M).
 /// Effective level unlocks Huntmaster, Raidmaster, extra captains, and guild teleports.
 /// Stake does not replace activity — it sits on top, same shape as personal Olympia expertise.
 /// </summary>
 public static class GuildProgression {
     public const string StakeTokenTicker = "$HELBREATH";
-    public const long DefaultStakePerLevel = 20_000L;
+    public const long DefaultStakePerLevel = 1_000_000L;
     public const int MaxGuildLevel = 40;
 
     static readonly object Gate = new();

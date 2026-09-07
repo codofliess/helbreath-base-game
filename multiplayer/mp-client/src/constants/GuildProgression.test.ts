@@ -8,12 +8,12 @@ import {
 } from './GuildProgression';
 
 describe('guildStakeBonusLevels', () => {
-    it('steps +1 all guild levels per 20k $HELBREATH', () => {
+    it('steps +1 guild level per 1M $HELBREATH collective', () => {
         assert.equal(guildStakeBonusLevels(0), 0);
-        assert.equal(guildStakeBonusLevels(19_999), 0);
-        assert.equal(guildStakeBonusLevels(20_000), 1);
-        assert.equal(guildStakeBonusLevels(200_000), 10);
-        assert.equal(guildStakeBonusLevels(240_000), 12);
+        assert.equal(guildStakeBonusLevels(999_999), 0);
+        assert.equal(guildStakeBonusLevels(1_000_000), 1);
+        assert.equal(guildStakeBonusLevels(10_000_000), 10);
+        assert.equal(guildStakeBonusLevels(12_000_000), 12);
     });
 });
 
@@ -26,7 +26,7 @@ describe('computeGuildProgression', () => {
             enemyKills: 20,
             gold: 200_000,
             majestics: 10,
-            stakedHelbreath: 240_000,
+            stakedHelbreath: 12_000_000,
         });
         assert.equal(snap.activityLevel, 5);
         assert.equal(snap.stakeBonusLevels, 12);

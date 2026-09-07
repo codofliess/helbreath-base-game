@@ -1,6 +1,6 @@
 {
   "token": "$HELBREATH",
-  "stakePerGuildLevel": 20000,
+  "stakePerGuildLevel": 1000000,
   "activity": {
     "pointsPerLevelBase": 100,
     "contributionWeight": 1,

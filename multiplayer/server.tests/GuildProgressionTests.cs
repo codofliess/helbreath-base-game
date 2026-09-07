@@ -16,14 +16,14 @@ public sealed class GuildProgressionTests : IDisposable {
     public void Dispose() => GuildProgression.ResetForTests();
 
     [Fact]
-    public void StakeBonus_StepsMatchPersonalTwentyK() {
+    public void StakeBonus_OneMillionPerGuildLevel() {
         Assert.Equal("$HELBREATH", GuildProgression.StakeTokenTicker);
-        Assert.Equal(20_000L, GuildProgression.StakePerGuildLevel);
+        Assert.Equal(1_000_000L, GuildProgression.StakePerGuildLevel);
         Assert.Equal(0, GuildProgression.StakeBonusLevels(0));
-        Assert.Equal(0, GuildProgression.StakeBonusLevels(19_999));
-        Assert.Equal(1, GuildProgression.StakeBonusLevels(20_000));
-        Assert.Equal(10, GuildProgression.StakeBonusLevels(200_000));
-        Assert.Equal(12, GuildProgression.StakeBonusLevels(240_000));
+        Assert.Equal(0, GuildProgression.StakeBonusLevels(999_999));
+        Assert.Equal(1, GuildProgression.StakeBonusLevels(1_000_000));
+        Assert.Equal(10, GuildProgression.StakeBonusLevels(10_000_000));
+        Assert.Equal(12, GuildProgression.StakeBonusLevels(12_000_000));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class GuildProgressionTests : IDisposable {
 
     [Fact]
     public void Effective_ActivityPlusCollectiveStake() {
-        var snap = GuildProgression.Compute(800, 20, 200_000, 10, 240_000);
+        var snap = GuildProgression.Compute(800, 20, 200_000, 10, 12_000_000);
         Assert.Equal(5, snap.ActivityLevel);
         Assert.Equal(12, snap.StakeBonusLevels);
         Assert.Equal(17, snap.EffectiveLevel);
@@ -52,7 +52,7 @@ public sealed class GuildProgressionTests : IDisposable {
 
     [Fact]
     public void StakeOnly_StillUnlocksHuntmasterAndCaptains() {
-        var snap = GuildProgression.Compute(0, 0, 0, 0, 200_000);
+        var snap = GuildProgression.Compute(0, 0, 0, 0, 10_000_000);
         Assert.Equal(0, snap.ActivityLevel);
         Assert.Equal(10, snap.StakeBonusLevels);
         Assert.Equal(10, snap.EffectiveLevel);
@@ -65,8 +65,8 @@ public sealed class GuildProgressionTests : IDisposable {
     [Fact]
     public void MemberStakes_SumIntoGuildLevel() {
         GuildProgression.AddActivity("legion", contribution: 800, enemyKills: 20, gold: 200_000, majestics: 10);
-        GuildProgression.RememberMemberStake("legion", "walletA", 80_000);
-        GuildProgression.RememberMemberStake("legion", "walletB", 160_000);
+        GuildProgression.RememberMemberStake("legion", "walletA", 4_000_000);
+        GuildProgression.RememberMemberStake("legion", "walletB", 8_000_000);
         var snap = GuildProgression.ComputeGuild("legion");
         Assert.Equal(5, snap.ActivityLevel);
         Assert.Equal(12, snap.StakeBonusLevels);

@@ -42,7 +42,7 @@ const initialState: GuildState = {
     enemyKills: 20,
     gold: 200_000,
     majestics: 10,
-    stakedHelbreath: 240_000,
+    stakedHelbreath: 12_000_000,
 };
 
 export const guildStore = new Store<GuildState>(initialState);

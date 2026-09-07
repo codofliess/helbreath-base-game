@@ -112,6 +112,12 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     private string characterName = "";
     /// <summary>Account id from authenticate (Solana wallet pubkey when wallet login is used).</summary>
     private string accountWallet = "";
+    /// <summary>Middleware SoT player UUID from session v2; empty on legacy HMAC tokens.</summary>
+    private string accountPlayerId = "";
+    /// <summary>Session actorKind from SoT (human|bot). Not the per-character controller.</summary>
+    private string actorKind = Helpers.AgentPlayerProfile.ControllerHuman;
+    /// <summary>Owner-trained agent blob; null means a human-played character.</summary>
+    private PersistedAgentProfile? agentProfile;
     /// <summary>Lifetime exp within the current rebirth cycle; resets to 0 on rebirth. Persisted.</summary>
     private long exp;
     /// <summary>Current level (1..Progression max); derived from <see cref="exp"/> via the Olympia curve on award. Persisted.</summary>
@@ -502,6 +508,14 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     /// <summary>Client-supplied character display name from authenticate; persisted with player saves.</summary>
     public string CharacterName => characterName;
     public string AccountWallet => accountWallet;
+    /// <summary>Middleware player id from the validated session; empty when the token is legacy.</summary>
+    public string AccountPlayerId => accountPlayerId;
+    /// <summary>SoT actorKind for this login (human|bot). Forge-closed: never taken from the client body.</summary>
+    public string ActorKind => actorKind;
+    /// <summary>True when this character slot is an owner-trained agent (same world rules as humans).</summary>
+    public bool IsAgentCharacter => Helpers.AgentPlayerProfile.IsAgentController(agentProfile?.ControllerKind);
+    /// <summary>Private owner prompt + skill loadout; observers never receive this blob.</summary>
+    public PersistedAgentProfile? AgentProfile => agentProfile;
 
     public long Exp => exp;
     public int Level => level;
@@ -1206,6 +1220,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
                 }
             }
         }
+        agentProfile = state.AgentProfile;
     }
 
     /// <summary>Sets Howard guild-hall interest flag (persisted with the character).</summary>
@@ -1480,7 +1495,8 @@ public class GameWorldPlayer : GameWorldActionableEntity {
             contribution,
             gardenQuestId,
             gardenQuestProgress,
-            rebirthRollback);
+            rebirthRollback,
+            agentProfile);
     }
 
     /// <summary>Add Olympia shard/fragment stack (disenchant / craft).</summary>
@@ -1758,6 +1774,27 @@ public class GameWorldPlayer : GameWorldActionableEntity {
 
     public void SetAccountWallet(string wallet) {
         accountWallet = string.IsNullOrWhiteSpace(wallet) ? "" : wallet.Trim();
+    }
+
+    /// <summary>Copies SoT identity from the validated session. Client packets cannot set these.</summary>
+    public void SetAccountIdentity(string playerId, string sessionActorKind) {
+        accountPlayerId = string.IsNullOrWhiteSpace(playerId) ? "" : playerId.Trim();
+        actorKind = Helpers.AgentPlayerProfile.NormalizeActorKind(sessionActorKind);
+    }
+
+    /// <summary>Replaces the agent profile on create (no cooldown).</summary>
+    public void SetAgentProfile(PersistedAgentProfile? profile) {
+        agentProfile = profile;
+    }
+
+    /// <summary>Owner login patch: rate-limited write of prompt / loadout / controller kind.</summary>
+    public bool TryApplyOwnerAgentProfile(PersistedAgentProfile incoming, long nowMs, out string rejectReason) {
+        ArgumentNullException.ThrowIfNull(incoming);
+        if (!Helpers.AgentPlayerProfile.TryMerge(agentProfile, incoming, nowMs, out var next, out rejectReason)) {
+            return false;
+        }
+        agentProfile = next;
+        return true;
     }
 
     /// <summary>Records move/cast/attack/chat activity and clears the AFK warning latch.</summary>

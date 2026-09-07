@@ -540,6 +540,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 int: payload.int,
                 mag: payload.mag,
                 chr: payload.chr,
+                controllerKind: payload.controllerKind,
+                ownerPrompt: payload.ownerPrompt,
             });
         };
 
@@ -718,6 +720,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             session?: ConnectToServerPayload['walletSession'];
             preferredInitialWorldId?: string;
             arenaKitJson?: string;
+            controllerKind?: ConnectToServerPayload['controllerKind'];
+            ownerPrompt?: string;
         },
     ) => {
         const trimmedName = opts.characterName.trim();
@@ -751,6 +755,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             chr: opts.chr,
             walletSession: sessionToUse,
             arenaKitJson: opts.arenaKitJson,
+            controllerKind: opts.controllerKind,
+            ownerPrompt: opts.ownerPrompt,
         });
     };
 

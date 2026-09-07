@@ -70,6 +70,28 @@ enum PlayerSkinColor {
   PLAYER_SKIN_COLOR_DARK = 2;
 }
 
+// Who drives this character in the shared world. Account actorKind (human|bot)
+// lives on the middleware player row; this flag is per character slot.
+enum CharacterControllerKind {
+  CHARACTER_CONTROLLER_KIND_HUMAN = 0;
+  CHARACTER_CONTROLLER_KIND_AGENT = 1;
+}
+
+// Team-designed skill pack slot (starter catalog and/or later NFT instance).
+// Owner-only on write; never copy owner prompts onto observer packets.
+message AgentSkillLoadoutSlot {
+  // Allowlisted catalog id (e.g. starter.academy.easy / f8.mining.basic). Unknown ids are dropped.
+  string skill_id = 1;
+  // Optional on-chain instance (cNFT mint / asset id). Opaque until mint shop ships.
+  optional string nft_mint = 2;
+  // True after a consumable pack was ingested into this character (not transferable).
+  bool consumed = 3;
+  // How this slot was bound: grant | buy_nft. Legacy stake rows are cleaned by unstake (not a shop rail).
+  optional string rail = 4;
+  // Unused for new buys. Leftover shop-stake stubs may still carry a refund amount.
+  optional int64 stake_hell = 5;
+}
+
 // Matches client MapDialog / WeatherManager string modes (dry, rain-*, snow-*).
 enum WeatherMode {
   WEATHER_MODE_DRY = 0;
@@ -240,6 +262,10 @@ message ClientMessage {
     ArenaPactPrizePledgeRequest arena_pact_prize_pledge_request = 104;
     ArenaPactPrizeConfirmRequest arena_pact_prize_confirm_request = 105;
     ArenaPactSignLossRequest arena_pact_sign_loss_request = 106;
+    // Agent skill shop: catalog snapshot / buy_nft (pending $HELL). Unstake only clears leftover shop-stake stubs.
+    GetAgentSkillShopRequest get_agent_skill_shop_request = 107;
+    AgentSkillShopAcquireRequest agent_skill_shop_acquire_request = 108;
+    AgentSkillShopUnstakeRequest agent_skill_shop_unstake_request = 109;
   }
 }
 
@@ -806,6 +832,12 @@ message AuthenticateRequest {
   optional string referral_code = 17;
   // Arena Pre-Ready kit JSON (validated against ArenaKitCatalog.json on tournament-arena entry).
   optional string arena_kit_json = 18;
+  // Create / owner-update: this slot is a trained agent-player (same world rules as humans).
+  optional CharacterControllerKind controller_kind = 19;
+  // Owner training prompt. Server stores it; never echoed on CharacterList or observer packets.
+  optional string owner_prompt = 20;
+  // Optional starter / equipped skill pack slots (allowlisted ids only).
+  repeated AgentSkillLoadoutSlot agent_skills = 21;
 }
 
 /** Pre-world request: wallet + auth token → up to 4 character slot summaries for the SELECTCHAR desk. */
@@ -865,6 +897,10 @@ message CharacterSlotSummary {
   repeated CharacterEquipPreview equipped = 17;
   // Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler).
   string citizenship_side = 18;
+  // Human-played vs owner-trained agent. Prompt text is intentionally omitted.
+  CharacterControllerKind controller_kind = 19;
+  int32 agent_skill_count = 20;
+  optional string starter_pack_id = 21;
 }
 
 message CharacterListResponse {
@@ -1139,6 +1175,9 @@ message ServerMessage {
     ArenaPactListResponse arena_pact_list_response = 105;
     // World / tournament Go-Live ack for cartelera.
     StreamBroadcastState stream_broadcast_state = 106;
+    // Agent skill shop catalog + pending $HELL + equipped packs (no owner prompt).
+    AgentSkillShopState agent_skill_shop_state = 107;
+    AgentSkillShopResult agent_skill_shop_result = 108;
   }
 }
 
@@ -1443,6 +1482,48 @@ message BuyCashShopItemRequest {
 message BuyCashShopItemResult {
   bool ok = 1;
   string message = 2;
+}
+
+// Allowlisted agent skill pack (maps onto existing F8 / Olympia masteries — not a second XP track).
+message AgentSkillShopEntry {
+  string skill_id = 1;
+  string display_name = 2;
+  // basic | advanced
+  string tier = 3;
+  // gather | craft | combat | academy
+  repeated string tags = 4;
+  // Skills.cs index 0–18; -1 = academy / policy bundle (no single mastery).
+  int32 olympia_skill_id = 5;
+  int64 price_hell = 6;
+  int64 stake_hell = 7;
+  string alias_of = 8;
+}
+
+message GetAgentSkillShopRequest {
+}
+
+message AgentSkillShopAcquireRequest {
+  string skill_id = 1;
+  // buy_nft only. stake is rejected (Olympia $HELBREATH expertise, not F8 packs).
+  string rail = 2;
+}
+
+message AgentSkillShopUnstakeRequest {
+  string skill_id = 1;
+}
+
+message AgentSkillShopState {
+  repeated AgentSkillShopEntry catalog = 1;
+  int64 pending_hell = 2;
+  // Wired shop ticker: pending $HELL (HellMiningStore). $HELBREATH is not wired here.
+  string token_ticker = 3;
+  repeated AgentSkillLoadoutSlot equipped = 4;
+}
+
+message AgentSkillShopResult {
+  bool ok = 1;
+  string error = 2;
+  AgentSkillShopState shop = 3;
 }
 
 // Item bind_state: 0=unbound, 1=soulbound, 2=guildbound (server authoritative).

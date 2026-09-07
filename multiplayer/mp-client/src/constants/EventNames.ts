@@ -127,6 +127,9 @@ export interface CreateCharConfirmPayload {
     int: number;
     mag: number;
     chr: number;
+    /** Owner-trained agent character (same world rules). */
+    controllerKind?: 'human' | 'agent';
+    ownerPrompt?: string;
 }
 
 /** Payload for IN_UI_CONNECT_TO_SERVER */
@@ -160,6 +163,8 @@ export interface ConnectToServerPayload {
      * When set with preferredInitialWorldId = arena map, server applies kit loadout.
      */
     arenaKitJson?: string;
+    controllerKind?: 'human' | 'agent';
+    ownerPrompt?: string;
 }
 
 /** Emitted when the WebSocket connection is closed (server shutdown, network loss, etc.) */

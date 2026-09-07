@@ -45,6 +45,7 @@ import {
     PlayerTakeDamage,
     PlayerGender,
     PlayerSkinColor,
+    CharacterControllerKind,
     PlayerTeleported,
     ServerMessage,
     SpellCastCancelled,
@@ -66,6 +67,8 @@ import {
     type StoneItemUpgradeResult,
     type ItemBindResult,
     type BuyCashShopItemResult,
+    type AgentSkillShopState,
+    type AgentSkillShopResult,
     type MonsterKillsUpdated,
     type KillMilestoneClaimResult,
     type BeginnerPathState,
@@ -585,6 +588,8 @@ export class NetworkManager {
     private authenticateMag: number | undefined;
     private authenticateChr: number | undefined;
     private authenticateArenaKitJson: string | undefined;
+    private authenticateControllerKind: 'human' | 'agent' | undefined;
+    private authenticateOwnerPrompt: string | undefined;
     private authToken = '';
     private hasSentAuthentication = false;
     private logoutPending = false;
@@ -595,6 +600,8 @@ export class NetworkManager {
     /** Authoritative self HP/max from server; updated by InitialState and hp_updated; used when merging map-only InitialGameWorldState. */
     private lastSelfHp: number | undefined;
     private lastSelfMaxHp: number | undefined;
+    /** Last server skill-shop snapshot (catalog + pending $HELL). No marketplace UI yet. */
+    private lastAgentSkillShop: AgentSkillShopState | null = null;
     /** Snapshot from InitialState for merging into each InitialGameWorldState (map load). */
     private initialStateMergeBase:
         | Pick<
@@ -646,6 +653,8 @@ export class NetworkManager {
             int?: number;
             mag?: number;
             chr?: number;
+            controllerKind?: 'human' | 'agent';
+            ownerPrompt?: string;
         },
         arenaKitJson?: string,
     ): Promise<void> {
@@ -694,6 +703,14 @@ export class NetworkManager {
                 this.authenticateInt = clampCreateStat(appearance?.int);
                 this.authenticateMag = clampCreateStat(appearance?.mag);
                 this.authenticateChr = clampCreateStat(appearance?.chr);
+                this.authenticateControllerKind =
+                    appearance?.controllerKind === 'agent' || appearance?.controllerKind === 'human'
+                        ? appearance.controllerKind
+                        : undefined;
+                this.authenticateOwnerPrompt =
+                    typeof appearance?.ownerPrompt === 'string' && appearance.ownerPrompt.trim().length > 0
+                        ? appearance.ownerPrompt.trim().slice(0, 4000)
+                        : undefined;
                 if (authToken !== undefined) {
                     this.authToken = authToken;
                 }
@@ -1683,6 +1700,13 @@ export class NetworkManager {
                     chr: this.authenticateChr,
                     referralCode: getStoredReferralCode(),
                     arenaKitJson: this.authenticateArenaKitJson,
+                    controllerKind:
+                        this.authenticateControllerKind === 'agent'
+                            ? CharacterControllerKind.CHARACTER_CONTROLLER_KIND_AGENT
+                            : this.authenticateControllerKind === 'human'
+                              ? CharacterControllerKind.CHARACTER_CONTROLLER_KIND_HUMAN
+                              : undefined,
+                    ownerPrompt: this.authenticateOwnerPrompt,
                 },
             },
         }).finish();
@@ -1925,6 +1949,12 @@ export class NetworkManager {
                     break;
                 case 'buyCashShopItemResult':
                     this.handleBuyCashShopItemResult(message.payload.value);
+                    break;
+                case 'agentSkillShopState':
+                    this.handleAgentSkillShopState(message.payload.value);
+                    break;
+                case 'agentSkillShopResult':
+                    this.handleAgentSkillShopResult(message.payload.value);
                     break;
                 case 'monsterKillsUpdated':
                     this.handleMonsterKillsUpdated(message.payload.value);
@@ -3712,6 +3742,57 @@ export class NetworkManager {
             severity: data.ok ? 'success' : 'warning',
         } satisfies ToastRequestedEvent);
         setCashShopStatusMessage(msg);
+    }
+
+    /** Server-authoritative agent skill catalog + pending $HELL (no marketplace UI). */
+    public requestAgentSkillShop(): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'getAgentSkillShopRequest',
+                value: {},
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'getAgentSkillShopRequest');
+    }
+
+    /** Skill shop purchase. Rail is buy_nft only; stake is rejected (Olympia $HELBREATH expertise). */
+    public requestAgentSkillShopAcquire(skillId: string, rail: 'buy_nft' = 'buy_nft'): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'agentSkillShopAcquireRequest',
+                value: { skillId, rail },
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'agentSkillShopAcquireRequest');
+    }
+
+    public requestAgentSkillShopUnstake(skillId: string): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'agentSkillShopUnstakeRequest',
+                value: { skillId },
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'agentSkillShopUnstakeRequest');
+    }
+
+    public getLastAgentSkillShop(): AgentSkillShopState | null {
+        return this.lastAgentSkillShop;
+    }
+
+    private handleAgentSkillShopState(data: AgentSkillShopState): void {
+        this.lastAgentSkillShop = data;
+    }
+
+    private handleAgentSkillShopResult(data: AgentSkillShopResult): void {
+        if (data.shop) {
+            this.lastAgentSkillShop = data.shop;
+        }
+        const msg = data.error?.trim() || (data.ok ? 'Skill shop OK' : 'Skill shop failed');
+        EventBus.emit(TOAST_REQUESTED, {
+            message: msg,
+            severity: data.ok ? 'success' : 'warning',
+        } satisfies ToastRequestedEvent);
     }
 
     public requestLevelUpSettings(deltas: {

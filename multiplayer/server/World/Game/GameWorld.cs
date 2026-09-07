@@ -735,6 +735,7 @@ public sealed class GameWorld : IWorkerWorld {
             connectedMessage.PersistedState?.Y);
         player.SetCharacterName(connectedMessage.CharacterName);
         player.SetAccountWallet(connectedMessage.AccountWallet);
+        player.SetAccountIdentity(connectedMessage.AccountPlayerId, connectedMessage.ActorKind);
         if (!string.IsNullOrWhiteSpace(connectedMessage.ArenaKitJson)) {
             player.SetArenaKitJson(connectedMessage.ArenaKitJson);
         }
@@ -742,6 +743,13 @@ public sealed class GameWorld : IWorkerWorld {
             player.ApplyPersistedState(connectedMessage.PersistedState);
             if (connectedMessage.TravelerMode) {
                 player.ApplyTravelerModeConstraints();
+            }
+            if (connectedMessage.OwnerAgentProfile is not null) {
+                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (!player.TryApplyOwnerAgentProfile(connectedMessage.OwnerAgentProfile, nowMs, out var agentReject)) {
+                    Console.WriteLine(
+                        $"[GameWorld:{id}] Agent profile update skipped for '{player.CharacterName}': {agentReject}");
+                }
             }
         } else {
             // Brand-new character: soft starter (never GM OP kit), desk slot, optional create appearance.
@@ -764,6 +772,9 @@ public sealed class GameWorld : IWorkerWorld {
                 connectedMessage.Int,
                 connectedMessage.Mag,
                 connectedMessage.Chr);
+            if (connectedMessage.OwnerAgentProfile is not null) {
+                player.SetAgentProfile(connectedMessage.OwnerAgentProfile);
+            }
         }
         ApplyTournamentEntry(player, connectedMessage.PersistedState);
         player.SetLastKnownIp(connectedMessage.RemoteIp);
@@ -771,7 +782,11 @@ public sealed class GameWorld : IWorkerWorld {
             player.SetCitizenshipSide(CityNpcServices.ResolveCitizenshipSidePublic(id));
         }
         OnlinePlayerDirectory.Register(player);
-        Console.WriteLine($"[GameWorld:{id}] Player connected. Players on world: {playersBySessionId.Count}");
+        Console.WriteLine(
+            $"[GameWorld:{id}] Player connected. Players on world: {playersBySessionId.Count}" +
+            (player.IsAgentCharacter
+                ? $" agent=1 actor={player.ActorKind} skills={player.AgentProfile?.Skills?.Length ?? 0}"
+                : $" actor={player.ActorKind}"));
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: true);
         Referral.OnPlayerEnteredWorld(gameWorldRef, player, connectedMessage.ReferralCode);
         ArenaPact.OnPlayerJoined(player);
@@ -786,6 +801,7 @@ public sealed class GameWorld : IWorkerWorld {
 
         reconnectedPlayer.SetCharacterName(reconnectedMessage.CharacterName);
         reconnectedPlayer.SetAccountWallet(reconnectedMessage.AccountWallet);
+        reconnectedPlayer.SetAccountIdentity(reconnectedMessage.AccountPlayerId, reconnectedMessage.ActorKind);
         reconnectedPlayer.SetLastKnownIp(reconnectedMessage.RemoteIp);
         reconnectedPlayer.AttachConnection(reconnectedMessage.SendMessage, reconnectedMessage.RequestDisconnect);
         OnlinePlayerDirectory.Register(reconnectedPlayer);
@@ -903,7 +919,9 @@ public sealed class GameWorld : IWorkerWorld {
                 player.TravelerMode,
                 player.AccountWallet,
                 player.LastKnownIp,
-                player.ArenaKitJson));
+                player.ArenaKitJson,
+                player.AccountPlayerId,
+                player.ActorKind));
         Console.WriteLine($"[GameWorld:{id}] Player transferred to world '{transferPlayerOutMessage.TargetWorldId}'. Players on world: {playersBySessionId.Count}");
     }
 
@@ -921,6 +939,9 @@ public sealed class GameWorld : IWorkerWorld {
         if (!string.IsNullOrWhiteSpace(transferPlayerInMessage.Player.AccountWallet)) {
             player.SetAccountWallet(transferPlayerInMessage.Player.AccountWallet);
         }
+        player.SetAccountIdentity(
+            transferPlayerInMessage.Player.AccountPlayerId,
+            transferPlayerInMessage.Player.ActorKind);
         if (!string.IsNullOrWhiteSpace(transferPlayerInMessage.Player.ArenaKitJson)) {
             player.SetArenaKitJson(transferPlayerInMessage.Player.ArenaKitJson);
         }
@@ -1075,6 +1096,15 @@ public sealed class GameWorld : IWorkerWorld {
                 break;
             case ClientMessage.PayloadOneofCase.BuyCashShopItemRequest:
                 CashShop.HandleBuyRequest(gameWorldRef, playerConnection, message.Message.BuyCashShopItemRequest);
+                break;
+            case ClientMessage.PayloadOneofCase.GetAgentSkillShopRequest:
+                AgentSkillShop.HandleGetState(playerConnection);
+                break;
+            case ClientMessage.PayloadOneofCase.AgentSkillShopAcquireRequest:
+                AgentSkillShop.HandleAcquire(playerConnection, message.Message.AgentSkillShopAcquireRequest);
+                break;
+            case ClientMessage.PayloadOneofCase.AgentSkillShopUnstakeRequest:
+                AgentSkillShop.HandleUnstake(playerConnection, message.Message.AgentSkillShopUnstakeRequest);
                 break;
             case ClientMessage.PayloadOneofCase.PlayerItemPickupRequested:
                 HandlePlayerItemPickupRequested(playerConnection, message.Message.PlayerItemPickupRequested);

@@ -63,6 +63,7 @@ Console.WriteLine(
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
     $"dailyCap={HellMiningStore.DailyTokenCap:N0} fullPoolToActive={HellMiningStore.FullDailyPoolToActivePlayers}.");
 Server.Helpers.CashShop.EnsureLoaded();
+Server.Helpers.AgentSkillShop.EnsureLoaded();
 var gcMonitor = settings.Debug.EnableGcLogs ? new GarbageCollectorMonitor() : null;
 var worldRegistry = new WorldRegistry(settings, workerCount: settings.Threads.GameWorldWorkers, tickInterval: TimeSpan.FromMilliseconds(settings.GameWorld.TickInterval));
 var sessionsByNetworkId = new ConcurrentDictionary<string, PlayerSession>(StringComparer.Ordinal);
@@ -125,6 +126,7 @@ try {
 }
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
 var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+var occupancyByWorldId = new Dictionary<string, GameWorldOccupancyTracker>(StringComparer.Ordinal);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -134,7 +136,9 @@ foreach (var gw in gameWorlds) {
         mapsDirectory,
         gw.Map,
         teleportLocs.SelectMany(teleportLoc => teleportLoc.Locs));
+    occupancyByWorldId[gw.Id] = occupancyTracker;
     Config.ValidateGameWorldNpcBounds(gw, occupancyTracker);
+    Config.ValidateGameWorldTeleportTriggers(gw, occupancyTracker);
     var world = worldRegistry.RegisterGameWorld(
         gw.Id,
         gw.Map,
@@ -179,6 +183,7 @@ foreach (var gw in gameWorlds) {
     }
     Console.WriteLine($"[Server] Loaded game world '{gw.Id}' ({gw.Name}): map {gw.Map}, size {occupancyTracker.SizeX}x{occupancyTracker.SizeY}, {occupancyTracker.OccupiedCount} blocked cells, worker thread {world.WorkerThreadId}");
 }
+Config.ValidateGameWorldTeleportLandings(gameWorlds, occupancyByWorldId);
 var globalWorld = worldRegistry.RegisterGlobalWorld(new GlobalWorld("global", settings), settings.Threads.GlobalWorldWorkerThread);
 Console.WriteLine($"[Server] Loaded global world 'global': worker thread {globalWorld.WorkerThreadId}");
 
@@ -512,7 +517,7 @@ app.Map("/ws", async context => {
             if (!isConnectedToGameWorld) {
                 if (clientMessage.PayloadCase == ClientMessage.PayloadOneofCase.CharacterListRequest) {
                     var listReq = clientMessage.CharacterListRequest;
-                    if (!WalletAuthValidator.TryValidate(listReq.Id.Trim(), listReq.AuthToken, out var listAuthError)) {
+                    if (!WalletAuthValidator.TryValidate(listReq.Id.Trim(), listReq.AuthToken, out var listAuthError, out _)) {
                         var rejectPreview = string.IsNullOrEmpty(listReq.Id)
                             ? "?"
                             : listReq.Id.Trim()[..Math.Min(8, listReq.Id.Trim().Length)];
@@ -559,7 +564,14 @@ app.Map("/ws", async context => {
                             CitizenshipSide = string.IsNullOrWhiteSpace(entry.CitizenshipSide)
                                 ? "traveler"
                                 : entry.CitizenshipSide.Trim().ToLowerInvariant(),
+                            ControllerKind = AgentPlayerProfile.IsAgentController(entry.ControllerKind)
+                                ? CharacterControllerKind.Agent
+                                : CharacterControllerKind.Human,
+                            AgentSkillCount = Math.Max(0, entry.AgentSkillCount),
                         };
+                        if (!string.IsNullOrWhiteSpace(entry.StarterPackId)) {
+                            summary.StarterPackId = entry.StarterPackId;
+                        }
                         // Olympia DrawObject_OnMove_ForMenu: walk/rotate with equipped gear.
                         if (entry.Equipped is { Count: > 0 }) {
                             foreach (var eq in entry.Equipped) {
@@ -731,7 +743,8 @@ app.Map("/ws", async context => {
                     worldRegistry,
                     out authenticatedSession,
                     out var isReconnect,
-                    out var authenticationError)) {
+                    out var authenticationError,
+                    out var sessionClaims)) {
                     var authPreview = string.IsNullOrEmpty(authReq.Id)
                         ? "?"
                         : authReq.Id.Trim()[..Math.Min(8, authReq.Id.Trim().Length)];
@@ -841,8 +854,29 @@ app.Map("/ws", async context => {
                 var authArenaKitJson = authReq.HasArenaKitJson && !string.IsNullOrWhiteSpace(authReq.ArenaKitJson)
                     ? authReq.ArenaKitJson
                     : null;
+                var ownerAgentProfile = AgentPlayerProfile.TryBuild(
+                    authReq.HasControllerKind
+                        ? (authReq.ControllerKind == CharacterControllerKind.Agent
+                            ? AgentPlayerProfile.ControllerAgent
+                            : AgentPlayerProfile.ControllerHuman)
+                        : null,
+                    authReq.HasOwnerPrompt ? authReq.OwnerPrompt : null,
+                    AgentPlayerProfile.FromProtoSlots(authReq.AgentSkills),
+                    starterPackId: null,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    defaultAgentWhenBotAccount: !authReq.HasControllerKind
+                        && string.Equals(sessionClaims.ActorKind, "bot", StringComparison.OrdinalIgnoreCase));
                 GameWorldMessage gameWorldMessage = isReconnect
-                    ? new PlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, RequestDisconnect, RequestWorldChange, session.CharacterName, session.NetworkId, remoteIp)
+                    ? new PlayerReconnectedMessage(
+                        session.SessionId,
+                        EnqueueOutgoingMessage,
+                        RequestDisconnect,
+                        RequestWorldChange,
+                        session.CharacterName,
+                        session.NetworkId,
+                        remoteIp,
+                        sessionClaims.PlayerId,
+                        sessionClaims.ActorKind)
                     : new PlayerConnectedMessage(
                         session.SessionId,
                         EnqueueOutgoingMessage,
@@ -866,7 +900,10 @@ app.Map("/ws", async context => {
                         authChr,
                         remoteIp,
                         authReq.HasReferralCode ? authReq.ReferralCode : null,
-                        authArenaKitJson);
+                        authArenaKitJson,
+                        sessionClaims.PlayerId,
+                        sessionClaims.ActorKind,
+                        ownerAgentProfile);
                 GlobalWorldMessage globalWorldMessage = isReconnect
                     ? new GlobalPlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName)
                     : new GlobalPlayerConnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName);
@@ -1032,17 +1069,19 @@ static bool TryAuthenticatePlayer(
     WorldRegistry worldRegistry,
     out PlayerSession? session,
     out bool isReconnect,
-    out string? errorMessage) {
+    out string? errorMessage,
+    out WalletAuthValidator.WalletSessionClaims sessionClaims) {
     session = null;
     isReconnect = false;
     errorMessage = null;
+    sessionClaims = new WalletAuthValidator.WalletSessionClaims("", "human");
 
     if (string.IsNullOrWhiteSpace(networkId)) {
         errorMessage = "Authentication id is required.";
         return false;
     }
 
-    if (!WalletAuthValidator.TryValidate(networkId.Trim(), authToken, out errorMessage)) {
+    if (!WalletAuthValidator.TryValidate(networkId.Trim(), authToken, out errorMessage, out sessionClaims)) {
         return false;
     }
 

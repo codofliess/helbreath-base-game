@@ -43,6 +43,7 @@ import {
 } from '../ui/selectCharDeskSync';
 import { peekCachedOccupiedCharacterList } from '../../utils/characterListApi';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CreateCharDesk } from '../ui/CreateCharDesk';
 import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
 import { loadArenaKits } from '../../utils/arenaKits';
@@ -386,10 +387,16 @@ export class LoginScreen extends Scene {
                 arenaDesk?.setVisible(false);
                 if (characterSlots.length > 0) {
                     const names = characterSlots.map((s) => s.name).join(',');
-                    console.info(
-                        '[LoginScreen] SELECTCHAR desk sync slots=%d names=%s',
+                    selectCharWarn(
+                        'LoginScreen SELECTCHAR desk sync slots=%d names=%s',
                         characterSlots.length,
                         names,
+                    );
+                } else {
+                    selectCharWarn(
+                        'LoginScreen SELECTCHAR desk sync slots=0 (empty shells) loading=%s store=%d',
+                        state.characterListLoading,
+                        state.characterSlots.length,
                     );
                 }
             } else if (showArena && arenaDesk) {

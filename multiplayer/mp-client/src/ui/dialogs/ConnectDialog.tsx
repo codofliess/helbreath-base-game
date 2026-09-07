@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import {
     IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
@@ -348,6 +349,12 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         (session: NonNullable<typeof walletSession>) => {
             const cached = peekCachedOccupiedCharacterList(session.wallet);
             const alreadyPainted = connectDialogStore.state.characterSlots.length > 0;
+            selectCharWarn(
+                'ConnectDialog characterList load wallet=%s… painted=%s cached=%d',
+                session.wallet.slice(0, 8),
+                alreadyPainted,
+                cached?.slots.length ?? 0,
+            );
             if (alreadyPainted || (cached && cached.slots.length > 0)) {
                 const slots = alreadyPainted
                     ? connectDialogStore.state.characterSlots
@@ -363,8 +370,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     EventBus.emit(IN_UI_CHARACTER_SLOTS_UPDATED, slots);
                 }
                 setCharacterListLoading(false);
-                console.info(
-                    '[ConnectDialog] SELECTCHAR already has occupied slots; skipping new CharacterList WS',
+                selectCharWarn(
+                    'ConnectDialog SELECTCHAR already has occupied slots; skipping new CharacterList WS',
                 );
                 return Promise.resolve();
             }
@@ -381,8 +388,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                         if (connectDialogStore.state.phase === 'create-char') {
                             setConnectGatePhase('play-world');
                         }
-                        console.info(
-                            '[ConnectDialog] Painted SELECTCHAR %s Lv%s (slots=%d)',
+                        selectCharWarn(
+                            'ConnectDialog Painted SELECTCHAR %s Lv%s (slots=%d)',
                             firstOccupied.name,
                             firstOccupied.level,
                             result.slots.length,
@@ -399,6 +406,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     setSelectedSlotIndex(0);
                     setCharacterName('');
                     setConnectGatePhase('create-char');
+                    selectCharWarn('ConnectDialog empty CharacterList → create-char');
                     EventBus.emit(TOAST_REQUESTED, {
                         message: 'Create your character first (name, looks, stats), then Start.',
                         severity: 'info',
@@ -427,7 +435,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                         return;
                     }
                     const message = error instanceof Error ? error.message : 'Failed to load characters.';
-                    console.warn('[ConnectDialog] Character list failed:', message);
+                    selectCharWarn('ConnectDialog Character list failed: %s', message);
                     const chain = session.chainId;
                     if (!chain || chain === 'sol') {
                         clearStoredWalletAuth();

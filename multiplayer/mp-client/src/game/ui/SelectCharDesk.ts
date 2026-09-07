@@ -30,6 +30,7 @@ import {
 } from './menuCharacterPreview';
 import { Direction } from '../../utils/CoordinateUtils';
 import { getStoredWalletPubkey, getStoredWalletToken } from '../../utils/walletAuth';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CHAIN_LORDS_BRAND } from './charUiMode';
 import { getItemById } from '../../constants/Items';
 import { OLYMPIA_SUPER_RARE_ITEM_IDS } from '../../utils/olympiaDropRules';
@@ -949,32 +950,20 @@ export class SelectCharDesk {
 
     public setCharacterSlots(slots: CharacterSlotSummary[]): void {
         if (slots.length === 0 && this.slots.length > 0) {
-            console.warn('[SelectCharDesk] Ignoring empty CharacterList wipe; keeping occupied slots');
+            selectCharWarn('SelectCharDesk Ignoring empty CharacterList wipe; keeping occupied slots');
             return;
         }
-        const prev = this.slots;
         const normalized = slots.map((row) => ({
             ...row,
             slotIndex: Number(row.slotIndex),
         }));
-        const same =
-            prev.length === normalized.length &&
-            prev.every(
-                (s, i) =>
-                    Number(s.slotIndex) === normalized[i]?.slotIndex &&
-                    s.name === normalized[i]?.name &&
-                    s.level === normalized[i]?.level,
-            );
         this.slots = normalized;
-        if (slots.length > 0) {
-            console.info(
-                '[SelectCharDesk] setCharacterSlots slots=%d names=%s visible=%s rebuild=%s',
-                slots.length,
-                slots.map((s) => s.name).join(','),
-                this.visible,
-                this.visible && !same,
-            );
-        }
+        selectCharWarn(
+            'SelectCharDesk setCharacterSlots slots=%d names=%s visible=%s',
+            normalized.length,
+            normalized.map((s) => s.name).join(',') || '(empty)',
+            this.visible,
+        );
         if (this.visible) {
             this.rebuild();
         } else {

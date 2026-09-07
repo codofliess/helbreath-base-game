@@ -1,6 +1,7 @@
 import { ClientMessage, ServerMessage } from '../proto/generated/network';
 import { buildGameWebSocketUrl } from './gameWebSocketUrl';
 import { getPlayerModeWireValue } from './playerMode';
+import { selectCharWarn } from './selectCharTrace';
 
 /** Visible equip row for SELECTCHAR walk/rotate preview (mirrors CharacterEquipPreview proto). */
 export interface CharacterEquipPreview {
@@ -161,21 +162,46 @@ export function mapCharacterListResponse(body: {
     return { slots, referral };
 }
 
+/** One inbound WS frame while waiting for CharacterListResponse (including bootstrap). */
+export interface CharacterListFrameInspection {
+    payloadCase: string;
+    parsed?: ParsedCharacterList;
+    decodeError?: string;
+}
+
 /**
- * Decode one ServerMessage frame. Returns the desk payload, or undefined when
- * the frame is bootstrap / undecodable and must be ignored (do not wipe a list).
+ * Decode one ServerMessage without wiping the desk on bootstrap / junk frames.
+ * Logs live smoke uses this so a silent worldsList skip cannot hide a bad list decode.
  */
-export function tryParseCharacterListMessage(bytes: Uint8Array): ParsedCharacterList | undefined {
+export function inspectCharacterListFrame(bytes: Uint8Array): CharacterListFrameInspection {
     try {
         const message = ServerMessage.decode(bytes);
-        if (message.payload?.$case !== 'characterListResponse') {
-            return undefined;
+        const payloadCase = message.payload?.$case ?? 'none';
+        if (payloadCase !== 'characterListResponse' || message.payload?.$case !== 'characterListResponse') {
+            return { payloadCase };
         }
-        return mapCharacterListResponse(message.payload.value);
+        return {
+            payloadCase,
+            parsed: mapCharacterListResponse(message.payload.value),
+        };
     } catch (error) {
-        console.warn('[characterList] Ignoring undecodable WS frame while waiting for list', error);
+        return {
+            payloadCase: 'decode-error',
+            decodeError: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+
+export function tryParseCharacterListMessage(bytes: Uint8Array): ParsedCharacterList | undefined {
+    const inspected = inspectCharacterListFrame(bytes);
+    if (inspected.payloadCase === 'decode-error') {
+        console.warn(
+            '[characterList] Ignoring undecodable WS frame while waiting for list',
+            inspected.decodeError,
+        );
         return undefined;
     }
+    return inspected.parsed;
 }
 
 let sharedListFetch:
@@ -339,16 +365,16 @@ export async function fetchCharacterList(
                 settled = true;
                 window.clearTimeout(timeoutId);
                 buffered = coalesced.ok;
+                const names = coalesced.ok.slots.map((s) => s.name).join(',');
                 if (coalesced.ok.slots.length > 0) {
                     rememberOccupiedCharacterList(trimmedWallet, coalesced.ok);
-                    const names = coalesced.ok.slots.map((s) => s.name).join(',');
-                    console.info(
-                        '[characterList] Occupied list ready slots=%d names=%s; holding WS %dms',
-                        coalesced.ok.slots.length,
-                        names,
-                        LIST_SOCKET_HOLD_MS,
-                    );
                 }
+                selectCharWarn(
+                    'characterList Occupied list ready slots=%d names=%s; holding WS %dms',
+                    coalesced.ok.slots.length,
+                    names || '(empty)',
+                    LIST_SOCKET_HOLD_MS,
+                );
                 scheduleSocketClose();
                 resolve(coalesced.ok);
                 return;
@@ -359,6 +385,7 @@ export async function fetchCharacterList(
             settled = true;
             window.clearTimeout(timeoutId);
             scheduleSocketClose();
+            selectCharWarn('characterList WS failed: %s', coalesced.error.message);
             reject(coalesced.error);
         };
 
@@ -373,11 +400,34 @@ export async function fetchCharacterList(
             finish(undefined, parsed);
         };
 
+        const onListBytes = (bytes: Uint8Array) => {
+            const inspected = inspectCharacterListFrame(bytes);
+            selectCharWarn(
+                'characterList WS frame case=%s slots=%s names=%s bytes=%d',
+                inspected.payloadCase,
+                inspected.parsed ? inspected.parsed.slots.length : '-',
+                inspected.parsed?.slots.map((s) => s.name).join(',') || inspected.decodeError || '',
+                bytes.byteLength,
+            );
+            if (inspected.payloadCase === 'decode-error') {
+                console.warn(
+                    '[characterList] Ignoring undecodable WS frame while waiting for list',
+                    inspected.decodeError,
+                );
+            }
+            acceptParsed(inspected.parsed);
+        };
+
         const timeoutId = window.setTimeout(() => {
             finish(new Error('Timed out waiting for character list.'), undefined, true);
         }, LIST_TIMEOUT_MS);
 
         socket.addEventListener('open', () => {
+            selectCharWarn(
+                'characterList WS open sending request wallet=%s… url=%s',
+                trimmedWallet.slice(0, 8),
+                websocketUrl,
+            );
             const packet = ClientMessage.encode({
                 payload: {
                     $case: 'characterListRequest',
@@ -395,7 +445,7 @@ export async function fetchCharacterList(
             const data = event.data;
             if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
                 const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-                acceptParsed(tryParseCharacterListMessage(bytes));
+                onListBytes(bytes);
                 return;
             }
             pendingBlobReads += 1;
@@ -403,9 +453,10 @@ export async function fetchCharacterList(
                 try {
                     const bytes = await wsPayloadToBytes(data);
                     if (!bytes) {
+                        selectCharWarn('characterList WS frame not bytes type=%s', typeof data);
                         return;
                     }
-                    acceptParsed(tryParseCharacterListMessage(bytes));
+                    onListBytes(bytes);
                 } finally {
                     pendingBlobReads -= 1;
                     if (!settled && pendingBlobReads === 0 && buffered) {
@@ -416,6 +467,7 @@ export async function fetchCharacterList(
         });
 
         socket.addEventListener('error', () => {
+            selectCharWarn('characterList WS error url=%s', websocketUrl);
             finish(new Error(`Failed to connect to ${websocketUrl} for character list.`));
         });
 
@@ -424,6 +476,7 @@ export async function fetchCharacterList(
                 return;
             }
             const reason = event.reason?.trim();
+            selectCharWarn('characterList WS close before list code=%s reason=%s', event.code, reason || '');
             finish(new Error(reason || 'Connection closed before character list arrived.'));
         });
     });

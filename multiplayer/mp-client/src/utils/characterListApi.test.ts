@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ServerMessage } from '../proto/generated/network';
 import {
+    inspectCharacterListFrame,
     mapCharacterListResponse,
     tryParseCharacterListMessage,
     wsPayloadToBytes,
@@ -83,6 +84,26 @@ describe('character list parse / paint mapping', () => {
         assert.ok(parsed);
         assert.equal(parsed?.slots[0]?.name, 'Elon');
         assert.equal(parsed?.referral?.code, 'Elon-AAAA');
+    });
+
+    it('inspects WorldsList vs occupied CharacterListResponse without throwing', () => {
+        const bootstrap = ServerMessage.encode({
+            payload: {
+                $case: 'worldsList',
+                value: { worlds: [] },
+            },
+        }).finish();
+        const skipped = inspectCharacterListFrame(bootstrap);
+        assert.equal(skipped.payloadCase, 'worldsList');
+        assert.equal(skipped.parsed, undefined);
+
+        const occupied = inspectCharacterListFrame(
+            encodeListFrame({
+                characters: [{ slotIndex: 0, name: 'Elon', level: 150 }],
+            }),
+        );
+        assert.equal(occupied.payloadCase, 'characterListResponse');
+        assert.equal(occupied.parsed?.slots[0]?.name, 'Elon');
     });
 
     it('ignores WorldsList bootstrap instead of wiping a desk payload', () => {

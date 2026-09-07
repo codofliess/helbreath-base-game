@@ -38,6 +38,7 @@ import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentati
 import { SelectCharDesk } from '../ui/SelectCharDesk';
 import {
     applyStoreToSelectCharDesk,
+    paintSelectCharSlotRows,
     resolveSelectCharSlotsForPaint,
     selectCharDeskIsMissingOccupiedSlots,
 } from '../ui/selectCharDeskSync';
@@ -387,6 +388,7 @@ export class LoginScreen extends Scene {
                     selectDesk.setCharacterSlots(characterSlots);
                     selectDesk.forceRebuild();
                 }
+                selectDesk.applyPaintedSlotRows(paintSelectCharSlotRows(characterSlots));
                 createDesk?.setVisible(false);
                 arenaDesk?.setVisible(false);
                 if (characterSlots.length > 0) {

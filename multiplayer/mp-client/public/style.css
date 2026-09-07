@@ -187,6 +187,35 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     image-rendering: smooth !important;
 }
 
+/* Occupied SELECTCHAR names above Phaser Canvas (KindGem — not Text-in-Container). */
+#selectchar-occupied-labels {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 35;
+}
+#selectchar-occupied-labels .sc-slot-glyph {
+    position: absolute;
+    min-width: 140px;
+    padding: 4px 8px 6px;
+    background: rgba(58, 40, 16, 0.92);
+    border: 1px solid rgba(224, 180, 90, 0.75);
+    color: #f0e0c0;
+    font-family: Spectral, Georgia, serif;
+    text-shadow: 0 1px 2px #000;
+    white-space: nowrap;
+}
+#selectchar-occupied-labels .sc-slot-glyph__name {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+#selectchar-occupied-labels .sc-slot-glyph__lev {
+    font-size: 16px;
+    color: #e0b45a;
+    line-height: 1.2;
+}
+
 /* Create Character — DOM name field (above Phaser canvas; reliable focus/typing). */
 input.createchar-name-input {
     position: fixed;

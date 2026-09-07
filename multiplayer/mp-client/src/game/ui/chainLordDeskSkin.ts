@@ -82,11 +82,21 @@ export function drawFullWash(g: GameObjects.Graphics, w: number, h: number): voi
 }
 
 /** Hub-style glass portal panel (thin gold frame). */
-export function drawPortalPanel(g: GameObjects.Graphics, r: PanelRect, selected = false): void {
-    const alpha = selected ? 0.92 : 0.78;
+export function drawPortalPanel(
+    g: GameObjects.Graphics,
+    r: PanelRect,
+    selected = false,
+    occupied = false,
+): void {
+    const alpha = selected ? 0.92 : occupied ? 0.88 : 0.78;
     g.fillStyle(CL.panelGlass, alpha);
     g.fillRoundedRect(r.x, r.y, r.w, r.h, 2);
-    g.lineStyle(selected ? 2 : 1, selected ? CL.gold : CL.goldLine, selected ? 0.95 : 0.45);
+    const occupiedStroke = occupied && !selected;
+    g.lineStyle(
+        selected || occupiedStroke ? 2 : 1,
+        selected || occupied ? CL.gold : CL.goldLine,
+        selected ? 0.95 : occupied ? 0.75 : 0.45,
+    );
     g.strokeRoundedRect(r.x, r.y, r.w, r.h, 2);
     if (selected) {
         g.lineStyle(1, 0xffe8a0, 0.25);

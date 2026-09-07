@@ -108,6 +108,17 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(desk, /SelectCharDesk painted slot texts/);
         assert.match(sync, /paintSelectCharSlotRows/);
         assert.match(sync, /forceRebuild/);
+        assert.match(sync, /applyPaintedSlotRows/);
+        assert.doesNotMatch(desk, /writeSlotCardTexts/);
+        assert.match(desk, /writeSlotGlyphImage/);
+        assert.match(desk, /painted slot texts names=/);
+        assert.match(desk, /syncOccupiedDomOverlay/);
+        const glyphs = fs.readFileSync(
+            path.join(clientRoot, 'src/game/ui/selectCharSlotGlyphs.ts'),
+            'utf8',
+        );
+        assert.match(glyphs, /occupiedSlotOverlayInnerHtml/);
+        assert.match(glyphs, /selectchar-occupied-labels/);
     });
 
     it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
@@ -179,5 +190,7 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /SELECTCHAR desk sync/);
         assert.match(entry, /painted slot texts/);
         assert.match(entry, /setCharacterSlots/);
+        assert.match(entry, /applyPaintedSlotRows/);
+        assert.match(entry, /selectchar-occupied-labels/);
     });
 });

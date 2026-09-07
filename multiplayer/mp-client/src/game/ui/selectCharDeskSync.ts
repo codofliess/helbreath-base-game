@@ -11,6 +11,8 @@ export interface SelectCharDeskPaintTarget {
     setLoading(loading: boolean): void;
     getCharacterSlots?(): CharacterSlotSummary[];
     forceRebuild?(): void;
+    /** Last paint: store-computed rows, applied after rebuild so Empty glyphs cannot win. */
+    applyPaintedSlotRows?(rows: SelectCharSlotPaintRow[]): void;
 }
 
 export interface SelectCharStorePaintState {
@@ -55,7 +57,7 @@ export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCh
     const normalized = normalizeDeskCharacterSlots(slots);
     const rows: SelectCharSlotPaintRow[] = [];
     for (let i = 0; i < 4; i++) {
-        const occupied = normalized.find((s) => s.slotIndex === i);
+        const occupied = normalized.find((s) => Number(s.slotIndex) === i);
         if (!occupied) {
             rows.push({ name: 'Empty', lev: 'Create Character', occupied: undefined });
             continue;
@@ -93,8 +95,8 @@ export function resolveSelectCharSelectedIndex(
  * Slots are applied before `setVisible(true)` so a deferred visibility rebuild
  * sees Elon, then applied again after visibility so an already-visible desk
  * cannot keep empty shells from the previous `refreshSlotTexts` pass.
- * Occupied paints always `forceRebuild` so Phaser Text children cannot keep
- * the Empty/Create glyphs after the store already has Elon.
+ * Occupied paints `forceRebuild` then `applyPaintedSlotRows` so a rebuild that
+ * recreates chrome cannot leave Empty/Create glyphs after the store has Elon.
  */
 export function applyStoreToSelectCharDesk(
     desk: SelectCharDeskPaintTarget,
@@ -105,6 +107,7 @@ export function applyStoreToSelectCharDesk(
         characterSlots,
         state.selectedSlotIndex,
     );
+    const rows = paintSelectCharSlotRows(characterSlots);
     desk.setCharacterSlots(characterSlots);
     desk.setVisible(true);
     desk.setCharacterSlots(characterSlots);
@@ -118,6 +121,8 @@ export function applyStoreToSelectCharDesk(
         desk.setCharacterSlots(characterSlots);
         desk.forceRebuild?.();
     }
+    // Glyphs last: rebuild/layout must not be the final writer of card labels.
+    desk.applyPaintedSlotRows?.(rows);
 }
 
 /** True when the Phaser desk is missing an occupied row the React store already has. */

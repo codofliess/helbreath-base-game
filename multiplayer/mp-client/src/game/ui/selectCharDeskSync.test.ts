@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
     applyStoreToSelectCharDesk,
+    paintSelectCharSlotRows,
+    resolveSelectCharSelectedIndex,
     resolveSelectCharSlotsForPaint,
     selectCharDeskIsMissingOccupiedSlots,
     type SelectCharDeskPaintTarget,
@@ -92,7 +94,8 @@ describe('applyStoreToSelectCharDesk', () => {
         assert.equal(desk.slots[0]?.name, 'Elon');
         assert.equal(desk.slots[0]?.level, 150);
         assert.equal(desk.calls.includes('slots:Elon'), true);
-        assert.equal(desk.calls.filter((c) => c === 'slots:Elon').length, 2);
+        assert.ok(desk.calls.filter((c) => c === 'slots:Elon').length >= 2);
+        assert.equal(desk.calls.includes('rebuild'), true);
     });
 
     it('re-pushes occupied slots after the desk is already visible (Strict Mode second paint)', () => {
@@ -142,5 +145,48 @@ describe('selectCharDeskIsMissingOccupiedSlots', () => {
         assert.equal(selectCharDeskIsMissingOccupiedSlots([elon], []), true);
         assert.equal(selectCharDeskIsMissingOccupiedSlots([elon], [elon]), false);
         assert.equal(selectCharDeskIsMissingOccupiedSlots([], []), false);
+    });
+});
+
+describe('paintSelectCharSlotRows', () => {
+    it('paints Elon Lv150 on card 0 and Empty/Create on the other shells', () => {
+        const rows = paintSelectCharSlotRows([elon]);
+        assert.equal(rows[0]?.name, 'Elon');
+        assert.equal(rows[0]?.lev, 'Lev. 150');
+        assert.equal(rows[0]?.occupied?.name, 'Elon');
+        assert.equal(rows[1]?.name, 'Empty');
+        assert.equal(rows[1]?.lev, 'Create Character');
+        assert.equal(rows[2]?.name, 'Empty');
+        assert.equal(rows[3]?.name, 'Empty');
+    });
+
+    it('claims an out-of-range slotIndex onto a visible card so Elon is not Empty', () => {
+        const rows = paintSelectCharSlotRows([{ ...elon, slotIndex: 99 }]);
+        assert.equal(rows.some((r) => r.name === 'Elon' && r.lev === 'Lev. 150'), true);
+        assert.equal(rows[0]?.name, 'Elon');
+    });
+});
+
+describe('resolveSelectCharSelectedIndex', () => {
+    it('moves selection onto occupied Elon when store still points at an empty card', () => {
+        const occupied = { ...elon, slotIndex: 1 };
+        assert.equal(resolveSelectCharSelectedIndex([occupied], 0), 1);
+        assert.equal(resolveSelectCharSelectedIndex([elon], 0), 0);
+    });
+});
+
+describe('applyStoreToSelectCharDesk occupied selection', () => {
+    it('selects Elon on slot 1 instead of leaving the hero on Empty card 0', () => {
+        const desk = new FakeDesk();
+        applyStoreToSelectCharDesk(desk, {
+            characterSlots: [{ ...elon, slotIndex: 1 }],
+            selectedSlotIndex: 0,
+            characterListLoading: false,
+        });
+        assert.equal(desk.slots[0]?.name, 'Elon');
+        assert.equal(desk.slots[0]?.slotIndex, 1);
+        assert.equal(desk.selected, 1);
+        assert.equal(desk.visible, true);
+        assert.equal(desk.calls.includes('rebuild'), true);
     });
 });

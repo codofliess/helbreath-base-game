@@ -1,4 +1,7 @@
-import type { CharacterSlotSummary } from '../../utils/characterListApi';
+import {
+    normalizeDeskCharacterSlots,
+    type CharacterSlotSummary,
+} from '../../utils/characterListApi';
 
 /** Minimal SELECTCHAR desk surface used by LoginScreen and unit tests. */
 export interface SelectCharDeskPaintTarget {
@@ -37,25 +40,82 @@ export function resolveSelectCharSlotsForPaint(
     return storeSlots;
 }
 
+/** One visual SELECTCHAR card (occupied name/level or Empty / Create Character). */
+export interface SelectCharSlotPaintRow {
+    name: string;
+    lev: string;
+    occupied: CharacterSlotSummary | undefined;
+}
+
+/**
+ * Labels for the 4 desk cards. Occupied rows are claimed onto 0–3 first so a
+ * live Elon with a missing/out-of-range slotIndex cannot leave every shell Empty.
+ */
+export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCharSlotPaintRow[] {
+    const normalized = normalizeDeskCharacterSlots(slots);
+    const rows: SelectCharSlotPaintRow[] = [];
+    for (let i = 0; i < 4; i++) {
+        const occupied = normalized.find((s) => s.slotIndex === i);
+        if (!occupied) {
+            rows.push({ name: 'Empty', lev: 'Create Character', occupied: undefined });
+            continue;
+        }
+        const displayName =
+            occupied.name.length > 16 ? `${occupied.name.slice(0, 15)}…` : occupied.name;
+        const lev =
+            occupied.rebirth > 0
+                ? `Lev. ${occupied.level} (+${occupied.rebirth})`
+                : `Lev. ${occupied.level}`;
+        rows.push({ name: displayName, lev, occupied });
+    }
+    return rows;
+}
+
+/** Prefer the store selection when that card is occupied; otherwise the first occupied card. */
+export function resolveSelectCharSelectedIndex(
+    slots: CharacterSlotSummary[],
+    selectedSlotIndex: number,
+): number {
+    const normalized = normalizeDeskCharacterSlots(slots);
+    if (normalized.length === 0) {
+        return Math.max(0, Math.min(3, Number(selectedSlotIndex) || 0));
+    }
+    const selected = Math.max(0, Math.min(3, Number(selectedSlotIndex) || 0));
+    if (normalized.some((s) => s.slotIndex === selected)) {
+        return selected;
+    }
+    return normalized[0].slotIndex;
+}
+
 /**
  * Push occupied (or empty) store slots onto the Phaser desk.
  *
  * Slots are applied before `setVisible(true)` so a deferred visibility rebuild
  * sees Elon, then applied again after visibility so an already-visible desk
  * cannot keep empty shells from the previous `refreshSlotTexts` pass.
+ * Occupied paints always `forceRebuild` so Phaser Text children cannot keep
+ * the Empty/Create glyphs after the store already has Elon.
  */
 export function applyStoreToSelectCharDesk(
     desk: SelectCharDeskPaintTarget,
     state: SelectCharStorePaintState,
 ): void {
-    desk.setCharacterSlots(state.characterSlots);
+    const characterSlots = normalizeDeskCharacterSlots(state.characterSlots);
+    const selectedSlotIndex = resolveSelectCharSelectedIndex(
+        characterSlots,
+        state.selectedSlotIndex,
+    );
+    desk.setCharacterSlots(characterSlots);
     desk.setVisible(true);
-    desk.setCharacterSlots(state.characterSlots);
-    desk.setSelectedSlotIndex(state.selectedSlotIndex);
+    desk.setCharacterSlots(characterSlots);
+    desk.setSelectedSlotIndex(selectedSlotIndex);
     desk.setLoading(state.characterListLoading);
-    const painted = desk.getCharacterSlots?.() ?? state.characterSlots;
-    if (selectCharDeskIsMissingOccupiedSlots(state.characterSlots, painted)) {
-        desk.setCharacterSlots(state.characterSlots);
+    const painted = desk.getCharacterSlots?.() ?? characterSlots;
+    if (
+        characterSlots.length > 0 ||
+        selectCharDeskIsMissingOccupiedSlots(characterSlots, painted)
+    ) {
+        desk.setCharacterSlots(characterSlots);
         desk.forceRebuild?.();
     }
 }

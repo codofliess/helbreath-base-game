@@ -7,6 +7,7 @@ import {
 } from '../../constants/EventNames';
 import {
     normalizeCitizenshipSide,
+    normalizeDeskCharacterSlots,
     type CharacterSlotSummary,
 } from '../../utils/characterListApi';
 import {
@@ -14,6 +15,10 @@ import {
     setSelectedSlotIndex,
     connectDialogStore,
 } from '../../ui/store/ConnectDialog.store';
+import {
+    paintSelectCharSlotRows,
+    resolveSelectCharSelectedIndex,
+} from './selectCharDeskSync';
 import { Gender, SkinColor } from '../../Types';
 import {
     applyLoginDeskCanvasPresentation,
@@ -929,12 +934,14 @@ export class SelectCharDesk {
             // Paint now (store slots may already be on this.slots) then again after presentation.
             this.rebuild();
             this.startMenuWalkAnimation();
+            this.refreshSlotTexts();
             window.requestAnimationFrame(() => {
                 if (!this.visible) {
                     return;
                 }
                 this.rebuild();
                 this.startMenuWalkAnimation();
+                this.refreshSlotTexts();
             });
         } else {
             this.detachKeyboard();
@@ -949,15 +956,16 @@ export class SelectCharDesk {
     }
 
     public setCharacterSlots(slots: CharacterSlotSummary[]): void {
-        if (slots.length === 0 && this.slots.length > 0) {
+        const normalized = normalizeDeskCharacterSlots(slots);
+        if (normalized.length === 0 && this.slots.length > 0) {
             selectCharWarn('SelectCharDesk Ignoring empty CharacterList wipe; keeping occupied slots');
             return;
         }
-        const normalized = slots.map((row) => ({
-            ...row,
-            slotIndex: Number(row.slotIndex),
-        }));
         this.slots = normalized;
+        this.selectedSlotIndex = resolveSelectCharSelectedIndex(
+            normalized,
+            this.selectedSlotIndex,
+        );
         selectCharWarn(
             'SelectCharDesk setCharacterSlots slots=%d names=%s visible=%s',
             normalized.length,
@@ -976,9 +984,8 @@ export class SelectCharDesk {
     }
 
     public forceRebuild(): void {
-        if (this.visible) {
-            this.rebuild();
-        }
+        this.rebuild();
+        this.refreshSlotTexts();
     }
 
     public setSelectedSlotIndex(index: number): void {
@@ -1209,35 +1216,30 @@ export class SelectCharDesk {
     }
 
     private refreshSlotTexts(): void {
+        const rows = paintSelectCharSlotRows(this.slots);
+        const paintedNames: string[] = [];
         for (let i = 0; i < 4; i++) {
             const visual = this.slotVisuals[i];
-            const occupied = this.slotForIndex(i);
+            const row = rows[i];
+            const occupied = row.occupied;
             const selected = i === this.selectedSlotIndex;
+            paintedNames.push(row.name);
 
+            this.writeSlotCardTexts(visual, row.name, row.lev);
             if (occupied) {
-                const displayName =
-                    occupied.name.length > 16 ? `${occupied.name.slice(0, 15)}…` : occupied.name;
-                const lev =
-                    occupied.rebirth > 0
-                        ? `Lev. ${occupied.level} (+${occupied.rebirth})`
-                        : `Lev. ${occupied.level}`;
-                visual.nameValue.setText(displayName);
-                visual.levValue.setText(lev);
                 const city = normalizeCitizenshipSide(occupied.citizenshipSide);
                 this.paintCitySeal(visual, city, true);
                 if (selected) {
                     const cityLabel =
                         city === 'aresden' ? 'Aresden' : city === 'elvine' ? 'Elvine' : 'Traveler';
-                    this.heroNameText?.setText(displayName).setVisible(true);
-                    this.heroMetaText?.setText(`${lev}  ·  ${cityLabel}`).setVisible(true);
+                    this.heroNameText?.setText(row.name).setVisible(true).setAlpha(1);
+                    this.heroMetaText?.setText(`${row.lev}  ·  ${cityLabel}`).setVisible(true).setAlpha(1);
                 }
             } else {
-                visual.nameValue.setText('Empty');
-                visual.levValue.setText('Create Character');
                 this.paintCitySeal(visual, undefined, false);
                 if (selected) {
-                    this.heroNameText?.setText('Empty slot').setVisible(true);
-                    this.heroMetaText?.setText('Create Character to fill this slot').setVisible(true);
+                    this.heroNameText?.setText('Empty slot').setVisible(true).setAlpha(1);
+                    this.heroMetaText?.setText('Create Character to fill this slot').setVisible(true).setAlpha(1);
                 }
             }
             try {
@@ -1245,9 +1247,43 @@ export class SelectCharDesk {
             } catch (err) {
                 console.warn('[SelectCharDesk] Menu preview failed; keeping name/level text', err);
             }
+            this.root.bringToTop(visual.nameValue);
+            this.root.bringToTop(visual.levValue);
+            this.root.bringToTop(visual.citySealLabel);
+        }
+        if (this.slots.length > 0) {
+            selectCharWarn(
+                'SelectCharDesk painted slot texts names=%s selected=%d',
+                paintedNames.join('|'),
+                this.selectedSlotIndex,
+            );
         }
         this.refreshDetailPanel();
         this.refreshWalletRow();
+    }
+
+    /**
+     * Recreate name/level Text so Phaser cannot keep the Empty/Create canvas
+     * after setCharacterSlots already stored Elon.
+     */
+    private writeSlotCardTexts(visual: SlotVisuals, name: string, lev: string): void {
+        const nx = visual.nameValue.x;
+        const ny = visual.nameValue.y;
+        const lx = visual.levValue.x;
+        const ly = visual.levValue.y;
+        visual.nameValue.destroy();
+        visual.levValue.destroy();
+        visual.nameValue = this.scene.add
+            .text(nx, ny, name, clBodyStyle({ fontSize: '18px', color: CL_PARCHMENT, fontStyle: 'bold' }))
+            .setOrigin(0, 0)
+            .setVisible(true)
+            .setAlpha(1);
+        visual.levValue = this.scene.add
+            .text(lx, ly, lev, clBodyStyle({ fontSize: '16px', color: CL_MUTED }))
+            .setOrigin(0, 0)
+            .setVisible(true)
+            .setAlpha(1);
+        this.root.add([visual.nameValue, visual.levValue]);
     }
 
     private refreshSlotPreview(

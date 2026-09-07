@@ -365,6 +365,10 @@ export class LoginScreen extends Scene {
                 selectDesk?.setVisible(false);
                 arenaDesk?.setVisible(false);
             } else if (showSelect && selectDesk) {
+                // Hide sibling desks first (Create is depth 21) so Empty/Create chrome
+                // from those roots cannot cover occupied World SELECTCHAR labels.
+                createDesk?.setVisible(false);
+                arenaDesk?.setVisible(false);
                 const wallet =
                     state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || '';
                 const cached = wallet ? peekCachedOccupiedCharacterList(wallet)?.slots ?? [] : [];

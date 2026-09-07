@@ -170,6 +170,33 @@ function claimDeskSlotIndex(raw: number, used: Set<number>): number {
 }
 
 /**
+ * Clamp occupied rows onto visual desks 0–3.
+ * EventBus / store copies can carry NaN or out-of-range slotIndex; without this
+ * SelectCharDesk.slotForIndex never matches and every card stays Empty.
+ */
+export function normalizeDeskCharacterSlots(
+    slots: CharacterSlotSummary[],
+): CharacterSlotSummary[] {
+    const used = new Set<number>();
+    const out: CharacterSlotSummary[] = [];
+    for (const row of slots) {
+        if (!row) {
+            continue;
+        }
+        const raw = Number(row.slotIndex);
+        const slotIndex = claimDeskSlotIndex(Number.isFinite(raw) ? raw : 0, used);
+        used.add(slotIndex);
+        out.push({
+            ...row,
+            slotIndex,
+            name: (row.name ?? '').trim(),
+        });
+    }
+    out.sort((a, b) => a.slotIndex - b.slotIndex);
+    return out;
+}
+
+/**
  * Map proto CharacterListResponse rows onto desk slots 0–3.
  * Does not filter traveler vs city — every occupied server row is shown.
  */

@@ -94,6 +94,22 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(src, /useLayoutEffect\(/);
     });
 
+    it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {
+        const login = fs.readFileSync(
+            path.join(clientRoot, 'src/game/scenes/LoginScreen.ts'),
+            'utf8',
+        );
+        const desk = fs.readFileSync(path.join(clientRoot, 'src/game/ui/SelectCharDesk.ts'), 'utf8');
+        const sync = fs.readFileSync(
+            path.join(clientRoot, 'src/game/ui/selectCharDeskSync.ts'),
+            'utf8',
+        );
+        assert.match(login, /LoginScreen SELECTCHAR desk sync/);
+        assert.match(desk, /SelectCharDesk painted slot texts/);
+        assert.match(sync, /paintSelectCharSlotRows/);
+        assert.match(sync, /forceRebuild/);
+    });
+
     it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/App.tsx'), 'utf8');
         assert.match(src, /PhaserMountGuard/);
@@ -145,5 +161,23 @@ describe('hub Phantom sign path (source)', () => {
         assert.match(src, /clearStoredWalletAuth\(\)/);
         assert.match(src, /onlyIfTrusted: false/);
         assert.match(src, /w\.phantom\?\.solana \?\? w\.solana/);
+    });
+});
+
+describe('production index-*.js (when dist exists)', () => {
+    it('hard-gates SELECTCHAR desk-sync in the entry chunk and forbids a main-* EventBus split', () => {
+        const distAssets = path.join(clientRoot, 'dist/assets');
+        if (!fs.existsSync(distAssets)) {
+            return;
+        }
+        const files = fs.readdirSync(distAssets);
+        const indexFiles = files.filter((f) => /^index-.*\.js$/.test(f));
+        const mainFiles = files.filter((f) => /^main-.*\.js$/.test(f));
+        assert.equal(indexFiles.length, 1, `expected one index-*.js, got ${indexFiles.join(',')}`);
+        assert.equal(mainFiles.length, 0, `EventBus split main-* chunk must not exist: ${mainFiles.join(',')}`);
+        const entry = fs.readFileSync(path.join(distAssets, indexFiles[0]), 'utf8');
+        assert.match(entry, /SELECTCHAR desk sync/);
+        assert.match(entry, /painted slot texts/);
+        assert.match(entry, /setCharacterSlots/);
     });
 });

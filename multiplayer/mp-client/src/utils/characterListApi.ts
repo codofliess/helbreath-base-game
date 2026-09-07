@@ -41,6 +41,11 @@ export interface ReferralListInfo {
 
 const LIST_TIMEOUT_MS = 15_000;
 
+export interface ParsedCharacterList {
+    slots: CharacterSlotSummary[];
+    referral?: ReferralListInfo;
+}
+
 /** Normalize city citizenship for SELECTCHAR seals. */
 export function normalizeCitizenshipSide(
     side: string | undefined | null,
@@ -50,6 +55,152 @@ export function normalizeCitizenshipSide(
         return s;
     }
     return 'traveler';
+}
+
+/** Read a WebSocket binary frame as bytes (ArrayBuffer, Uint8Array, or Blob). */
+export async function wsPayloadToBytes(data: unknown): Promise<Uint8Array | undefined> {
+    if (data instanceof Uint8Array) {
+        return data;
+    }
+    if (data instanceof ArrayBuffer) {
+        return new Uint8Array(data);
+    }
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        return new Uint8Array(await data.arrayBuffer());
+    }
+    return undefined;
+}
+
+function claimDeskSlotIndex(raw: number, used: Set<number>): number {
+    if (Number.isInteger(raw) && raw >= 0 && raw <= 3 && !used.has(raw)) {
+        return raw;
+    }
+    for (let i = 0; i < 4; i++) {
+        if (!used.has(i)) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Map proto CharacterListResponse rows onto desk slots 0–3.
+ * Does not filter traveler vs city — every occupied server row is shown.
+ */
+export function mapCharacterListResponse(body: {
+    characters?: Array<{
+        slotIndex?: number;
+        name?: string;
+        level?: number;
+        exp?: bigint | number;
+        rebirth?: number;
+        hoursPlayed?: number;
+        str?: number;
+        vit?: number;
+        dex?: number;
+        intel?: number;
+        mag?: number;
+        chr?: number;
+        gender?: number;
+        skinColor?: number;
+        hairStyleIndex?: number;
+        underwearColorIndex?: number;
+        equipped?: Array<{ slot?: string; itemId?: number } | undefined>;
+        citizenshipSide?: string;
+    }>;
+    referralCode?: string;
+    referralShareUrl?: string;
+    referralAlreadyAttributed?: boolean;
+}): ParsedCharacterList {
+    const used = new Set<number>();
+    const slots: CharacterSlotSummary[] = [];
+    for (const c of body.characters ?? []) {
+        if (!c) {
+            continue;
+        }
+        const slotIndex = claimDeskSlotIndex(c.slotIndex ?? 0, used);
+        used.add(slotIndex);
+        slots.push({
+            slotIndex,
+            name: (c.name ?? '').trim(),
+            level: c.level ?? 0,
+            exp: c.exp ?? 0,
+            rebirth: c.rebirth ?? 0,
+            hoursPlayed: c.hoursPlayed ?? 0,
+            str: c.str ?? 0,
+            vit: c.vit ?? 0,
+            dex: c.dex ?? 0,
+            intel: c.intel ?? 0,
+            mag: c.mag ?? 0,
+            chr: c.chr ?? 0,
+            gender: c.gender ?? 0,
+            skinColor: c.skinColor ?? 0,
+            hairStyleIndex: c.hairStyleIndex ?? 0,
+            underwearColorIndex: c.underwearColorIndex ?? 0,
+            equipped: (c.equipped ?? [])
+                .filter((e): e is { slot: string; itemId: number } => !!e && (e.itemId ?? 0) > 0 && !!e.slot)
+                .map((e) => ({ slot: e.slot, itemId: e.itemId })),
+            citizenshipSide: normalizeCitizenshipSide(c.citizenshipSide),
+        });
+    }
+    slots.sort((a, b) => a.slotIndex - b.slotIndex);
+
+    const code = (body.referralCode ?? '').trim();
+    const shareUrl =
+        (body.referralShareUrl ?? '').trim() ||
+        (code ? `https://play.chainlords.net/?ref=${code}` : '');
+    const referral: ReferralListInfo | undefined = code
+        ? {
+              code,
+              shareUrl,
+              alreadyAttributed: !!body.referralAlreadyAttributed,
+          }
+        : undefined;
+    return { slots, referral };
+}
+
+/**
+ * Decode one ServerMessage frame. Returns the desk payload, or undefined when
+ * the frame is bootstrap / undecodable and must be ignored (do not wipe a list).
+ */
+export function tryParseCharacterListMessage(bytes: Uint8Array): ParsedCharacterList | undefined {
+    try {
+        const message = ServerMessage.decode(bytes);
+        if (message.payload?.$case !== 'characterListResponse') {
+            return undefined;
+        }
+        return mapCharacterListResponse(message.payload.value);
+    } catch (error) {
+        console.warn('[characterList] Ignoring undecodable WS frame while waiting for list', error);
+        return undefined;
+    }
+}
+
+let sharedListFetch:
+    | { key: string; promise: Promise<ParsedCharacterList> }
+    | undefined;
+
+/**
+ * One in-flight CharacterList WS per wallet+token+endpoint so React Strict Mode
+ * / overlapping hub enters do not cancel a valid list or open a second socket.
+ */
+export function fetchCharacterListShared(
+    host: string,
+    port: number,
+    wallet: string,
+    authToken: string,
+): Promise<ParsedCharacterList> {
+    const key = `${wallet.trim()}\0${authToken}\0${host.trim()}\0${port}`;
+    if (sharedListFetch?.key === key) {
+        return sharedListFetch.promise;
+    }
+    const promise = fetchCharacterList(host, port, wallet, authToken).finally(() => {
+        if (sharedListFetch?.promise === promise) {
+            sharedListFetch = undefined;
+        }
+    });
+    sharedListFetch = { key, promise };
+    return promise;
 }
 
 /**
@@ -69,6 +220,10 @@ export async function fetchCharacterList(
     }
     if (!trimmedWallet) {
         throw new Error('Wallet is required for character list.');
+    }
+    const trimmedToken = (authToken ?? '').trim();
+    if (!trimmedToken) {
+        throw new Error('Wallet auth token missing for character list.');
     }
 
     const websocketUrl = buildGameWebSocketUrl(trimmedHost, port);
@@ -109,7 +264,7 @@ export async function fetchCharacterList(
                     $case: 'characterListRequest',
                     value: {
                         id: trimmedWallet,
-                        authToken: authToken ?? '',
+                        authToken: trimmedToken,
                         playerMode: getPlayerModeWireValue(),
                     },
                 },
@@ -118,56 +273,25 @@ export async function fetchCharacterList(
         });
 
         socket.addEventListener('message', (event: MessageEvent) => {
-            if (!(event.data instanceof ArrayBuffer)) {
+            const data = event.data;
+            if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+                const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+                const parsed = tryParseCharacterListMessage(bytes);
+                if (parsed) {
+                    finish(undefined, parsed);
+                }
                 return;
             }
-            try {
-                const message = ServerMessage.decode(new Uint8Array(event.data));
-                if (message.payload?.$case !== 'characterListResponse') {
-                    // Join bootstrap (worlds/monsters lists) can arrive first; wait for the desk payload.
+            void (async () => {
+                const bytes = await wsPayloadToBytes(data);
+                if (!bytes || settled) {
                     return;
                 }
-                const body = message.payload.value;
-                const characters = body.characters ?? [];
-                const code = (body.referralCode ?? '').trim();
-                const shareUrl =
-                    (body.referralShareUrl ?? '').trim() ||
-                    (code ? `https://play.chainlords.net/?ref=${code}` : '');
-                const referral: ReferralListInfo | undefined = code
-                    ? {
-                          code,
-                          shareUrl,
-                          alreadyAttributed: !!body.referralAlreadyAttributed,
-                      }
-                    : undefined;
-                finish(undefined, {
-                    slots: characters.map((c) => ({
-                        slotIndex: c.slotIndex,
-                        name: c.name,
-                        level: c.level,
-                        exp: c.exp,
-                        rebirth: c.rebirth,
-                        hoursPlayed: c.hoursPlayed,
-                        str: c.str,
-                        vit: c.vit,
-                        dex: c.dex,
-                        intel: c.intel,
-                        mag: c.mag,
-                        chr: c.chr,
-                        gender: c.gender,
-                        skinColor: c.skinColor,
-                        hairStyleIndex: c.hairStyleIndex,
-                        underwearColorIndex: c.underwearColorIndex,
-                        equipped: (c.equipped ?? [])
-                            .filter((e) => e && e.itemId > 0 && e.slot)
-                            .map((e) => ({ slot: e.slot, itemId: e.itemId })),
-                        citizenshipSide: normalizeCitizenshipSide(c.citizenshipSide),
-                    })),
-                    referral,
-                });
-            } catch (error) {
-                console.warn('[characterList] Ignoring undecodable WS frame while waiting for list', error);
-            }
+                const parsed = tryParseCharacterListMessage(bytes);
+                if (parsed) {
+                    finish(undefined, parsed);
+                }
+            })();
         });
 
         // Browser fires `error` then `close` on failure — only settle once (avoids double toasts/modals).

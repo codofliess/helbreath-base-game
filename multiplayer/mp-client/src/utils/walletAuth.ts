@@ -15,6 +15,7 @@ export interface WalletSession {
 type PhantomProvider = {
     isPhantom?: boolean;
     isConnected?: boolean;
+    publicKey?: { toBase58: () => string };
     connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toBase58: () => string } }>;
     signMessage: (
         message: Uint8Array,
@@ -24,6 +25,8 @@ type PhantomProvider = {
         signature: Uint8Array;
         publicKey?: { toBase58: () => string };
     }>;
+    on?: (event: string, handler: (publicKey?: { toBase58: () => string } | null) => void) => void;
+    off?: (event: string, handler: (publicKey?: { toBase58: () => string } | null) => void) => void;
 };
 
 export const PHANTOM_SIGN_PENDING_TOAST = 'Approve the signature in the Phantom extension';
@@ -157,6 +160,27 @@ export function getStoredWalletToken(): string | undefined {
 export function getStoredAuthChainId(): AuthChainId | undefined {
     const raw = readStoredGameState()?.authChainId;
     return isAuthChainId(raw) ? raw : undefined;
+}
+
+/**
+ * True when World enter must open Phantom (no in-memory seal yet, or chain switched).
+ * A just-verified hub session is enough for CharacterList — do not prompt a second sign.
+ * Stale Sol tokens in localStorage never become `session` ({@link getReusableHubWalletSession}).
+ * Reconnect / Sign again always bypasses this and calls {@link connectWalletAndAuthenticate}.
+ */
+export function needsWalletSignForWorldEnter(
+    chainId: AuthChainId,
+    session: WalletSession | null | undefined,
+): boolean {
+    const wallet = session?.wallet?.trim() ?? '';
+    const token = session?.token?.trim() ?? '';
+    if (!wallet || !token) {
+        return true;
+    }
+    if (session?.chainId && session.chainId !== chainId) {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -624,6 +648,54 @@ export type ConnectWalletAuthOptions = {
     onSignPending?: () => void;
 };
 
+function readPhantomPublicKey(phantom: PhantomProvider, fallback = ''): string {
+    try {
+        return (phantom.publicKey?.toBase58?.() ?? fallback).trim();
+    } catch {
+        return fallback.trim();
+    }
+}
+
+/**
+ * Kind/Phantom often updates `publicKey` on accountChanged after connect().
+ * Wait briefly so the challenge is issued for the account that will sign (one popup).
+ */
+function resolvePhantomWalletAfterConnect(
+    phantom: PhantomProvider,
+    connectedWallet: string,
+): Promise<string> {
+    const immediate = readPhantomPublicKey(phantom, connectedWallet);
+    if (immediate && immediate !== connectedWallet) {
+        return Promise.resolve(immediate);
+    }
+    if (typeof phantom.on !== 'function') {
+        return Promise.resolve(immediate || connectedWallet);
+    }
+    return new Promise((resolve) => {
+        let settled = false;
+        let timeoutId = 0;
+        const onAccount = (publicKey?: { toBase58: () => string } | null) => {
+            const next = publicKey?.toBase58?.() ?? readPhantomPublicKey(phantom, connectedWallet);
+            finish(next);
+        };
+        const finish = (wallet: string) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            window.clearTimeout(timeoutId);
+            if (typeof phantom.off === 'function') {
+                phantom.off('accountChanged', onAccount);
+            }
+            resolve(wallet.trim() || connectedWallet);
+        };
+        timeoutId = window.setTimeout(() => {
+            finish(readPhantomPublicKey(phantom, connectedWallet));
+        }, 280);
+        phantom.on('accountChanged', onAccount);
+    });
+}
+
 async function connectSolanaAndAuthenticate(onSignPending?: () => void): Promise<WalletSession> {
     const phantom = getPhantom();
     if (!phantom) {
@@ -631,19 +703,19 @@ async function connectSolanaAndAuthenticate(onSignPending?: () => void): Promise
     }
 
     const { publicKey } = await phantom.connect({ onlyIfTrusted: false });
-    let wallet = publicKey.toBase58();
+    const connectedWallet = publicKey.toBase58();
+    const wallet = await resolvePhantomWalletAfterConnect(phantom, connectedWallet);
     const middlewareUrl = getMiddlewareAuthUrl();
 
-    let challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
+    const challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
     onSignPending?.();
-    let signed = await signChallengeMessage(phantom, challengeBody.message);
-    const signedWallet = signed.publicKey?.toBase58?.() ?? wallet;
-
-    if (signedWallet !== wallet) {
-        wallet = signedWallet;
-        challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
-        onSignPending?.();
-        signed = await signChallengeMessage(phantom, challengeBody.message);
+    const signed = await signChallengeMessage(phantom, challengeBody.message);
+    const signedWallet = (signed.publicKey?.toBase58?.() ?? '').trim();
+    if (signedWallet && signedWallet !== wallet) {
+        console.warn(
+            '[walletAuth] signMessage pubkey differed from challenge wallet; verifying challenge wallet (no second sign)',
+            { challengeWallet: wallet, signedWallet },
+        );
     }
 
     const signatureBytes = signed.signature instanceof Uint8Array
@@ -696,18 +768,35 @@ async function connectEvmAndAuthenticate(chainId: 'rh' | 'base'): Promise<Wallet
 /**
  * Connect + challenge + verify for `sol` (Phantom), `rh`, or `base` (EIP-1193 personal_sign).
  * Phantom Sol always clears a stale token and requires a fresh signMessage.
+ * Overlapping hub clicks share one in-flight Sol auth so Kind cannot open a second popup.
  */
+let solAuthInFlight: Promise<WalletSession> | undefined;
+
 export async function connectWalletAndAuthenticate(
     chainId: AuthChainId = 'sol',
     options?: ConnectWalletAuthOptions,
 ): Promise<WalletSession> {
     persistPreferredAuthChain(chainId);
-    if (chainId === 'sol' || options?.forceFresh) {
-        clearStoredWalletAuth();
+    if (chainId === 'sol' && solAuthInFlight) {
+        return solAuthInFlight;
     }
-    const session = chainId === 'sol'
-        ? await connectSolanaAndAuthenticate(options?.onSignPending)
-        : await connectEvmAndAuthenticate(chainId);
-    persistWalletSession(session);
-    return session;
+    const run = (async () => {
+        if (chainId === 'sol' || options?.forceFresh) {
+            clearStoredWalletAuth();
+        }
+        const session = chainId === 'sol'
+            ? await connectSolanaAndAuthenticate(options?.onSignPending)
+            : await connectEvmAndAuthenticate(chainId);
+        persistWalletSession(session);
+        return session;
+    })();
+    if (chainId === 'sol') {
+        solAuthInFlight = run.finally(() => {
+            if (solAuthInFlight === run) {
+                solAuthInFlight = undefined;
+            }
+        });
+        return solAuthInFlight;
+    }
+    return run;
 }

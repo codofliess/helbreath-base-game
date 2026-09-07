@@ -948,8 +948,21 @@ export class SelectCharDesk {
     }
 
     public setCharacterSlots(slots: CharacterSlotSummary[]): void {
+        const prev = this.slots;
+        const same =
+            prev.length === slots.length &&
+            prev.every(
+                (s, i) =>
+                    s.slotIndex === slots[i]?.slotIndex &&
+                    s.name === slots[i]?.name &&
+                    s.level === slots[i]?.level,
+            );
         this.slots = slots;
-        this.refreshSlotTexts();
+        if (this.visible && !same) {
+            this.rebuild();
+        } else {
+            this.refreshSlotTexts();
+        }
     }
 
     public setSelectedSlotIndex(index: number): void {

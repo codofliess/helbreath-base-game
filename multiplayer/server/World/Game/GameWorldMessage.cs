@@ -123,7 +123,7 @@ public sealed record PlayerPersistenceState(
     int HungerStatus = 100,
     /// <summary>Skill masteries 0–100 (SKILLCFG order). Null = all zeros.</summary>
     int[]? SkillLevels = null,
-    /// <summary>Mock / ledger $HELL staked for specialty utility (floor/100k → +10 levels). Not yield.</summary>
+    /// <summary>Ledger $HELBREATH staked for Olympia group expertise (floor/20k → +1 all groups). Not yield.</summary>
     long StakedHell = 0,
     /// <summary>Olympia shards/fragments inventory (disenchant materials). Null = empty.</summary>
     PersistedEnchantMaterial[]? EnchantMaterials = null,

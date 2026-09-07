@@ -4,14 +4,17 @@ using Server.World.Game;
 namespace Server.Helpers;
 
 /// <summary>
-/// Olympia mob specialty ladder (contents/specialties.json) + personal stake level offset.
-/// Level from kills: max L with kills &gt;= base_kills * L^2.
-/// Stake: +1 specialty level per 100_000 $HELL (5_000_000 → +50). Unstake / lower balance reverses.
-/// Stake amount = max(character StakedHell, wallet mining PendingHell).
+/// Olympia mob specialty: kill progress is per <c>segment</c> group (not one exclusive ladder per
+/// monster). Stake $HELBREATH (<see cref="GameWorldPlayer.StakedHell"/>) adds
+/// <c>floor(staked / 20_000)</c> to <b>every</b> group. Additive:
+/// <c>effective = groupKillLevel + stakeBonus</c>. Pending $HELL cash-shop credits do not count.
 /// </summary>
 public static class MobSpecialty {
-    /// <summary>$HELL required per +1 effective specialty level (5M = +50).</summary>
-    public const long StakePerTier = 100_000L;
+    public const string StakeTokenTicker = "$HELBREATH";
+    /// <summary>$HELBREATH per +1 effective level on every monster group (200k → +10; 240k → +12).</summary>
+    public const long StakePerLevel = 20_000L;
+    /// <summary>Legacy name for <see cref="StakePerLevel"/>.</summary>
+    public const long StakePerTier = StakePerLevel;
     public const int LevelsPerStakeTier = 1;
     /// <summary>Fallback for unlisted species — mid-low farm band (common mobs need more kills).</summary>
     public const int DefaultBaseKills = 75;
@@ -20,11 +23,13 @@ public static class MobSpecialty {
 
     static readonly object Gate = new();
     static Dictionary<int, SpecialtyDef> byMonsterId = new();
+    static Dictionary<string, List<int>> monsterIdsBySegment = new(StringComparer.Ordinal);
     static bool loaded;
 
     public sealed class SpecialtyDef {
         public int MonsterId { get; init; }
         public int BaseKills { get; init; } = DefaultBaseKills;
+        public string Segment { get; init; } = "";
         public string[] Bonuses { get; init; } = ["damage", "damage_reduction", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate"];
     }
 
@@ -44,6 +49,7 @@ public static class MobSpecialty {
     public static void Initialize(string configDirectory) {
         lock (Gate) {
             byMonsterId = new Dictionary<int, SpecialtyDef>();
+            monsterIdsBySegment = new Dictionary<string, List<int>>(StringComparer.Ordinal);
             var path = Path.Combine(configDirectory, "MobSpecialties.json");
             if (!File.Exists(path)) {
                 Console.WriteLine("[MobSpecialty] MobSpecialties.json missing — using defaults (base 150).");
@@ -59,17 +65,30 @@ public static class MobSpecialty {
                     }
                     var id = idEl.GetInt32();
                     var baseKills = el.TryGetProperty("base_kills", out var bk) ? bk.GetInt32() : DefaultBaseKills;
+                    var segment = el.TryGetProperty("segment", out var segEl) && segEl.ValueKind == JsonValueKind.String
+                        ? (segEl.GetString() ?? "").Trim()
+                        : "";
                     string[] bonuses = el.TryGetProperty("bonuses", out var bonEl) && bonEl.ValueKind == JsonValueKind.Array
                         ? [.. bonEl.EnumerateArray().Select(x => x.GetString() ?? "drop_rate")]
                         : ["damage", "damage_reduction", "drop_rate"];
                     byMonsterId[id] = new SpecialtyDef {
                         MonsterId = id,
                         BaseKills = Math.Max(1, baseKills),
+                        Segment = segment,
                         Bonuses = bonuses.Length > 0 ? bonuses : ["damage", "damage_reduction", "drop_rate"],
                     };
+                    if (segment.Length > 0) {
+                        if (!monsterIdsBySegment.TryGetValue(segment, out var ids)) {
+                            ids = [];
+                            monsterIdsBySegment[segment] = ids;
+                        }
+                        ids.Add(id);
+                    }
                 }
                 loaded = true;
-                Console.WriteLine($"[MobSpecialty] Loaded {byMonsterId.Count} species ladders from MobSpecialties.json.");
+                Console.WriteLine(
+                    $"[MobSpecialty] Loaded {byMonsterId.Count} species / {monsterIdsBySegment.Count} groups; " +
+                    $"stake {StakeTokenTicker} {StakePerLevel}/+1 all groups.");
             } catch (Exception ex) {
                 Console.Error.WriteLine($"[MobSpecialty] Failed to load: {ex.Message}");
                 loaded = true;
@@ -86,32 +105,61 @@ public static class MobSpecialty {
         return new SpecialtyDef { MonsterId = catalogMonsterId, BaseKills = DefaultBaseKills };
     }
 
-    public static int StakeBonusLevels(long stakedHell) {
-        if (stakedHell <= 0) {
+    public static int StakeBonusLevels(long stakedHelbreath) {
+        if (stakedHelbreath <= 0) {
             return 0;
         }
-        // floor(staked / 100_000) * LevelsPerStakeTier (currently 1 → 5M = +50).
-        var tiers = stakedHell / StakePerTier;
-        if (tiers > int.MaxValue / Math.Max(1, LevelsPerStakeTier)) {
-            return int.MaxValue / Math.Max(1, LevelsPerStakeTier) * LevelsPerStakeTier;
+        var levels = stakedHelbreath / StakePerLevel;
+        if (levels > int.MaxValue) {
+            return int.MaxValue;
         }
-        return (int)tiers * LevelsPerStakeTier;
+        return (int)levels;
+    }
+
+    /// <summary>effectiveLevel = killLevel + floor(stakedHelbreath / 20_000), capped at 2× max ladder.</summary>
+    public static int EffectiveLevel(int killLevel, long stakedHelbreath) {
+        var kill = Math.Max(0, killLevel);
+        var bonus = StakeBonusLevels(stakedHelbreath);
+        var sum = kill > int.MaxValue - bonus ? int.MaxValue : kill + bonus;
+        return Math.Min(MaxSpecialtyLevel * 2, sum);
+    }
+
+    /// <summary>Segment group key (e.g. early). Unlisted catalog ids stay solo so they do not invent a pool.</summary>
+    public static string GroupKeyFor(int catalogMonsterId) {
+        var def = GetDef(catalogMonsterId);
+        return string.IsNullOrEmpty(def.Segment) ? $"solo:{catalogMonsterId}" : def.Segment;
+    }
+
+    /// <summary>Sum of kills for every catalog id in the same Olympia segment group.</summary>
+    public static long GroupKills(IReadOnlyDictionary<int, long>? kills, int catalogMonsterId) {
+        if (kills is null || kills.Count == 0) {
+            return 0;
+        }
+        var key = GroupKeyFor(catalogMonsterId);
+        if (key.StartsWith("solo:", StringComparison.Ordinal)) {
+            return kills.TryGetValue(catalogMonsterId, out var solo) ? solo : 0;
+        }
+        long sum = 0;
+        lock (Gate) {
+            if (!monsterIdsBySegment.TryGetValue(key, out var ids)) {
+                return kills.TryGetValue(catalogMonsterId, out var fallback) ? fallback : 0;
+            }
+            foreach (var id in ids) {
+                if (kills.TryGetValue(id, out var n) && n > 0) {
+                    sum = SaturateAdd(sum, n);
+                }
+            }
+        }
+        return sum;
     }
 
     /// <summary>
-    /// Tokens that count toward specialty stake: explicit char field, or wallet mining pending
-    /// (daily credit-share lands in PendingHell — that balance drives +1 tier / 100k until a real stake UI).
+    /// $HELBREATH staked on the character ledger (<see cref="GameWorldPlayer.StakedHell"/>).
+    /// Pending $HELL mining credits are cash-shop currency and do not raise expertise.
     /// </summary>
     public static long ResolveStakeAmount(GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
-        long pending = 0;
-        if (!string.IsNullOrWhiteSpace(player.AccountWallet)) {
-            var snap = HellMiningStore.GetSnapshot(
-                player.AccountWallet,
-                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            pending = Math.Max(0, snap.PendingHell);
-        }
-        return Math.Max(Math.Max(0, player.StakedHell), pending);
+        return Math.Max(0, player.StakedHell);
     }
 
     /// <summary>Kills required to reach specialty level L (L&gt;=1). Uses base * L^2 (Olympia UI #315).</summary>
@@ -144,17 +192,30 @@ public static class MobSpecialty {
 
     public static SpecialtySnapshot Compute(GameWorldPlayer player, int catalogMonsterId) {
         ArgumentNullException.ThrowIfNull(player);
-        player.MonsterKills.TryGetValue(catalogMonsterId, out var kills);
+        return ComputeFromKills(player.MonsterKills, catalogMonsterId, ResolveStakeAmount(player));
+    }
+
+    /// <summary>Test/UI helper: group kill level + $HELBREATH stake, same bonuses as live combat.</summary>
+    public static SpecialtySnapshot ComputeFromKills(
+        IReadOnlyDictionary<int, long>? kills,
+        int catalogMonsterId,
+        long stakedHelbreath) {
         var def = GetDef(catalogMonsterId);
-        var specialty = SpecialtyLevelFromKills(kills, def.BaseKills);
-        var stakeAmount = ResolveStakeAmount(player);
-        var stakeBonus = StakeBonusLevels(stakeAmount);
-        // Cap effective at 2× max real ladder so stake can still stack on high GM/test tiers without unbounded growth.
-        var effective = Math.Min(MaxSpecialtyLevel * 2, specialty + stakeBonus);
-        var next = NextKillsForSpecialty(kills, def.BaseKills);
+        var groupKills = GroupKills(kills, catalogMonsterId);
+        var specialty = SpecialtyLevelFromKills(groupKills, def.BaseKills);
+        var stakeBonus = StakeBonusLevels(stakedHelbreath);
+        var effective = EffectiveLevel(specialty, stakedHelbreath);
+        var next = NextKillsForSpecialty(groupKills, def.BaseKills);
         AggregateBonuses(def, effective, out var flatDmg, out var flatRed, out var dmgPct, out var redPct, out var drop, out var hit);
         var summary = BuildSummary(flatDmg, flatRed, dmgPct, redPct, drop, hit);
         return new SpecialtySnapshot(specialty, effective, stakeBonus, next, flatDmg, flatRed, dmgPct, redPct, drop, hit, summary);
+    }
+
+    static long SaturateAdd(long a, long b) {
+        if (b <= 0) {
+            return a;
+        }
+        return a > long.MaxValue - b ? long.MaxValue : a + b;
     }
 
     /// <summary>

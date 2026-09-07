@@ -213,7 +213,7 @@ public static class NetworkManager {
             MaxSp = player.MaxSp,
             MajesticPoints = player.MajesticPoints,
             LevelBlocked = player.LevelBlocked,
-            // UI stake line: mining pending and/or explicit StakedHell (max).
+            // UI stake line: $HELBREATH on character StakedHell (not pending $HELL).
             StakedHell = Helpers.MobSpecialty.ResolveStakeAmount(player),
             Hunger = player.HungerStatus,
             EnemyKills = Helpers.PvpAcademy.GetEkCount(player),

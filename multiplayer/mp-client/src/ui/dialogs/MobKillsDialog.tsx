@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-store';
 import { MOB_KILLS_DIALOG_BG } from '../../constants/SpriteKeys';
 import { IN_UI_CLAIM_KILL_MILESTONE } from '../../constants/EventNames';
 import { ITEMS } from '../../constants/Items';
+import { HELBREATH_TOKEN_TICKER, helbreathStakeBonusLevels } from '../../constants/HelbreathStake';
 import { EventBus } from '../../game/EventBus';
 import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
 import { setMobKillsDialogOpen, mobKillsDialogStore } from '../store/MobKillsDialog.store';
@@ -139,10 +140,10 @@ export function MobKillsDialog({
         killRows[0] ??
         null;
 
-    // 100k $HELL = +1 final tier (server authoritative via stakeBonusLevels).
+    // 20k $HELBREATH = +1 on every group (server authoritative via stakeBonusLevels).
     const stakeBonus =
         killRows.find((r) => r.stakeBonusLevels > 0)?.stakeBonusLevels ??
-        Math.floor(Math.max(0, progression.stakedHell) / 100_000);
+        helbreathStakeBonusLevels(progression.stakedHell);
 
     if (!isOpen) {
         return null;
@@ -169,8 +170,8 @@ export function MobKillsDialog({
                 <p className="mob-kills-total">
                     Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                     {' · '}
-                    Staked $HELL: <strong>{progression.stakedHell.toLocaleString()}</strong>
-                    {stakeBonus > 0 ? ` (+${stakeBonus} final all mobs)` : ''}
+                    Staked {HELBREATH_TOKEN_TICKER}: <strong>{progression.stakedHell.toLocaleString()}</strong>
+                    {stakeBonus > 0 ? ` (+${stakeBonus} all groups)` : ''}
                 </p>
 
                 <SelectedMobDetail row={selected} />
@@ -184,8 +185,9 @@ export function MobKillsDialog({
                 <div className="mob-kills-list">
                     {killRows.length === 0 ? (
                         <p className="mob-kills-hint">
-                            No specialty yet — kill monsters to unlock tiers. Each species has its own
-                            ladder (Slime ≠ Orc).
+                            No specialty yet — kill monsters to unlock group tiers. Species in the
+                            same Olympia segment share kill progress (Slime + Orc = early). Stake{' '}
+                            {HELBREATH_TOKEN_TICKER} adds to every group.
                         </p>
                     ) : (
                         killRows.map((row) => {

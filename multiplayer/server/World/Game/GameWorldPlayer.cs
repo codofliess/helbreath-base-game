@@ -126,7 +126,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     private PersistedRebirthRollbackSnapshot? rebirthRollback;
     /// <summary>Lifetime credited monster kills keyed by catalog monster id (survives rebirth). Persisted.</summary>
     private readonly Dictionary<int, long> monsterKills = new();
-    /// <summary>Mock / ledger $HELL staked for specialty level offset (floor/100k → +10 levels). Persisted.</summary>
+    /// <summary>Ledger $HELBREATH staked for Olympia group expertise (floor/20k → +1 all groups). Persisted.</summary>
     private long stakedHell;
     /// <summary>Olympia shards/fragments: key = (isShard, type, level) → count. Persisted.</summary>
     private readonly Dictionary<(bool IsShard, int Type, int Level), int> enchantMaterials = new();
@@ -512,7 +512,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     public bool LevelBlocked => levelBlocked;
     /// <summary>True when a pre-rebirth snapshot exists (can cancel last rebirth).</summary>
     public bool HasRebirthRollback => rebirthRollback is not null;
-    /// <summary>Mock / ledger $HELL staked for specialty utility (no yield). floor(staked/100k)*10 effective levels.</summary>
+    /// <summary>Ledger $HELBREATH staked for Olympia group expertise (no yield). floor(staked/20k) on every group.</summary>
     public long StakedHell => stakedHell;
     /// <summary>Classic STR (create-char / SELECTCHAR).</summary>
     public int Str => str;
@@ -534,7 +534,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
         hungerStatus = Math.Clamp(value, 0, Helpers.Hunger.MaxHunger);
     }
 
-    /// <summary>Sets mock/ledger staked $HELL used only for specialty effective level offset.</summary>
+    /// <summary>Sets ledger staked $HELBREATH used only for Olympia group expertise offset.</summary>
     public void SetStakedHell(long amount) {
         stakedHell = Math.Max(0, amount);
     }

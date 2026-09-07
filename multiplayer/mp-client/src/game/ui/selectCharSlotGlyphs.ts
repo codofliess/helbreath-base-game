@@ -378,7 +378,10 @@ export function syncSelectCharReactOccupiedBannerDom(
         }
     }
     const unique = [...new Set(nodes)];
-    const painted = paintSelectCharReactOccupiedBannerNodes(banner, unique as SelectCharBannerPaintNode[]);
+    const painted = paintSelectCharReactOccupiedBannerNodes(
+        banner,
+        unique as unknown as SelectCharBannerPaintNode[],
+    );
     kindgem.setAttribute('aria-label', banner);
     kindgem.setAttribute('title', banner);
     kindgem.setAttribute('role', 'status');

@@ -60,16 +60,99 @@ export function normalizeCitizenshipSide(
     return 'traveler';
 }
 
-/** Read a WebSocket binary frame as bytes (ArrayBuffer, Uint8Array, or Blob). */
-export async function wsPayloadToBytes(data: unknown): Promise<Uint8Array | undefined> {
+/** Tag for live smoke when a WS frame is not the expected binary type. */
+export function wsPayloadTag(data: unknown): string {
+    if (data == null) {
+        return String(data);
+    }
+    const ctor = (data as { constructor?: { name?: string } }).constructor?.name ?? '?';
+    const tos = Object.prototype.toString.call(data);
+    const byteLength =
+        typeof (data as { byteLength?: unknown }).byteLength === 'number'
+            ? (data as { byteLength: number }).byteLength
+            : undefined;
+    return `${tos}|${ctor}|bl=${byteLength ?? 'n'}`;
+}
+
+function copyToSameRealmBytes(view: Uint8Array): Uint8Array {
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(view);
+    return copy;
+}
+
+function isArrayBufferLike(data: unknown): data is ArrayBuffer {
+    if (typeof ArrayBuffer === 'undefined' || data == null || typeof data !== 'object') {
+        return false;
+    }
+    if (Object.prototype.toString.call(data) === '[object ArrayBuffer]') {
+        return true;
+    }
+    const maybe = data as { byteLength?: unknown; constructor?: { name?: string }; slice?: unknown };
+    return (
+        typeof maybe.byteLength === 'number' &&
+        maybe.constructor?.name === 'ArrayBuffer' &&
+        typeof maybe.slice === 'function'
+    );
+}
+
+function isBlobLike(data: unknown): data is Blob {
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        return true;
+    }
+    if (data == null || typeof data !== 'object') {
+        return false;
+    }
+    return (
+        Object.prototype.toString.call(data) === '[object Blob]' &&
+        typeof (data as Blob).arrayBuffer === 'function'
+    );
+}
+
+/**
+ * Copy a WS binary frame into a same-realm Uint8Array.
+ * KindGem / Phantom / iframe wrappers can fail `instanceof ArrayBuffer` and still
+ * carry a real protobuf frame — silent drop there is the live SELECTCHAR empty-desk
+ * path (server CharacterList logged, Occupied never fires).
+ */
+export function coerceWsBinaryPayload(
+    data: unknown,
+): { ok: true; bytes: Uint8Array; tag: string } | { ok: false; tag: string } {
+    const tag = wsPayloadTag(data);
+    if (data == null) {
+        return { ok: false, tag };
+    }
     if (data instanceof Uint8Array) {
-        return data;
+        return { ok: true, bytes: copyToSameRealmBytes(data), tag };
     }
     if (data instanceof ArrayBuffer) {
-        return new Uint8Array(data);
+        return { ok: true, bytes: copyToSameRealmBytes(new Uint8Array(data)), tag };
     }
-    if (typeof Blob !== 'undefined' && data instanceof Blob) {
-        return new Uint8Array(await data.arrayBuffer());
+    if (ArrayBuffer.isView(data)) {
+        const view = data as ArrayBufferView;
+        return {
+            ok: true,
+            bytes: copyToSameRealmBytes(new Uint8Array(view.buffer, view.byteOffset, view.byteLength)),
+            tag,
+        };
+    }
+    if (isArrayBufferLike(data)) {
+        try {
+            return { ok: true, bytes: copyToSameRealmBytes(new Uint8Array(data as ArrayBuffer)), tag };
+        } catch {
+            return { ok: false, tag };
+        }
+    }
+    return { ok: false, tag };
+}
+
+/** Read a WebSocket binary frame as bytes (ArrayBuffer, typed view, duck-typed buffer, or Blob). */
+export async function wsPayloadToBytes(data: unknown): Promise<Uint8Array | undefined> {
+    const coerced = coerceWsBinaryPayload(data);
+    if (coerced.ok) {
+        return coerced.bytes;
+    }
+    if (isBlobLike(data)) {
+        return copyToSameRealmBytes(new Uint8Array(await data.arrayBuffer()));
     }
     return undefined;
 }
@@ -400,14 +483,15 @@ export async function fetchCharacterList(
             finish(undefined, parsed);
         };
 
-        const onListBytes = (bytes: Uint8Array) => {
+        const onListBytes = (bytes: Uint8Array, payloadTag?: string) => {
             const inspected = inspectCharacterListFrame(bytes);
             selectCharWarn(
-                'characterList WS frame case=%s slots=%s names=%s bytes=%d',
+                'characterList WS frame case=%s slots=%s names=%s bytes=%d tag=%s',
                 inspected.payloadCase,
                 inspected.parsed ? inspected.parsed.slots.length : '-',
                 inspected.parsed?.slots.map((s) => s.name).join(',') || inspected.decodeError || '',
                 bytes.byteLength,
+                payloadTag ?? '',
             );
             if (inspected.payloadCase === 'decode-error') {
                 console.warn(
@@ -442,10 +526,14 @@ export async function fetchCharacterList(
         });
 
         socket.addEventListener('message', (event: MessageEvent) => {
-            const data = event.data;
-            if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-                const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-                onListBytes(bytes);
+            const data = event.data as unknown;
+            const coerced = coerceWsBinaryPayload(data);
+            if (coerced.ok) {
+                onListBytes(coerced.bytes, coerced.tag);
+                return;
+            }
+            if (!isBlobLike(data)) {
+                selectCharWarn('characterList WS frame not binary tag=%s', coerced.tag);
                 return;
             }
             pendingBlobReads += 1;
@@ -453,10 +541,10 @@ export async function fetchCharacterList(
                 try {
                     const bytes = await wsPayloadToBytes(data);
                     if (!bytes) {
-                        selectCharWarn('characterList WS frame not bytes type=%s', typeof data);
+                        selectCharWarn('characterList WS frame not bytes tag=%s', coerced.tag);
                         return;
                     }
-                    onListBytes(bytes);
+                    onListBytes(bytes, coerced.tag);
                 } finally {
                     pendingBlobReads -= 1;
                     if (!settled && pendingBlobReads === 0 && buffered) {

@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ServerMessage } from '../proto/generated/network';
+import vm from 'node:vm';
 import {
     inspectCharacterListFrame,
     mapCharacterListResponse,
     tryParseCharacterListMessage,
     wsPayloadToBytes,
+    coerceWsBinaryPayload,
     coalesceCharacterListResult,
     clearCachedOccupiedCharacterList,
     fetchCharacterList,
@@ -138,6 +140,33 @@ describe('character list parse / paint mapping', () => {
         const parsed = tryParseCharacterListMessage(asAb!);
         assert.equal(parsed?.slots[0]?.name, 'Elon');
     });
+
+    it('decodes CharacterList from DataView and cross-realm ArrayBuffer', async () => {
+        const bytes = encodeListFrame({
+            characters: [{ slotIndex: 0, name: 'Elon', level: 150 }],
+        });
+        const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        const fromView = coerceWsBinaryPayload(new DataView(copy as ArrayBuffer));
+        assert.equal(fromView.ok, true);
+        if (fromView.ok) {
+            assert.equal(tryParseCharacterListMessage(fromView.bytes)?.slots[0]?.name, 'Elon');
+        }
+
+        const context = vm.createContext({ src: Array.from(bytes) });
+        const foreignBuffer = vm.runInContext(
+            '(function(){ const a = new Uint8Array(src.length); a.set(src); return a.buffer; })()',
+            context,
+        );
+        assert.equal(foreignBuffer instanceof ArrayBuffer, false);
+        const fromForeign = coerceWsBinaryPayload(foreignBuffer);
+        assert.equal(fromForeign.ok, true);
+        if (fromForeign.ok) {
+            assert.equal(tryParseCharacterListMessage(fromForeign.bytes)?.slots[0]?.name, 'Elon');
+        }
+
+        const fromWs = await wsPayloadToBytes(foreignBuffer);
+        assert.equal(tryParseCharacterListMessage(fromWs!)?.slots[0]?.name, 'Elon');
+    });
 });
 
 describe('coalesceCharacterListResult — retain occupied list', () => {
@@ -211,10 +240,12 @@ class FakeListSocket {
         }
     }
 
-    openAndDeliver(bytes: Uint8Array, thenClose: boolean) {
+    openAndDeliver(bytes: Uint8Array, thenClose: boolean, as: 'arraybuffer' | 'dataview' = 'arraybuffer') {
         this.readyState = FakeListSocket.OPEN;
         this.emit('open', {});
-        this.emit('message', { data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
+        const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+        const data = as === 'dataview' ? new DataView(copy) : copy;
+        this.emit('message', { data });
         if (thenClose) {
             this.close();
         }
@@ -257,6 +288,44 @@ describe('fetchCharacterList WS hold / remount cache', () => {
         } finally {
             (globalThis as { window?: unknown }).window = prevWindow;
             (globalThis as { WebSocket?: unknown }).WebSocket = prevWS;
+        }
+    });
+
+    it('resolves Elon when the list frame arrives as a DataView (not instanceof ArrayBuffer)', async () => {
+        clearCachedOccupiedCharacterList();
+        const created: FakeListSocket[] = [];
+        const bytes = encodeListFrame({
+            characters: [{ slotIndex: 0, name: 'Elon', level: 150, citizenshipSide: 'traveler' }],
+        });
+
+        const prevWindow = (globalThis as { window?: unknown }).window;
+        const prevWS = (globalThis as { WebSocket?: unknown }).WebSocket;
+        (globalThis as { window?: unknown }).window = {
+            setTimeout: globalThis.setTimeout.bind(globalThis),
+            clearTimeout: globalThis.clearTimeout.bind(globalThis),
+            location: {
+                protocol: 'https:',
+                hostname: 'play.chainlords.net',
+                host: 'play.chainlords.net',
+                port: '',
+            },
+        };
+        (globalThis as { WebSocket?: unknown }).WebSocket = class extends FakeListSocket {
+            constructor() {
+                super();
+                created.push(this);
+                queueMicrotask(() => this.openAndDeliver(bytes, true, 'dataview'));
+            }
+        };
+
+        try {
+            const parsed = await fetchCharacterList('play.chainlords.net', 443, '4R7FsyC8elon', 'tok');
+            assert.equal(parsed.slots[0]?.name, 'Elon');
+            assert.equal(created.length, 1);
+        } finally {
+            (globalThis as { window?: unknown }).window = prevWindow;
+            (globalThis as { WebSocket?: unknown }).WebSocket = prevWS;
+            clearCachedOccupiedCharacterList();
         }
     });
 

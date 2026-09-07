@@ -40,6 +40,8 @@ export interface ReferralListInfo {
 }
 
 const LIST_TIMEOUT_MS = 15_000;
+/** Hold the list socket after decode so React remount / paint cannot race a close wipe. */
+const LIST_SOCKET_HOLD_MS = 400;
 
 export interface ParsedCharacterList {
     slots: CharacterSlotSummary[];
@@ -180,9 +182,74 @@ let sharedListFetch:
     | { key: string; promise: Promise<ParsedCharacterList> }
     | undefined;
 
+/** Last occupied desk keyed by wallet — survives WS close, remount, and token refresh. */
+const occupiedListByWallet = new Map<string, ParsedCharacterList>();
+
+export function peekCachedOccupiedCharacterList(wallet: string): ParsedCharacterList | undefined {
+    const key = wallet.trim();
+    if (!key) {
+        return undefined;
+    }
+    return occupiedListByWallet.get(key);
+}
+
+/** Drops the occupied-list cache (Reconnect / Sign again, or tests). */
+export function clearCachedOccupiedCharacterList(wallet?: string): void {
+    if (wallet && wallet.trim()) {
+        occupiedListByWallet.delete(wallet.trim());
+        return;
+    }
+    occupiedListByWallet.clear();
+}
+
+function rememberOccupiedCharacterList(wallet: string, parsed: ParsedCharacterList): void {
+    if (parsed.slots.length === 0) {
+        return;
+    }
+    const key = wallet.trim();
+    if (!key) {
+        return;
+    }
+    occupiedListByWallet.set(key, parsed);
+}
+
+/**
+ * Prefer an occupied list that already arrived over close/error/empty follow-ups.
+ * Used by the WS client and ConnectDialog so SELECTCHAR never wipes Elon after a valid paint.
+ */
+export function coalesceCharacterListResult(
+    incoming: ParsedCharacterList | undefined,
+    error: Error | undefined,
+    buffered: ParsedCharacterList | undefined,
+): { ok: ParsedCharacterList } | { error: Error } {
+    const occupied = (list: ParsedCharacterList | undefined): list is ParsedCharacterList =>
+        (list?.slots.length ?? 0) > 0;
+    if (occupied(incoming)) {
+        return { ok: incoming };
+    }
+    if (occupied(buffered)) {
+        if (error) {
+            console.warn(
+                '[characterList] WS close/error/timeout after occupied list; keeping buffered slots',
+                error,
+            );
+        }
+        return { ok: buffered };
+    }
+    if (incoming && !error) {
+        return { ok: incoming };
+    }
+    if (buffered && !error) {
+        return { ok: buffered };
+    }
+    return { error: error ?? new Error('Connection closed before character list arrived.') };
+}
+
 /**
  * One in-flight CharacterList WS per wallet+token+endpoint so React Strict Mode
  * / overlapping hub enters do not cancel a valid list or open a second socket.
+ * Occupied lists are reused so a remount after the first socket settles does not
+ * open another CharacterList connection (live: two WS both slots=1 same second).
  */
 export function fetchCharacterListShared(
     host: string,
@@ -190,11 +257,21 @@ export function fetchCharacterListShared(
     wallet: string,
     authToken: string,
 ): Promise<ParsedCharacterList> {
-    const key = `${wallet.trim()}\0${authToken}\0${host.trim()}\0${port}`;
+    const trimmedWallet = wallet.trim();
+    const cached = peekCachedOccupiedCharacterList(trimmedWallet);
+    if (cached && cached.slots.length > 0) {
+        console.info(
+            '[characterList] Reusing occupied list wallet=%s… slots=%d (no new WS)',
+            trimmedWallet.slice(0, 8),
+            cached.slots.length,
+        );
+        return Promise.resolve(cached);
+    }
+    const key = `${trimmedWallet}\0${authToken}\0${host.trim()}\0${port}`;
     if (sharedListFetch?.key === key) {
         return sharedListFetch.promise;
     }
-    const promise = fetchCharacterList(host, port, wallet, authToken).finally(() => {
+    const promise = fetchCharacterList(host, port, trimmedWallet, authToken).finally(() => {
         if (sharedListFetch?.promise === promise) {
             sharedListFetch = undefined;
         }
@@ -204,8 +281,12 @@ export function fetchCharacterListShared(
 }
 
 /**
- * Opens a short-lived WebSocket, sends CharacterListRequest after Phantom auth,
- * and returns up to 4 occupied desk slots. Does not join a game world.
+ * Opens a WebSocket, sends CharacterListRequest after Phantom auth, and returns
+ * up to 4 occupied desk slots. Does not join a game world.
+ *
+ * The socket stays open after the list frame until paint has a turn (hold delay).
+ * First-frame WorldsList / undecodable bytes are ignored. Close/error/timeout
+ * after an occupied list still resolve with that buffer — they must not wipe.
  */
 export async function fetchCharacterList(
     host: string,
@@ -230,32 +311,70 @@ export async function fetchCharacterList(
 
     return new Promise((resolve, reject) => {
         let settled = false;
+        let buffered: ParsedCharacterList | undefined;
+        let pendingBlobReads = 0;
         const socket = new WebSocket(websocketUrl);
         socket.binaryType = 'arraybuffer';
 
-        const finish = (
-            error?: Error,
-            payload?: { slots: CharacterSlotSummary[]; referral?: ReferralListInfo },
-        ) => {
+        const scheduleSocketClose = () => {
+            const closer = () => {
+                try {
+                    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+                        socket.close();
+                    }
+                } catch {
+                    // ignore close errors
+                }
+            };
+            const hold = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
+            hold(closer, LIST_SOCKET_HOLD_MS);
+        };
+
+        const finish = (error?: Error, payload?: ParsedCharacterList, force = false) => {
             if (settled) {
+                return;
+            }
+            const coalesced = coalesceCharacterListResult(payload, error, buffered);
+            if ('ok' in coalesced) {
+                settled = true;
+                window.clearTimeout(timeoutId);
+                buffered = coalesced.ok;
+                if (coalesced.ok.slots.length > 0) {
+                    rememberOccupiedCharacterList(trimmedWallet, coalesced.ok);
+                    const names = coalesced.ok.slots.map((s) => s.name).join(',');
+                    console.info(
+                        '[characterList] Occupied list ready slots=%d names=%s; holding WS %dms',
+                        coalesced.ok.slots.length,
+                        names,
+                        LIST_SOCKET_HOLD_MS,
+                    );
+                }
+                scheduleSocketClose();
+                resolve(coalesced.ok);
+                return;
+            }
+            if (!force && pendingBlobReads > 0) {
                 return;
             }
             settled = true;
             window.clearTimeout(timeoutId);
-            try {
-                socket.close();
-            } catch {
-                // ignore close errors
+            scheduleSocketClose();
+            reject(coalesced.error);
+        };
+
+        const acceptParsed = (parsed: ParsedCharacterList | undefined) => {
+            if (!parsed) {
+                return;
             }
-            if (error) {
-                reject(error);
-            } else {
-                resolve(payload ?? { slots: [] });
+            buffered = parsed;
+            if (parsed.slots.length > 0) {
+                rememberOccupiedCharacterList(trimmedWallet, parsed);
             }
+            finish(undefined, parsed);
         };
 
         const timeoutId = window.setTimeout(() => {
-            finish(new Error('Timed out waiting for character list.'));
+            finish(new Error('Timed out waiting for character list.'), undefined, true);
         }, LIST_TIMEOUT_MS);
 
         socket.addEventListener('open', () => {
@@ -276,34 +395,36 @@ export async function fetchCharacterList(
             const data = event.data;
             if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
                 const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-                const parsed = tryParseCharacterListMessage(bytes);
-                if (parsed) {
-                    finish(undefined, parsed);
-                }
+                acceptParsed(tryParseCharacterListMessage(bytes));
                 return;
             }
+            pendingBlobReads += 1;
             void (async () => {
-                const bytes = await wsPayloadToBytes(data);
-                if (!bytes || settled) {
-                    return;
-                }
-                const parsed = tryParseCharacterListMessage(bytes);
-                if (parsed) {
-                    finish(undefined, parsed);
+                try {
+                    const bytes = await wsPayloadToBytes(data);
+                    if (!bytes) {
+                        return;
+                    }
+                    acceptParsed(tryParseCharacterListMessage(bytes));
+                } finally {
+                    pendingBlobReads -= 1;
+                    if (!settled && pendingBlobReads === 0 && buffered) {
+                        finish(undefined, buffered);
+                    }
                 }
             })();
         });
 
-        // Browser fires `error` then `close` on failure — only settle once (avoids double toasts/modals).
         socket.addEventListener('error', () => {
             finish(new Error(`Failed to connect to ${websocketUrl} for character list.`));
         });
 
         socket.addEventListener('close', (event) => {
-            if (!settled) {
-                const reason = event.reason?.trim();
-                finish(new Error(reason || 'Connection closed before character list arrived.'));
+            if (settled) {
+                return;
             }
+            const reason = event.reason?.trim();
+            finish(new Error(reason || 'Connection closed before character list arrived.'));
         });
     });
 }

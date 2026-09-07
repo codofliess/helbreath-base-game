@@ -126,23 +126,31 @@ export const enterPlayWorldPhase = (walletSession: WalletSession) => {
 
 export const setConnectWalletSession = (walletSession: WalletSession | null) => {
     connectDialogStore.setState((state) => {
-        const sameWallet =
-            !!walletSession &&
-            !!state.walletSession &&
-            walletSession.wallet === state.walletSession.wallet &&
-            walletSession.token === state.walletSession.token;
+        const incomingWallet = walletSession?.wallet?.trim() ?? '';
+        const previousWallet = state.walletSession?.wallet?.trim() ?? '';
+        const switchedToDifferentWallet =
+            incomingWallet.length > 0 &&
+            previousWallet.length > 0 &&
+            incomingWallet !== previousWallet;
         return {
             ...state,
             walletSession,
             phase: walletSession ? state.phase : 'hub',
-            characterSlots: sameWallet ? state.characterSlots : [],
-            referralInfo: sameWallet ? state.referralInfo : null,
+            characterSlots: switchedToDifferentWallet ? [] : state.characterSlots,
+            referralInfo: switchedToDifferentWallet ? null : state.referralInfo,
         };
     });
 };
 
+/** Occupied SELECTCHAR rows are sticky: empty updates never wipe a list already received. */
 export const setCharacterSlots = (characterSlots: CharacterSlotSummary[]) => {
-    connectDialogStore.setState((state) => ({ ...state, characterSlots }));
+    connectDialogStore.setState((state) => {
+        if (characterSlots.length === 0 && state.characterSlots.length > 0) {
+            console.warn('[connectDialog] Refusing to wipe occupied CharacterList with an empty update');
+            return state;
+        }
+        return { ...state, characterSlots };
+    });
 };
 
 export const setReferralInfo = (referralInfo: ReferralListInfo | null) => {

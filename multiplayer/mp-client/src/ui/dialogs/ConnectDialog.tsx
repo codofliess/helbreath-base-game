@@ -35,22 +35,30 @@ import {
 } from '../store/ArenaPactDialog.store';
 import {
     PHANTOM_SIGN_PENDING_TOAST,
+    abortHubWorldEnter,
+    clearInMemorySolSession,
     clearStoredWalletAuth,
     clearWalletDeepLink,
     connectWalletAndAuthenticate,
     consumeAutoEnterWorldFlag,
     consumePreferredAuthChain,
     consumeWalletDeepLink,
+    finishHubWorldEnter,
     getReusableHubWalletSession,
     getStoredWalletPubkey,
+    isHubWorldEnterQuiet,
     needsWalletSignForWorldEnter,
+    peekInMemorySolSession,
     persistPreferredAuthChain,
     type AuthChainId,
     releaseAutoEnterWorldLock,
     tryAcquireAutoEnterWorldLock,
+    tryBeginHubWorldEnter,
 } from '../../utils/walletAuth';
 import {
+    clearCachedOccupiedCharacterList,
     fetchCharacterListShared,
+    peekCachedOccupiedCharacterList,
     type CharacterSlotSummary,
 } from '../../utils/characterListApi';
 import { declineArenaPactFromHub, fetchArenaPactInbox } from '../../utils/arenaPactInboxApi';
@@ -330,14 +338,29 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     }, [isOpen, phase]);
 
     const listLoadEpoch = useRef(0);
-    const worldEnterInFlight = useRef(false);
 
     /**
      * Fetch desk slots with the in-memory authToken. Shared across Strict Mode remounts.
-     * A successful list always paints; errors never wipe slots already received.
+     * A successful occupied list always paints; errors / empty follow-ups never wipe slots.
      */
     const loadCharacterListForPlayWorld = useCallback(
         (session: NonNullable<typeof walletSession>) => {
+            const cached = peekCachedOccupiedCharacterList(session.wallet);
+            const alreadyPainted = connectDialogStore.state.characterSlots.length > 0;
+            if (alreadyPainted || (cached && cached.slots.length > 0)) {
+                if (cached && cached.slots.length > 0 && !alreadyPainted) {
+                    setCharacterSlots(cached.slots);
+                    setReferralInfo(cached.referral ?? null);
+                    const firstOccupied = cached.slots[0];
+                    setSelectedSlotIndex(firstOccupied.slotIndex);
+                    setCharacterName(firstOccupied.name);
+                }
+                setCharacterListLoading(false);
+                console.info(
+                    '[ConnectDialog] SELECTCHAR already has occupied slots; skipping new CharacterList WS',
+                );
+                return Promise.resolve();
+            }
             const epoch = ++listLoadEpoch.current;
             setCharacterListLoading(true);
             return fetchCharacterListShared(host, port, session.wallet, session.token)
@@ -351,9 +374,19 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                         if (connectDialogStore.state.phase === 'create-char') {
                             setConnectGatePhase('play-world');
                         }
+                        console.info(
+                            '[ConnectDialog] Painted SELECTCHAR %s Lv%s (slots=%d)',
+                            firstOccupied.name,
+                            firstOccupied.level,
+                            result.slots.length,
+                        );
                         return;
                     }
                     if (epoch !== listLoadEpoch.current) {
+                        return;
+                    }
+                    if (connectDialogStore.state.characterSlots.length > 0) {
+                        console.warn('[ConnectDialog] Empty list after occupied paint; keeping desk');
                         return;
                     }
                     setSelectedSlotIndex(0);
@@ -372,6 +405,16 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                     if (connectDialogStore.state.characterSlots.length > 0) {
                         console.warn(
                             '[ConnectDialog] Character list error after a valid list; keeping painted slots',
+                            error,
+                        );
+                        return;
+                    }
+                    const cachedOccupied = peekCachedOccupiedCharacterList(session.wallet);
+                    if (cachedOccupied && cachedOccupied.slots.length > 0) {
+                        setCharacterSlots(cachedOccupied.slots);
+                        setReferralInfo(cachedOccupied.referral ?? null);
+                        console.warn(
+                            '[ConnectDialog] Character list error; restoring buffered occupied slots',
                             error,
                         );
                         return;
@@ -680,7 +723,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
 
     const handleWalletConnect = async (
         chainId: AuthChainId = authChain,
-        opts?: { keepBusy?: boolean },
+        opts?: { keepBusy?: boolean; forceFresh?: boolean },
     ): Promise<typeof walletSession> => {
         setWalletBusy(true);
         setHubError(undefined);
@@ -688,7 +731,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         setAuthChain(chainId);
         try {
             const session = await connectWalletAndAuthenticate(chainId, {
-                forceFresh: chainId === 'sol',
+                forceFresh: opts?.forceFresh ?? false,
                 onSignPending:
                     chainId === 'sol'
                         ? () => {
@@ -739,39 +782,56 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             applyPhase();
             return;
         }
-        // Let Phantom's closing layout settle one tick, then pin SELECTCHAR.
         window.setTimeout(applyPhase, 50);
     };
 
     /** One click: chosen wallet sign (if needed) → classic SELECTCHAR desk. */
     const handleEnterWorldFromHub = async (chainOverride?: AuthChainId) => {
-        if (worldEnterInFlight.current) {
+        const chain = chainOverride ?? authChain;
+        const storeSession = connectDialogStore.state.walletSession;
+        const memorySession = chain === 'sol' ? peekInMemorySolSession() : undefined;
+        const existingSession = storeSession ?? memorySession ?? walletSession ?? null;
+
+        if (isHubWorldEnterQuiet() && !needsWalletSignForWorldEnter(chain, existingSession)) {
+            if (existingSession && connectDialogStore.state.phase === 'hub') {
+                EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, 1200);
+                enterPlayWorldPhase(existingSession);
+                void loadCharacterListForPlayWorld(existingSession);
+            }
+            console.info('[ConnectDialog] Ignoring overlapping World enter after in-memory Sol session');
             return;
         }
-        worldEnterInFlight.current = true;
+
+        if (!tryBeginHubWorldEnter()) {
+            console.info('[ConnectDialog] World enter already in flight — one signMessage only');
+            return;
+        }
+
         setHubError(undefined);
-        const chain = chainOverride ?? authChain;
-        let session = walletSession;
+        let session = existingSession;
         let justAuthed = false;
         try {
-            // Fresh Phantom sign only when this tab has no in-memory Sol session.
-            // Ghost clicks after a successful sign must not open a second Phantom prompt.
             const mustSign = needsWalletSignForWorldEnter(chain, session);
             if (mustSign) {
-                session = await handleWalletConnect(chain, { keepBusy: true });
+                session = await handleWalletConnect(chain, { keepBusy: true, forceFresh: false });
                 if (!session) {
+                    abortHubWorldEnter();
                     return;
                 }
                 justAuthed = true;
             }
             if (!session) {
+                abortHubWorldEnter();
                 return;
             }
             EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, justAuthed ? 1200 : 400);
             enterPlayWorldPhase(session);
             void loadCharacterListForPlayWorld(session);
+            finishHubWorldEnter();
+        } catch (err) {
+            abortHubWorldEnter();
+            throw err;
         } finally {
-            worldEnterInFlight.current = false;
             setWalletBusy(false);
         }
     };
@@ -779,7 +839,11 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     /** Explicit Phantom/EVM rebind when Kind is unlocked but the sign popup never opened. */
     const handleResignWallet = async () => {
         setHubError(undefined);
-        await handleWalletConnect(authChain);
+        const previousWallet =
+            connectDialogStore.state.walletSession?.wallet ?? peekInMemorySolSession()?.wallet;
+        clearInMemorySolSession();
+        clearCachedOccupiedCharacterList(previousWallet);
+        await handleWalletConnect(authChain, { forceFresh: true });
     };
 
     const handleEnterArenaFromHub = () => {

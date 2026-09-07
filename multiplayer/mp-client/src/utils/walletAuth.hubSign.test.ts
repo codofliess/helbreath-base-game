@@ -6,6 +6,11 @@ import {
     getStoredWalletToken,
     persistWalletSession,
     needsWalletSignForWorldEnter,
+    rememberInMemorySolSession,
+    resetWalletAuthClientStateForTests,
+    resolveHubPhantomAuthAction,
+    peekSolSignRequestCount,
+    connectWalletAndAuthenticate,
 } from './walletAuth';
 
 function installMinimalBrowser() {
@@ -118,5 +123,47 @@ describe('needsWalletSignForWorldEnter', () => {
             }),
             true,
         );
+    });
+
+    it('does not require a sign when only the in-memory Sol session exists (stale React state)', () => {
+        resetWalletAuthClientStateForTests();
+        rememberInMemorySolSession({
+            wallet: '4R7FsyC85Yic3hGz7yWAt7HbV5A1qtC7UQi13Hsv5r7K',
+            token: 'fresh-sol-token',
+            expiresAt: Date.now() + 60_000,
+            chainId: 'sol',
+        });
+        assert.equal(needsWalletSignForWorldEnter('sol', null), false);
+        resetWalletAuthClientStateForTests();
+    });
+});
+
+describe('resolveHubPhantomAuthAction — one signMessage per hub Connect', () => {
+    const elon = {
+        wallet: '4R7FsyC85Yic3hGz7yWAt7HbV5A1qtC7UQi13Hsv5r7K',
+        token: 'fresh-sol-token',
+        expiresAt: Date.now() + 60_000,
+        chainId: 'sol' as const,
+    };
+
+    it('signs once then reuses memory for the second and third Connect click', () => {
+        resetWalletAuthClientStateForTests();
+        assert.equal(resolveHubPhantomAuthAction('sol', { forceFresh: false }, undefined), 'sign');
+        assert.equal(resolveHubPhantomAuthAction('sol', { forceFresh: false }, elon), 'reuse-memory');
+        assert.equal(resolveHubPhantomAuthAction('sol', { forceFresh: false }, elon), 'reuse-memory');
+        assert.equal(resolveHubPhantomAuthAction('sol', { forceFresh: true }, elon), 'sign');
+    });
+
+    it('connectWalletAndAuthenticate does not increment sign count on reuse', async () => {
+        installMinimalBrowser();
+        resetWalletAuthClientStateForTests();
+        rememberInMemorySolSession(elon);
+        assert.equal(peekSolSignRequestCount(), 0);
+        const second = await connectWalletAndAuthenticate('sol', { forceFresh: false });
+        const third = await connectWalletAndAuthenticate('sol', { forceFresh: false });
+        assert.equal(second.token, 'fresh-sol-token');
+        assert.equal(third.token, 'fresh-sol-token');
+        assert.equal(peekSolSignRequestCount(), 0);
+        resetWalletAuthClientStateForTests();
     });
 });

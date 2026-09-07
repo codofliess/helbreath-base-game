@@ -75,15 +75,21 @@ export const SELECTCHAR_KINDGEM_VISIBLE_LOG = 'React SELECTCHAR KindGem visible=
 export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
     '[data-selectchar-react-banner="1"], .selectchar-react-occupied__banner, #selectchar-kindgem-occupied-banner';
 
-/** Inline fail-closed paint: parchment, dark 28px type, above Phaser canvas. */
+/**
+ * Inline fail-closed paint: last child of document.body, not under #root / #app clip.
+ * KindGem viewport must see OCCUPIED Elon Lev.150 unclipped (top>=0, width>100).
+ */
 export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'display:block!important;visibility:visible!important;opacity:1!important;' +
-    'position:fixed!important;top:16px!important;left:50%!important;transform:translateX(-50%)!important;' +
+    'position:fixed!important;top:12px!important;left:50%!important;right:auto!important;bottom:auto!important;' +
+    'inset:auto!important;transform:translateX(-50%)!important;margin:0!important;' +
     'z-index:2147483646!important;pointer-events:none!important;overflow:visible!important;' +
-    'color:#1a1008!important;background:#f4ead5!important;background-color:#f4ead5!important;' +
-    'font-size:28px!important;font-weight:700!important;line-height:1.25!important;' +
-    'font-family:Georgia,serif!important;min-width:280px!important;min-height:44px!important;' +
-    'padding:10px 22px!important;text-align:center!important;border:2px solid #3a2810!important;' +
+    'clip:auto!important;clip-path:none!important;contain:none!important;filter:none!important;' +
+    'color:#1a0a12!important;background:#f4ead5!important;background-color:#f4ead5!important;' +
+    'font-size:28px!important;font-weight:700!important;line-height:1.2!important;' +
+    'font-family:Georgia,serif!important;max-width:90vw!important;min-width:280px!important;' +
+    'min-height:44px!important;width:max-content!important;height:auto!important;' +
+    'padding:12px 20px!important;text-align:center!important;border:2px solid #3a2810!important;' +
     'box-sizing:border-box!important;white-space:nowrap!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
@@ -165,6 +171,11 @@ export interface SelectCharBannerPaintNode {
         fontSize?: string;
         position?: string;
         pointerEvents?: string;
+        overflow?: string;
+        maxWidth?: string;
+        lineHeight?: string;
+        padding?: string;
+        whiteSpace?: string;
         [key: string]: unknown;
     };
     setAttribute(name: string, value: string): void;
@@ -177,14 +188,19 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.opacity = '1';
     node.style.zIndex = '2147483646';
     node.style.position = 'fixed';
-    node.style.top = '16px';
+    node.style.top = '12px';
     node.style.left = '50%';
     node.style.transform = 'translateX(-50%)';
-    node.style.color = '#1a1008';
+    node.style.overflow = 'visible';
+    node.style.maxWidth = '90vw';
+    node.style.color = '#1a0a12';
     node.style.background = '#f4ead5';
     node.style.fontSize = '28px';
+    node.style.lineHeight = '1.2';
+    node.style.padding = '12px 20px';
     node.style.minWidth = '280px';
     node.style.minHeight = '44px';
+    node.style.whiteSpace = 'nowrap';
     node.style.pointerEvents = 'none';
     const css = node.style as { cssText?: string };
     if (typeof css.cssText === 'string') {
@@ -249,9 +265,138 @@ export function destroySelectCharWaitingBannerNodes(doc: Document): number {
     return removed;
 }
 
+function elementIdOf(el: { id?: string } | null | undefined): string {
+    return (el?.id ?? '').trim();
+}
+
+/**
+ * True when a node sits under #root, #app, or a React portal that inherits overflow:hidden.
+ * KindGem screenshots miss OCCUPIED when the banner is clipped by those wrappers.
+ */
+export function selectCharKindGemBannerHostClips(host: { id?: string } | null | undefined): boolean {
+    const id = elementIdOf(host);
+    return id === 'root' || id === 'app' || id === SELECTCHAR_REACT_OCCUPIED_ID || id === SELECTCHAR_OCCUPIED_OVERLAY_ID;
+}
+
+/** KindGem on-screen gate: top/left on the viewport and a readable box. */
+export function selectCharKindGemBannerRectOnScreen(rect: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+}): boolean {
+    return rect.top >= 0 && rect.left >= 0 && rect.width > 100 && rect.height > 20;
+}
+
+type OverflowChainHost = {
+    id?: string;
+    tagName?: string;
+    parentElement?: OverflowChainHost | null;
+    parentNode?: OverflowChainHost | null;
+    style?: { overflow?: string; overflowX?: string; overflowY?: string; contain?: string; transform?: string };
+};
+
+function overflowChainParent(node: OverflowChainHost | null | undefined): OverflowChainHost | null {
+    if (!node) {
+        return null;
+    }
+    if (node.parentElement) {
+        return node.parentElement;
+    }
+    const parent = node.parentNode;
+    if (parent && parent !== node) {
+        return parent;
+    }
+    return null;
+}
+
+/**
+ * Ancestor overflow/contain/transform KindGem can log when the banner is clipped.
+ */
+export function collectSelectCharKindGemParentOverflowChain(el: OverflowChainHost): Array<{
+    id: string;
+    tag: string;
+    overflow: string;
+    overflowX: string;
+    overflowY: string;
+    contain: string;
+    transform: string;
+}> {
+    const chain: Array<{
+        id: string;
+        tag: string;
+        overflow: string;
+        overflowX: string;
+        overflowY: string;
+        contain: string;
+        transform: string;
+    }> = [];
+    let parent = overflowChainParent(el);
+    while (parent && chain.length < 12) {
+        let overflow = parent.style?.overflow ?? '';
+        let overflowX = parent.style?.overflowX ?? overflow;
+        let overflowY = parent.style?.overflowY ?? overflow;
+        let contain = parent.style?.contain ?? '';
+        let transform = parent.style?.transform ?? '';
+        if (typeof getComputedStyle === 'function' && typeof parent.tagName === 'string' && parent.tagName.length > 0) {
+            try {
+                const cs = getComputedStyle(parent as unknown as Element);
+                overflow = cs.overflow;
+                overflowX = cs.overflowX;
+                overflowY = cs.overflowY;
+                contain = cs.contain;
+                transform = cs.transform;
+            } catch {
+                /* jsdom / fake document */
+            }
+        }
+        chain.push({
+            id: elementIdOf(parent),
+            tag: parent.tagName ?? '',
+            overflow,
+            overflowX,
+            overflowY,
+            contain,
+            transform,
+        });
+        parent = overflowChainParent(parent);
+    }
+    return chain;
+}
+
+function parentLooksLikeBody(parent: { id?: string; tagName?: string } | null | undefined): boolean {
+    if (!parent) {
+        return false;
+    }
+    if (typeof document !== 'undefined' && parent === document.body) {
+        return true;
+    }
+    return (parent.tagName ?? '').toUpperCase() === 'BODY';
+}
+
+/**
+ * Direct `document.body` last child — never under #root / React portal overflow:hidden.
+ */
+export function mountSelectCharKindGemBannerOnBody(doc: Document, el: HTMLElement): HTMLElement {
+    const body = doc.body;
+    if (!body) {
+        return el;
+    }
+    const parent = (el.parentElement ?? el.parentNode) as { id?: string } | null;
+    if (parent && parent !== (body as unknown)) {
+        el.remove();
+    }
+    if (selectCharKindGemBannerHostClips(parent)) {
+        el.remove();
+    }
+    body.appendChild(el);
+    return el;
+}
+
 /**
  * Body-level banner KindGem screenshots. Recreated on named paint so an a11y
  * snapshot of «waiting» cannot outlive textContent=Elon.
+ * Always the last child of document.body so #root / canvas overflow cannot clip it.
  */
 export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = false): HTMLElement {
     let el = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
@@ -265,10 +410,9 @@ export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = 
         el.className = 'selectchar-react-occupied__banner';
         el.setAttribute('data-selectchar-react-banner', '1');
         el.setAttribute('data-selectchar-kindgem-banner', '1');
-        doc.body.appendChild(el);
+        el.setAttribute('data-selectchar-kindgem-host', 'document.body');
     }
-    doc.body.appendChild(el);
-    return el;
+    return mountSelectCharKindGemBannerOnBody(doc, el);
 }
 
 /** Drop extra banner nodes so only `#selectchar-kindgem-occupied-banner` remains visible. */
@@ -281,7 +425,7 @@ export function collapseSelectCharOccupiedBannersToKindGemSingleton(doc: Documen
     }
 }
 
-/** Log bounding box + computed style after paint (KindGem screenshot evidence). */
+/** Log bounding box + parent overflow after paint (KindGem screenshot evidence). */
 export function logSelectCharKindGemVisible(el: HTMLElement): void {
     const rect = typeof el.getBoundingClientRect === 'function'
         ? el.getBoundingClientRect()
@@ -292,6 +436,7 @@ export function logSelectCharKindGemVisible(el: HTMLElement): void {
     let zIndex = el.style.zIndex;
     let color = el.style.color;
     let fontSize = el.style.fontSize;
+    let overflow = el.style.overflow;
     if (typeof getComputedStyle === 'function') {
         try {
             const cs = getComputedStyle(el);
@@ -301,16 +446,23 @@ export function logSelectCharKindGemVisible(el: HTMLElement): void {
             zIndex = cs.zIndex;
             color = cs.color;
             fontSize = cs.fontSize;
+            overflow = cs.overflow;
         } catch {
             /* jsdom / fake document */
         }
     }
+    const parent = (el.parentElement ?? el.parentNode) as { id?: string; tagName?: string } | null;
     selectCharWarn(
         '%s%s',
         SELECTCHAR_KINDGEM_VISIBLE_LOG,
         JSON.stringify({
             textContent: el.textContent,
-            rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left },
+            host: parentLooksLikeBody(parent) ? 'document.body' : elementIdOf(parent) || parent?.tagName || 'unknown',
+            parentIsBody: parentLooksLikeBody(parent),
+            rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+            onScreen: selectCharKindGemBannerRectOnScreen(rect),
+            overflow,
+            parentOverflow: collectSelectCharKindGemParentOverflowChain(el),
             display,
             visibility,
             opacity,
@@ -385,8 +537,19 @@ export function syncSelectCharReactOccupiedBannerDom(
     kindgem.setAttribute('aria-label', banner);
     kindgem.setAttribute('title', banner);
     kindgem.setAttribute('role', 'status');
+    kindgem.setAttribute('data-selectchar-kindgem-host', 'document.body');
+    mountSelectCharKindGemBannerOnBody(d, kindgem);
     if (named) {
         logSelectCharKindGemVisible(kindgem);
+        const afterPaint = () => {
+            mountSelectCharKindGemBannerOnBody(d, kindgem);
+            logSelectCharKindGemVisible(kindgem);
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(afterPaint);
+            });
+        }
     }
     return { joined: painted.joined, hasWaiting: painted.hasWaiting, count: unique.length };
 }

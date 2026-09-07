@@ -8,6 +8,7 @@ import {
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
+    selectCharKindGemBannerRectOnScreen,
     syncSelectCharReactOccupiedBannerDom,
 } from '../src/game/ui/selectCharSlotGlyphs';
 import { paintSelectCharSlotRows } from '../src/game/ui/selectCharDeskSync';
@@ -137,6 +138,9 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(glyphs, /destroySelectCharWaitingBannerNodes/);
         assert.match(glyphs, /paintSelectCharReactOccupiedBannerNodes/);
         assert.match(glyphs, /syncSelectCharReactOccupiedBannerDom/);
+        assert.match(glyphs, /mountSelectCharKindGemBannerOnBody/);
+        assert.match(glyphs, /selectCharKindGemBannerRectOnScreen/);
+        assert.match(glyphs, /parentOverflow/);
         const overlay = fs.readFileSync(
             path.join(clientRoot, 'src/ui/components/SelectCharOccupiedReactOverlay.tsx'),
             'utf8',
@@ -210,17 +214,29 @@ describe('KindGem occupied overlay mount (Elon lv150)', () => {
             transform = '';
             minWidth = '';
             minHeight = '';
+            overflow = '';
+            overflowX = '';
+            overflowY = '';
+            contain = '';
+            maxWidth = '';
+            lineHeight = '';
+            padding = '';
+            whiteSpace = '';
             cssText = '';
             [key: string]: string;
         }
         class FakeEl {
             id = '';
             className = '';
+            tagName = 'DIV';
             textContent = '';
             children: FakeEl[] = [];
             parentNode: FakeEl | null = null;
             style = new FakeStyle();
             attrs = new Map<string, string>();
+            get parentElement(): FakeEl | null {
+                return this.parentNode;
+            }
             get innerText(): string {
                 return this.textContent || this.children.map((c) => c.innerText).join(' ');
             }
@@ -288,7 +304,9 @@ describe('KindGem occupied overlay mount (Elon lv150)', () => {
                 const fontPx = parseFloat(this.style.fontSize) || 0;
                 const width = hidden ? 0 : Math.max(280, parseFloat(this.style.minWidth) || 280);
                 const height = hidden ? 0 : Math.max(44, fontPx > 0 ? fontPx + 16 : 44);
-                return { width, height, top: 16, left: 120, bottom: 16 + height, right: 120 + width };
+                const top = parseFloat(this.style.top) || 12;
+                const left = 120;
+                return { width, height, top, left, bottom: top + height, right: left + width };
             }
         }
         class FakeDoc {
@@ -339,6 +357,7 @@ describe('KindGem occupied overlay mount (Elon lv150)', () => {
             citizenshipSide: 'traveler',
         };
         const doc = new FakeDoc();
+        doc.body.tagName = 'BODY';
         const waiting = new FakeEl();
         waiting.className = 'selectchar-react-occupied__banner';
         waiting.textContent = 'ConnectDialog React SELECTCHAR occupied — waiting';
@@ -366,9 +385,14 @@ describe('KindGem occupied overlay mount (Elon lv150)', () => {
         assert.equal(waiting.parentNode, null);
 
         const box = painted!.getBoundingClientRect();
-        assert.ok(box.width > 0);
-        assert.ok(box.height > 0);
+        assert.equal(selectCharKindGemBannerRectOnScreen(box), true);
+        assert.ok(box.top >= 0);
+        assert.ok(box.left >= 0);
+        assert.ok(box.width > 100);
+        assert.ok(box.height > 20);
         assert.notEqual(painted!.style.opacity, '0');
+        assert.equal(painted!.parentNode, doc.body);
+        assert.equal(doc.body.children[doc.body.children.length - 1], painted);
     });
 });
 
@@ -417,5 +441,7 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /React SELECTCHAR KindGem visible=/);
         assert.match(entry, /OCCUPIED Elon Lev\.150/);
         assert.match(entry, /selectchar-kindgem-occupied-banner/);
+        assert.match(entry, /parentOverflow/);
+        assert.match(entry, /document\.body/);
     });
 });

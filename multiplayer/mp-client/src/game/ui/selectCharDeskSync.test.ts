@@ -19,6 +19,7 @@ import {
     paintSelectCharReactOccupiedBannerNodes,
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
+    selectCharKindGemBannerRectOnScreen,
     selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
 } from './selectCharSlotGlyphs';
@@ -305,7 +306,7 @@ describe('paintSelectCharReactOccupiedBannerNodes — DOM not console', () => {
         assert.equal(stale.style.visibility, 'visible');
         assert.equal(stale.style.opacity, '1');
         assert.equal(stale.style.fontSize, '28px');
-        assert.equal(stale.style.color, '#1a1008');
+        assert.equal(stale.style.color, '#1a0a12');
         assert.equal(attrs.get('data-selectchar-banner-text'), banner);
     });
 
@@ -336,6 +337,14 @@ function installFakeSelectCharDocument() {
         transform = '';
         minWidth = '';
         minHeight = '';
+        overflow = '';
+        overflowX = '';
+        overflowY = '';
+        contain = '';
+        maxWidth = '';
+        lineHeight = '';
+        padding = '';
+        whiteSpace = '';
         cssText = '';
         [key: string]: string;
     }
@@ -343,11 +352,16 @@ function installFakeSelectCharDocument() {
     class FakeEl {
         id = '';
         className = '';
+        tagName = 'DIV';
         textContent = '';
         children: FakeEl[] = [];
         parentNode: FakeEl | null = null;
         style = new FakeStyle();
         attrs = new Map<string, string>();
+
+        get parentElement(): FakeEl | null {
+            return this.parentNode;
+        }
 
         get innerText(): string {
             if (this.textContent) {
@@ -438,7 +452,9 @@ function installFakeSelectCharDocument() {
             const minW = parseFloat(this.style.minWidth) || 0;
             const width = hidden ? 0 : Math.max(280, minW, fontPx > 0 ? 280 : 0);
             const height = hidden ? 0 : Math.max(44, fontPx > 0 ? fontPx + 16 : 0);
-            return { width, height, top: 16, left: 120, bottom: 16 + height, right: 120 + width, x: 120, y: 16 };
+            const top = parseFloat(this.style.top) || 12;
+            const left = 120;
+            return { width, height, top, left, bottom: top + height, right: left + width, x: left, y: top };
         }
     }
 
@@ -476,6 +492,7 @@ function installFakeSelectCharDocument() {
     }
 
     const doc = new FakeDoc();
+    doc.body.tagName = 'BODY';
     return { doc, FakeEl };
 }
 
@@ -510,10 +527,45 @@ describe('syncSelectCharReactOccupiedBannerDom — fail-closed KindGem paint', (
         assert.equal(bannerText.includes('waiting'), false);
 
         const rect = kindgem!.getBoundingClientRect();
-        assert.ok(rect.width > 0);
-        assert.ok(rect.height > 0);
+        assert.equal(selectCharKindGemBannerRectOnScreen(rect), true);
+        assert.ok(rect.top >= 0);
+        assert.ok(rect.left >= 0);
+        assert.ok(rect.width > 100);
+        assert.ok(rect.height > 20);
         assert.notEqual(kindgem!.style.opacity, '0');
         assert.equal(kindgem!.style.fontSize, '28px');
+        assert.equal(kindgem!.parentNode, doc.body);
+        assert.equal(doc.body.children[doc.body.children.length - 1], kindgem);
+    });
+
+    it('reparents a #root overflow:hidden banner onto document.body last child', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const { doc, FakeEl } = installFakeSelectCharDocument();
+        const root = new FakeEl();
+        root.id = 'root';
+        root.style.overflow = 'hidden';
+        doc.body.appendChild(root);
+        const trapped = new FakeEl();
+        trapped.id = SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID;
+        trapped.className = 'selectchar-react-occupied__banner';
+        trapped.setAttribute('data-selectchar-react-banner', '1');
+        trapped.textContent = 'OCCUPIED Elon Lev.150';
+        root.appendChild(trapped);
+
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+
+        const kindgem = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+        assert.ok(kindgem);
+        assert.equal(kindgem?.parentNode, doc.body);
+        assert.equal(root.children.includes(kindgem!), false);
+        assert.equal(kindgem?.textContent, 'OCCUPIED Elon Lev.150');
+        const rect = kindgem!.getBoundingClientRect();
+        assert.equal(selectCharKindGemBannerRectOnScreen(rect), true);
+        assert.match(kindgem?.textContent ?? '', /OCCUPIED/);
+        assert.match(kindgem?.textContent ?? '', /Elon/);
+        assert.match(kindgem?.textContent ?? '', /150/);
+        assert.equal((kindgem?.textContent ?? '').includes('waiting'), false);
     });
 });
 

@@ -49,7 +49,7 @@ async function deskProbe(page) {
             : null;
         return {
             snap,
-            chrome: !!document.querySelector('.login-selectchar-chrome'),
+            chrome: !!document.querySelector('#selectchar-react-occupied'),
             hub: !!document.querySelector('.login-hub'),
             bodyClass: document.body.className,
             canvas: style,

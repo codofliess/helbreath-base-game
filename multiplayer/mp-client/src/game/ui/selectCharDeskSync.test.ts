@@ -10,6 +10,7 @@ import {
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
 import {
+    buildSelectCharReactOccupiedBanner,
     occupiedSlotOverlayInnerHtml,
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
@@ -223,6 +224,23 @@ describe('paintSlotGlyphCanvas', () => {
         assert.deepEqual(written, ['Elon', 'Lev. 150']);
         assert.deepEqual(texts, ['Elon', 'Lev. 150']);
         assert.equal(texts.includes('Empty'), false);
+    });
+});
+
+describe('buildSelectCharReactOccupiedBanner', () => {
+    it('puts Elon Lev. 150 in a KindGem-visible ConnectDialog banner', () => {
+        const rows = paintSelectCharSlotRows([elon]);
+        const banner = buildSelectCharReactOccupiedBanner(rows);
+        assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
+        assert.match(banner, /Elon/);
+        assert.match(banner, /Lev\. 150/);
+        assert.equal(banner.includes('waiting'), false);
+    });
+
+    it('still mounts the React paint path when the store has no occupied rows', () => {
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]));
+        assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
+        assert.match(banner, /waiting/);
     });
 });
 

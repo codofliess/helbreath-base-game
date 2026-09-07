@@ -1344,6 +1344,7 @@ export class SelectCharDesk {
         const canvas = this.scene.game.canvas;
         const rect = canvas?.getBoundingClientRect?.();
         if (!rect || rect.width < 2 || rect.height < 2) {
+            // Keep KindGem HTML even if the canvas box is not measurable yet.
             return;
         }
         const gameW = Math.max(1, this.scene.scale.width || this.viewW);

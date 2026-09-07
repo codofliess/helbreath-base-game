@@ -247,7 +247,7 @@ export function syncSelectCharReactOccupiedBannerDom(
             }
         }
     }
-    const painted = paintSelectCharReactOccupiedBannerNodes(banner, [...nodes]);
+    const painted = paintSelectCharReactOccupiedBannerNodes(banner, [...nodes] as SelectCharBannerPaintNode[]);
     return { joined: painted.joined, hasWaiting: painted.hasWaiting, count: nodes.size };
 }
 

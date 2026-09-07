@@ -16,7 +16,7 @@ import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
  * Login gate phase:
  * - hub — World | Goddesses | Arena; equal entry portals
  * - play-world — Phaser SELECTCHAR desk (ND_SELECTCHAR)
- * - create-char — Phaser Create Character desk (ND_NEWCHAR) for an empty slot
+ * - create-char — React Create Character form (name, gender, stats, referral)
  * - arena-lobby — Phaser Arena SELECTCHAR desk (kits 160/90)
  */
 export type ConnectGatePhase = 'hub' | 'play-world' | 'create-char' | 'arena-lobby';

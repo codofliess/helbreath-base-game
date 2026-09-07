@@ -158,10 +158,21 @@ const phaserGame = read('src/PhaserGame.tsx');
 const walletAuth = read('src/utils/walletAuth.ts');
 assert(
     /gatePhase === 'hub'/.test(phaserGame) &&
+        /gatePhase === 'create-char'/.test(phaserGame) &&
         /setLivePhaserGame/.test(phaserGame) &&
         /parkPhaserForWalletUi/.test(walletAuth) &&
         walletAuth.indexOf('parkPhaserForWalletUi') < walletAuth.indexOf('phantom.connect'),
-    'Phaser must not boot on the hub; Phantom connect/sign must park the canvas (KindGem Aw Snap 9)',
+    'Phaser must not boot on the hub or create-char; Phantom connect/sign must park the canvas (KindGem Aw Snap 9)',
+);
+
+const connectDialog = read('src/ui/dialogs/ConnectDialog.tsx');
+const createForm = read('src/ui/components/CreateCharReactForm.tsx');
+assert(
+    /<CreateCharReactForm/.test(connectDialog) &&
+        /applyReferralCodeFromUser/.test(createForm) &&
+        /setGender\('female'\)/.test(createForm) &&
+        /remainingCreateStatPoints/.test(createForm),
+    'RH create-char must be a React form with gender, stats, and referral — not an empty Phaser plaza',
 );
 
 assert(

@@ -334,7 +334,9 @@ export class LoginScreen extends Scene {
             setConnectDialogOpen(true);
         }
         const showSelect = state.phase === 'play-world' && !this.isConnecting;
-        const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
+        // React CreateCharReactForm owns ND_NEWCHAR. Phaser chips sat off the
+        // letterboxed canvas — RH wallets could type a name and nothing else.
+        const showCreate = false;
         const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
 
         if ((showSelect || showCreate || showArena) && !this.isConnecting) {

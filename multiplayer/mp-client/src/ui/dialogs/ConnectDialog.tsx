@@ -78,6 +78,7 @@ import {
 } from '../../utils/arenaKits';
 import { openArenaKitBuilder } from '../store/ArenaKitBuilder.store';
 import { ARENA_CLOSED_MESSAGE, ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
+import { CreateCharReactForm } from '../components/CreateCharReactForm';
 import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
@@ -95,7 +96,8 @@ function slotForIndex(slots: CharacterSlotSummary[], index: number): CharacterSl
 
 /**
  * Login gate: hub (World | Goddesses | Arena portals).
- * World SELECTCHAR / Create Character / Arena kits are Phaser-only desks (wallet stays on the hub).
+ * World SELECTCHAR / Arena kits are Phaser desks. Create Character is React
+ * (Phaser chips sat off the letterboxed canvas — RH new wallets saw only a name field).
  * Host/port are hardcoded under the hood (never shown on World flow).
  */
 export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
@@ -502,7 +504,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, phase, characterSlots, walletSession]);
 
-    /** Phaser Create Character confirm / cancel. */
+    /** Create Character confirm / cancel (React form + leftover Phaser desk). */
     useEffect(() => {
         if (!isOpen || phase !== 'create-char') {
             return;
@@ -900,9 +902,17 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         ? `${walletSession.wallet.slice(0, 4)}…${walletSession.wallet.slice(-4)}`
         : undefined;
 
-    // Phaser owns Create Character / Arena desks. SELECTCHAR keeps a React occupied overlay
-    // from this same store so KindGem is not stuck on Empty Phaser shells.
-    if (phase === 'create-char' || phase === 'arena-lobby') {
+    // Arena stays Phaser-only. Create Character is React so gender / stats / referral
+    // stay on-screen (letterboxed Phaser chips were unclickable).
+    if (phase === 'create-char') {
+        return (
+            <CreateCharReactForm
+                zIndex={zIndex}
+                slotIndex={selectedSlotIndex}
+            />
+        );
+    }
+    if (phase === 'arena-lobby') {
         return null;
     }
     if (phase === 'play-world') {

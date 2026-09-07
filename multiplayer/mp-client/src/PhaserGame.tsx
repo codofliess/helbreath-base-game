@@ -19,8 +19,9 @@ import './ui/rpg-ui.css';
  *
  * Phaser does **not** boot on the React hub. KindGem Phantom connect/sign Aw Snaps
  * (Error 9, firmas=0) if Canvas is compositing under the wallet overlay. StartGame
- * waits until SELECTCHAR / Create / Arena (`phase !== 'hub'`). Canvas 2D is the
- * primary renderer; StartGame failures leave `#root` intact.
+ * waits until SELECTCHAR / Arena (`play-world` / `arena-lobby`). Create Character
+ * stays React-only so a new RH wallet is not dumped onto an empty plaza canvas.
+ * Canvas 2D is the primary renderer; StartGame failures leave `#root` intact.
  */
 
 export interface IRefPhaserGame
@@ -45,7 +46,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     // opens a Phaser desk — hub Phantom UI must not share a live canvas.
     useEffect(() =>
     {
-        if (gatePhase === 'hub' || game.current !== null) {
+        if (gatePhase === 'hub' || gatePhase === 'create-char' || game.current !== null) {
             return;
         }
 

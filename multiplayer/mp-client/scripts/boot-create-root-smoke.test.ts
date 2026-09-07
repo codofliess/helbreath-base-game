@@ -102,7 +102,33 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(src, /await import\('\.\/game\/main'\)/);
         assert.doesNotMatch(src, /useLayoutEffect\(/);
         assert.match(src, /gatePhase === 'hub'/);
+        assert.match(src, /gatePhase === 'create-char'/);
         assert.match(src, /parkPhaserForWalletUi|setLivePhaserGame/);
+    });
+
+    it('Create Character is a React form with gender, stats, and referral', () => {
+        const form = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/CreateCharReactForm.tsx'),
+            'utf8',
+        );
+        const connect = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'),
+            'utf8',
+        );
+        const login = fs.readFileSync(
+            path.join(clientRoot, 'src/game/scenes/LoginScreen.ts'),
+            'utf8',
+        );
+        const css = fs.readFileSync(path.join(clientRoot, 'src/ui/rpg-ui.css'), 'utf8');
+        assert.match(form, /CreateCharReactForm/);
+        assert.match(form, /setGender\('female'\)/);
+        assert.match(form, /applyReferralCodeFromUser/);
+        assert.match(form, /remainingCreateStatPoints/);
+        assert.match(form, /createPortal/);
+        assert.match(connect, /<CreateCharReactForm/);
+        assert.match(login, /const showCreate = false/);
+        assert.match(css, /\.createchar-react/);
+        assert.match(css, /body\.createchar-react-open/);
     });
 
     it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {

@@ -320,6 +320,190 @@ input.createchar-name-input:focus {
         0 0 12px rgba(224, 180, 90, 0.18);
 }
 
+body.createchar-react-open #game-container,
+body.createchar-react-open canvas,
+body.createchar-react-open input.createchar-name-input,
+body.createchar-react-open .selectchar-react-occupied,
+body.createchar-react-open #selectchar-kindgem-occupied-banner,
+body.createchar-react-open .cl-ref-panel,
+body.createchar-react-open .cl-desk-mode-tab {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.createchar-react {
+    --hub-gold: #e0b45a;
+    --hub-parchment: #f0e0c0;
+    --hub-ink: #0a0602;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 24px 16px 32px;
+    font-family: Spectral, Georgia, Palatino, serif;
+    color: var(--hub-parchment);
+    background: var(--hub-ink);
+    pointer-events: auto;
+}
+
+.createchar-react::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(180deg, rgba(8, 4, 2, 0.62) 0%, rgba(8, 4, 2, 0.82) 100%),
+        url('/assets/images/SiteBg.jpg');
+    background-size: cover;
+    background-position: center 35%;
+    filter: saturate(0.85) brightness(0.55);
+    pointer-events: none;
+}
+
+.createchar-react__panel {
+    position: relative;
+    z-index: 1;
+    width: min(560px, calc(100vw - 32px));
+    margin: auto;
+    padding: 22px 22px 18px;
+    box-sizing: border-box;
+    background: rgba(10, 6, 2, 0.88);
+    border: 1px solid rgba(224, 180, 90, 0.45);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+
+.createchar-react__kicker {
+    margin: 0 0 4px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #e0b45a;
+}
+
+.createchar-react__title {
+    margin: 0 0 8px;
+    font-family: Cinzel, Georgia, serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff6d8;
+}
+
+.createchar-react__lead,
+.createchar-react__status,
+.createchar-react__hint,
+.createchar-react__points,
+.createchar-react__vitals {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #cbb892;
+}
+
+.createchar-react__label {
+    display: block;
+    margin: 10px 0 6px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #e8d8b0;
+}
+
+.createchar-react__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid rgba(224, 180, 90, 0.5);
+    border-radius: 2px;
+    background: rgba(8, 4, 2, 0.78);
+    color: #f0e0c0;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    outline: none;
+}
+
+.createchar-react__row,
+.createchar-react__ref-row,
+.createchar-react__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 12px;
+}
+
+.createchar-react__chip,
+.createchar-react__btn {
+    padding: 7px 12px;
+    border: 1px solid rgba(196, 154, 72, 0.45);
+    border-radius: 4px;
+    background: rgba(20, 12, 6, 0.72);
+    color: #e8d8b0;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.createchar-react__chip.is-on,
+.createchar-react__btn--gold {
+    border-color: #e8c878;
+    background: linear-gradient(180deg, #6a4820 0%, #3d2810 100%);
+    color: #fff6d8;
+}
+
+.createchar-react__value {
+    min-width: 72px;
+    text-align: center;
+    font-weight: 700;
+    color: #fff6d8;
+}
+
+.createchar-react__points {
+    color: #e0b45a;
+    font-weight: 700;
+}
+
+.createchar-react__stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.createchar-react__stat {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid rgba(196, 154, 72, 0.28);
+    background: rgba(8, 4, 2, 0.55);
+}
+
+.createchar-react__stat strong {
+    min-width: 22px;
+    text-align: center;
+    color: #fff6d8;
+}
+
+.createchar-react__ref-row .createchar-react__input {
+    flex: 1;
+}
+
+.createchar-react__actions {
+    margin-top: 16px;
+}
+
+.createchar-react__actions .createchar-react__btn--gold {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 15px;
+}
+
 /*
  * SELECTCHAR letterbox — native CSS cm (user ruler contract):
  *   from left/right edges of the browser page → 3.5cm black

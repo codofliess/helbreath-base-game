@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
     applyStoreToSelectCharDesk,
+    formatSelectCharOccupiedLev,
     paintSelectCharSlotRows,
     resolveSelectCharSelectedIndex,
     resolveSelectCharSlotsForPaint,
@@ -178,6 +179,13 @@ describe('paintSelectCharSlotRows', () => {
     });
 });
 
+describe('formatSelectCharOccupiedLev', () => {
+    it('renders Lev. 150 when store level is 150', () => {
+        assert.equal(formatSelectCharOccupiedLev(150, 0), 'Lev. 150');
+        assert.equal(formatSelectCharOccupiedLev(undefined, 0), 'Lev. 0');
+    });
+});
+
 describe('resolveSelectCharSelectedIndex', () => {
     it('moves selection onto occupied Elon when store still points at an empty card', () => {
         const occupied = { ...elon, slotIndex: 1 };
@@ -230,15 +238,23 @@ describe('paintSlotGlyphCanvas', () => {
 describe('buildSelectCharReactOccupiedBanner', () => {
     it('puts Elon Lev. 150 in a KindGem-visible ConnectDialog banner', () => {
         const rows = paintSelectCharSlotRows([elon]);
-        const banner = buildSelectCharReactOccupiedBanner(rows);
+        const banner = buildSelectCharReactOccupiedBanner(rows, [elon]);
         assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(banner, /Elon/);
         assert.match(banner, /Lev\. 150/);
         assert.equal(banner.includes('waiting'), false);
     });
 
+    it('uses store Elon Lv150 even when paint rows are still Empty/waiting', () => {
+        const emptyRows = paintSelectCharSlotRows([]);
+        const banner = buildSelectCharReactOccupiedBanner(emptyRows, [elon]);
+        assert.match(banner, /Elon/);
+        assert.match(banner, /150/);
+        assert.equal(banner.includes('waiting'), false);
+    });
+
     it('still mounts the React paint path when the store has no occupied rows', () => {
-        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]));
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
         assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(banner, /waiting/);
     });

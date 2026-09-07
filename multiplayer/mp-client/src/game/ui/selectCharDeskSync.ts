@@ -49,12 +49,30 @@ export interface SelectCharSlotPaintRow {
     occupied: CharacterSlotSummary | undefined;
 }
 
+/** KindGem Lev. line — numeric even when proto/store omitted level. */
+export function formatSelectCharOccupiedLev(level: unknown, rebirth: unknown = 0): string {
+    const lv = Number(level);
+    const shown = Number.isFinite(lv) ? lv : 0;
+    const rb = Number(rebirth);
+    if (Number.isFinite(rb) && rb > 0) {
+        return `Lev. ${shown} (+${rb})`;
+    }
+    return `Lev. ${shown}`;
+}
+
+/** Server/store rows that have a visible character name (Empty shells excluded). */
+export function namedOccupiedCharacterSlots(
+    slots: CharacterSlotSummary[] | undefined,
+): CharacterSlotSummary[] {
+    return normalizeDeskCharacterSlots(slots ?? []).filter((row) => row.name.length > 0);
+}
+
 /**
  * Labels for the 4 desk cards. Occupied rows are claimed onto 0–3 first so a
  * live Elon with a missing/out-of-range slotIndex cannot leave every shell Empty.
  */
 export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCharSlotPaintRow[] {
-    const normalized = normalizeDeskCharacterSlots(slots);
+    const normalized = namedOccupiedCharacterSlots(slots);
     const rows: SelectCharSlotPaintRow[] = [];
     for (let i = 0; i < 4; i++) {
         const occupied = normalized.find((s) => Number(s.slotIndex) === i);
@@ -64,11 +82,11 @@ export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCh
         }
         const displayName =
             occupied.name.length > 16 ? `${occupied.name.slice(0, 15)}…` : occupied.name;
-        const lev =
-            occupied.rebirth > 0
-                ? `Lev. ${occupied.level} (+${occupied.rebirth})`
-                : `Lev. ${occupied.level}`;
-        rows.push({ name: displayName, lev, occupied });
+        rows.push({
+            name: displayName,
+            lev: formatSelectCharOccupiedLev(occupied.level, occupied.rebirth),
+            occupied,
+        });
     }
     return rows;
 }

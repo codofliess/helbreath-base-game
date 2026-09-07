@@ -121,12 +121,14 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(glyphs, /selectchar-occupied-labels/);
         assert.match(glyphs, /selectchar-react-occupied/);
         assert.match(glyphs, /ConnectDialog React SELECTCHAR occupied/);
+        assert.match(glyphs, /React SELECTCHAR occupied painted names=/);
         const overlay = fs.readFileSync(
             path.join(clientRoot, 'src/ui/components/SelectCharOccupiedReactOverlay.tsx'),
             'utf8',
         );
         assert.match(overlay, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_ID/);
+        assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG/);
         assert.match(overlay, /createPortal/);
         const connect = fs.readFileSync(
             path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'),
@@ -212,5 +214,6 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /selectchar-occupied-labels/);
         assert.match(entry, /selectchar-react-occupied/);
         assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
+        assert.match(entry, /React SELECTCHAR occupied painted names=/);
     });
 });

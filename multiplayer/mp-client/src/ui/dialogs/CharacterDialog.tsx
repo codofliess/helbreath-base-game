@@ -735,6 +735,9 @@ function GuildPanel({ onBack }: { onBack: () => void }) {
                         </span>
                     </p>
                     <p className="guild-progress-line">
+                        Stake de esta guild: miembros suman · 1M $HELBREATH = +1
+                    </p>
+                    <p className="guild-progress-line">
                         Huntmaster {progress.huntmaster} · Raidmaster {progress.raidmaster} · Captains{' '}
                         {progress.captains}
                     </p>

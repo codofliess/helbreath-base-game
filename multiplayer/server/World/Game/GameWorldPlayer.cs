@@ -1216,7 +1216,19 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     public void SetCitizenshipSide(string side) => citizenshipSide = side?.Trim() ?? string.Empty;
 
     /// <summary>Sets Fase H guild id stub for auction guild filters (persisted).</summary>
-    public void SetGuildId(string id) => guildId = id?.Trim() ?? string.Empty;
+    public void SetGuildId(string id) {
+        var next = id?.Trim() ?? string.Empty;
+        if (string.Equals(guildId, next, StringComparison.OrdinalIgnoreCase)) {
+            guildId = next;
+            return;
+        }
+        guildId = next;
+        if (string.IsNullOrEmpty(guildId)) {
+            Helpers.GuildProgression.ClearMemberStake(accountWallet);
+        } else {
+            Helpers.GuildProgression.RememberMemberStake(guildId, accountWallet, stakedHell);
+        }
+    }
 
     /// <summary>Sets guild rank stub (0–3). Captain/master may unbind guild-bound items.</summary>
     public void SetGuildRank(int rank) => guildRank = Math.Clamp(rank, 0, 3);

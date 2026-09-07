@@ -177,17 +177,33 @@ public static class GuildProgression {
     public static void RememberMemberStake(string? guildId, string? wallet, long stakedHelbreath) {
         var id = NormalizeGuild(guildId);
         var w = NormalizeWallet(wallet);
-        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(w)) {
+        if (string.IsNullOrEmpty(w)) {
             return;
         }
         lock (Gate) {
             EnsureLoaded();
-            var row = GetOrCreateLocked(id);
-            if (stakedHelbreath <= 0) {
+            // One wallet pledges to one guild. Leaving / switching drops it from the old pot.
+            foreach (var row in ledger.Values) {
                 row.MemberStakes.Remove(w);
-            } else {
-                row.MemberStakes[w] = stakedHelbreath;
             }
+            if (string.IsNullOrEmpty(id) || stakedHelbreath <= 0) {
+                return;
+            }
+            GetOrCreateLocked(id).MemberStakes[w] = stakedHelbreath;
+        }
+    }
+
+    public static void ClearMemberStake(string? wallet) => RememberMemberStake(null, wallet, 0);
+
+    /// <summary>$HELBREATH pledged by members of this guild only (other guilds do not stack in).</summary>
+    public static long SumMemberStakes(string? guildId) {
+        var id = NormalizeGuild(guildId);
+        if (string.IsNullOrEmpty(id)) {
+            return 0;
+        }
+        lock (Gate) {
+            EnsureLoaded();
+            return ledger.TryGetValue(id, out var row) ? SumStakes(row) : 0;
         }
     }
 

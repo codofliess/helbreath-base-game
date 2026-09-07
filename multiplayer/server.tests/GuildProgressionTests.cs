@@ -76,6 +76,24 @@ public sealed class GuildProgressionTests : IDisposable {
     }
 
     [Fact]
+    public void SameGuild_Stacks_OtherGuild_DoesNot() {
+        GuildProgression.RememberMemberStake("legion", "walletA", 600_000);
+        GuildProgression.RememberMemberStake("legion", "walletB", 400_000);
+        GuildProgression.RememberMemberStake("rival", "walletC", 5_000_000);
+        Assert.Equal(1_000_000L, GuildProgression.SumMemberStakes("legion"));
+        Assert.Equal(5_000_000L, GuildProgression.SumMemberStakes("rival"));
+        Assert.Equal(1, GuildProgression.ComputeGuild("legion").StakeBonusLevels);
+        Assert.Equal(5, GuildProgression.ComputeGuild("rival").StakeBonusLevels);
+
+        // Wallet B switches guild — Legion pot drops, Rival stacks the new pledge.
+        GuildProgression.RememberMemberStake("rival", "walletB", 400_000);
+        Assert.Equal(600_000L, GuildProgression.SumMemberStakes("legion"));
+        Assert.Equal(5_400_000L, GuildProgression.SumMemberStakes("rival"));
+        Assert.Equal(0, GuildProgression.ComputeGuild("legion").StakeBonusLevels);
+        Assert.Equal(5, GuildProgression.ComputeGuild("rival").StakeBonusLevels);
+    }
+
+    [Fact]
     public void EmptyGuild_HallOnly() {
         var snap = GuildProgression.ComputeGuild("");
         Assert.Equal(0, snap.EffectiveLevel);

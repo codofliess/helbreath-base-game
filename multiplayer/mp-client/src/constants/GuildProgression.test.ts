@@ -17,6 +17,27 @@ describe('guildStakeBonusLevels', () => {
     });
 });
 
+describe('same-guild stake stack', () => {
+    it('only the pot of one guild counts: 600k + 400k in Legion = +1, not mixed with another guild', () => {
+        const legion = computeGuildProgression({
+            contribution: 0,
+            enemyKills: 0,
+            gold: 0,
+            majestics: 0,
+            stakedHelbreath: 600_000 + 400_000,
+        });
+        const rival = computeGuildProgression({
+            contribution: 0,
+            enemyKills: 0,
+            gold: 0,
+            majestics: 0,
+            stakedHelbreath: 5_000_000,
+        });
+        assert.equal(legion.stakeBonusLevels, 1);
+        assert.equal(rival.stakeBonusLevels, 5);
+    });
+});
+
 describe('computeGuildProgression', () => {
     it('adds collective stake on top of contribution / EK / gold / majestic activity', () => {
         assert.equal(guildActivityPoints({ contribution: 800, enemyKills: 20, gold: 200_000, majestics: 10 }), 2670);

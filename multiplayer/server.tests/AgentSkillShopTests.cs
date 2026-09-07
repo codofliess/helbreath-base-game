@@ -114,43 +114,35 @@ public sealed class AgentSkillShopTests : IDisposable {
     }
 
     [Fact]
-    public void TryAcquire_StakeThenUnstakeRefundsAndKeepsOtherSlots() {
+    public void TryAcquire_RejectsStakeRailWithoutSpending() {
         const string wallet = "ShopTestWalletStake11111111111111111111";
         HellMiningStore.GrantPendingHell(wallet, 500);
-        var buy = AgentSkillShop.TryAcquire(
+        var before = HellMiningStore.GetSnapshot(wallet, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).PendingHell;
+        var stake = AgentSkillShop.TryAcquire(
             AgentPlayerProfile.ControllerAgent,
             wallet,
             [],
             "f8.mining.basic",
             AgentSkillShop.RailStake,
-            out var staked,
+            out var next,
             out var stakeMsg);
-        Assert.True(buy, stakeMsg);
-        Assert.Equal(AgentSkillShop.RailStake, staked.Single().Rail);
-        Assert.Equal(50, staked.Single().StakeHell);
-        Assert.False(staked.Single().Consumed);
-        Assert.Equal(450, HellMiningStore.GetSnapshot(wallet, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).PendingHell);
+        Assert.False(stake);
+        Assert.Empty(next);
+        Assert.Contains("does not equip skill packs", stakeMsg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("$HELBREATH", stakeMsg, StringComparison.Ordinal);
+        Assert.Equal(before, HellMiningStore.GetSnapshot(wallet, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).PendingHell);
 
-        var unstakeUnknown = AgentSkillShop.TryUnstake(
+        var leftover = new PersistedAgentSkillSlot("f8.mining.basic", "", false, AgentSkillShop.RailStake, 50);
+        var cleaned = AgentSkillShop.TryUnstake(
             AgentPlayerProfile.ControllerAgent,
             wallet,
-            staked,
-            "f8.alchemy.basic",
-            out _,
-            out var missMsg);
-        Assert.False(unstakeUnknown);
-        Assert.Contains("No live stake", missMsg, StringComparison.OrdinalIgnoreCase);
-
-        var unstake = AgentSkillShop.TryUnstake(
-            AgentPlayerProfile.ControllerAgent,
-            wallet,
-            staked,
+            [leftover],
             "f8.mining.basic",
             out var after,
             out var unstakeMsg);
-        Assert.True(unstake, unstakeMsg);
+        Assert.True(cleaned, unstakeMsg);
         Assert.Empty(after);
-        Assert.Equal(500, HellMiningStore.GetSnapshot(wallet, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).PendingHell);
+        Assert.Equal(before + 50, HellMiningStore.GetSnapshot(wallet, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).PendingHell);
     }
 
     [Fact]
@@ -170,7 +162,7 @@ public sealed class AgentSkillShopTests : IDisposable {
             wallet,
             first,
             "starter.gather.fish",
-            AgentSkillShop.RailStake,
+            AgentSkillShop.RailBuyNft,
             out _,
             out var dupMsg);
         Assert.False(dup);
@@ -183,6 +175,6 @@ public sealed class AgentSkillShopTests : IDisposable {
             "forged_rail",
             out _,
             out var railMsg));
-        Assert.Contains("buy_nft or stake", railMsg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("buy_nft only", railMsg, StringComparison.OrdinalIgnoreCase);
     }
 }

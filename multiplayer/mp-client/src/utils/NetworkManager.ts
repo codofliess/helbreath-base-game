@@ -3755,7 +3755,8 @@ export class NetworkManager {
         this.sendPacket(command, false, 'normal', 'getAgentSkillShopRequest');
     }
 
-    public requestAgentSkillShopAcquire(skillId: string, rail: 'buy_nft' | 'stake'): void {
+    /** Skill shop purchase. Rail is buy_nft only; stake is rejected (Olympia $HELBREATH expertise). */
+    public requestAgentSkillShopAcquire(skillId: string, rail: 'buy_nft' = 'buy_nft'): void {
         const command = ClientMessage.encode({
             payload: {
                 $case: 'agentSkillShopAcquireRequest',

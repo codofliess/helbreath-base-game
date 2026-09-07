@@ -86,9 +86,9 @@ message AgentSkillLoadoutSlot {
   optional string nft_mint = 2;
   // True after a consumable pack was ingested into this character (not transferable).
   bool consumed = 3;
-  // How this slot was bound: grant | buy_nft | stake. Client cannot pay by sending this.
+  // How this slot was bound: grant | buy_nft. Legacy stake rows are cleaned by unstake (not a shop rail).
   optional string rail = 4;
-  // Pending $HELL locked on a live stake rail; refunded on unstake.
+  // Unused for new buys. Leftover shop-stake stubs may still carry a refund amount.
   optional int64 stake_hell = 5;
 }
 
@@ -262,7 +262,7 @@ message ClientMessage {
     ArenaPactPrizePledgeRequest arena_pact_prize_pledge_request = 104;
     ArenaPactPrizeConfirmRequest arena_pact_prize_confirm_request = 105;
     ArenaPactSignLossRequest arena_pact_sign_loss_request = 106;
-    // Agent skill shop: catalog snapshot / buy_nft or stake / unstake (pending $HELL).
+    // Agent skill shop: catalog snapshot / buy_nft (pending $HELL). Unstake only clears leftover shop-stake stubs.
     GetAgentSkillShopRequest get_agent_skill_shop_request = 107;
     AgentSkillShopAcquireRequest agent_skill_shop_acquire_request = 108;
     AgentSkillShopUnstakeRequest agent_skill_shop_unstake_request = 109;
@@ -1504,7 +1504,7 @@ message GetAgentSkillShopRequest {
 
 message AgentSkillShopAcquireRequest {
   string skill_id = 1;
-  // buy_nft | stake
+  // buy_nft only. stake is rejected (Olympia $HELBREATH expertise, not F8 packs).
   string rail = 2;
 }
 

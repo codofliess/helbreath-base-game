@@ -10,8 +10,9 @@ namespace Server.Helpers;
 
 /// <summary>
 /// Allowlisted agent skill-pack shop. Packs are licenses to grind the existing F8 / Olympia
-/// masteries (<see cref="Skills"/>) — not a second XP track. Spend/lock uses pending $HELL
-/// (<see cref="HellMiningStore"/>), same rail as cash-shop currency 2. No mainnet mint.
+/// masteries (<see cref="Skills"/>) — not a second XP track. Purchase is <c>buy_nft</c> with
+/// pending $HELL (<see cref="HellMiningStore"/>, cash-shop currency 2). Staking $HELBREATH
+/// is Olympia monster-group expertise (<see cref="MobSpecialty"/>), not a shop rail.
 /// </summary>
 public static class AgentSkillShop {
     public const string TokenTicker = "$HELL";
@@ -131,7 +132,7 @@ public static class AgentSkillShop {
 
     /// <summary>Grant-only packs may arrive on AuthenticateRequest. Paid packs require this shop.</summary>
     public static bool IsGrantOnly(string? skillId) =>
-        TryResolve(skillId, out var entry) && entry.PriceHell <= 0 && entry.StakeHell <= 0;
+        TryResolve(skillId, out var entry) && entry.PriceHell <= 0;
 
     /// <summary>
     /// Pays pending $HELL and binds a pack. Client-supplied loadouts cannot call this —
@@ -149,13 +150,17 @@ public static class AgentSkillShop {
         message = "";
 
         if (!AgentPlayerProfile.IsAgentController(controllerKind)) {
-            message = "Only declared agent characters can buy or stake skill packs.";
+            message = "Only declared agent characters can buy skill packs.";
             return false;
         }
 
         var railNorm = (rail ?? "").Trim().ToLowerInvariant();
-        if (railNorm is not (RailBuyNft or RailStake)) {
-            message = "Choose buy_nft or stake.";
+        if (railNorm == RailStake) {
+            message = "Staking does not equip skill packs. Buy the NFT Skill with pending $HELL; stake $HELBREATH for Olympia monster-group expertise.";
+            return false;
+        }
+        if (railNorm != RailBuyNft) {
+            message = "Skill shop rail is buy_nft only.";
             return false;
         }
         if (!TryResolve(skillId, out var entry)) {
@@ -173,28 +178,10 @@ public static class AgentSkillShop {
             return false;
         }
 
-        long cost;
-        bool consumed;
-        long stakeHell;
-        string boundRail;
-        if (railNorm == RailBuyNft) {
-            cost = entry.PriceHell;
-            if (cost <= 0) {
-                message = "That pack is grant-only (not for sale).";
-                return false;
-            }
-            consumed = true;
-            stakeHell = 0;
-            boundRail = RailBuyNft;
-        } else {
-            cost = entry.StakeHell;
-            if (cost <= 0) {
-                message = "That pack cannot be staked.";
-                return false;
-            }
-            consumed = false;
-            stakeHell = cost;
-            boundRail = RailStake;
+        var cost = entry.PriceHell;
+        if (cost <= 0) {
+            message = "That pack is grant-only (not for sale).";
+            return false;
         }
 
         if (!HellMiningStore.TrySpendPending(accountWallet, cost, out var spendMsg)) {
@@ -202,15 +189,16 @@ public static class AgentSkillShop {
             return false;
         }
 
-        var added = new PersistedAgentSkillSlot(entry.Id, "", consumed, boundRail, stakeHell);
+        var added = new PersistedAgentSkillSlot(entry.Id, "", Consumed: true, Rail: RailBuyNft, StakeHell: 0);
         nextSkills = [.. have, added];
-        message = railNorm == RailBuyNft
-            ? $"Bound {entry.DisplayName} for {cost} pending {loadedTicker}. NFT mint is a post-test stub — training continues on this character."
-            : $"Staked {cost} pending {loadedTicker} for {entry.DisplayName}. Unstake drops the pack; F8 mastery XP stays on the blob.";
+        message = $"Bound {entry.DisplayName} for {cost} pending {loadedTicker}. NFT mint is a post-test stub — training continues on this character.";
         return true;
     }
 
-    /// <summary>Refunds a live stake and removes the pack. Later <see cref="Skills.GrantSkillXp"/> on the blob is kept.</summary>
+    /// <summary>
+    /// Shop is buy_nft only. If a leftover <c>stake</c> slot remains from an earlier stub, refund pending $HELL
+    /// and drop the pack so it cannot gate mining/alchemy. F8 XP on the blob is unchanged.
+    /// </summary>
     public static bool TryUnstake(
         string? controllerKind,
         string? accountWallet,
@@ -221,12 +209,8 @@ public static class AgentSkillShop {
         nextSkills = current is null ? [] : current.ToArray();
         message = "";
 
-        if (!AgentPlayerProfile.IsAgentController(controllerKind)) {
-            message = "Only declared agent characters can unstake skill packs.";
-            return false;
-        }
         if (!TryResolve(skillId, out var entry)) {
-            message = "Unknown skill pack.";
+            message = "Unknown skill pack. Skill shop is buy_nft only — stake $HELBREATH for Olympia expertise.";
             return false;
         }
 
@@ -235,18 +219,18 @@ public static class AgentSkillShop {
             string.Equals(s.SkillId, entry.Id, StringComparison.Ordinal) &&
             string.Equals(s.Rail, RailStake, StringComparison.Ordinal));
         if (idx < 0) {
-            message = "No live stake for that pack.";
+            message = "Skill shop is buy_nft only. Stake $HELBREATH raises Olympia monster-group expertise, not F8 packs.";
             return false;
         }
 
         var slot = have[idx];
-        var refund = slot.StakeHell > 0 ? slot.StakeHell : entry.StakeHell;
+        var refund = slot.StakeHell > 0 ? slot.StakeHell : 0;
         have.RemoveAt(idx);
         if (refund > 0) {
             HellMiningStore.RefundPendingSpend(accountWallet, refund);
         }
         nextSkills = have.ToArray();
-        message = $"Unstaked {entry.DisplayName}; refunded {refund} pending {loadedTicker}. Mastery XP on this character is unchanged.";
+        message = $"Removed leftover shop-stake on {entry.DisplayName}; refunded {refund} pending {loadedTicker}. Packs are buy_nft only.";
         return true;
     }
 
@@ -459,7 +443,7 @@ public static class AgentSkillShop {
             Tags = ["gather"],
             OlympiaSkillId = Skills.Mining,
             PriceHell = 50,
-            StakeHell = 50,
+            StakeHell = 0,
             AliasOf = "f8.mining.basic",
         });
         list.Add(new AgentSkillShopCatalogEntry {
@@ -469,7 +453,7 @@ public static class AgentSkillShop {
             Tags = ["gather"],
             OlympiaSkillId = Skills.Fishing,
             PriceHell = 50,
-            StakeHell = 50,
+            StakeHell = 0,
             AliasOf = "f8.fishing.basic",
         });
         return list;
@@ -491,7 +475,7 @@ public static class AgentSkillShop {
             Tags = tags,
             OlympiaSkillId = olympia,
             PriceHell = price,
-            StakeHell = price,
+            StakeHell = 0,
         };
     }
 

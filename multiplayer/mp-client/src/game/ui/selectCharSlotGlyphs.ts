@@ -3,7 +3,7 @@
  * Phaser Text destroy/recreate in a Container left Empty/Create glyphs on live Canvas.
  */
 
-import { formatSelectCharOccupiedLev } from './selectCharDeskSync';
+import { selectCharWarn } from '../../utils/selectCharTrace';
 
 export interface SlotGlyphCanvas {
     clearRect(x: number, y: number, w: number, h: number): void;
@@ -54,6 +54,12 @@ export const SELECTCHAR_REACT_OCCUPIED_ID = 'selectchar-react-occupied';
 /** Singleton KindGem banner — last child of body, not owned by a stale React portal. */
 export const SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID = 'selectchar-kindgem-occupied-banner';
 
+/** Visible KindGem occupied prefix — live string is `OCCUPIED Elon Lev.150`. */
+export const SELECTCHAR_KINDGEM_OCCUPIED_PREFIX = 'OCCUPIED';
+
+/** Dist + KindGem cut: exact occupied banner for Elon lv150. */
+export const SELECTCHAR_KINDGEM_ELON_LV150_TEXT = 'OCCUPIED Elon Lev.150';
+
 const REACT_OCCUPIED_BANNER_PREFIX = 'ConnectDialog React SELECTCHAR occupied';
 
 /** Console + dist hard-gate: occupied React overlay actually painted names (not waiting). */
@@ -62,9 +68,23 @@ export const SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG = 'React SELECTCHAR occupied 
 /** Console + dist hard-gate: actual banner textContent after DOM write (not the JS string). */
 export const SELECTCHAR_REACT_OCCUPIED_DOM_LOG = 'React SELECTCHAR occupied DOM textContent=';
 
+/** Console + dist hard-gate: bounding box + computed style KindGem can screenshot. */
+export const SELECTCHAR_KINDGEM_VISIBLE_LOG = 'React SELECTCHAR KindGem visible=';
+
 /** CSS selector KindGem and tests use for every occupied banner node. */
 export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
     '[data-selectchar-react-banner="1"], .selectchar-react-occupied__banner, #selectchar-kindgem-occupied-banner';
+
+/** Inline fail-closed paint: parchment, dark 28px type, above Phaser canvas. */
+export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
+    'display:block!important;visibility:visible!important;opacity:1!important;' +
+    'position:fixed!important;top:16px!important;left:50%!important;transform:translateX(-50%)!important;' +
+    'z-index:2147483646!important;pointer-events:none!important;overflow:visible!important;' +
+    'color:#1a1008!important;background:#f4ead5!important;background-color:#f4ead5!important;' +
+    'font-size:28px!important;font-weight:700!important;line-height:1.25!important;' +
+    'font-family:Georgia,serif!important;min-width:280px!important;min-height:44px!important;' +
+    'padding:10px 22px!important;text-align:center!important;border:2px solid #3a2810!important;' +
+    'box-sizing:border-box!important;white-space:nowrap!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
 let stickyNamedOccupiedBanner = '';
@@ -80,10 +100,27 @@ function paintRowLooksOccupied(row: SlotGlyphRow | undefined): boolean {
     return name.length > 0 && name !== 'Empty';
 }
 
+/** KindGem occupied line: `Elon Lev.150` (no space after Lev.). */
+export function formatSelectCharKindGemNameLev(name: string, level: unknown): string {
+    const lv = Number(level);
+    const shown = Number.isFinite(lv) ? lv : 0;
+    return `${name.trim()} Lev.${shown}`;
+}
+
+function levelFromPaintRow(row: SlotGlyphRow): unknown {
+    const occupied = row.occupied;
+    if (occupied && typeof occupied === 'object' && occupied !== null && 'level' in occupied) {
+        return (occupied as { level?: unknown }).level;
+    }
+    const digits = /\d+/.exec(row.lev ?? '');
+    return digits ? Number(digits[0]) : 0;
+}
+
 /**
  * Banner KindGem can read without Phaser Text.
  * Named store slots win over paint-row `occupied` so a live Elon list cannot
  * stay on «waiting» after CharacterList (empty paint rows / missing level).
+ * Occupied paint is `OCCUPIED Elon Lev.150` — never a «waiting» substring.
  */
 export function buildSelectCharReactOccupiedBanner(
     rows: SlotGlyphRow[],
@@ -92,12 +129,9 @@ export function buildSelectCharReactOccupiedBanner(
     const fromStore = (storeSlots ?? []).filter((row) => (row?.name ?? '').trim().length > 0);
     if (fromStore.length > 0) {
         const names = fromStore
-            .map((row) => {
-                const name = (row.name ?? '').trim();
-                return `${name} ${formatSelectCharOccupiedLev(row.level, row.rebirth)}`;
-            })
+            .map((row) => formatSelectCharKindGemNameLev(row.name ?? '', row.level))
             .join(' · ');
-        stickyNamedOccupiedBanner = `${REACT_OCCUPIED_BANNER_PREFIX} ${names}`;
+        stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
         return stickyNamedOccupiedBanner;
     }
     const occupied = rows.filter(paintRowLooksOccupied);
@@ -108,12 +142,9 @@ export function buildSelectCharReactOccupiedBanner(
         return `${REACT_OCCUPIED_BANNER_PREFIX} — waiting`;
     }
     const names = occupied
-        .map((row) => {
-            const lev = (row.lev ?? '').trim() || 'Lev. 0';
-            return `${row.name} ${lev}`;
-        })
+        .map((row) => formatSelectCharKindGemNameLev(row.name, levelFromPaintRow(row)))
         .join(' · ');
-    stickyNamedOccupiedBanner = `${REACT_OCCUPIED_BANNER_PREFIX} ${names}`;
+    stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
     return stickyNamedOccupiedBanner;
 }
 
@@ -145,9 +176,20 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.visibility = 'visible';
     node.style.opacity = '1';
     node.style.zIndex = '2147483646';
-    node.style.color = '#f0e0c0';
-    node.style.fontSize = '18px';
+    node.style.position = 'fixed';
+    node.style.top = '16px';
+    node.style.left = '50%';
+    node.style.transform = 'translateX(-50%)';
+    node.style.color = '#1a1008';
+    node.style.background = '#f4ead5';
+    node.style.fontSize = '28px';
+    node.style.minWidth = '280px';
+    node.style.minHeight = '44px';
     node.style.pointerEvents = 'none';
+    const css = node.style as { cssText?: string };
+    if (typeof css.cssText === 'string') {
+        css.cssText = SELECTCHAR_KINDGEM_BANNER_CSS_TEXT;
+    }
 }
 
 /**
@@ -172,7 +214,10 @@ export function paintSelectCharReactOccupiedBannerNodes(
 }
 
 function isBannerElement(node: Element): node is HTMLElement {
-    return node instanceof HTMLElement;
+    if (typeof HTMLElement !== 'undefined' && node instanceof HTMLElement) {
+        return true;
+    }
+    return typeof (node as HTMLElement)?.setAttribute === 'function';
 }
 
 /** Every KindGem-readable occupied banner currently in the document. */
@@ -182,12 +227,38 @@ export function querySelectCharReactOccupiedBannerNodes(doc: Document): HTMLElem
     );
 }
 
+function visibleTextOf(el: { textContent?: string | null; innerText?: string; getAttribute?: (n: string) => string | null }): string {
+    const inner = 'innerText' in el && typeof el.innerText === 'string' ? el.innerText : '';
+    return `${el.textContent ?? ''} ${inner} ${el.getAttribute?.('aria-label') ?? ''} ${el.getAttribute?.('title') ?? ''}`;
+}
+
 /**
- * Body-level banner KindGem screenshots. Dual React portals cannot hide this behind a
- * stale «waiting» sibling because it is moved to the end of body on every write.
+ * After named Elon exists, destroy every SELECTCHAR node whose visible text is waiting.
+ * Do not leave a waiting banner in the tree for KindGem / a11y to screenshot.
  */
-export function ensureSelectCharKindGemOccupiedBanner(doc: Document): HTMLElement {
+export function destroySelectCharWaitingBannerNodes(doc: Document): number {
+    const unique = [...new Set(querySelectCharReactOccupiedBannerNodes(doc))];
+    let removed = 0;
+    for (const el of unique) {
+        if (!/waiting/i.test(visibleTextOf(el))) {
+            continue;
+        }
+        el.remove();
+        removed += 1;
+    }
+    return removed;
+}
+
+/**
+ * Body-level banner KindGem screenshots. Recreated on named paint so an a11y
+ * snapshot of «waiting» cannot outlive textContent=Elon.
+ */
+export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = false): HTMLElement {
     let el = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+    if (recreate && el) {
+        el.remove();
+        el = null;
+    }
     if (!el) {
         el = doc.createElement('div');
         el.id = SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID;
@@ -198,6 +269,56 @@ export function ensureSelectCharKindGemOccupiedBanner(doc: Document): HTMLElemen
     }
     doc.body.appendChild(el);
     return el;
+}
+
+/** Drop extra banner nodes so only `#selectchar-kindgem-occupied-banner` remains visible. */
+export function collapseSelectCharOccupiedBannersToKindGemSingleton(doc: Document, keep: HTMLElement): void {
+    for (const el of querySelectCharReactOccupiedBannerNodes(doc)) {
+        if (el === keep) {
+            continue;
+        }
+        el.remove();
+    }
+}
+
+/** Log bounding box + computed style after paint (KindGem screenshot evidence). */
+export function logSelectCharKindGemVisible(el: HTMLElement): void {
+    const rect = typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : { width: 0, height: 0, top: 0, left: 0 };
+    let display = el.style.display;
+    let visibility = el.style.visibility;
+    let opacity = el.style.opacity;
+    let zIndex = el.style.zIndex;
+    let color = el.style.color;
+    let fontSize = el.style.fontSize;
+    if (typeof getComputedStyle === 'function') {
+        try {
+            const cs = getComputedStyle(el);
+            display = cs.display;
+            visibility = cs.visibility;
+            opacity = cs.opacity;
+            zIndex = cs.zIndex;
+            color = cs.color;
+            fontSize = cs.fontSize;
+        } catch {
+            /* jsdom / fake document */
+        }
+    }
+    selectCharWarn(
+        '%s%s',
+        SELECTCHAR_KINDGEM_VISIBLE_LOG,
+        JSON.stringify({
+            textContent: el.textContent,
+            rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left },
+            display,
+            visibility,
+            opacity,
+            zIndex,
+            color,
+            fontSize,
+        }),
+    );
 }
 
 /** Drop leftover occupied overlay trees so KindGem cannot screenshot a stale waiting portal. */
@@ -219,8 +340,8 @@ export function collapseSelectCharReactOccupiedDuplicateRoots(
 }
 
 /**
- * After a named paint, write Elon/150 onto every banner node and log that textContent.
- * A waiting leftover from getElementById(first) cannot survive this sweep.
+ * After a named paint, recreate a single KindGem banner, destroy waiting leftovers,
+ * and log the painted box KindGem can screenshot. Phaser desk paint is unchanged.
  */
 export function syncSelectCharReactOccupiedBannerDom(
     banner: string,
@@ -231,24 +352,40 @@ export function syncSelectCharReactOccupiedBannerDom(
     if (!d) {
         return { joined: banner, hasWaiting: banner.includes('waiting'), count: 0 };
     }
-    const kindgem = ensureSelectCharKindGemOccupiedBanner(d);
+    const named = !banner.includes('waiting') && banner.includes(SELECTCHAR_KINDGEM_OCCUPIED_PREFIX);
     if (preferred) {
         collapseSelectCharReactOccupiedDuplicateRoots(preferred, d);
     }
-    const nodes = new Set<HTMLElement>(querySelectCharReactOccupiedBannerNodes(d));
-    nodes.add(kindgem);
-    if (preferred) {
+    if (named) {
+        destroySelectCharWaitingBannerNodes(d);
+    }
+    const kindgem = ensureSelectCharKindGemOccupiedBanner(d, named);
+    if (named) {
+        collapseSelectCharOccupiedBannersToKindGemSingleton(d, kindgem);
+        destroySelectCharWaitingBannerNodes(d);
+    }
+    const nodes: HTMLElement[] = named
+        ? [kindgem]
+        : [...new Set([...querySelectCharReactOccupiedBannerNodes(d), kindgem])];
+    if (!named && preferred) {
         if (preferred.matches('[data-selectchar-react-banner="1"]')) {
-            nodes.add(preferred);
+            nodes.push(preferred);
         } else {
             const inner = preferred.querySelector<HTMLElement>('[data-selectchar-react-banner="1"]');
             if (inner) {
-                nodes.add(inner);
+                nodes.push(inner);
             }
         }
     }
-    const painted = paintSelectCharReactOccupiedBannerNodes(banner, [...nodes] as SelectCharBannerPaintNode[]);
-    return { joined: painted.joined, hasWaiting: painted.hasWaiting, count: nodes.size };
+    const unique = [...new Set(nodes)];
+    const painted = paintSelectCharReactOccupiedBannerNodes(banner, unique as SelectCharBannerPaintNode[]);
+    kindgem.setAttribute('aria-label', banner);
+    kindgem.setAttribute('title', banner);
+    kindgem.setAttribute('role', 'status');
+    if (named) {
+        logSelectCharKindGemVisible(kindgem);
+    }
+    return { joined: painted.joined, hasWaiting: painted.hasWaiting, count: unique.length };
 }
 
 /** True when painted names are real characters — banner must include them and must not say waiting. */

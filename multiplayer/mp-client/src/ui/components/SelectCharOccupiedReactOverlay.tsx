@@ -14,6 +14,7 @@ import {
 } from '../../game/ui/selectCharSlotLayout';
 import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
+    SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
     SELECTCHAR_REACT_OCCUPIED_DOM_LOG,
     SELECTCHAR_REACT_OCCUPIED_ID,
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
@@ -34,10 +35,8 @@ interface SelectCharOccupiedReactOverlayProps {
 
 /**
  * KindGem-visible occupied SELECTCHAR labels from the live React store.
- * Subscribes to characterSlots itself so a late CharacterList cannot leave
- * the portal on «waiting» after ConnectDialog's first empty play-world paint.
- * Banner text is written onto every matching DOM node (plus a body singleton)
- * so a stale dual portal cannot keep «waiting» after painted names=Elon.
+ * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` and destroys
+ * every waiting banner node so KindGem cannot screenshot a stale a11y tree.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
@@ -45,7 +44,6 @@ export function SelectCharOccupiedReactOverlay({
     characterListLoading,
 }: SelectCharOccupiedReactOverlayProps) {
     const rootRef = useRef<HTMLDivElement>(null);
-    const bannerRef = useRef<HTMLDivElement>(null);
     const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
     const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(
@@ -85,8 +83,15 @@ export function SelectCharOccupiedReactOverlay({
         if (root) {
             document.body.appendChild(root);
         }
-        const painted = syncSelectCharReactOccupiedBannerDom(banner, root ?? bannerRef.current);
+        const painted = syncSelectCharReactOccupiedBannerDom(banner, root);
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
+        if (occupiedNames.includes('Elon') && banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
+            selectCharWarn(
+                'ConnectDialog React SELECTCHAR KindGem Elon string mismatch have=%s want=%s',
+                banner,
+                SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
+            );
+        }
         if (
             occupiedNames &&
             occupiedNames !== '(none)' &&
@@ -97,7 +102,7 @@ export function SelectCharOccupiedReactOverlay({
                 occupiedNames,
                 painted.joined,
             );
-            const retry = syncSelectCharReactOccupiedBannerDom(banner, root ?? bannerRef.current);
+            const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
             selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
         const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
@@ -142,15 +147,8 @@ export function SelectCharOccupiedReactOverlay({
             data-occupied-count={occupied.length}
             data-occupied-names={occupiedNames}
             style={{ zIndex: Math.max(zIndex + 22, 2147483000) }}
-            aria-live="polite"
+            aria-hidden="true"
         >
-            <div
-                ref={bannerRef}
-                className="selectchar-react-occupied__banner"
-                data-selectchar-react-banner="1"
-            >
-                {banner}
-            </div>
             {occupied.map(({ row, slotIndex }) => (
                 <div
                     key={`${slotIndex}-${row.name}`}

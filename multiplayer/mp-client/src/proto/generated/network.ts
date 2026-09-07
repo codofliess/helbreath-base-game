@@ -143,7 +143,7 @@ export enum EkScreenshotRarity {
  * Owner-only on write; never copy owner prompts onto observer packets.
  */
 export interface AgentSkillLoadoutSlot {
-  /** Allowlisted catalog id (e.g. starter.academy.easy). Unknown ids are dropped. */
+  /** Allowlisted catalog id (e.g. starter.academy.easy / f8.mining.basic). Unknown ids are dropped. */
   skillId: string;
   /** Optional on-chain instance (cNFT mint / asset id). Opaque until mint shop ships. */
   nftMint?:
@@ -151,6 +151,12 @@ export interface AgentSkillLoadoutSlot {
     | undefined;
   /** True after a consumable pack was ingested into this character (not transferable). */
   consumed: boolean;
+  /** How this slot was bound: grant | buy_nft | stake. Client cannot pay by sending this. */
+  rail?:
+    | string
+    | undefined;
+  /** Pending $HELL locked on a live stake rail; refunded on unstake. */
+  stakeHell?: bigint | undefined;
 }
 
 export interface ClientMessage {
@@ -340,6 +346,11 @@ export interface ClientMessage {
     { $case: "arenaPactPrizePledgeRequest"; value: ArenaPactPrizePledgeRequest }
     | { $case: "arenaPactPrizeConfirmRequest"; value: ArenaPactPrizeConfirmRequest }
     | { $case: "arenaPactSignLossRequest"; value: ArenaPactSignLossRequest }
+    | //
+    /** Agent skill shop: catalog snapshot / buy_nft or stake / unstake (pending $HELL). */
+    { $case: "getAgentSkillShopRequest"; value: GetAgentSkillShopRequest }
+    | { $case: "agentSkillShopAcquireRequest"; value: AgentSkillShopAcquireRequest }
+    | { $case: "agentSkillShopUnstakeRequest"; value: AgentSkillShopUnstakeRequest }
     | undefined;
 }
 
@@ -1309,6 +1320,10 @@ export interface ServerMessage {
     | //
     /** World / tournament Go-Live ack for cartelera. */
     { $case: "streamBroadcastState"; value: StreamBroadcastState }
+    | //
+    /** Agent skill shop catalog + pending $HELL + equipped packs (no owner prompt). */
+    { $case: "agentSkillShopState"; value: AgentSkillShopState }
+    | { $case: "agentSkillShopResult"; value: AgentSkillShopResult }
     | undefined;
 }
 
@@ -1651,6 +1666,48 @@ export interface BuyCashShopItemRequest {
 export interface BuyCashShopItemResult {
   ok: boolean;
   message: string;
+}
+
+/** Allowlisted agent skill pack (maps onto existing F8 / Olympia masteries — not a second XP track). */
+export interface AgentSkillShopEntry {
+  skillId: string;
+  displayName: string;
+  /** basic | advanced */
+  tier: string;
+  /** gather | craft | combat | academy */
+  tags: string[];
+  /** Skills.cs index 0–18; -1 = academy / policy bundle (no single mastery). */
+  olympiaSkillId: number;
+  priceHell: bigint;
+  stakeHell: bigint;
+  aliasOf: string;
+}
+
+export interface GetAgentSkillShopRequest {
+}
+
+export interface AgentSkillShopAcquireRequest {
+  skillId: string;
+  /** buy_nft | stake */
+  rail: string;
+}
+
+export interface AgentSkillShopUnstakeRequest {
+  skillId: string;
+}
+
+export interface AgentSkillShopState {
+  catalog: AgentSkillShopEntry[];
+  pendingHell: bigint;
+  /** Wired shop ticker: pending $HELL (HellMiningStore). $HELBREATH is not wired here. */
+  tokenTicker: string;
+  equipped: AgentSkillLoadoutSlot[];
+}
+
+export interface AgentSkillShopResult {
+  ok: boolean;
+  error: string;
+  shop: AgentSkillShopState | undefined;
 }
 
 /** Item bind_state: 0=unbound, 1=soulbound, 2=guildbound (server authoritative). */
@@ -2710,7 +2767,7 @@ export interface PingResponse {
 }
 
 function createBaseAgentSkillLoadoutSlot(): AgentSkillLoadoutSlot {
-  return { skillId: "", nftMint: undefined, consumed: false };
+  return { skillId: "", nftMint: undefined, consumed: false, rail: undefined, stakeHell: undefined };
 }
 
 export const AgentSkillLoadoutSlot: MessageFns<AgentSkillLoadoutSlot> = {
@@ -2723,6 +2780,15 @@ export const AgentSkillLoadoutSlot: MessageFns<AgentSkillLoadoutSlot> = {
     }
     if (message.consumed !== false) {
       writer.uint32(24).bool(message.consumed);
+    }
+    if (message.rail !== undefined) {
+      writer.uint32(34).string(message.rail);
+    }
+    if (message.stakeHell !== undefined) {
+      if (BigInt.asIntN(64, message.stakeHell) !== message.stakeHell) {
+        throw new globalThis.Error("value provided for field message.stakeHell of type int64 too large");
+      }
+      writer.uint32(40).int64(message.stakeHell);
     }
     return writer;
   },
@@ -2758,6 +2824,22 @@ export const AgentSkillLoadoutSlot: MessageFns<AgentSkillLoadoutSlot> = {
           message.consumed = reader.bool();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.rail = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.stakeHell = reader.int64() as bigint;
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2775,6 +2857,8 @@ export const AgentSkillLoadoutSlot: MessageFns<AgentSkillLoadoutSlot> = {
     message.skillId = object.skillId ?? "";
     message.nftMint = object.nftMint ?? undefined;
     message.consumed = object.consumed ?? false;
+    message.rail = object.rail ?? undefined;
+    message.stakeHell = object.stakeHell ?? undefined;
     return message;
   },
 };
@@ -3103,6 +3187,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "arenaPactSignLossRequest":
         ArenaPactSignLossRequest.encode(message.payload.value, writer.uint32(850).fork()).join();
+        break;
+      case "getAgentSkillShopRequest":
+        GetAgentSkillShopRequest.encode(message.payload.value, writer.uint32(858).fork()).join();
+        break;
+      case "agentSkillShopAcquireRequest":
+        AgentSkillShopAcquireRequest.encode(message.payload.value, writer.uint32(866).fork()).join();
+        break;
+      case "agentSkillShopUnstakeRequest":
+        AgentSkillShopUnstakeRequest.encode(message.payload.value, writer.uint32(874).fork()).join();
         break;
     }
     return writer;
@@ -4218,6 +4311,39 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           };
           continue;
         }
+        case 107: {
+          if (tag !== 858) {
+            break;
+          }
+
+          message.payload = {
+            $case: "getAgentSkillShopRequest",
+            value: GetAgentSkillShopRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 108: {
+          if (tag !== 866) {
+            break;
+          }
+
+          message.payload = {
+            $case: "agentSkillShopAcquireRequest",
+            value: AgentSkillShopAcquireRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 109: {
+          if (tag !== 874) {
+            break;
+          }
+
+          message.payload = {
+            $case: "agentSkillShopUnstakeRequest",
+            value: AgentSkillShopUnstakeRequest.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5147,6 +5273,33 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = {
             $case: "arenaPactSignLossRequest",
             value: ArenaPactSignLossRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "getAgentSkillShopRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "getAgentSkillShopRequest",
+            value: GetAgentSkillShopRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "agentSkillShopAcquireRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "agentSkillShopAcquireRequest",
+            value: AgentSkillShopAcquireRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "agentSkillShopUnstakeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "agentSkillShopUnstakeRequest",
+            value: AgentSkillShopUnstakeRequest.fromPartial(object.payload.value),
           };
         }
         break;
@@ -13508,6 +13661,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "streamBroadcastState":
         StreamBroadcastState.encode(message.payload.value, writer.uint32(850).fork()).join();
         break;
+      case "agentSkillShopState":
+        AgentSkillShopState.encode(message.payload.value, writer.uint32(858).fork()).join();
+        break;
+      case "agentSkillShopResult":
+        AgentSkillShopResult.encode(message.payload.value, writer.uint32(866).fork()).join();
+        break;
     }
     return writer;
   },
@@ -14501,6 +14660,28 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           };
           continue;
         }
+        case 107: {
+          if (tag !== 858) {
+            break;
+          }
+
+          message.payload = {
+            $case: "agentSkillShopState",
+            value: AgentSkillShopState.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
+        case 108: {
+          if (tag !== 866) {
+            break;
+          }
+
+          message.payload = {
+            $case: "agentSkillShopResult",
+            value: AgentSkillShopResult.decode(reader, reader.uint32()),
+          };
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -15301,6 +15482,24 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           message.payload = {
             $case: "streamBroadcastState",
             value: StreamBroadcastState.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "agentSkillShopState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "agentSkillShopState",
+            value: AgentSkillShopState.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "agentSkillShopResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "agentSkillShopResult",
+            value: AgentSkillShopResult.fromPartial(object.payload.value),
           };
         }
         break;
@@ -18292,6 +18491,446 @@ export const BuyCashShopItemResult: MessageFns<BuyCashShopItemResult> = {
     const message = createBaseBuyCashShopItemResult();
     message.ok = object.ok ?? false;
     message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseAgentSkillShopEntry(): AgentSkillShopEntry {
+  return {
+    skillId: "",
+    displayName: "",
+    tier: "",
+    tags: [],
+    olympiaSkillId: 0,
+    priceHell: 0n,
+    stakeHell: 0n,
+    aliasOf: "",
+  };
+}
+
+export const AgentSkillShopEntry: MessageFns<AgentSkillShopEntry> = {
+  encode(message: AgentSkillShopEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== "") {
+      writer.uint32(10).string(message.skillId);
+    }
+    if (message.displayName !== "") {
+      writer.uint32(18).string(message.displayName);
+    }
+    if (message.tier !== "") {
+      writer.uint32(26).string(message.tier);
+    }
+    for (const v of message.tags) {
+      writer.uint32(34).string(v!);
+    }
+    if (message.olympiaSkillId !== 0) {
+      writer.uint32(40).int32(message.olympiaSkillId);
+    }
+    if (message.priceHell !== 0n) {
+      if (BigInt.asIntN(64, message.priceHell) !== message.priceHell) {
+        throw new globalThis.Error("value provided for field message.priceHell of type int64 too large");
+      }
+      writer.uint32(48).int64(message.priceHell);
+    }
+    if (message.stakeHell !== 0n) {
+      if (BigInt.asIntN(64, message.stakeHell) !== message.stakeHell) {
+        throw new globalThis.Error("value provided for field message.stakeHell of type int64 too large");
+      }
+      writer.uint32(56).int64(message.stakeHell);
+    }
+    if (message.aliasOf !== "") {
+      writer.uint32(66).string(message.aliasOf);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillShopEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillShopEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.skillId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.displayName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.tier = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tags.push(reader.string());
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.olympiaSkillId = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.priceHell = reader.int64() as bigint;
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.stakeHell = reader.int64() as bigint;
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.aliasOf = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillShopEntry>, I>>(base?: I): AgentSkillShopEntry {
+    return AgentSkillShopEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillShopEntry>, I>>(object: I): AgentSkillShopEntry {
+    const message = createBaseAgentSkillShopEntry();
+    message.skillId = object.skillId ?? "";
+    message.displayName = object.displayName ?? "";
+    message.tier = object.tier ?? "";
+    message.tags = object.tags?.map((e) => e) || [];
+    message.olympiaSkillId = object.olympiaSkillId ?? 0;
+    message.priceHell = object.priceHell ?? 0n;
+    message.stakeHell = object.stakeHell ?? 0n;
+    message.aliasOf = object.aliasOf ?? "";
+    return message;
+  },
+};
+
+function createBaseGetAgentSkillShopRequest(): GetAgentSkillShopRequest {
+  return {};
+}
+
+export const GetAgentSkillShopRequest: MessageFns<GetAgentSkillShopRequest> = {
+  encode(_: GetAgentSkillShopRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetAgentSkillShopRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetAgentSkillShopRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<GetAgentSkillShopRequest>, I>>(base?: I): GetAgentSkillShopRequest {
+    return GetAgentSkillShopRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetAgentSkillShopRequest>, I>>(_: I): GetAgentSkillShopRequest {
+    const message = createBaseGetAgentSkillShopRequest();
+    return message;
+  },
+};
+
+function createBaseAgentSkillShopAcquireRequest(): AgentSkillShopAcquireRequest {
+  return { skillId: "", rail: "" };
+}
+
+export const AgentSkillShopAcquireRequest: MessageFns<AgentSkillShopAcquireRequest> = {
+  encode(message: AgentSkillShopAcquireRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== "") {
+      writer.uint32(10).string(message.skillId);
+    }
+    if (message.rail !== "") {
+      writer.uint32(18).string(message.rail);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillShopAcquireRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillShopAcquireRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.skillId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.rail = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillShopAcquireRequest>, I>>(base?: I): AgentSkillShopAcquireRequest {
+    return AgentSkillShopAcquireRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillShopAcquireRequest>, I>>(object: I): AgentSkillShopAcquireRequest {
+    const message = createBaseAgentSkillShopAcquireRequest();
+    message.skillId = object.skillId ?? "";
+    message.rail = object.rail ?? "";
+    return message;
+  },
+};
+
+function createBaseAgentSkillShopUnstakeRequest(): AgentSkillShopUnstakeRequest {
+  return { skillId: "" };
+}
+
+export const AgentSkillShopUnstakeRequest: MessageFns<AgentSkillShopUnstakeRequest> = {
+  encode(message: AgentSkillShopUnstakeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== "") {
+      writer.uint32(10).string(message.skillId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillShopUnstakeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillShopUnstakeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.skillId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillShopUnstakeRequest>, I>>(base?: I): AgentSkillShopUnstakeRequest {
+    return AgentSkillShopUnstakeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillShopUnstakeRequest>, I>>(object: I): AgentSkillShopUnstakeRequest {
+    const message = createBaseAgentSkillShopUnstakeRequest();
+    message.skillId = object.skillId ?? "";
+    return message;
+  },
+};
+
+function createBaseAgentSkillShopState(): AgentSkillShopState {
+  return { catalog: [], pendingHell: 0n, tokenTicker: "", equipped: [] };
+}
+
+export const AgentSkillShopState: MessageFns<AgentSkillShopState> = {
+  encode(message: AgentSkillShopState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.catalog) {
+      AgentSkillShopEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pendingHell !== 0n) {
+      if (BigInt.asIntN(64, message.pendingHell) !== message.pendingHell) {
+        throw new globalThis.Error("value provided for field message.pendingHell of type int64 too large");
+      }
+      writer.uint32(16).int64(message.pendingHell);
+    }
+    if (message.tokenTicker !== "") {
+      writer.uint32(26).string(message.tokenTicker);
+    }
+    for (const v of message.equipped) {
+      AgentSkillLoadoutSlot.encode(v!, writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillShopState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillShopState();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.catalog.push(AgentSkillShopEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pendingHell = reader.int64() as bigint;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.tokenTicker = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.equipped.push(AgentSkillLoadoutSlot.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillShopState>, I>>(base?: I): AgentSkillShopState {
+    return AgentSkillShopState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillShopState>, I>>(object: I): AgentSkillShopState {
+    const message = createBaseAgentSkillShopState();
+    message.catalog = object.catalog?.map((e) => AgentSkillShopEntry.fromPartial(e)) || [];
+    message.pendingHell = object.pendingHell ?? 0n;
+    message.tokenTicker = object.tokenTicker ?? "";
+    message.equipped = object.equipped?.map((e) => AgentSkillLoadoutSlot.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseAgentSkillShopResult(): AgentSkillShopResult {
+  return { ok: false, error: "", shop: undefined };
+}
+
+export const AgentSkillShopResult: MessageFns<AgentSkillShopResult> = {
+  encode(message: AgentSkillShopResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.error !== "") {
+      writer.uint32(18).string(message.error);
+    }
+    if (message.shop !== undefined) {
+      AgentSkillShopState.encode(message.shop, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillShopResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillShopResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.error = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.shop = AgentSkillShopState.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillShopResult>, I>>(base?: I): AgentSkillShopResult {
+    return AgentSkillShopResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillShopResult>, I>>(object: I): AgentSkillShopResult {
+    const message = createBaseAgentSkillShopResult();
+    message.ok = object.ok ?? false;
+    message.error = object.error ?? "";
+    message.shop = (object.shop !== undefined && object.shop !== null)
+      ? AgentSkillShopState.fromPartial(object.shop)
+      : undefined;
     return message;
   },
 };

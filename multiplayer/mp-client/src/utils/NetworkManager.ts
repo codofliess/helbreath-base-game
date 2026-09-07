@@ -67,6 +67,8 @@ import {
     type StoneItemUpgradeResult,
     type ItemBindResult,
     type BuyCashShopItemResult,
+    type AgentSkillShopState,
+    type AgentSkillShopResult,
     type MonsterKillsUpdated,
     type KillMilestoneClaimResult,
     type BeginnerPathState,
@@ -598,6 +600,8 @@ export class NetworkManager {
     /** Authoritative self HP/max from server; updated by InitialState and hp_updated; used when merging map-only InitialGameWorldState. */
     private lastSelfHp: number | undefined;
     private lastSelfMaxHp: number | undefined;
+    /** Last server skill-shop snapshot (catalog + pending $HELL). No marketplace UI yet. */
+    private lastAgentSkillShop: AgentSkillShopState | null = null;
     /** Snapshot from InitialState for merging into each InitialGameWorldState (map load). */
     private initialStateMergeBase:
         | Pick<
@@ -1945,6 +1949,12 @@ export class NetworkManager {
                     break;
                 case 'buyCashShopItemResult':
                     this.handleBuyCashShopItemResult(message.payload.value);
+                    break;
+                case 'agentSkillShopState':
+                    this.handleAgentSkillShopState(message.payload.value);
+                    break;
+                case 'agentSkillShopResult':
+                    this.handleAgentSkillShopResult(message.payload.value);
                     break;
                 case 'monsterKillsUpdated':
                     this.handleMonsterKillsUpdated(message.payload.value);
@@ -3732,6 +3742,56 @@ export class NetworkManager {
             severity: data.ok ? 'success' : 'warning',
         } satisfies ToastRequestedEvent);
         setCashShopStatusMessage(msg);
+    }
+
+    /** Server-authoritative agent skill catalog + pending $HELL (no marketplace UI). */
+    public requestAgentSkillShop(): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'getAgentSkillShopRequest',
+                value: {},
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'getAgentSkillShopRequest');
+    }
+
+    public requestAgentSkillShopAcquire(skillId: string, rail: 'buy_nft' | 'stake'): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'agentSkillShopAcquireRequest',
+                value: { skillId, rail },
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'agentSkillShopAcquireRequest');
+    }
+
+    public requestAgentSkillShopUnstake(skillId: string): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'agentSkillShopUnstakeRequest',
+                value: { skillId },
+            },
+        }).finish();
+        this.sendPacket(command, false, 'normal', 'agentSkillShopUnstakeRequest');
+    }
+
+    public getLastAgentSkillShop(): AgentSkillShopState | null {
+        return this.lastAgentSkillShop;
+    }
+
+    private handleAgentSkillShopState(data: AgentSkillShopState): void {
+        this.lastAgentSkillShop = data;
+    }
+
+    private handleAgentSkillShopResult(data: AgentSkillShopResult): void {
+        if (data.shop) {
+            this.lastAgentSkillShop = data.shop;
+        }
+        const msg = data.error?.trim() || (data.ok ? 'Skill shop OK' : 'Skill shop failed');
+        EventBus.emit(TOAST_REQUESTED, {
+            message: msg,
+            severity: data.ok ? 'success' : 'warning',
+        } satisfies ToastRequestedEvent);
     }
 
     public requestLevelUpSettings(deltas: {

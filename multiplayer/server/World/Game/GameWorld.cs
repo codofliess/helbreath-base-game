@@ -1097,6 +1097,15 @@ public sealed class GameWorld : IWorkerWorld {
             case ClientMessage.PayloadOneofCase.BuyCashShopItemRequest:
                 CashShop.HandleBuyRequest(gameWorldRef, playerConnection, message.Message.BuyCashShopItemRequest);
                 break;
+            case ClientMessage.PayloadOneofCase.GetAgentSkillShopRequest:
+                AgentSkillShop.HandleGetState(playerConnection);
+                break;
+            case ClientMessage.PayloadOneofCase.AgentSkillShopAcquireRequest:
+                AgentSkillShop.HandleAcquire(playerConnection, message.Message.AgentSkillShopAcquireRequest);
+                break;
+            case ClientMessage.PayloadOneofCase.AgentSkillShopUnstakeRequest:
+                AgentSkillShop.HandleUnstake(playerConnection, message.Message.AgentSkillShopUnstakeRequest);
+                break;
             case ClientMessage.PayloadOneofCase.PlayerItemPickupRequested:
                 HandlePlayerItemPickupRequested(playerConnection, message.Message.PlayerItemPickupRequested);
                 break;

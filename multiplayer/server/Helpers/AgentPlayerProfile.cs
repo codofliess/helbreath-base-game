@@ -22,7 +22,7 @@ public static class AgentPlayerProfile {
     public const string ControllerAgent = "agent";
     public const string DefaultStarterPackId = "starter.academy.easy";
 
-    /// <summary>Team catalog ids that may appear on a loadout before the NFT shop exists.</summary>
+    /// <summary>Legacy starter ids (still valid). Paid F8 packs live in <see cref="AgentSkillShop"/>.</summary>
     public static readonly string[] CatalogSkillIds = [
         "starter.academy.easy",
         "starter.academy.hard",
@@ -40,18 +40,7 @@ public static class AgentPlayerProfile {
     public static string NormalizeActorKind(string? kind) =>
         string.Equals(kind, "bot", StringComparison.OrdinalIgnoreCase) ? "bot" : "human";
 
-    public static bool IsCatalogSkillId(string? skillId) {
-        if (string.IsNullOrWhiteSpace(skillId)) {
-            return false;
-        }
-        var id = skillId.Trim();
-        foreach (var known in CatalogSkillIds) {
-            if (string.Equals(known, id, StringComparison.Ordinal)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    public static bool IsCatalogSkillId(string? skillId) => AgentSkillShop.IsCatalogSkillId(skillId);
 
     /// <summary>Strips control characters (keeps newline/tab) and caps length. Never used in observer chat.</summary>
     public static string SanitizeOwnerPrompt(string? raw) {
@@ -80,11 +69,19 @@ public static class AgentPlayerProfile {
             yield return new PersistedAgentSkillSlot(
                 slot.SkillId ?? "",
                 slot.HasNftMint ? slot.NftMint : "",
-                slot.Consumed);
+                slot.Consumed,
+                slot.HasRail ? slot.Rail ?? "" : "",
+                slot.HasStakeHell ? slot.StakeHell : 0);
         }
     }
 
-    public static PersistedAgentSkillSlot[] SanitizeSkills(IEnumerable<PersistedAgentSkillSlot>? slots) {
+    /// <summary>
+    /// Drops unknown ids. Client writes (<paramref name="grantOnly"/>) may only keep free grant packs —
+    /// paid buy_nft / stake slots come from <see cref="AgentSkillShop"/>, not AuthenticateRequest.
+    /// </summary>
+    public static PersistedAgentSkillSlot[] SanitizeSkills(
+        IEnumerable<PersistedAgentSkillSlot>? slots,
+        bool grantOnly = true) {
         if (slots is null) {
             return [];
         }
@@ -95,15 +92,23 @@ public static class AgentPlayerProfile {
             if (list.Count >= MaxSkillSlots) {
                 break;
             }
-            var id = (slot.SkillId ?? string.Empty).Trim();
-            if (id.Length > MaxSkillIdChars || !IsCatalogSkillId(id) || !seen.Add(id)) {
+            var canonical = AgentSkillShop.ResolveCanonicalId(slot.SkillId);
+            if (canonical.Length == 0 || canonical.Length > MaxSkillIdChars || !seen.Add(canonical)) {
+                continue;
+            }
+            if (grantOnly && !AgentSkillShop.IsGrantOnly(canonical)) {
+                continue;
+            }
+            if (grantOnly) {
+                list.Add(new PersistedAgentSkillSlot(canonical, "", Consumed: false, Rail: AgentSkillShop.RailGrant, StakeHell: 0));
                 continue;
             }
             var mint = (slot.NftMint ?? string.Empty).Trim();
             if (mint.Length > MaxNftMintChars) {
                 mint = mint[..MaxNftMintChars];
             }
-            list.Add(new PersistedAgentSkillSlot(id, mint, slot.Consumed));
+            var rail = (slot.Rail ?? string.Empty).Trim();
+            list.Add(new PersistedAgentSkillSlot(canonical, mint, slot.Consumed, rail, slot.StakeHell));
         }
         return list.ToArray();
     }
@@ -127,7 +132,7 @@ public static class AgentPlayerProfile {
         var sanitizedSkills = SanitizeSkills(skills);
         var prompt = SanitizeOwnerPrompt(ownerPrompt);
         var pack = (starterPackId ?? string.Empty).Trim();
-        if (pack.Length > MaxStarterPackIdChars || (pack.Length > 0 && !IsCatalogSkillId(pack))) {
+        if (pack.Length > MaxStarterPackIdChars || (pack.Length > 0 && !AgentSkillShop.IsGrantOnly(pack))) {
             pack = "";
         }
 
@@ -136,8 +141,8 @@ public static class AgentPlayerProfile {
         }
 
         if (kind == ControllerAgent && sanitizedSkills.Length == 0) {
-            pack = pack.Length > 0 ? pack : DefaultStarterPackId;
-            sanitizedSkills = [new PersistedAgentSkillSlot(pack, "", Consumed: false)];
+            pack = pack.Length > 0 && AgentSkillShop.IsGrantOnly(pack) ? pack : DefaultStarterPackId;
+            sanitizedSkills = [new PersistedAgentSkillSlot(pack, "", Consumed: false, Rail: AgentSkillShop.RailGrant)];
         }
 
         return new PersistedAgentProfile(kind, prompt, sanitizedSkills, pack, nowMs);
@@ -162,7 +167,44 @@ public static class AgentPlayerProfile {
             return false;
         }
 
-        next = incoming with { LastWriteMs = nowMs };
+        next = incoming with {
+            LastWriteMs = nowMs,
+            Skills = MergeClientSkills(current?.Skills, incoming.Skills),
+        };
         return true;
+    }
+
+    /// <summary>Paid / staked packs stay on the blob; the client may only add grant-only ids.</summary>
+    public static PersistedAgentSkillSlot[] MergeClientSkills(
+        IEnumerable<PersistedAgentSkillSlot>? current,
+        IEnumerable<PersistedAgentSkillSlot>? incomingClient) {
+        var kept = new List<PersistedAgentSkillSlot>(MaxSkillSlots);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (current is not null) {
+            foreach (var slot in current) {
+                var id = AgentSkillShop.ResolveCanonicalId(slot.SkillId);
+                if (id.Length == 0 || !seen.Add(id)) {
+                    continue;
+                }
+                if (IsShopBoundSlot(slot) || !AgentSkillShop.IsGrantOnly(id)) {
+                    kept.Add(slot with { SkillId = id });
+                }
+            }
+        }
+        foreach (var grant in SanitizeSkills(incomingClient, grantOnly: true)) {
+            if (kept.Count >= MaxSkillSlots) {
+                break;
+            }
+            if (seen.Add(grant.SkillId)) {
+                kept.Add(grant);
+            }
+        }
+        return kept.ToArray();
+    }
+
+    static bool IsShopBoundSlot(PersistedAgentSkillSlot slot) {
+        var rail = (slot.Rail ?? "").Trim();
+        return string.Equals(rail, AgentSkillShop.RailBuyNft, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rail, AgentSkillShop.RailStake, StringComparison.OrdinalIgnoreCase);
     }
 }

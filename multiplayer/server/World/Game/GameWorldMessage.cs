@@ -142,7 +142,11 @@ public sealed record PlayerPersistenceState(
 public sealed record PersistedAgentSkillSlot(
     string SkillId,
     string NftMint = "",
-    bool Consumed = false);
+    bool Consumed = false,
+    /// <summary>grant / buy_nft / stake. Empty on legacy rows.</summary>
+    string Rail = "",
+    /// <summary>Pending $HELL locked while <see cref="Rail"/> is stake.</summary>
+    long StakeHell = 0);
 
 /// <summary>Per-character agent metadata stored inside <see cref="PlayerPersistenceState"/> / <c>state_json</c>.</summary>
 public sealed record PersistedAgentProfile(

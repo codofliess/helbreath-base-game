@@ -22,6 +22,7 @@
   <ItemGroup>
     <Content Include="Persistence\schema.sql" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="Config\ArenaPrizeWhitelist.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Config\AgentSkillShop.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Never ship player data / nested publish trees into the build output. -->

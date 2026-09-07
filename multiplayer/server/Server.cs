@@ -63,6 +63,7 @@ Console.WriteLine(
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
     $"dailyCap={HellMiningStore.DailyTokenCap:N0} fullPoolToActive={HellMiningStore.FullDailyPoolToActivePlayers}.");
 Server.Helpers.CashShop.EnsureLoaded();
+Server.Helpers.AgentSkillShop.EnsureLoaded();
 var gcMonitor = settings.Debug.EnableGcLogs ? new GarbageCollectorMonitor() : null;
 var worldRegistry = new WorldRegistry(settings, workerCount: settings.Threads.GameWorldWorkers, tickInterval: TimeSpan.FromMilliseconds(settings.GameWorld.TickInterval));
 var sessionsByNetworkId = new ConcurrentDictionary<string, PlayerSession>(StringComparer.Ordinal);

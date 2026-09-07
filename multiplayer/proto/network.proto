@@ -80,12 +80,16 @@ enum CharacterControllerKind {
 // Team-designed skill pack slot (starter catalog and/or later NFT instance).
 // Owner-only on write; never copy owner prompts onto observer packets.
 message AgentSkillLoadoutSlot {
-  // Allowlisted catalog id (e.g. starter.academy.easy). Unknown ids are dropped.
+  // Allowlisted catalog id (e.g. starter.academy.easy / f8.mining.basic). Unknown ids are dropped.
   string skill_id = 1;
   // Optional on-chain instance (cNFT mint / asset id). Opaque until mint shop ships.
   optional string nft_mint = 2;
   // True after a consumable pack was ingested into this character (not transferable).
   bool consumed = 3;
+  // How this slot was bound: grant | buy_nft | stake. Client cannot pay by sending this.
+  optional string rail = 4;
+  // Pending $HELL locked on a live stake rail; refunded on unstake.
+  optional int64 stake_hell = 5;
 }
 
 // Matches client MapDialog / WeatherManager string modes (dry, rain-*, snow-*).
@@ -258,6 +262,10 @@ message ClientMessage {
     ArenaPactPrizePledgeRequest arena_pact_prize_pledge_request = 104;
     ArenaPactPrizeConfirmRequest arena_pact_prize_confirm_request = 105;
     ArenaPactSignLossRequest arena_pact_sign_loss_request = 106;
+    // Agent skill shop: catalog snapshot / buy_nft or stake / unstake (pending $HELL).
+    GetAgentSkillShopRequest get_agent_skill_shop_request = 107;
+    AgentSkillShopAcquireRequest agent_skill_shop_acquire_request = 108;
+    AgentSkillShopUnstakeRequest agent_skill_shop_unstake_request = 109;
   }
 }
 
@@ -1167,6 +1175,9 @@ message ServerMessage {
     ArenaPactListResponse arena_pact_list_response = 105;
     // World / tournament Go-Live ack for cartelera.
     StreamBroadcastState stream_broadcast_state = 106;
+    // Agent skill shop catalog + pending $HELL + equipped packs (no owner prompt).
+    AgentSkillShopState agent_skill_shop_state = 107;
+    AgentSkillShopResult agent_skill_shop_result = 108;
   }
 }
 
@@ -1471,6 +1482,48 @@ message BuyCashShopItemRequest {
 message BuyCashShopItemResult {
   bool ok = 1;
   string message = 2;
+}
+
+// Allowlisted agent skill pack (maps onto existing F8 / Olympia masteries — not a second XP track).
+message AgentSkillShopEntry {
+  string skill_id = 1;
+  string display_name = 2;
+  // basic | advanced
+  string tier = 3;
+  // gather | craft | combat | academy
+  repeated string tags = 4;
+  // Skills.cs index 0–18; -1 = academy / policy bundle (no single mastery).
+  int32 olympia_skill_id = 5;
+  int64 price_hell = 6;
+  int64 stake_hell = 7;
+  string alias_of = 8;
+}
+
+message GetAgentSkillShopRequest {
+}
+
+message AgentSkillShopAcquireRequest {
+  string skill_id = 1;
+  // buy_nft | stake
+  string rail = 2;
+}
+
+message AgentSkillShopUnstakeRequest {
+  string skill_id = 1;
+}
+
+message AgentSkillShopState {
+  repeated AgentSkillShopEntry catalog = 1;
+  int64 pending_hell = 2;
+  // Wired shop ticker: pending $HELL (HellMiningStore). $HELBREATH is not wired here.
+  string token_ticker = 3;
+  repeated AgentSkillLoadoutSlot equipped = 4;
+}
+
+message AgentSkillShopResult {
+  bool ok = 1;
+  string error = 2;
+  AgentSkillShopState shop = 3;
 }
 
 // Item bind_state: 0=unbound, 1=soulbound, 2=guildbound (server authoritative).

@@ -52,6 +52,34 @@ public static class BeginnerPath {
     /// <summary>True when the catalog finished loading.</summary>
     public static bool IsReady => config is not null;
 
+    /// <summary>Live catalog in path order (mentor / tools). Empty until <see cref="Initialize"/>.</summary>
+    public static IReadOnlyList<BeginnerQuestConfig> LiveQuests => orderedLiveQuests;
+
+    /// <summary>
+    /// Picks the live quest whose level-guide band contains <paramref name="level"/>;
+    /// otherwise the next band above the player, else the last live row.
+    /// </summary>
+    public static BeginnerQuestConfig? RecommendQuestForLevel(int level) {
+        if (orderedLiveQuests.Count == 0) {
+            return null;
+        }
+
+        var clamped = Math.Clamp(level, 1, 200);
+        foreach (var quest in orderedLiveQuests) {
+            if (clamped >= quest.LevelGuideMin && clamped <= quest.LevelGuideMax) {
+                return quest;
+            }
+        }
+
+        foreach (var quest in orderedLiveQuests) {
+            if (clamped < quest.LevelGuideMin) {
+                return quest;
+            }
+        }
+
+        return orderedLiveQuests[^1];
+    }
+
     /// <summary>Sends a full <see cref="BeginnerPathState"/> snapshot to the player.</summary>
     public static void SendState(GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);

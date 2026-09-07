@@ -87,10 +87,10 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(src, /failIfMajorPerformanceCaveat:\s*false/);
     });
 
-    it('PhaserGame lazy-loads Phaser after paint (no static StartGame import)', () => {
+    it('PhaserGame static-imports StartGame so SELECTCHAR desk-sync stays in index-*.js', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/PhaserGame.tsx'), 'utf8');
-        assert.doesNotMatch(src, /import StartGame from/);
-        assert.match(src, /import\('\.\/game\/main'\)/);
+        assert.match(src, /^import StartGame from '\.\/game\/main';/m);
+        assert.doesNotMatch(src, /await import\('\.\/game\/main'\)/);
         assert.doesNotMatch(src, /useLayoutEffect\(/);
     });
 
@@ -131,7 +131,7 @@ describe('createRoot boot path (no wallet)', () => {
 describe('hub Phantom sign path (source)', () => {
     it('ConnectDialog always re-authenticates Phantom Sol and surfaces the extension toast', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'), 'utf8');
-        assert.match(src, /const mustSign = chain === 'sol' \|\| !session;/);
+        assert.match(src, /const mustSign = needsWalletSignForWorldEnter\(chain, session\);/);
         assert.match(src, /Reconnect \/ Sign again/);
         assert.match(src, /PHANTOM_SIGN_PENDING_TOAST/);
         assert.match(src, /getReusableHubWalletSession/);

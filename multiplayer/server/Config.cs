@@ -616,6 +616,62 @@ public static class Config {
         }
     }
 
+    /// <summary>
+    /// Rejects teleport trigger cells that are map-blocked (AMD bit 0x80) so a player can step onto the pad.
+    /// Uses occupancy after <see cref="Server.World.Game.Map.LoadOccupancy"/> (no entities yet).
+    /// </summary>
+    public static void ValidateGameWorldTeleportTriggers(GameWorldConfig gw, GameWorldOccupancyTracker tracker) {
+        ArgumentNullException.ThrowIfNull(gw);
+        ArgumentNullException.ThrowIfNull(tracker);
+        if (gw.TeleportLocs is null || gw.TeleportLocs.Length == 0) {
+            return;
+        }
+
+        for (var i = 0; i < gw.TeleportLocs.Length; i++) {
+            var locs = gw.TeleportLocs[i].Locs;
+            if (locs is null) {
+                continue;
+            }
+            for (var j = 0; j < locs.Length; j++) {
+                var loc = locs[j];
+                if (!tracker.IsFree(loc.X, loc.Y)) {
+                    throw new InvalidOperationException(
+                        $"Game world '{gw.Id}' teleportLocs[{i}].locs[{j}] ({loc.X},{loc.Y}) is not walkable (AMD 0x80 / out of bounds).");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rejects teleport landings that sit on map-blocked cells in the destination world.
+    /// </summary>
+    public static void ValidateGameWorldTeleportLandings(
+        GameWorldConfig[] worlds,
+        IReadOnlyDictionary<string, GameWorldOccupancyTracker> occupancyByWorldId) {
+        ArgumentNullException.ThrowIfNull(worlds);
+        ArgumentNullException.ThrowIfNull(occupancyByWorldId);
+        foreach (var gw in worlds) {
+            if (gw.TeleportLocs is null) {
+                continue;
+            }
+            for (var i = 0; i < gw.TeleportLocs.Length; i++) {
+                var t = gw.TeleportLocs[i];
+                var destId = t.Target?.WorldId;
+                var destLoc = t.Target?.Loc;
+                if (string.IsNullOrEmpty(destId) || destLoc is null) {
+                    continue;
+                }
+                if (!occupancyByWorldId.TryGetValue(destId, out var destTracker)) {
+                    continue;
+                }
+                if (!destTracker.IsFree(destLoc.X, destLoc.Y)) {
+                    throw new InvalidOperationException(
+                        $"Game world '{gw.Id}' teleportLocs[{i}] landing {destId} ({destLoc.X},{destLoc.Y}) is not walkable (AMD 0x80 / out of bounds).");
+                }
+            }
+        }
+    }
+
     public static async Task<SettingsConfig> LoadSettings() {
         var settings = await LoadJsonAsync<SettingsConfig>("Settings.json", "settings");
         if (settings.Port is < 1 or > 65535) {

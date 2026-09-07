@@ -55,9 +55,10 @@ export class HBMapTile {
 
         // Parse flags from byte 8
         const flags = data[8];
-        // Tile sprite 19 = deep water; 18 = coastal shore — not standable (matches server).
+        // Tile sprite 19 = deep water; 18 = coastal shore (looks wet; walkability is the 0x80 bit).
         this.isWater = this.sprite === 19 || this.sprite === 18;
-        this.isMoveAllowed = (flags & 0x80) === 0 && !this.isWater;    // Bit 7: 1 = blocked, 0 = allowed
+        // Classic Helbreath / server occupancy: bit 0x80 only (Middleland IB shore causeway).
+        this.isMoveAllowed = (flags & 0x80) === 0;
         this.isTeleport = (flags & 0x40) !== 0;       // Bit 6: 1 = teleport
         this.isFarmingAllowed = (flags & 0x20) !== 0; // Bit 5: 1 = blocked, 0 = allowed
     }

@@ -222,10 +222,14 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 10040;
+    z-index: 2147483000;
+    opacity: 1;
+    visibility: visible;
+    display: block;
 }
+#selectchar-kindgem-occupied-banner,
 .selectchar-react-occupied__banner {
-    position: absolute;
+    position: fixed;
     left: 50%;
     top: 0.35cm;
     transform: translateX(-50%);
@@ -233,14 +237,19 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     padding: 8px 16px;
     background: rgba(58, 40, 16, 0.94);
     border: 1px solid rgba(224, 180, 90, 0.85);
-    color: #f0e0c0;
+    color: #f0e0c0 !important;
     font-family: Spectral, Georgia, serif;
-    font-size: 18px;
+    font-size: 18px !important;
     font-weight: 700;
     text-align: center;
     text-shadow: 0 1px 2px #000;
     white-space: normal;
     overflow: visible;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483646 !important;
+    pointer-events: none;
 }
 .selectchar-react-occupied__slot {
     position: absolute;

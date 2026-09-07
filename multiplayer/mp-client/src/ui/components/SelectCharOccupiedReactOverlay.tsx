@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@tanstack/react-store';
 import { selectCharWarn } from '../../utils/selectCharTrace';
@@ -13,10 +13,15 @@ import {
     SELECTCHAR_SLOT_PITCH,
 } from '../../game/ui/selectCharSlotLayout';
 import {
+    SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
+    SELECTCHAR_REACT_OCCUPIED_DOM_LOG,
     SELECTCHAR_REACT_OCCUPIED_ID,
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
+    clearSelectCharReactOccupiedBannerSticky,
     projectDeskPointToCss,
+    selectCharOccupiedNamesRequireVisibleBanner,
+    syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
 import { peekCachedOccupiedCharacterList, type CharacterSlotSummary } from '../../utils/characterListApi';
 import { connectDialogStore } from '../store/ConnectDialog.store';
@@ -31,12 +36,16 @@ interface SelectCharOccupiedReactOverlayProps {
  * KindGem-visible occupied SELECTCHAR labels from the live React store.
  * Subscribes to characterSlots itself so a late CharacterList cannot leave
  * the portal on «waiting» after ConnectDialog's first empty play-world paint.
+ * Banner text is written onto every matching DOM node (plus a body singleton)
+ * so a stale dual portal cannot keep «waiting» after painted names=Elon.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
     characterSlots,
     characterListLoading,
 }: SelectCharOccupiedReactOverlayProps) {
+    const rootRef = useRef<HTMLDivElement>(null);
+    const bannerRef = useRef<HTMLDivElement>(null);
     const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
     const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(
@@ -72,10 +81,24 @@ export function SelectCharOccupiedReactOverlay({
             loading,
         );
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG, occupiedNames || '(none)');
-        const root = document.getElementById(SELECTCHAR_REACT_OCCUPIED_ID);
-        const bannerNode = root?.querySelector<HTMLElement>('[data-selectchar-react-banner="1"]');
-        if (bannerNode) {
-            bannerNode.textContent = banner;
+        const root = rootRef.current;
+        if (root) {
+            document.body.appendChild(root);
+        }
+        const painted = syncSelectCharReactOccupiedBannerDom(banner, root ?? bannerRef.current);
+        selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
+        if (
+            occupiedNames &&
+            occupiedNames !== '(none)' &&
+            !selectCharOccupiedNamesRequireVisibleBanner(occupiedNames, painted.joined)
+        ) {
+            selectCharWarn(
+                'ConnectDialog React SELECTCHAR banner DOM mismatch names=%s text=%s',
+                occupiedNames,
+                painted.joined,
+            );
+            const retry = syncSelectCharReactOccupiedBannerDom(banner, root ?? bannerRef.current);
+            selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
         const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
         const rect = canvas?.getBoundingClientRect();
@@ -98,17 +121,34 @@ export function SelectCharOccupiedReactOverlay({
         });
     }, [banner, loading, occupiedNames]);
 
+    useLayoutEffect(() => {
+        return () => {
+            requestAnimationFrame(() => {
+                if (document.querySelector('[data-selectchar-react-occupied="1"]')) {
+                    return;
+                }
+                clearSelectCharReactOccupiedBannerSticky();
+                document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID)?.remove();
+            });
+        };
+    }, []);
+
     return createPortal(
         <div
+            ref={rootRef}
             id={SELECTCHAR_REACT_OCCUPIED_ID}
             className="selectchar-react-occupied"
             data-selectchar-react-occupied="1"
             data-occupied-count={occupied.length}
             data-occupied-names={occupiedNames}
-            style={{ zIndex: Math.max(zIndex + 22, 10040) }}
+            style={{ zIndex: Math.max(zIndex + 22, 2147483000) }}
             aria-live="polite"
         >
-            <div className="selectchar-react-occupied__banner" data-selectchar-react-banner="1">
+            <div
+                ref={bannerRef}
+                className="selectchar-react-occupied__banner"
+                data-selectchar-react-banner="1"
+            >
                 {banner}
             </div>
             {occupied.map(({ row, slotIndex }) => (

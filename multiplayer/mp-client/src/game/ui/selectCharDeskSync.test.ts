@@ -12,9 +12,12 @@ import {
 } from './selectCharDeskSync';
 import {
     buildSelectCharReactOccupiedBanner,
+    clearSelectCharReactOccupiedBannerSticky,
     occupiedSlotOverlayInnerHtml,
+    paintSelectCharReactOccupiedBannerNodes,
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
+    selectCharOccupiedNamesRequireVisibleBanner,
 } from './selectCharSlotGlyphs';
 
 const elon: CharacterSlotSummary = {
@@ -237,6 +240,7 @@ describe('paintSlotGlyphCanvas', () => {
 
 describe('buildSelectCharReactOccupiedBanner', () => {
     it('puts Elon Lev. 150 in a KindGem-visible ConnectDialog banner', () => {
+        clearSelectCharReactOccupiedBannerSticky();
         const rows = paintSelectCharSlotRows([elon]);
         const banner = buildSelectCharReactOccupiedBanner(rows, [elon]);
         assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
@@ -246,6 +250,7 @@ describe('buildSelectCharReactOccupiedBanner', () => {
     });
 
     it('uses store Elon Lv150 even when paint rows are still Empty/waiting', () => {
+        clearSelectCharReactOccupiedBannerSticky();
         const emptyRows = paintSelectCharSlotRows([]);
         const banner = buildSelectCharReactOccupiedBanner(emptyRows, [elon]);
         assert.match(banner, /Elon/);
@@ -254,9 +259,60 @@ describe('buildSelectCharReactOccupiedBanner', () => {
     });
 
     it('still mounts the React paint path when the store has no occupied rows', () => {
+        clearSelectCharReactOccupiedBannerSticky();
         const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
         assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(banner, /waiting/);
+    });
+
+    it('never returns waiting after named Elon rows, even on a later empty paint', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        const later = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
+        assert.match(later, /Elon/);
+        assert.match(later, /150/);
+        assert.equal(later.includes('waiting'), false);
+    });
+});
+
+describe('paintSelectCharReactOccupiedBannerNodes — DOM not console', () => {
+    it('overwrites a stale waiting portal so KindGem textContent has Elon and 150', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        const attrs = new Map<string, string>();
+        const stale = {
+            textContent: 'ConnectDialog React SELECTCHAR occupied — waiting',
+            style: {},
+            setAttribute(name: string, value: string) {
+                attrs.set(name, value);
+            },
+        };
+        const live = {
+            textContent: 'ConnectDialog React SELECTCHAR occupied — waiting',
+            style: {},
+            setAttribute() {},
+        };
+        const painted = paintSelectCharReactOccupiedBannerNodes(banner, [stale, live]);
+        assert.equal(painted.hasWaiting, false);
+        for (const text of painted.textContents) {
+            assert.match(text, /Elon/);
+            assert.match(text, /150/);
+            assert.equal(text.includes('waiting'), false);
+        }
+        assert.equal(selectCharOccupiedNamesRequireVisibleBanner('Elon', painted.joined), true);
+        assert.equal(stale.style.visibility, 'visible');
+        assert.equal(stale.style.opacity, '1');
+        assert.equal(attrs.get('data-selectchar-banner-text'), banner);
+    });
+
+    it('fails the KindGem gate when painted names=Elon but DOM still says waiting', () => {
+        assert.equal(
+            selectCharOccupiedNamesRequireVisibleBanner(
+                'Elon',
+                'ConnectDialog React SELECTCHAR occupied — waiting',
+            ),
+            false,
+        );
     });
 });
 

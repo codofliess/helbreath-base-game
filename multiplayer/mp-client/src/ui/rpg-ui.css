@@ -7088,7 +7088,8 @@ body:not(.game-world-active):not(.helbreath-game-active) .testnet-hud {
 
 .login-desk-frame--createchar {
     width: min(720px, calc(100vw - 32px));
-    max-height: min(92vh, 860px);
+    height: min(92vh, 860px);
+    min-height: 560px;
     aspect-ratio: auto;
     overflow: hidden;
 }

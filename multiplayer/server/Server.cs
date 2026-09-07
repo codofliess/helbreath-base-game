@@ -265,6 +265,41 @@ app.MapMethods("/api/realm-stats", new[] { "OPTIONS" }, (HttpContext http) => {
     return Results.NoContent();
 });
 
+// New-player mentor (local beginner path + auction quotes; optional Grok 4.6 low).
+static void AppendMentorCors(HttpContext http) {
+    http.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+    http.Response.Headers.Append("Access-Control-Allow-Methods", "POST, OPTIONS");
+    http.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type");
+    http.Response.Headers.Append("Cache-Control", "no-store, max-age=0");
+}
+
+app.MapPost("/api/mentor/chat", async (HttpContext http) => {
+    AppendMentorCors(http);
+    var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    if (!MentorGuide.TryAcceptRequest(ip, out var limited)) {
+        return Results.Json(new MentorChatReply {
+            Reply = limited ?? "Demasiadas preguntas seguidas.",
+            Source = "local",
+            Kind = "chat",
+        }, statusCode: 429);
+    }
+
+    MentorChatRequest? body = null;
+    try {
+        body = await http.Request.ReadFromJsonAsync<MentorChatRequest>();
+    } catch (Exception ex) {
+        Console.WriteLine($"[Mentor] Bad JSON: {ex.Message}");
+    }
+
+    body ??= new MentorChatRequest();
+    var reply = await MentorGuide.ChatAsync(body);
+    return Results.Json(reply);
+});
+app.MapMethods("/api/mentor/chat", new[] { "OPTIONS" }, (HttpContext http) => {
+    AppendMentorCors(http);
+    return Results.NoContent();
+});
+
 // Public PVP cartelera (chainlords.net / play Watch multi-cam). CORS open for landing.
 static void AppendDuelsCors(HttpContext http) {
     http.Response.Headers.Append("Access-Control-Allow-Origin", "*");

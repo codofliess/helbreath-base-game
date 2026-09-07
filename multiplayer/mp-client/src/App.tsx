@@ -57,6 +57,7 @@ import { PerformanceDialog } from './ui/dialogs/PerformanceDialog';
 import { ConnectDialog } from './ui/dialogs/ConnectDialog';
 import { ReferralCharListPanel } from './ui/components/ReferralCharListPanel';
 import { DeskModeJumpTab } from './ui/components/DeskModeJumpTab';
+import { PlayerMentorPanel } from './ui/components/PlayerMentorPanel';
 import { BleedingOnlineStrip } from './ui/components/BleedingOnlineStrip';
 import { CitySelectDialog } from './ui/dialogs/CitySelectDialog';
 import { ShopDialog } from './ui/dialogs/ShopDialog';
@@ -1420,6 +1421,7 @@ function App()
                 <ArenaKitBuilderDialog zIndex={10050} />
                 <ReferralCharListPanel />
                 <DeskModeJumpTab />
+                <PlayerMentorPanel />
                 <BleedingOnlineStrip />
                 {showCitySelectDialog && travelerMode && (
                     <CitySelectDialog

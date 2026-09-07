@@ -11643,3 +11643,214 @@ body.game-world-active .cl-desk-mode-tab {
 body.game-world-active .bi-online-strip {
     display: none;
 }
+
+/*
+ * New-player mentor — fixed right rail. Stays above the bottom dock
+ * (--hb-dock-height). Minimized state is a side tab like .cl-desk-mode-tab.
+ */
+.player-mentor {
+    position: fixed;
+    z-index: 10045;
+    right: 10px;
+    top: 64px;
+    width: min(320px, calc(100vw - 24px));
+    height: min(440px, calc(100vh - var(--hb-dock-height, 72px) - 88px));
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    padding: 10px 12px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(224, 184, 74, 0.75);
+    background: linear-gradient(180deg, rgba(28, 22, 14, 0.97) 0%, rgba(12, 10, 8, 0.96) 100%);
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 220, 140, 0.14);
+    color: var(--hb-nemesis-body, #e8e2d8);
+    font-family: 'Spectral', Georgia, serif;
+    pointer-events: auto;
+}
+.player-mentor--min {
+    top: 18%;
+    bottom: auto;
+    width: auto;
+    height: auto;
+    min-width: 40px;
+    min-height: 100px;
+    padding: 10px 8px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-family: 'Cinzel', 'Palatino Linotype', Georgia, serif;
+    color: #f5e6c8;
+}
+.player-mentor--min:hover {
+    border-color: #ffe08a;
+    color: #fff4d0;
+}
+.player-mentor__tab-arrow {
+    font-size: 13px;
+    font-weight: 800;
+    color: #e0b84a;
+}
+.player-mentor__tab-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.player-mentor__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+.player-mentor__kicker {
+    display: block;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--hb-nemesis-gold, #d4af37);
+}
+.player-mentor__title {
+    margin: 0;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--hb-nemesis-title, #d4a04a);
+}
+.player-mentor__icon-btn {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(196, 137, 58, 0.65);
+    background: rgba(20, 16, 12, 0.85);
+    color: #f0c060;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+}
+.player-mentor__icon-btn:hover {
+    border-color: #ffe08a;
+}
+.player-mentor__lead {
+    margin: 6px 0 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--hb-nemesis-muted, #a8a094);
+}
+.player-mentor__log {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+.player-mentor__empty {
+    margin: 0;
+    font-size: 12px;
+    color: #b8a888;
+    font-style: italic;
+}
+.player-mentor__empty strong {
+    color: #e0b84a;
+    font-style: normal;
+}
+.player-mentor__bubble--user {
+    align-self: flex-end;
+    max-width: 92%;
+}
+.player-mentor__bubble--mentor {
+    align-self: flex-start;
+    max-width: 100%;
+}
+.player-mentor__who {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c4893a;
+    margin-bottom: 2px;
+}
+.player-mentor__text {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #e8e2d8;
+}
+.player-mentor__pending {
+    margin: 0;
+    font-size: 12px;
+    color: #d4a04a;
+    font-style: italic;
+}
+.player-mentor__actions {
+    flex: 0 0 auto;
+    margin-top: 8px;
+}
+.player-mentor__guide,
+.player-mentor__send {
+    border-radius: 6px;
+    border: 1px solid rgba(224, 184, 74, 0.8);
+    background: linear-gradient(180deg, rgba(72, 52, 24, 0.98) 0%, rgba(28, 20, 12, 0.97) 100%);
+    color: #f5e6c8;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 6px 10px;
+}
+.player-mentor__guide:disabled,
+.player-mentor__send:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.player-mentor__guide:hover:not(:disabled),
+.player-mentor__send:hover:not(:disabled) {
+    border-color: #ffe08a;
+    color: #fff4d0;
+}
+.player-mentor__compose {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    margin-top: 8px;
+    flex: 0 0 auto;
+}
+.player-mentor__input {
+    flex: 1 1 auto;
+    resize: none;
+    min-height: 44px;
+    border-radius: 6px;
+    border: 1px solid rgba(168, 114, 46, 0.65);
+    background: rgba(10, 8, 6, 0.9);
+    color: #e8e2d8;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+}
+.player-mentor__input:focus {
+    outline: 2px solid rgba(255, 220, 120, 0.55);
+    outline-offset: 1px;
+}
+.player-mentor__send {
+    align-self: stretch;
+}
+@media (max-width: 900px) {
+    .player-mentor:not(.player-mentor--min) {
+        width: min(280px, calc(100vw - 16px));
+        right: 6px;
+        top: 52px;
+    }
+}

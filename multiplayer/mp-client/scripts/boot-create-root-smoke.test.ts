@@ -157,6 +157,9 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(desk, /SelectCharDesk painted slot texts/);
         assert.match(sync, /paintSelectCharSlotRows/);
+        assert.match(sync, /paintExplorerSelectCharRows/);
+        assert.match(sync, /nextOccupiedExplorerIndex/);
+        assert.match(sync, /highestLevelOccupiedSlot/);
         assert.match(sync, /forceRebuild/);
         assert.match(sync, /applyPaintedSlotRows/);
         assert.doesNotMatch(desk, /writeSlotCardTexts/);
@@ -201,12 +204,18 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(reactDesk, /Explorer/);
         assert.match(reactDesk, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
         assert.match(reactDesk, /SelectCharReactDesk/);
+        assert.match(reactDesk, /paintExplorerSelectCharRows/);
+        assert.match(reactDesk, /nextOccupiedExplorerIndex/);
+        assert.match(reactDesk, /ArrowRight/);
+        assert.match(overlay, /occupiedNames.includes\('Elon'\)/);
+        assert.doesNotMatch(overlay, /selectchar-react-occupied__slot/);
         const store = fs.readFileSync(
             path.join(clientRoot, 'src/ui/store/ConnectDialog.store.ts'),
             'utf8',
         );
         assert.match(store, /phase === 'entering-world'/);
         assert.match(store, /phaserWorldSession/);
+        assert.match(store, /highestLevelOccupiedSlot/);
         assert.doesNotMatch(
             store,
             /return state\.phase === 'play-world' \|\| state\.phase === 'create-char' \|\| state\.phase === 'arena-lobby'/,
@@ -231,6 +240,24 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(
             connect,
             /phase === 'play-world' \|\| phase === 'create-char' \|\| phase === 'arena-lobby'/,
+        );
+        const createPanel = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/CreateCharReactPanel.tsx'),
+            'utf8',
+        );
+        assert.match(createPanel, /setGender\('female'\)/);
+        assert.match(createPanel, /applyReferralCodeFromUser/);
+        assert.match(createPanel, /remainingCreateStatPoints/);
+        assert.match(createPanel, /Friend&apos;s referral/);
+        assert.doesNotMatch(createPanel, /str: 14/);
+        assert.doesNotMatch(createPanel, /gender: 'male',\s*skinColor: 'light'/);
+        const rpgUi = fs.readFileSync(path.join(clientRoot, 'src/ui/rpg-ui.css'), 'utf8');
+        const createFrame = rpgUi.slice(rpgUi.indexOf('.login-desk-frame--createchar'));
+        assert.match(createFrame, /display:\s*flex/);
+        assert.match(createFrame, /height:\s*auto/);
+        assert.doesNotMatch(
+            createFrame.slice(0, 600),
+            /\.createchar-react-body\s*\{\s*position:\s*absolute/,
         );
     });
 

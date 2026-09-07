@@ -8,20 +8,13 @@ import {
     resolveSelectCharSlotsForPaint,
 } from '../../game/ui/selectCharDeskSync';
 import {
-    SELECTCHAR_LINE_NAME_Y,
-    SELECTCHAR_SLOT_NAME_X,
-    SELECTCHAR_SLOT_PITCH,
-} from '../../game/ui/selectCharSlotLayout';
-import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
-    SELECTCHAR_OCCUPIED_SLOT_LABEL,
     SELECTCHAR_REACT_OCCUPIED_DOM_LOG,
     SELECTCHAR_REACT_OCCUPIED_ID,
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
-    projectDeskPointToCss,
     selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
@@ -39,6 +32,8 @@ interface SelectCharOccupiedReactOverlayProps {
  * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` as the last
  * child of `document.body` (not under #root / React overflow:hidden) so KindGem
  * can screenshot unclipped `OCCUPIED Elon Lev.150`.
+ * Slot cards stay on SelectCharReactDesk (SELECTCHAR_OCCUPIED_SLOT_LABEL) so
+ * Co2 / BebaMaster do not stack a second OCCUPIED layer.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
@@ -85,13 +80,17 @@ export function SelectCharOccupiedReactOverlay({
         if (root) {
             document.body.appendChild(root);
         }
+        if (!occupiedNames.includes('Elon')) {
+            document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID)?.remove();
+            return;
+        }
         const painted = syncSelectCharReactOccupiedBannerDom(banner, root);
         const kindgem = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
         if (kindgem) {
             document.body.appendChild(kindgem);
         }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
-        if (occupiedNames.includes('Elon') && banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
+        if (banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
             selectCharWarn(
                 'ConnectDialog React SELECTCHAR KindGem Elon string mismatch have=%s want=%s',
                 banner,
@@ -111,25 +110,6 @@ export function SelectCharOccupiedReactOverlay({
             const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
             selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
-        const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
-        const rect = canvas?.getBoundingClientRect();
-        if (!root || !rect || rect.width < 2 || rect.height < 2) {
-            return;
-        }
-        const gameW = 800;
-        const gameH = 600;
-        root.querySelectorAll<HTMLElement>('[data-react-slot]').forEach((node) => {
-            const index = Number(node.dataset.reactSlot);
-            const pos = projectDeskPointToCss(
-                { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-                gameW,
-                gameH,
-                SELECTCHAR_SLOT_NAME_X + index * SELECTCHAR_SLOT_PITCH,
-                SELECTCHAR_LINE_NAME_Y,
-            );
-            node.style.left = `${Math.round(pos.left)}px`;
-            node.style.top = `${Math.round(pos.top)}px`;
-        });
     }, [banner, loading, occupiedNames]);
 
     useLayoutEffect(() => {
@@ -154,20 +134,7 @@ export function SelectCharOccupiedReactOverlay({
             data-occupied-names={occupiedNames}
             style={{ zIndex: Math.max(zIndex + 22, 2147483000) }}
             aria-hidden="true"
-        >
-            {occupied.map(({ row, slotIndex }) => (
-                <div
-                    key={`${slotIndex}-${row.name}`}
-                    className="selectchar-react-occupied__slot"
-                    data-react-slot={slotIndex}
-                    data-occupied="1"
-                >
-                    <div className="selectchar-react-occupied__status">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>
-                    <div className="selectchar-react-occupied__name">{row.name}</div>
-                    <div className="selectchar-react-occupied__lev">{row.lev}</div>
-                </div>
-            ))}
-        </div>,
+        />,
         document.body,
     );
 }

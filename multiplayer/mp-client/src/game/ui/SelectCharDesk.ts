@@ -18,7 +18,9 @@ import {
 import {
     paintSelectCharSlotRows,
     resolveSelectCharSelectedIndex,
+    type SelectCharSlotPaintRow,
 } from './selectCharDeskSync';
+import { paintSlotGlyphCanvas, SLOT_GLYPH_H, SLOT_GLYPH_W } from './selectCharSlotGlyphs';
 import { Gender, SkinColor } from '../../Types';
 import {
     applyLoginDeskCanvasPresentation,
@@ -85,6 +87,11 @@ interface SlotVisuals {
     zone: GameObjects.Zone;
     nameValue: GameObjects.Text;
     levValue: GameObjects.Text;
+    /** CanvasTexture image: occupied Elon glyphs that survive Phaser Text stale canvases. */
+    glyphImage: GameObjects.Image;
+    glyphKey: string;
+    labelX: number;
+    labelY: number;
     /** City seal drawn on the empty right half of the slot card. */
     citySealGfx: GameObjects.Graphics;
     citySealLabel: GameObjects.Text;
@@ -145,7 +152,8 @@ export class SelectCharDesk {
     constructor(scene: Scene) {
         this.scene = scene;
         this.root = scene.add.container(0, 0);
-        this.root.setDepth(20);
+        // Above Create Character (21) so sibling Empty/Create chrome cannot cover Elon.
+        this.root.setDepth(30);
         this.root.setVisible(false);
 
         this.washGfx = scene.add.graphics();
@@ -214,12 +222,21 @@ export class SelectCharDesk {
         const citySealLabel = this.scene.add
             .text(0, 0, '', clKickerStyle({ fontSize: '11px', color: CL_GOLD }))
             .setOrigin(0.5, 0);
-        this.root.add([nameValue, levValue, citySealLabel]);
+        const glyphKey = `cl-slot-glyph-${index}`;
+        if (!this.scene.textures.exists(glyphKey)) {
+            this.scene.textures.createCanvas(glyphKey, SLOT_GLYPH_W, SLOT_GLYPH_H);
+        }
+        const glyphImage = this.scene.add.image(0, 0, glyphKey).setOrigin(0, 0);
+        this.root.add([nameValue, levValue, citySealLabel, glyphImage]);
         return {
             cardGfx,
             zone,
             nameValue,
             levValue,
+            glyphImage,
+            glyphKey,
+            labelX: 0,
+            labelY: 0,
             citySealGfx,
             citySealLabel,
             feetX: 0,
@@ -339,12 +356,13 @@ export class SelectCharDesk {
         const maxRow = Math.floor((listBottom - listY - 3 * gap) / 4);
         const rowH = Math.max(120, Math.min(LIST_ROW_H_TARGET, maxRow));
 
+        const rows = paintSelectCharSlotRows(this.slots);
         for (let i = 0; i < 4; i++) {
             const sel = i === this.selectedSlotIndex;
             const y = listY + i * (rowH + gap);
             const visual = this.slotVisuals[i];
             visual.cardGfx.clear();
-            drawPortalPanel(visual.cardGfx, { x: listX, y, w, h: rowH }, sel);
+            drawPortalPanel(visual.cardGfx, { x: listX, y, w, h: rowH }, sel, !!rows[i]?.occupied);
             visual.listRect = { x: listX, y, w, h: rowH };
             visual.zone.setPosition(listX + w / 2, y + rowH / 2);
             visual.zone.setSize(w, rowH);
@@ -364,12 +382,15 @@ export class SelectCharDesk {
 
             // Name / lev sit above the seal on the right half.
             const textX = listX + w * 0.52;
+            visual.labelX = textX;
+            visual.labelY = y + rowH * 0.12;
             visual.nameValue.setPosition(textX, y + rowH * 0.12);
             visual.nameValue.setFontSize(18);
             visual.nameValue.setColor(CL_PARCHMENT);
             visual.levValue.setPosition(textX, y + rowH * 0.28);
             visual.levValue.setFontSize(15);
             visual.levValue.setColor(CL_MUTED);
+            visual.glyphImage.setPosition(textX, y + rowH * 0.1);
         }
     }
 
@@ -931,17 +952,15 @@ export class SelectCharDesk {
             this.applyCanvasPresentation(true);
             holdLoginDeskCanvasPresentation(this.scene, 1500);
             this.attachKeyboard();
-            // Paint now (store slots may already be on this.slots) then again after presentation.
             this.rebuild();
             this.startMenuWalkAnimation();
-            this.refreshSlotTexts();
             window.requestAnimationFrame(() => {
                 if (!this.visible) {
                     return;
                 }
                 this.rebuild();
                 this.startMenuWalkAnimation();
-                this.refreshSlotTexts();
+                this.applyPaintedSlotRows(paintSelectCharSlotRows(this.slots));
             });
         } else {
             this.detachKeyboard();
@@ -985,7 +1004,7 @@ export class SelectCharDesk {
 
     public forceRebuild(): void {
         this.rebuild();
-        this.refreshSlotTexts();
+        this.applyPaintedSlotRows(paintSelectCharSlotRows(this.slots));
     }
 
     public setSelectedSlotIndex(index: number): void {
@@ -1044,6 +1063,9 @@ export class SelectCharDesk {
         this.stopMenuWalkAnimation();
         for (const v of this.slotVisuals) {
             v.preview?.destroy();
+            if (this.scene.textures.exists(v.glyphKey)) {
+                this.scene.textures.remove(v.glyphKey);
+            }
         }
         this.applyCanvasPresentation(false);
         this.root.destroy(true);
@@ -1216,16 +1238,36 @@ export class SelectCharDesk {
     }
 
     private refreshSlotTexts(): void {
-        const rows = paintSelectCharSlotRows(this.slots);
+        this.applyPaintedSlotRows(paintSelectCharSlotRows(this.slots));
+    }
+
+    /**
+     * Write store-computed card glyphs last. Does not destroy Phaser Text
+     * (live Canvas kept Empty/Create after destroy+recreate).
+     */
+    public applyPaintedSlotRows(rows: SelectCharSlotPaintRow[]): void {
         const paintedNames: string[] = [];
         for (let i = 0; i < 4; i++) {
             const visual = this.slotVisuals[i];
-            const row = rows[i];
+            const row = rows[i] ?? { name: 'Empty', lev: 'Create Character', occupied: undefined };
             const occupied = row.occupied;
             const selected = i === this.selectedSlotIndex;
             paintedNames.push(row.name);
 
-            this.writeSlotCardTexts(visual, row.name, row.lev);
+            visual.nameValue
+                .setText(row.name)
+                .setPosition(visual.labelX || visual.nameValue.x, visual.labelY || visual.nameValue.y)
+                .setVisible(false)
+                .setAlpha(1);
+            visual.levValue
+                .setText(row.lev)
+                .setPosition(
+                    visual.labelX || visual.levValue.x,
+                    (visual.labelY || visual.levValue.y) + 22,
+                )
+                .setVisible(false)
+                .setAlpha(1);
+            this.writeSlotGlyphImage(visual, row);
             if (occupied) {
                 const city = normalizeCitizenshipSide(occupied.citizenshipSide);
                 this.paintCitySeal(visual, city, true);
@@ -1247,43 +1289,36 @@ export class SelectCharDesk {
             } catch (err) {
                 console.warn('[SelectCharDesk] Menu preview failed; keeping name/level text', err);
             }
-            this.root.bringToTop(visual.nameValue);
-            this.root.bringToTop(visual.levValue);
+            this.root.bringToTop(visual.glyphImage);
             this.root.bringToTop(visual.citySealLabel);
         }
-        if (this.slots.length > 0) {
+        if (this.slots.length > 0 || paintedNames.some((n) => n !== 'Empty')) {
             selectCharWarn(
-                'SelectCharDesk painted slot texts names=%s selected=%d',
+                'SelectCharDesk painted slot texts names=%s selected=%d glyphs=%s',
                 paintedNames.join('|'),
                 this.selectedSlotIndex,
+                paintedNames.join('|'),
             );
         }
         this.refreshDetailPanel();
         this.refreshWalletRow();
     }
 
-    /**
-     * Recreate name/level Text so Phaser cannot keep the Empty/Create canvas
-     * after setCharacterSlots already stored Elon.
-     */
-    private writeSlotCardTexts(visual: SlotVisuals, name: string, lev: string): void {
-        const nx = visual.nameValue.x;
-        const ny = visual.nameValue.y;
-        const lx = visual.levValue.x;
-        const ly = visual.levValue.y;
-        visual.nameValue.destroy();
-        visual.levValue.destroy();
-        visual.nameValue = this.scene.add
-            .text(nx, ny, name, clBodyStyle({ fontSize: '18px', color: CL_PARCHMENT, fontStyle: 'bold' }))
-            .setOrigin(0, 0)
+    private writeSlotGlyphImage(visual: SlotVisuals, row: SelectCharSlotPaintRow): void {
+        const tex = this.scene.textures.get(visual.glyphKey);
+        const src = tex?.getSourceImage() as HTMLCanvasElement | undefined;
+        const ctx = src?.getContext?.('2d');
+        if (!ctx) {
+            visual.nameValue.setVisible(true);
+            visual.levValue.setVisible(true);
+            return;
+        }
+        paintSlotGlyphCanvas(ctx, row);
+        tex.refresh();
+        visual.glyphImage
+            .setPosition(visual.labelX || visual.nameValue.x, visual.labelY || visual.nameValue.y)
             .setVisible(true)
             .setAlpha(1);
-        visual.levValue = this.scene.add
-            .text(lx, ly, lev, clBodyStyle({ fontSize: '16px', color: CL_MUTED }))
-            .setOrigin(0, 0)
-            .setVisible(true)
-            .setAlpha(1);
-        this.root.add([visual.nameValue, visual.levValue]);
     }
 
     private refreshSlotPreview(

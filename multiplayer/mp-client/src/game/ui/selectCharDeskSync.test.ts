@@ -9,6 +9,7 @@ import {
     selectCharDeskIsMissingOccupiedSlots,
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
+import { paintSlotGlyphCanvas } from './selectCharSlotGlyphs';
 
 const elon: CharacterSlotSummary = {
     slotIndex: 0,
@@ -70,6 +71,10 @@ class FakeDesk implements SelectCharDeskPaintTarget {
         this.calls.push('rebuild');
     }
 
+    applyPaintedSlotRows(rows: { name: string }[]): void {
+        this.calls.push(`glyphs:${rows.map((r) => r.name).join('|')}`);
+    }
+
     flushDeferredRebuild(): void {
         if (this.deferredRebuildSlots) {
             this.slots = this.deferredRebuildSlots.slice();
@@ -96,6 +101,7 @@ describe('applyStoreToSelectCharDesk', () => {
         assert.equal(desk.calls.includes('slots:Elon'), true);
         assert.ok(desk.calls.filter((c) => c === 'slots:Elon').length >= 2);
         assert.equal(desk.calls.includes('rebuild'), true);
+        assert.equal(desk.calls.at(-1), 'glyphs:Elon|Empty|Empty|Empty');
     });
 
     it('re-pushes occupied slots after the desk is already visible (Strict Mode second paint)', () => {
@@ -188,5 +194,30 @@ describe('applyStoreToSelectCharDesk occupied selection', () => {
         assert.equal(desk.selected, 1);
         assert.equal(desk.visible, true);
         assert.equal(desk.calls.includes('rebuild'), true);
+        assert.equal(desk.calls.at(-1), 'glyphs:Empty|Elon|Empty|Empty');
+    });
+});
+
+describe('paintSlotGlyphCanvas', () => {
+    it('burns Elon Lev. 150 onto the canvas, not Empty/Create', () => {
+        const texts: string[] = [];
+        const ctx = {
+            clearRect() {},
+            fillRect() {},
+            fillText(text: string) {
+                texts.push(text);
+            },
+            font: '',
+            fillStyle: '',
+            textBaseline: 'top' as const,
+        };
+        const written = paintSlotGlyphCanvas(ctx, {
+            name: 'Elon',
+            lev: 'Lev. 150',
+            occupied: elon,
+        });
+        assert.deepEqual(written, ['Elon', 'Lev. 150']);
+        assert.deepEqual(texts, ['Elon', 'Lev. 150']);
+        assert.equal(texts.includes('Empty'), false);
     });
 });

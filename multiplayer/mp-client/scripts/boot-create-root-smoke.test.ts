@@ -108,6 +108,10 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(desk, /SelectCharDesk painted slot texts/);
         assert.match(sync, /paintSelectCharSlotRows/);
         assert.match(sync, /forceRebuild/);
+        assert.match(sync, /applyPaintedSlotRows/);
+        assert.doesNotMatch(desk, /writeSlotCardTexts/);
+        assert.match(desk, /writeSlotGlyphImage/);
+        assert.match(desk, /painted slot texts names=/);
     });
 
     it('App wraps PhaserGame so a Phaser render throw cannot empty #root', () => {
@@ -179,5 +183,6 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /SELECTCHAR desk sync/);
         assert.match(entry, /painted slot texts/);
         assert.match(entry, /setCharacterSlots/);
+        assert.match(entry, /applyPaintedSlotRows/);
     });
 });

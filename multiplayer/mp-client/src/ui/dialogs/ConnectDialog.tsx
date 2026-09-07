@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import {
+    IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
     IN_UI_SUPPRESS_POINTER_INPUT,
     OUT_UI_ARENA_ACTION,
@@ -348,12 +349,18 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             const cached = peekCachedOccupiedCharacterList(session.wallet);
             const alreadyPainted = connectDialogStore.state.characterSlots.length > 0;
             if (alreadyPainted || (cached && cached.slots.length > 0)) {
+                const slots = alreadyPainted
+                    ? connectDialogStore.state.characterSlots
+                    : cached!.slots;
                 if (cached && cached.slots.length > 0 && !alreadyPainted) {
                     setCharacterSlots(cached.slots);
                     setReferralInfo(cached.referral ?? null);
                     const firstOccupied = cached.slots[0];
                     setSelectedSlotIndex(firstOccupied.slotIndex);
                     setCharacterName(firstOccupied.name);
+                } else if (slots.length > 0) {
+                    // Late Phaser LoginScreen missed the first emit — replay occupied rows.
+                    EventBus.emit(IN_UI_CHARACTER_SLOTS_UPDATED, slots);
                 }
                 setCharacterListLoading(false);
                 console.info(

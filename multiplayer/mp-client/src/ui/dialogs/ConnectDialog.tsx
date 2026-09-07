@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import {
@@ -43,13 +43,14 @@ import {
     consumeWalletDeepLink,
     getReusableHubWalletSession,
     getStoredWalletPubkey,
+    needsWalletSignForWorldEnter,
     persistPreferredAuthChain,
     type AuthChainId,
     releaseAutoEnterWorldLock,
     tryAcquireAutoEnterWorldLock,
 } from '../../utils/walletAuth';
 import {
-    fetchCharacterList,
+    fetchCharacterListShared,
     type CharacterSlotSummary,
 } from '../../utils/characterListApi';
 import { declineArenaPactFromHub, fetchArenaPactInbox } from '../../utils/arenaPactInboxApi';
@@ -328,28 +329,33 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, phase]);
 
-    /** Loads SELECTCHAR metadata once when the desk opens. */
-    useEffect(() => {
-        if (!isOpen || phase !== 'play-world' || !walletSession) {
-            return;
-        }
+    const listLoadEpoch = useRef(0);
+    const worldEnterInFlight = useRef(false);
 
-        let cancelled = false;
-        setCharacterListLoading(true);
-        void fetchCharacterList(host, port, walletSession.wallet, walletSession.token)
-            .then((result) => {
-                if (cancelled) {
-                    return;
-                }
-                const slots = result.slots;
-                setCharacterSlots(slots);
-                setReferralInfo(result.referral ?? null);
-                const firstOccupied = slots[0];
-                if (firstOccupied) {
-                    setSelectedSlotIndex(firstOccupied.slotIndex);
-                    setCharacterName(firstOccupied.name);
-                } else {
-                    // No playable character yet → Create Character is step 1 (cannot Start).
+    /**
+     * Fetch desk slots with the in-memory authToken. Shared across Strict Mode remounts.
+     * A successful list always paints; errors never wipe slots already received.
+     */
+    const loadCharacterListForPlayWorld = useCallback(
+        (session: NonNullable<typeof walletSession>) => {
+            const epoch = ++listLoadEpoch.current;
+            setCharacterListLoading(true);
+            return fetchCharacterListShared(host, port, session.wallet, session.token)
+                .then((result) => {
+                    if (result.slots.length > 0) {
+                        setCharacterSlots(result.slots);
+                        setReferralInfo(result.referral ?? null);
+                        const firstOccupied = result.slots[0];
+                        setSelectedSlotIndex(firstOccupied.slotIndex);
+                        setCharacterName(firstOccupied.name);
+                        if (connectDialogStore.state.phase === 'create-char') {
+                            setConnectGatePhase('play-world');
+                        }
+                        return;
+                    }
+                    if (epoch !== listLoadEpoch.current) {
+                        return;
+                    }
                     setSelectedSlotIndex(0);
                     setCharacterName('');
                     setConnectGatePhase('create-char');
@@ -358,38 +364,48 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                         severity: 'info',
                         autoClose: 4500,
                     });
-                }
-            })
-            .catch((error) => {
-                if (cancelled) {
-                    return;
-                }
-                setCharacterSlots([]);
-                setReferralInfo(null);
-                const message = error instanceof Error ? error.message : 'Failed to load characters.';
-                console.warn('[ConnectDialog] Character list failed:', message);
-                const chain = walletSession.chainId;
-                if (!chain || chain === 'sol') {
-                    clearStoredWalletAuth();
-                    setConnectWalletSession(null);
-                }
-                setConnectGatePhase('hub');
-                EventBus.emit(TOAST_REQUESTED, {
-                    message: `${message} Use Reconnect / Sign again so Phantom can bind a fresh seal.`,
-                    severity: 'warning',
-                    autoClose: 6000,
+                })
+                .catch((error) => {
+                    if (epoch !== listLoadEpoch.current) {
+                        return;
+                    }
+                    if (connectDialogStore.state.characterSlots.length > 0) {
+                        console.warn(
+                            '[ConnectDialog] Character list error after a valid list; keeping painted slots',
+                            error,
+                        );
+                        return;
+                    }
+                    const message = error instanceof Error ? error.message : 'Failed to load characters.';
+                    console.warn('[ConnectDialog] Character list failed:', message);
+                    const chain = session.chainId;
+                    if (!chain || chain === 'sol') {
+                        clearStoredWalletAuth();
+                        setConnectWalletSession(null);
+                    }
+                    setConnectGatePhase('hub');
+                    EventBus.emit(TOAST_REQUESTED, {
+                        message: `${message} Use Reconnect / Sign again so Phantom can bind a fresh seal.`,
+                        severity: 'warning',
+                        autoClose: 6000,
+                    });
+                })
+                .finally(() => {
+                    if (epoch === listLoadEpoch.current) {
+                        setCharacterListLoading(false);
+                    }
                 });
-            })
-            .finally(() => {
-                if (!cancelled) {
-                    setCharacterListLoading(false);
-                }
-            });
+        },
+        [host, port],
+    );
 
-        return () => {
-            cancelled = true;
-        };
-    }, [isOpen, phase, walletSession, host, port]);
+    /** Loads SELECTCHAR metadata when the desk opens (backup if enter-world already kicked the fetch). */
+    useEffect(() => {
+        if (!isOpen || phase !== 'play-world' || !walletSession) {
+            return;
+        }
+        void loadCharacterListForPlayWorld(walletSession);
+    }, [isOpen, phase, walletSession, loadCharacterListForPlayWorld]);
 
     /** Phaser SELECTCHAR Start / Create / Back → connect, create desk, or hub. */
     useEffect(() => {
@@ -662,7 +678,10 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
         } satisfies ConnectToServerPayload);
     };
 
-    const handleWalletConnect = async (chainId: AuthChainId = authChain): Promise<typeof walletSession> => {
+    const handleWalletConnect = async (
+        chainId: AuthChainId = authChain,
+        opts?: { keepBusy?: boolean },
+    ): Promise<typeof walletSession> => {
         setWalletBusy(true);
         setHubError(undefined);
         persistPreferredAuthChain(chainId);
@@ -693,7 +712,9 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             EventBus.emit(TOAST_REQUESTED, { message, severity: 'error' });
             return null;
         } finally {
-            setWalletBusy(false);
+            if (!opts?.keepBusy) {
+                setWalletBusy(false);
+            }
         }
     };
 
@@ -724,20 +745,35 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
 
     /** One click: chosen wallet sign (if needed) → classic SELECTCHAR desk. */
     const handleEnterWorldFromHub = async (chainOverride?: AuthChainId) => {
+        if (worldEnterInFlight.current) {
+            return;
+        }
+        worldEnterInFlight.current = true;
         setHubError(undefined);
         const chain = chainOverride ?? authChain;
         let session = walletSession;
         let justAuthed = false;
-        // Phantom Sol always re-runs challenge+signMessage (Kind skips the popup if a stale token is reused).
-        const mustSign = chain === 'sol' || !session;
-        if (mustSign) {
-            session = await handleWalletConnect(chain);
+        try {
+            // Fresh Phantom sign only when this tab has no in-memory Sol session.
+            // Ghost clicks after a successful sign must not open a second Phantom prompt.
+            const mustSign = needsWalletSignForWorldEnter(chain, session);
+            if (mustSign) {
+                session = await handleWalletConnect(chain, { keepBusy: true });
+                if (!session) {
+                    return;
+                }
+                justAuthed = true;
+            }
             if (!session) {
                 return;
             }
-            justAuthed = true;
+            EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, justAuthed ? 1200 : 400);
+            enterPlayWorldPhase(session);
+            void loadCharacterListForPlayWorld(session);
+        } finally {
+            worldEnterInFlight.current = false;
+            setWalletBusy(false);
         }
-        enterPhaserDeskPhase('play-world', justAuthed);
     };
 
     /** Explicit Phantom/EVM rebind when Kind is unlocked but the sign popup never opened. */

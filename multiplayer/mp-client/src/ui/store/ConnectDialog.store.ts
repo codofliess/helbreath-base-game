@@ -72,18 +72,21 @@ export function ensureLoginHubOpenAtBoot(): void {
 
 /** Opens the login hub for a fresh login (clears last-attempt restore; keeps wallet if still valid). */
 export const openConnectDialogForLogin = (defaultCharacterName: string) => {
-    connectDialogStore.setState((state) => ({
-        isOpen: true,
-        defaultCharacterName,
-        lastAttempt: null,
-        phase: 'hub',
-        walletSession: state.walletSession,
-        characterSlots: [],
-        referralInfo: null,
-        characterListLoading: false,
-        selectedSlotIndex: 0,
-        arenaDeskIndex: 0,
-    }));
+    connectDialogStore.setState((state) => {
+        const keepDesk = state.phase === 'play-world' || state.phase === 'create-char';
+        return {
+            isOpen: true,
+            defaultCharacterName,
+            lastAttempt: null,
+            phase: keepDesk ? state.phase : 'hub',
+            walletSession: state.walletSession,
+            characterSlots: keepDesk ? state.characterSlots : [],
+            referralInfo: keepDesk ? state.referralInfo : null,
+            characterListLoading: keepDesk ? state.characterListLoading : false,
+            selectedSlotIndex: keepDesk ? state.selectedSlotIndex : 0,
+            arenaDeskIndex: 0,
+        };
+    });
 };
 
 export const setLastConnectAttempt = (attempt: {
@@ -122,13 +125,20 @@ export const enterPlayWorldPhase = (walletSession: WalletSession) => {
 };
 
 export const setConnectWalletSession = (walletSession: WalletSession | null) => {
-    connectDialogStore.setState((state) => ({
-        ...state,
-        walletSession,
-        phase: walletSession ? state.phase : 'hub',
-        characterSlots: walletSession ? state.characterSlots : [],
-        referralInfo: walletSession ? state.referralInfo : null,
-    }));
+    connectDialogStore.setState((state) => {
+        const sameWallet =
+            !!walletSession &&
+            !!state.walletSession &&
+            walletSession.wallet === state.walletSession.wallet &&
+            walletSession.token === state.walletSession.token;
+        return {
+            ...state,
+            walletSession,
+            phase: walletSession ? state.phase : 'hub',
+            characterSlots: sameWallet ? state.characterSlots : [],
+            referralInfo: sameWallet ? state.referralInfo : null,
+        };
+    });
 };
 
 export const setCharacterSlots = (characterSlots: CharacterSlotSummary[]) => {

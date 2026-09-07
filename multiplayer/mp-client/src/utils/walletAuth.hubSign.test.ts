@@ -5,6 +5,7 @@ import {
     getReusableHubWalletSession,
     getStoredWalletToken,
     persistWalletSession,
+    needsWalletSignForWorldEnter,
 } from './walletAuth';
 
 function installMinimalBrowser() {
@@ -86,5 +87,36 @@ describe('hub wallet restore', () => {
         assert.equal(getStoredWalletToken(), undefined);
         const raw = JSON.parse(localStorage.getItem('gameState') ?? '{}') as { networkId?: string };
         assert.equal(raw.networkId, 'SoL111111111111111111111111111111111111111');
+    });
+});
+
+describe('needsWalletSignForWorldEnter', () => {
+    it('requires a sign when there is no in-memory session', () => {
+        assert.equal(needsWalletSignForWorldEnter('sol', null), true);
+        assert.equal(needsWalletSignForWorldEnter('sol', { wallet: '', token: '', expiresAt: 0 }), true);
+    });
+
+    it('does not require a second Phantom sign after a just-verified Sol session', () => {
+        assert.equal(
+            needsWalletSignForWorldEnter('sol', {
+                wallet: '4R7FsyC85Yic3hGz7yWAt7HbV5A1qtC7UQi13Hsv5r7K',
+                token: 'fresh-sol-token',
+                expiresAt: Date.now() + 60_000,
+                chainId: 'sol',
+            }),
+            false,
+        );
+    });
+
+    it('requires a sign when switching from an EVM seal to Phantom', () => {
+        assert.equal(
+            needsWalletSignForWorldEnter('sol', {
+                wallet: '0x1111111111111111111111111111111111111111',
+                token: 'rh-token',
+                expiresAt: Date.now() + 60_000,
+                chainId: 'rh',
+            }),
+            true,
+        );
     });
 });

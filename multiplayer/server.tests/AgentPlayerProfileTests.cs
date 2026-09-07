@@ -70,7 +70,7 @@ public class AgentPlayerProfileTests {
         Assert.NotNull(profile);
         Assert.Single(profile!.Skills!);
         Assert.Equal(AgentPlayerProfile.DefaultStarterPackId, profile.Skills![0].SkillId);
-        Assert.Equal("", profile.StarterPackId);
+        Assert.Equal(AgentPlayerProfile.DefaultStarterPackId, profile.StarterPackId);
     }
 
     [Fact]
@@ -95,10 +95,11 @@ public class AgentPlayerProfileTests {
         var ok = AgentPlayerProfile.TryMerge(current, incoming, incoming.LastWriteMs, out var next, out _);
         Assert.True(ok);
         Assert.Equal("v2", next.OwnerPrompt);
-        Assert.Equal(2, next.Skills!.Length);
-        Assert.Contains(next.Skills, s => s.SkillId == "f8.mining.basic" && s.Rail == AgentSkillShop.RailBuyNft);
-        Assert.Contains(next.Skills, s => s.SkillId == "f8.fishing.basic" && s.Rail == AgentSkillShop.RailStake);
-        Assert.DoesNotContain(next.Skills, s => s.SkillId.Contains("alchemy", StringComparison.Ordinal));
+        Assert.Contains(next.Skills!, s => s.SkillId == "f8.mining.basic" && s.Rail == AgentSkillShop.RailBuyNft);
+        Assert.Contains(next.Skills!, s => s.SkillId == "f8.fishing.basic" && s.Rail == AgentSkillShop.RailStake);
+        Assert.Contains(next.Skills!, s => s.SkillId == AgentPlayerProfile.DefaultStarterPackId);
+        Assert.DoesNotContain(next.Skills!, s => s.SkillId.Contains("alchemy", StringComparison.Ordinal));
+        Assert.Equal(3, next.Skills!.Length);
     }
 
     [Fact]

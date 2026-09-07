@@ -70,6 +70,24 @@ enum PlayerSkinColor {
   PLAYER_SKIN_COLOR_DARK = 2;
 }
 
+// Who drives this character in the shared world. Account actorKind (human|bot)
+// lives on the middleware player row; this flag is per character slot.
+enum CharacterControllerKind {
+  CHARACTER_CONTROLLER_KIND_HUMAN = 0;
+  CHARACTER_CONTROLLER_KIND_AGENT = 1;
+}
+
+// Team-designed skill pack slot (starter catalog and/or later NFT instance).
+// Owner-only on write; never copy owner prompts onto observer packets.
+message AgentSkillLoadoutSlot {
+  // Allowlisted catalog id (e.g. starter.academy.easy). Unknown ids are dropped.
+  string skill_id = 1;
+  // Optional on-chain instance (cNFT mint / asset id). Opaque until mint shop ships.
+  optional string nft_mint = 2;
+  // True after a consumable pack was ingested into this character (not transferable).
+  bool consumed = 3;
+}
+
 // Matches client MapDialog / WeatherManager string modes (dry, rain-*, snow-*).
 enum WeatherMode {
   WEATHER_MODE_DRY = 0;
@@ -806,6 +824,12 @@ message AuthenticateRequest {
   optional string referral_code = 17;
   // Arena Pre-Ready kit JSON (validated against ArenaKitCatalog.json on tournament-arena entry).
   optional string arena_kit_json = 18;
+  // Create / owner-update: this slot is a trained agent-player (same world rules as humans).
+  optional CharacterControllerKind controller_kind = 19;
+  // Owner training prompt. Server stores it; never echoed on CharacterList or observer packets.
+  optional string owner_prompt = 20;
+  // Optional starter / equipped skill pack slots (allowlisted ids only).
+  repeated AgentSkillLoadoutSlot agent_skills = 21;
 }
 
 /** Pre-world request: wallet + auth token → up to 4 character slot summaries for the SELECTCHAR desk. */
@@ -865,6 +889,10 @@ message CharacterSlotSummary {
   repeated CharacterEquipPreview equipped = 17;
   // Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler).
   string citizenship_side = 18;
+  // Human-played vs owner-trained agent. Prompt text is intentionally omitted.
+  CharacterControllerKind controller_kind = 19;
+  int32 agent_skill_count = 20;
+  optional string starter_pack_id = 21;
 }
 
 message CharacterListResponse {

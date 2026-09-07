@@ -165,6 +165,11 @@ export function SelectCharOccupiedReactOverlay({
                     <div className="selectchar-react-occupied__status">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>
                     <div className="selectchar-react-occupied__name">{row.name}</div>
                     <div className="selectchar-react-occupied__lev">{row.lev}</div>
+                    {row.occupied?.controllerKind === 'agent' ? (
+                        <div className="selectchar-react-occupied__agent" data-controller-kind="agent">
+                            AGENT
+                        </div>
+                    ) : null}
                 </div>
             ))}
         </div>,

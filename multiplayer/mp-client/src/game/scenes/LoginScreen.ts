@@ -205,6 +205,8 @@ export class LoginScreen extends Scene {
                         int: payload.int,
                         mag: payload.mag,
                         chr: payload.chr,
+                        controllerKind: payload.controllerKind,
+                        ownerPrompt: payload.ownerPrompt,
                     },
                     payload.arenaKitJson,
                 );

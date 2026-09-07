@@ -39,6 +39,9 @@ function encodeListFrame(partial: Parameters<typeof mapCharacterListResponse>[0]
                     underwearColorIndex: c.underwearColorIndex ?? 0,
                     equipped: [],
                     citizenshipSide: c.citizenshipSide ?? '',
+                    controllerKind: typeof c.controllerKind === 'number' ? c.controllerKind : 0,
+                    agentSkillCount: c.agentSkillCount ?? 0,
+                    starterPackId: c.starterPackId,
                 })),
                 referralCode: partial.referralCode,
                 referralShareUrl: partial.referralShareUrl,
@@ -66,6 +69,27 @@ describe('character list parse / paint mapping', () => {
         assert.equal(parsed.slots[0].level, 150);
         assert.equal(parsed.slots[0].slotIndex, 0);
         assert.equal(parsed.slots[0].citizenshipSide, 'elvine');
+        assert.equal(parsed.slots[0].controllerKind, 'human');
+    });
+
+    it('maps an agent controller without exposing an owner prompt field', () => {
+        const parsed = mapCharacterListResponse({
+            characters: [
+                {
+                    slotIndex: 1,
+                    name: 'GrokBot',
+                    level: 12,
+                    citizenshipSide: 'traveler',
+                    controllerKind: 1,
+                    agentSkillCount: 1,
+                    starterPackId: 'starter.academy.easy',
+                },
+            ],
+        });
+        assert.equal(parsed.slots[0].controllerKind, 'agent');
+        assert.equal(parsed.slots[0].agentSkillCount, 1);
+        assert.equal(parsed.slots[0].starterPackId, 'starter.academy.easy');
+        assert.equal('ownerPrompt' in parsed.slots[0], false);
     });
 
     it('clamps out-of-range slotIndex onto desk 0–3 so the row is visible', () => {

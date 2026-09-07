@@ -85,6 +85,16 @@ export enum PlayerSkinColor {
   UNRECOGNIZED = -1,
 }
 
+/**
+ * Who drives this character in the shared world. Account actorKind (human|bot)
+ * lives on the middleware player row; this flag is per character slot.
+ */
+export enum CharacterControllerKind {
+  CHARACTER_CONTROLLER_KIND_HUMAN = 0,
+  CHARACTER_CONTROLLER_KIND_AGENT = 1,
+  UNRECOGNIZED = -1,
+}
+
 /** Matches client MapDialog / WeatherManager string modes (dry, rain-*, snow-*). */
 export enum WeatherMode {
   WEATHER_MODE_DRY = 0,
@@ -126,6 +136,21 @@ export enum EkScreenshotRarity {
   EK_SCREENSHOT_RARITY_RARE = 2,
   EK_SCREENSHOT_RARITY_LEGENDARY = 3,
   UNRECOGNIZED = -1,
+}
+
+/**
+ * Team-designed skill pack slot (starter catalog and/or later NFT instance).
+ * Owner-only on write; never copy owner prompts onto observer packets.
+ */
+export interface AgentSkillLoadoutSlot {
+  /** Allowlisted catalog id (e.g. starter.academy.easy). Unknown ids are dropped. */
+  skillId: string;
+  /** Optional on-chain instance (cNFT mint / asset id). Opaque until mint shop ships. */
+  nftMint?:
+    | string
+    | undefined;
+  /** True after a consumable pack was ingested into this character (not transferable). */
+  consumed: boolean;
 }
 
 export interface ClientMessage {
@@ -901,7 +926,19 @@ export interface AuthenticateRequest {
     | string
     | undefined;
   /** Arena Pre-Ready kit JSON (validated against ArenaKitCatalog.json on tournament-arena entry). */
-  arenaKitJson?: string | undefined;
+  arenaKitJson?:
+    | string
+    | undefined;
+  /** Create / owner-update: this slot is a trained agent-player (same world rules as humans). */
+  controllerKind?:
+    | CharacterControllerKind
+    | undefined;
+  /** Owner training prompt. Server stores it; never echoed on CharacterList or observer packets. */
+  ownerPrompt?:
+    | string
+    | undefined;
+  /** Optional starter / equipped skill pack slots (allowlisted ids only). */
+  agentSkills: AgentSkillLoadoutSlot[];
 }
 
 /** Pre-world request: wallet + auth token → up to 4 character slot summaries for the SELECTCHAR desk. */
@@ -961,6 +998,10 @@ export interface CharacterSlotSummary {
   equipped: CharacterEquipPreview[];
   /** Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler). */
   citizenshipSide: string;
+  /** Human-played vs owner-trained agent. Prompt text is intentionally omitted. */
+  controllerKind: CharacterControllerKind;
+  agentSkillCount: number;
+  starterPackId?: string | undefined;
 }
 
 export interface CharacterListResponse {
@@ -2667,6 +2708,76 @@ export interface PingResponse {
   playersInMap: number;
   pingVariance: number;
 }
+
+function createBaseAgentSkillLoadoutSlot(): AgentSkillLoadoutSlot {
+  return { skillId: "", nftMint: undefined, consumed: false };
+}
+
+export const AgentSkillLoadoutSlot: MessageFns<AgentSkillLoadoutSlot> = {
+  encode(message: AgentSkillLoadoutSlot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skillId !== "") {
+      writer.uint32(10).string(message.skillId);
+    }
+    if (message.nftMint !== undefined) {
+      writer.uint32(18).string(message.nftMint);
+    }
+    if (message.consumed !== false) {
+      writer.uint32(24).bool(message.consumed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AgentSkillLoadoutSlot {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAgentSkillLoadoutSlot();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.skillId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nftMint = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.consumed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<AgentSkillLoadoutSlot>, I>>(base?: I): AgentSkillLoadoutSlot {
+    return AgentSkillLoadoutSlot.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AgentSkillLoadoutSlot>, I>>(object: I): AgentSkillLoadoutSlot {
+    const message = createBaseAgentSkillLoadoutSlot();
+    message.skillId = object.skillId ?? "";
+    message.nftMint = object.nftMint ?? undefined;
+    message.consumed = object.consumed ?? false;
+    return message;
+  },
+};
 
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
@@ -10590,6 +10701,9 @@ function createBaseAuthenticateRequest(): AuthenticateRequest {
     chr: undefined,
     referralCode: undefined,
     arenaKitJson: undefined,
+    controllerKind: undefined,
+    ownerPrompt: undefined,
+    agentSkills: [],
   };
 }
 
@@ -10648,6 +10762,15 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     }
     if (message.arenaKitJson !== undefined) {
       writer.uint32(146).string(message.arenaKitJson);
+    }
+    if (message.controllerKind !== undefined) {
+      writer.uint32(152).int32(message.controllerKind);
+    }
+    if (message.ownerPrompt !== undefined) {
+      writer.uint32(162).string(message.ownerPrompt);
+    }
+    for (const v of message.agentSkills) {
+      AgentSkillLoadoutSlot.encode(v!, writer.uint32(170).fork()).join();
     }
     return writer;
   },
@@ -10803,6 +10926,30 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
           message.arenaKitJson = reader.string();
           continue;
         }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.controllerKind = reader.int32() as any;
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.ownerPrompt = reader.string();
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.agentSkills.push(AgentSkillLoadoutSlot.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -10835,6 +10982,9 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     message.chr = object.chr ?? undefined;
     message.referralCode = object.referralCode ?? undefined;
     message.arenaKitJson = object.arenaKitJson ?? undefined;
+    message.controllerKind = object.controllerKind ?? undefined;
+    message.ownerPrompt = object.ownerPrompt ?? undefined;
+    message.agentSkills = object.agentSkills?.map((e) => AgentSkillLoadoutSlot.fromPartial(e)) || [];
     return message;
   },
 };
@@ -11127,6 +11277,9 @@ function createBaseCharacterSlotSummary(): CharacterSlotSummary {
     underwearColorIndex: 0,
     equipped: [],
     citizenshipSide: "",
+    controllerKind: 0,
+    agentSkillCount: 0,
+    starterPackId: undefined,
   };
 }
 
@@ -11188,6 +11341,15 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
     }
     if (message.citizenshipSide !== "") {
       writer.uint32(146).string(message.citizenshipSide);
+    }
+    if (message.controllerKind !== 0) {
+      writer.uint32(152).int32(message.controllerKind);
+    }
+    if (message.agentSkillCount !== 0) {
+      writer.uint32(160).int32(message.agentSkillCount);
+    }
+    if (message.starterPackId !== undefined) {
+      writer.uint32(170).string(message.starterPackId);
     }
     return writer;
   },
@@ -11343,6 +11505,30 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
           message.citizenshipSide = reader.string();
           continue;
         }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.controllerKind = reader.int32() as any;
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.agentSkillCount = reader.int32();
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.starterPackId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11375,6 +11561,9 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
     message.underwearColorIndex = object.underwearColorIndex ?? 0;
     message.equipped = object.equipped?.map((e) => CharacterEquipPreview.fromPartial(e)) || [];
     message.citizenshipSide = object.citizenshipSide ?? "";
+    message.controllerKind = object.controllerKind ?? 0;
+    message.agentSkillCount = object.agentSkillCount ?? 0;
+    message.starterPackId = object.starterPackId ?? undefined;
     return message;
   },
 };

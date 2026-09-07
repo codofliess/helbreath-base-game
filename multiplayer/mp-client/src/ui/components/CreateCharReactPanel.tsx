@@ -10,6 +10,8 @@ import { connectDialogStore } from '../store/ConnectDialog.store';
 export function CreateCharReactPanel() {
     const slotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const [characterName, setCharacterName] = useState('');
+    const [agentPlayer, setAgentPlayer] = useState(false);
+    const [ownerPrompt, setOwnerPrompt] = useState('');
 
     const confirm = () => {
         const name = characterName.trim();
@@ -29,6 +31,8 @@ export function CreateCharReactPanel() {
             int: 11,
             mag: 11,
             chr: 10,
+            controllerKind: agentPlayer ? 'agent' : 'human',
+            ownerPrompt: agentPlayer ? ownerPrompt.trim() : undefined,
         });
     };
 
@@ -51,6 +55,27 @@ export function CreateCharReactPanel() {
                             spellCheck={false}
                         />
                     </label>
+                    <label className="login-gate-field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <input
+                            type="checkbox"
+                            checked={agentPlayer}
+                            onChange={(e) => setAgentPlayer(e.target.checked)}
+                        />
+                        <span>Agent player (same world rules; you train it)</span>
+                    </label>
+                    {agentPlayer ? (
+                        <label className="login-gate-field">
+                            <span>Owner prompt (private — never shown to others)</span>
+                            <textarea
+                                className="olympia-input"
+                                value={ownerPrompt}
+                                onChange={(e) => setOwnerPrompt(e.target.value)}
+                                maxLength={4000}
+                                rows={3}
+                                placeholder="How this agent should play. Starts from the team Academy Easy skill pack."
+                            />
+                        </label>
+                    ) : null}
                     <div className="login-desk-actions">
                         <button
                             type="button"

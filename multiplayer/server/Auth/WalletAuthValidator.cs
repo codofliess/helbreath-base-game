@@ -36,8 +36,20 @@ public static class WalletAuthValidator {
         }
     }
 
+    /// <summary>SoT claims copied from a validated session v2 token. Legacy tokens yield empty player id + human.</summary>
+    public readonly record struct WalletSessionClaims(string PlayerId, string ActorKind);
+
     public static bool TryValidate(string walletPubkey, string authToken, out string? errorMessage) {
+        return TryValidate(walletPubkey, authToken, out errorMessage, out _);
+    }
+
+    public static bool TryValidate(
+        string walletPubkey,
+        string authToken,
+        out string? errorMessage,
+        out WalletSessionClaims claims) {
         errorMessage = null;
+        claims = new WalletSessionClaims("", "human");
 
         if (!IsRequired) {
             if (IsProductionHost) {
@@ -108,13 +120,18 @@ public static class WalletAuthValidator {
         }
 
         if (payload.StartsWith('{')) {
-            return TryValidateV2(walletPubkey.Trim(), payload, out errorMessage);
+            return TryValidateV2(walletPubkey.Trim(), payload, out errorMessage, out claims);
         }
 
-        return TryValidateLegacy(walletPubkey.Trim(), payload, out errorMessage);
+        return TryValidateLegacy(walletPubkey.Trim(), payload, out errorMessage, out claims);
     }
 
-    private static bool TryValidateV2(string walletPubkey, string payload, out string? errorMessage) {
+    private static bool TryValidateV2(
+        string walletPubkey,
+        string payload,
+        out string? errorMessage,
+        out WalletSessionClaims claims) {
+        claims = new WalletSessionClaims("", "human");
         errorMessage = null;
         SessionV2? session;
         try {
@@ -156,10 +173,19 @@ public static class WalletAuthValidator {
             return false;
         }
 
+        var actorKind = string.Equals(session.ActorKind, "bot", StringComparison.OrdinalIgnoreCase)
+            ? "bot"
+            : "human";
+        claims = new WalletSessionClaims(session.PlayerId.Trim(), actorKind);
         return true;
     }
 
-    private static bool TryValidateLegacy(string walletPubkey, string payload, out string? errorMessage) {
+    private static bool TryValidateLegacy(
+        string walletPubkey,
+        string payload,
+        out string? errorMessage,
+        out WalletSessionClaims claims) {
+        claims = new WalletSessionClaims("", "human");
         var segments = payload.Split(':', 2);
         if (segments.Length != 2 ||
             !string.Equals(segments[0], walletPubkey, StringComparison.Ordinal) ||

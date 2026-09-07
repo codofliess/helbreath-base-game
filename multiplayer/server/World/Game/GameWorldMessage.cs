@@ -134,7 +134,23 @@ public sealed record PlayerPersistenceState(
     /// <summary>Kills toward the active Garden quest.</summary>
     int GardenQuestProgress = 0,
     /// <summary>Pre-rebirth snapshot for cancel/rollback (Olympia-like undo). Null = no cancel available.</summary>
-    PersistedRebirthRollbackSnapshot? RebirthRollback = null);
+    PersistedRebirthRollbackSnapshot? RebirthRollback = null,
+    /// <summary>Owner-trained agent-player blob (controller + private prompt + skill loadout). Null = human.</summary>
+    PersistedAgentProfile? AgentProfile = null);
+
+/// <summary>One allowlisted skill pack slot on an agent character (catalog id and optional NFT mint).</summary>
+public sealed record PersistedAgentSkillSlot(
+    string SkillId,
+    string NftMint = "",
+    bool Consumed = false);
+
+/// <summary>Per-character agent metadata stored inside <see cref="PlayerPersistenceState"/> / <c>state_json</c>.</summary>
+public sealed record PersistedAgentProfile(
+    string ControllerKind = "human",
+    string OwnerPrompt = "",
+    PersistedAgentSkillSlot[]? Skills = null,
+    string StarterPackId = "",
+    long LastWriteMs = 0);
 
 /// <summary>Full character progression snapshot taken immediately before a successful rebirth.</summary>
 public sealed record PersistedRebirthRollbackSnapshot(
@@ -188,7 +204,11 @@ public sealed record CharacterListEntry(
     int UnderwearColorIndex = 0,
     IReadOnlyList<CharacterListEquipPreview>? Equipped = null,
     /// <summary>aresden | elvine | traveler (from state_json CitizenshipSide).</summary>
-    string CitizenshipSide = "");
+    string CitizenshipSide = "",
+    /// <summary>human | agent — SELECTCHAR badge only; prompt is never listed.</summary>
+    string ControllerKind = "human",
+    int AgentSkillCount = 0,
+    string StarterPackId = "");
 
 /// <summary>State carried across worlds during a transfer: session identity plus the player settings snapshot to reapply in the target world.</summary>
 public sealed record TransferredPlayerState(
@@ -198,7 +218,11 @@ public sealed record TransferredPlayerState(
     string AccountWallet = "",
     string? RemoteIp = null,
     /// <summary>Arena Pre-Ready kit JSON (re-applied on tournament arena entry after transfer).</summary>
-    string? ArenaKitJson = null);
+    string? ArenaKitJson = null,
+    /// <summary>Middleware SoT player id from session v2 (empty on legacy tokens).</summary>
+    string AccountPlayerId = "",
+    /// <summary>Session actorKind from SoT: human | bot. Not forgeable from the client.</summary>
+    string ActorKind = "human");
 
 /// <summary>Authoritative destination chosen by the source world; spawn coordinates are optional for non-teleport transfers.</summary>
 public sealed record WorldTransferDestination(string WorldId, int? SpawnX, int? SpawnY);
@@ -235,7 +259,13 @@ public sealed record PlayerConnectedMessage(
     /// <summary>Optional ?ref= code from AuthenticateRequest (first-touch attribution).</summary>
     string? ReferralCode = null,
     /// <summary>Optional Arena Pre-Ready kit JSON (applied on tournament-arena entry).</summary>
-    string? ArenaKitJson = null) : GameWorldMessage;
+    string? ArenaKitJson = null,
+    /// <summary>Middleware SoT player id from the validated session (never from the client body).</summary>
+    string AccountPlayerId = "",
+    /// <summary>Session actorKind from SoT (human|bot). Independent of per-character controller.</summary>
+    string ActorKind = "human",
+    /// <summary>Sanitized owner agent profile from authenticate (create or rate-limited update).</summary>
+    PersistedAgentProfile? OwnerAgentProfile = null) : GameWorldMessage;
 
 /// <summary>Existing in-world player attached a new socket after disconnect grace.</summary>
 public sealed record PlayerReconnectedMessage(
@@ -246,7 +276,9 @@ public sealed record PlayerReconnectedMessage(
     string CharacterName,
     string AccountWallet,
     /// <summary>Client remote IP for auction fee-debt IP blocks (MVP).</summary>
-    string? RemoteIp = null) : GameWorldMessage;
+    string? RemoteIp = null,
+    string AccountPlayerId = "",
+    string ActorKind = "human") : GameWorldMessage;
 
 /// <summary>Socket closed; <paramref name="SessionRemainsActive"/> controls whether others still see a disconnected ghost in range.</summary>
 public sealed record PlayerDisconnectedMessage(Guid SessionId, bool SessionRemainsActive) : GameWorldMessage;

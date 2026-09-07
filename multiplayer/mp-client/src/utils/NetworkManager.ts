@@ -45,6 +45,7 @@ import {
     PlayerTakeDamage,
     PlayerGender,
     PlayerSkinColor,
+    CharacterControllerKind,
     PlayerTeleported,
     ServerMessage,
     SpellCastCancelled,
@@ -585,6 +586,8 @@ export class NetworkManager {
     private authenticateMag: number | undefined;
     private authenticateChr: number | undefined;
     private authenticateArenaKitJson: string | undefined;
+    private authenticateControllerKind: 'human' | 'agent' | undefined;
+    private authenticateOwnerPrompt: string | undefined;
     private authToken = '';
     private hasSentAuthentication = false;
     private logoutPending = false;
@@ -646,6 +649,8 @@ export class NetworkManager {
             int?: number;
             mag?: number;
             chr?: number;
+            controllerKind?: 'human' | 'agent';
+            ownerPrompt?: string;
         },
         arenaKitJson?: string,
     ): Promise<void> {
@@ -694,6 +699,14 @@ export class NetworkManager {
                 this.authenticateInt = clampCreateStat(appearance?.int);
                 this.authenticateMag = clampCreateStat(appearance?.mag);
                 this.authenticateChr = clampCreateStat(appearance?.chr);
+                this.authenticateControllerKind =
+                    appearance?.controllerKind === 'agent' || appearance?.controllerKind === 'human'
+                        ? appearance.controllerKind
+                        : undefined;
+                this.authenticateOwnerPrompt =
+                    typeof appearance?.ownerPrompt === 'string' && appearance.ownerPrompt.trim().length > 0
+                        ? appearance.ownerPrompt.trim().slice(0, 4000)
+                        : undefined;
                 if (authToken !== undefined) {
                     this.authToken = authToken;
                 }
@@ -1683,6 +1696,13 @@ export class NetworkManager {
                     chr: this.authenticateChr,
                     referralCode: getStoredReferralCode(),
                     arenaKitJson: this.authenticateArenaKitJson,
+                    controllerKind:
+                        this.authenticateControllerKind === 'agent'
+                            ? CharacterControllerKind.CHARACTER_CONTROLLER_KIND_AGENT
+                            : this.authenticateControllerKind === 'human'
+                              ? CharacterControllerKind.CHARACTER_CONTROLLER_KIND_HUMAN
+                              : undefined,
+                    ownerPrompt: this.authenticateOwnerPrompt,
                 },
             },
         }).finish();

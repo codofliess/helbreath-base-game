@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using Npgsql;
+using Server.Helpers;
 using Server.Utils;
 using Server.World.Game;
 
@@ -205,6 +206,9 @@ public sealed class GamePersistenceService : IAsyncDisposable {
             var underwearColorIndex = 0;
             List<CharacterListEquipPreview>? equipped = null;
             var citizenshipSide = "traveler";
+            var controllerKind = AgentPlayerProfile.ControllerHuman;
+            var agentSkillCount = 0;
+            var starterPackId = "";
 
             if (!string.IsNullOrWhiteSpace(json)) {
                 try {
@@ -233,6 +237,11 @@ public sealed class GamePersistenceService : IAsyncDisposable {
                             ? new List<CharacterListEquipPreview>(eqList)
                             : null;
                         citizenshipSide = GamePersistence.NormalizeCitizenshipSide(state.CitizenshipSide);
+                        if (state.AgentProfile is not null) {
+                            controllerKind = AgentPlayerProfile.NormalizeControllerKind(state.AgentProfile.ControllerKind);
+                            agentSkillCount = state.AgentProfile.Skills?.Length ?? 0;
+                            starterPackId = state.AgentProfile.StarterPackId ?? "";
+                        }
                     }
                 } catch (JsonException ex) {
                     Console.Error.WriteLine($"[Persistence] Failed to parse list row '{name}' for '{accountWallet}': {ex.Message}");
@@ -264,7 +273,8 @@ public sealed class GamePersistenceService : IAsyncDisposable {
             usedSlots.Add(slotIndex);
             results.Add(new CharacterListEntry(
                 slotIndex, name, level, exp, rebirth, hoursPlayed, str, vit, dex, intel, mag, chr,
-                genderValue, skinColorValue, hairStyleIndex, underwearColorIndex, equipped, citizenshipSide));
+                genderValue, skinColorValue, hairStyleIndex, underwearColorIndex, equipped, citizenshipSide,
+                controllerKind, agentSkillCount, starterPackId));
         }
 
         results.Sort((a, b) => a.SlotIndex.CompareTo(b.SlotIndex));
@@ -908,7 +918,10 @@ public static class GamePersistence {
             Math.Clamp(state.HairStyleIndex, 0, 7),
             Math.Clamp(state.UnderwearColorIndex, 0, 7),
             ExtractEquipPreview(state),
-            NormalizeCitizenshipSide(state.CitizenshipSide));
+            NormalizeCitizenshipSide(state.CitizenshipSide),
+            AgentPlayerProfile.NormalizeControllerKind(state.AgentProfile?.ControllerKind),
+            state.AgentProfile?.Skills?.Length ?? 0,
+            state.AgentProfile?.StarterPackId ?? "");
     }
 
     /// <summary>aresden | elvine | traveler for SELECTCHAR city seals.</summary>

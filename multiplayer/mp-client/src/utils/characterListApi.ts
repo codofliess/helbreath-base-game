@@ -31,6 +31,10 @@ export interface CharacterSlotSummary {
     equipped?: CharacterEquipPreview[];
     /** aresden | elvine | traveler */
     citizenshipSide?: string;
+    /** human-played vs owner-trained agent (SELECTCHAR badge). Prompt is never listed. */
+    controllerKind?: 'human' | 'agent';
+    agentSkillCount?: number;
+    starterPackId?: string;
 }
 
 /** Wallet-level referral info from CharacterListResponse. */
@@ -47,6 +51,14 @@ const LIST_SOCKET_HOLD_MS = 400;
 export interface ParsedCharacterList {
     slots: CharacterSlotSummary[];
     referral?: ReferralListInfo;
+}
+
+/** Proto CharacterControllerKind.AGENT is 1; wire may also send the enum name. */
+export function isAgentControllerKind(kind: number | string | undefined | null): boolean {
+    if (kind === 1 || kind === 'agent') {
+        return true;
+    }
+    return String(kind ?? '').toUpperCase().includes('AGENT');
 }
 
 /** Normalize city citizenship for SELECTCHAR seals. */
@@ -220,6 +232,9 @@ export function mapCharacterListResponse(body: {
         underwearColorIndex?: number;
         equipped?: Array<{ slot?: string; itemId?: number } | undefined>;
         citizenshipSide?: string;
+        controllerKind?: number | string;
+        agentSkillCount?: number;
+        starterPackId?: string;
     }>;
     referralCode?: string;
     referralShareUrl?: string;
@@ -254,6 +269,9 @@ export function mapCharacterListResponse(body: {
                 .filter((e): e is { slot: string; itemId: number } => !!e && (e.itemId ?? 0) > 0 && !!e.slot)
                 .map((e) => ({ slot: e.slot, itemId: e.itemId })),
             citizenshipSide: normalizeCitizenshipSide(c.citizenshipSide),
+            controllerKind: isAgentControllerKind(c.controllerKind) ? 'agent' : 'human',
+            agentSkillCount: Math.max(0, Number(c.agentSkillCount) || 0),
+            starterPackId: (c.starterPackId ?? '').trim(),
         });
     }
     slots.sort((a, b) => a.slotIndex - b.slotIndex);

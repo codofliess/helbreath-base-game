@@ -251,7 +251,8 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     line-height: 1.2;
     text-align: center;
     text-shadow: none;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     overflow: visible;
     clip: auto;
     clip-path: none;
@@ -264,6 +265,7 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
 }
 .selectchar-react-occupied__slot {
     position: absolute;
+    display: none !important;
     min-width: 140px;
     padding: 4px 8px 6px;
     background: rgba(58, 40, 16, 0.94);

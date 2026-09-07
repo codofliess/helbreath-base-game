@@ -11,6 +11,7 @@ import {
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
 import {
+    SELECTCHAR_KINDGEM_BANNER_CSS_TEXT,
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_OCCUPIED_PREFIX,
     buildSelectCharReactOccupiedBanner,
@@ -275,6 +276,17 @@ describe('buildSelectCharReactOccupiedBanner', () => {
         const later = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
         assert.equal(later, 'OCCUPIED Elon Lev.150');
         assert.equal(later.includes('waiting'), false);
+    });
+
+    it('wraps a two-name KindGem banner so Co2 · BebaMaster cannot clip off the left', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const beba: CharacterSlotSummary = { ...elon, slotIndex: 1, name: 'BebaMaster', level: 1 };
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon, beba]), [elon, beba]);
+        assert.match(banner, /OCCUPIED/);
+        assert.match(banner, /Elon/);
+        assert.match(banner, /BebaMaster/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /white-space:normal/);
+        assert.doesNotMatch(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /white-space:nowrap/);
     });
 });
 

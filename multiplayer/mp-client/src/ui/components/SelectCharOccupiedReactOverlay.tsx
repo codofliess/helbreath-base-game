@@ -8,11 +8,6 @@ import {
     resolveSelectCharSlotsForPaint,
 } from '../../game/ui/selectCharDeskSync';
 import {
-    SELECTCHAR_LINE_NAME_Y,
-    SELECTCHAR_SLOT_NAME_X,
-    SELECTCHAR_SLOT_PITCH,
-} from '../../game/ui/selectCharSlotLayout';
-import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
     SELECTCHAR_REACT_OCCUPIED_DOM_LOG,
@@ -20,8 +15,6 @@ import {
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
-    projectDeskPointToCss,
-    selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
 import { peekCachedOccupiedCharacterList, type CharacterSlotSummary } from '../../utils/characterListApi';
@@ -97,38 +90,6 @@ export function SelectCharOccupiedReactOverlay({
                 SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
             );
         }
-        if (
-            occupiedNames &&
-            occupiedNames !== '(none)' &&
-            !selectCharOccupiedNamesRequireVisibleBanner(occupiedNames, painted.joined)
-        ) {
-            selectCharWarn(
-                'ConnectDialog React SELECTCHAR banner DOM mismatch names=%s text=%s',
-                occupiedNames,
-                painted.joined,
-            );
-            const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
-            selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
-        }
-        const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
-        const rect = canvas?.getBoundingClientRect();
-        if (!root || !rect || rect.width < 2 || rect.height < 2) {
-            return;
-        }
-        const gameW = 800;
-        const gameH = 600;
-        root.querySelectorAll<HTMLElement>('[data-react-slot]').forEach((node) => {
-            const index = Number(node.dataset.reactSlot);
-            const pos = projectDeskPointToCss(
-                { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-                gameW,
-                gameH,
-                SELECTCHAR_SLOT_NAME_X + index * SELECTCHAR_SLOT_PITCH,
-                SELECTCHAR_LINE_NAME_Y,
-            );
-            node.style.left = `${Math.round(pos.left)}px`;
-            node.style.top = `${Math.round(pos.top)}px`;
-        });
     }, [banner, loading, occupiedNames]);
 
     useLayoutEffect(() => {

@@ -90,7 +90,7 @@ export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'font-family:Georgia,serif!important;max-width:90vw!important;min-width:280px!important;' +
     'min-height:44px!important;width:max-content!important;height:auto!important;' +
     'padding:12px 20px!important;text-align:center!important;border:2px solid #3a2810!important;' +
-    'box-sizing:border-box!important;white-space:nowrap!important;';
+    'box-sizing:border-box!important;white-space:normal!important;overflow-wrap:anywhere!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
 let stickyNamedOccupiedBanner = '';
@@ -200,7 +200,7 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.padding = '12px 20px';
     node.style.minWidth = '280px';
     node.style.minHeight = '44px';
-    node.style.whiteSpace = 'nowrap';
+    node.style.whiteSpace = 'normal';
     node.style.pointerEvents = 'none';
     const css = node.style as { cssText?: string };
     if (typeof css.cssText === 'string') {

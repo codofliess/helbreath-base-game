@@ -25,6 +25,7 @@ import {
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
     SELECTCHAR_OCCUPIED_OVERLAY_ID,
+    SELECTCHAR_REACT_OCCUPIED_ID,
     SLOT_GLYPH_H,
     SLOT_GLYPH_W,
 } from './selectCharSlotGlyphs';
@@ -1322,6 +1323,12 @@ export class SelectCharDesk {
      */
     private syncOccupiedDomOverlay(rows: SelectCharSlotPaintRow[]): void {
         if (typeof document === 'undefined') {
+            return;
+        }
+        // React KindGem banner owns HTML occupied labels. Extra Phaser cards stacked
+        // Co2/BebaMaster in the desk middle (live "rotísimo" screenshot).
+        if (document.getElementById(SELECTCHAR_REACT_OCCUPIED_ID)) {
+            this.removeOccupiedDomOverlay();
             return;
         }
         const existing = document.getElementById(SELECTCHAR_OCCUPIED_OVERLAY_ID);

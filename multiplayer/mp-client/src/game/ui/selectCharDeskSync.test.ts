@@ -9,7 +9,11 @@ import {
     selectCharDeskIsMissingOccupiedSlots,
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
-import { paintSlotGlyphCanvas } from './selectCharSlotGlyphs';
+import {
+    occupiedSlotOverlayInnerHtml,
+    paintSlotGlyphCanvas,
+    projectDeskPointToCss,
+} from './selectCharSlotGlyphs';
 
 const elon: CharacterSlotSummary = {
     slotIndex: 0,
@@ -219,5 +223,31 @@ describe('paintSlotGlyphCanvas', () => {
         assert.deepEqual(written, ['Elon', 'Lev. 150']);
         assert.deepEqual(texts, ['Elon', 'Lev. 150']);
         assert.equal(texts.includes('Empty'), false);
+    });
+});
+
+describe('occupiedSlotOverlayInnerHtml', () => {
+    it('emits a KindGem Elon Lv150 node and skips Empty shells', () => {
+        const rows = paintSelectCharSlotRows([elon]);
+        const html = occupiedSlotOverlayInnerHtml(rows);
+        assert.match(html, /data-occupied="1"/);
+        assert.match(html, />Elon</);
+        assert.match(html, />Lev\. 150</);
+        assert.equal(html.includes('Empty'), false);
+        assert.equal(html.includes('Create Character'), false);
+    });
+});
+
+describe('projectDeskPointToCss', () => {
+    it('maps desk (0,0) to the canvas CSS origin', () => {
+        const pos = projectDeskPointToCss(
+            { left: 10, top: 20, width: 800, height: 600 },
+            800,
+            600,
+            0,
+            0,
+        );
+        assert.equal(pos.left, 10);
+        assert.equal(pos.top, 20);
     });
 });

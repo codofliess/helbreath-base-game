@@ -21,6 +21,59 @@ export interface SlotGlyphRow {
     occupied: unknown;
 }
 
+export interface DeskCssRect {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+}
+
+/** Map SELECTCHAR desk pixels onto the CSS canvas box (Scale.NONE + full-bleed CSS). */
+export function projectDeskPointToCss(
+    canvasRect: DeskCssRect,
+    gameW: number,
+    gameH: number,
+    x: number,
+    y: number,
+): { left: number; top: number } {
+    const gw = Math.max(1, gameW);
+    const gh = Math.max(1, gameH);
+    return {
+        left: canvasRect.left + (x / gw) * canvasRect.width,
+        top: canvasRect.top + (y / gh) * canvasRect.height,
+    };
+}
+
+export const SELECTCHAR_OCCUPIED_OVERLAY_ID = 'selectchar-occupied-labels';
+
+/** HTML for occupied KindGem labels (DOM sits above Phaser Canvas). */
+export function occupiedSlotOverlayInnerHtml(rows: SlotGlyphRow[]): string {
+    const parts: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row?.occupied) {
+            continue;
+        }
+        const name = escapeOverlayText(row.name);
+        const lev = escapeOverlayText(row.lev);
+        parts.push(
+            `<div class="sc-slot-glyph" data-slot="${i}" data-occupied="1">` +
+                `<div class="sc-slot-glyph__name">${name}</div>` +
+                `<div class="sc-slot-glyph__lev">${lev}</div>` +
+                `</div>`,
+        );
+    }
+    return parts.join('');
+}
+
+function escapeOverlayText(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 /** Fill a slot label canvas with occupied Elon (or Empty / Create Character). */
 export function paintSlotGlyphCanvas(ctx: SlotGlyphCanvas, row: SlotGlyphRow): string[] {
     ctx.clearRect(0, 0, SLOT_GLYPH_W, SLOT_GLYPH_H);

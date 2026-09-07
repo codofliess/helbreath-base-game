@@ -20,7 +20,14 @@ import {
     resolveSelectCharSelectedIndex,
     type SelectCharSlotPaintRow,
 } from './selectCharDeskSync';
-import { paintSlotGlyphCanvas, SLOT_GLYPH_H, SLOT_GLYPH_W } from './selectCharSlotGlyphs';
+import {
+    occupiedSlotOverlayInnerHtml,
+    paintSlotGlyphCanvas,
+    projectDeskPointToCss,
+    SELECTCHAR_OCCUPIED_OVERLAY_ID,
+    SLOT_GLYPH_H,
+    SLOT_GLYPH_W,
+} from './selectCharSlotGlyphs';
 import { Gender, SkinColor } from '../../Types';
 import {
     applyLoginDeskCanvasPresentation,
@@ -966,6 +973,7 @@ export class SelectCharDesk {
             this.detachKeyboard();
             this.closeWalletPanel();
             this.stopMenuWalkAnimation();
+            this.removeOccupiedDomOverlay();
             this.applyCanvasPresentation(false);
         }
     }
@@ -1061,6 +1069,7 @@ export class SelectCharDesk {
         }
         this.closeWalletPanel();
         this.stopMenuWalkAnimation();
+        this.removeOccupiedDomOverlay();
         for (const v of this.slotVisuals) {
             v.preview?.destroy();
             if (this.scene.textures.exists(v.glyphKey)) {
@@ -1257,7 +1266,7 @@ export class SelectCharDesk {
             visual.nameValue
                 .setText(row.name)
                 .setPosition(visual.labelX || visual.nameValue.x, visual.labelY || visual.nameValue.y)
-                .setVisible(false)
+                .setVisible(true)
                 .setAlpha(1);
             visual.levValue
                 .setText(row.lev)
@@ -1265,7 +1274,7 @@ export class SelectCharDesk {
                     visual.labelX || visual.levValue.x,
                     (visual.labelY || visual.levValue.y) + 22,
                 )
-                .setVisible(false)
+                .setVisible(true)
                 .setAlpha(1);
             this.writeSlotGlyphImage(visual, row);
             if (occupied) {
@@ -1289,9 +1298,12 @@ export class SelectCharDesk {
             } catch (err) {
                 console.warn('[SelectCharDesk] Menu preview failed; keeping name/level text', err);
             }
+            this.root.bringToTop(visual.nameValue);
+            this.root.bringToTop(visual.levValue);
             this.root.bringToTop(visual.glyphImage);
             this.root.bringToTop(visual.citySealLabel);
         }
+        this.syncOccupiedDomOverlay(rows);
         if (this.slots.length > 0 || paintedNames.some((n) => n !== 'Empty')) {
             selectCharWarn(
                 'SelectCharDesk painted slot texts names=%s selected=%d glyphs=%s',
@@ -1302,6 +1314,64 @@ export class SelectCharDesk {
         }
         this.refreshDetailPanel();
         this.refreshWalletRow();
+    }
+
+    /**
+     * HTML labels above the canvas so KindGem is not stuck on Phaser Text in a Container
+     * (live Dx8sUjya destroy/recreate kept Empty shells after Occupied Elon).
+     */
+    private syncOccupiedDomOverlay(rows: SelectCharSlotPaintRow[]): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        const existing = document.getElementById(SELECTCHAR_OCCUPIED_OVERLAY_ID);
+        if (!this.visible) {
+            existing?.remove();
+            return;
+        }
+        const inner = occupiedSlotOverlayInnerHtml(rows);
+        if (!inner) {
+            existing?.remove();
+            return;
+        }
+        const root = existing ?? document.createElement('div');
+        root.id = SELECTCHAR_OCCUPIED_OVERLAY_ID;
+        root.setAttribute('data-selectchar-occupied', '1');
+        root.innerHTML = inner;
+        if (!existing) {
+            document.body.appendChild(root);
+        }
+        const canvas = this.scene.game.canvas;
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!rect || rect.width < 2 || rect.height < 2) {
+            return;
+        }
+        const gameW = Math.max(1, this.scene.scale.width || this.viewW);
+        const gameH = Math.max(1, this.scene.scale.height || this.viewH);
+        const nodes = root.querySelectorAll<HTMLElement>('.sc-slot-glyph');
+        nodes.forEach((node) => {
+            const index = Number(node.dataset.slot);
+            const visual = this.slotVisuals[index];
+            if (!visual) {
+                return;
+            }
+            const pos = projectDeskPointToCss(
+                { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                gameW,
+                gameH,
+                visual.labelX || visual.nameValue.x,
+                visual.labelY || visual.nameValue.y,
+            );
+            node.style.left = `${Math.round(pos.left)}px`;
+            node.style.top = `${Math.round(pos.top)}px`;
+        });
+    }
+
+    private removeOccupiedDomOverlay(): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        document.getElementById(SELECTCHAR_OCCUPIED_OVERLAY_ID)?.remove();
     }
 
     private writeSlotGlyphImage(visual: SlotVisuals, row: SelectCharSlotPaintRow): void {

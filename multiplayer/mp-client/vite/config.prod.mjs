@@ -54,6 +54,8 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             output: {
+                // Phaser library only. Do not async-split src/game/main — that
+                // duplicates EventBus and moves SELECTCHAR desk-sync out of index-*.js.
                 manualChunks: {
                     phaser: ['phaser'],
                 },

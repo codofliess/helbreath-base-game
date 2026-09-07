@@ -7,6 +7,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 const mpClientRoot = path.resolve(__dirname, '..');
 
+function isPhaserPreloadId(id) {
+    return /(?:^|\/)phaser[-.]|PhaserGame|gameWorldCanvasPresentation/i.test(id);
+}
+
 const phasermsg = () => {
     return {
         name: 'phasermsg',
@@ -15,6 +19,15 @@ const phasermsg = () => {
         },
         generateBundle(_opts, bundle) {
             for (const [file, chunk] of Object.entries(bundle)) {
+                if (chunk.type === 'asset' && file.endsWith('.html')) {
+                    const html = String(chunk.source ?? '');
+                    if (/modulepreload[^>]+(?:phaser-|PhaserGame)/i.test(html)) {
+                        throw new Error(
+                            `Hub index.html must not modulepreload Phaser (KindGem Error 9 after seal). ${file}`,
+                        );
+                    }
+                    continue;
+                }
                 if (chunk.type !== 'chunk' || !chunk.isEntry) {
                     continue;
                 }
@@ -69,6 +82,14 @@ export default defineConfig({
     build: {
         outDir: 'dist',
         emptyOutDir: true,
+        // Do not modulepreload PhaserGame / phaser from the hub HTML. Chrome
+        // evaluates that graph after Phantom overlay and Aw Snaps Error 9
+        // before React Explorer Occupied can paint.
+        modulePreload: {
+            resolveDependencies(_filename, deps) {
+                return deps.filter((dep) => !isPhaserPreloadId(dep));
+            },
+        },
         rollupOptions: {
             output: {
                 // Do NOT put Phaser in manualChunks. That chunk also collects Vite CJS

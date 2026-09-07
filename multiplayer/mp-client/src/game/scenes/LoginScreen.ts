@@ -12,7 +12,6 @@ import {
 import {
     CURRENT_SCENE_READY,
     INITIAL_GAME_WORLD_STATE_RECEIVED,
-    IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
     OUT_UI_SET_SELECTED_MAP,
     PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED,
@@ -25,53 +24,29 @@ import type { InitialGameWorldStateEventData } from '../../Types';
 import { setConnectingDialogOpen } from '../../ui/store/ConnectingDialog.store';
 import {
     connectDialogStore,
-    enterPlayWorldPhase,
-    openConnectDialogForLogin,
     setConnectDialogOpen,
-    setConnectWalletSession,
     takePendingWorldEnter,
     setConnectGatePhase,
     clearPhaserWorldSession,
 } from '../../ui/store/ConnectDialog.store';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
-import { clearWalletDeepLink, consumeWalletDeepLink, getStoredWalletPubkey } from '../../utils/walletAuth';
 import { forceClearLoginDeskCanvasPresentation } from '../ui/loginDeskPresentation';
-import { SelectCharDesk } from '../ui/SelectCharDesk';
-import {
-    applyStoreToSelectCharDesk,
-    paintSelectCharSlotRows,
-    resolveSelectCharSlotsForPaint,
-    selectCharDeskIsMissingOccupiedSlots,
-} from '../ui/selectCharDeskSync';
-import { peekCachedOccupiedCharacterList } from '../../utils/characterListApi';
-import type { CharacterSlotSummary } from '../../utils/characterListApi';
-import { selectCharWarn } from '../../utils/selectCharTrace';
-import { CreateCharDesk } from '../ui/CreateCharDesk';
-import { ArenaSelectCharDesk } from '../ui/ArenaSelectCharDesk';
-import { loadArenaKits } from '../../utils/arenaKits';
-import { LOAD_BOOT_SPRITES_ON_DEMAND } from '../../Config';
-import { loadSelectAppearanceSprites } from '../../utils/bootCatalog';
 
 /**
- * Login screen. Hub, SELECTCHAR, Create, and Arena are React.
- * Phaser boots only for queued world enter (`entering-world`).
+ * Phaser login scene is connect-only. Hub / SELECTCHAR / Arena stay React.
+ * Do not import SelectCharDesk / CreateCharDesk / ArenaSelectCharDesk here —
+ * those constructors plus paper-doll `.spr` decode are the KindGem Error 9
+ * path if this scene ever boots before Occupied paints.
  */
 export class LoginScreen extends Scene {
     private backgroundImage!: Phaser.GameObjects.Image;
-    private selectCharDesk: SelectCharDesk | undefined;
-    private createCharDesk: CreateCharDesk | undefined;
-    private arenaSelectCharDesk: ArenaSelectCharDesk | undefined;
-    private storeUnsubscribe: (() => void) | undefined;
-    private characterSlotsUpdatedHandler: ((slots?: CharacterSlotSummary[]) => void) | undefined;
     private isConnecting = false;
     private pendingInitialGameWorldStateListener: ((data: InitialGameWorldStateEventData) => void) | undefined;
     /** When set, login is waiting for initial state after TCP connect; auth failure closes the socket first. */
     private loginPendingDisconnectHandler: (() => void) | undefined;
     private connectToServerHandler: ((payload: ConnectToServerPayload) => void) | undefined;
     private prefetchPlayerItemAppearanceHandler: ((payload: PlayerItemAppearancePrefetchEventData) => void) | undefined;
-    /** Paper-doll `.spr` load kicked off when leaving the React hub for SELECTCHAR. */
-    private selectAppearanceLoad: Promise<void> | undefined;
 
     constructor() {
         super('LoginScreen');
@@ -81,7 +56,6 @@ export class LoginScreen extends Scene {
         this.clearPendingInitialGameWorldStateListener();
         this.clearLoginPendingDisconnectListener();
         this.clearConnectToServerListener();
-        this.teardownDesks();
         this.isConnecting = false;
 
         this.cameras.main.setBackgroundColor(0x000000);
@@ -91,7 +65,6 @@ export class LoginScreen extends Scene {
         const height = this.scale.height;
         const loginBgKey = getLoginScreenBgKey(this);
 
-        // Hub atmosphere only — SELECTCHAR / Create Character replace this when open.
         if (loginBgKey && this.textures.exists(loginBgKey)) {
             this.backgroundImage = this.add.image(width / 2, height / 2, loginBgKey);
             const scaleX = width / this.backgroundImage.width;
@@ -99,100 +72,36 @@ export class LoginScreen extends Scene {
             const scale = Math.max(scaleX, scaleY) * 1.18;
             this.backgroundImage.setScale(scale);
             this.backgroundImage.setDepth(0);
+            this.backgroundImage.setVisible(false);
         }
 
         createGameStateManager(this.game);
+        forceClearLoginDeskCanvasPresentation(this);
 
         this.events.once('shutdown', () => {
             this.clearPendingInitialGameWorldStateListener();
             this.clearLoginPendingDisconnectListener();
             this.clearConnectToServerListener();
             this.clearPrefetchPlayerItemAppearanceListener();
-            this.teardownDesks();
             this.isConnecting = false;
             setConnectingDialogOpen(false);
-            setConnectDialogOpen(false);
         });
     }
 
     public create() {
         const gsm = getGameStateManager(this.game);
+        setConnectDialogOpen(false);
+        forceClearLoginDeskCanvasPresentation(this);
+        console.info('[LoginScreen] Phaser ready for queued world enter (no SELECTCHAR desks)');
 
-        // Subscribe first; SELECTCHAR GameObjects wait until a desk phase after Phantom seal.
-        this.bindDeskStoreListeners();
-
-        // Landing Play Now: ?wallet=&token=&mode=world → character list (SELECTCHAR).
-        // Deep-link stays in sessionStorage until desk is shown (Strict Mode safe).
-        const alreadyEnteringWorld =
-            !!connectDialogStore.state.walletSession &&
-            connectDialogStore.state.phase !== 'hub';
-        const enteringWorld = connectDialogStore.state.phase === 'entering-world';
-
-        const deepLink = consumeWalletDeepLink();
-        if (deepLink) {
-            gsm.setWalletSession(
-                deepLink.session.wallet,
-                deepLink.session.token,
-                deepLink.session.expiresAt,
-            );
-            if (deepLink.mode === 'world') {
-                console.info('[LoginScreen] Entering SELECTCHAR from landing deep link');
-                enterPlayWorldPhase(deepLink.session);
-            } else if (deepLink.mode === 'arena') {
-                // Arena entry gated until kit builder ships (see ArenaGate.ts).
-                setConnectWalletSession(deepLink.session);
-                openConnectDialogForLogin(gsm.getCharacterName() ?? '');
-                console.info('[LoginScreen] Arena deep link ignored — arena entry closed');
-            } else {
-                setConnectWalletSession(deepLink.session);
-                openConnectDialogForLogin(gsm.getCharacterName() ?? '');
-            }
-        } else if (enteringWorld) {
-            setConnectDialogOpen(false);
-            console.info('[LoginScreen] Phaser ready for queued world enter (no SELECTCHAR desks)');
-        } else if (alreadyEnteringWorld) {
-            // React hub already entered World before Phaser booted — keep SELECTCHAR.
+        const returnToReactSelectChar = () => {
+            this.isConnecting = false;
+            setConnectingDialogOpen(false);
+            setConnectGatePhase('play-world');
+            clearPhaserWorldSession();
             setConnectDialogOpen(true);
-            console.info('[LoginScreen] Phaser ready under existing play-world phase');
-        } else {
-            openConnectDialogForLogin(gsm.getCharacterName() ?? '');
-        }
-
-        this.syncDesksFromStore();
-        // Re-apply after React ConnectDialog mounts + canvas presentation settles.
-        this.time.delayedCall(80, () => this.syncDesksFromStore());
-        this.time.delayedCall(350, () => {
-            this.syncDesksFromStore();
-            // Desk is up — drop deep-link so refresh doesn't re-enter mid-session oddly.
-            if (connectDialogStore.state.phase === 'play-world') {
-                clearWalletDeepLink();
-            }
-        });
-        this.time.delayedCall(900, () => this.syncDesksFromStore());
-        // CharacterList often settles after the first paint; keep pulling cache/store onto the desk.
-        this.time.addEvent({
-            delay: 250,
-            repeat: 16,
-            callback: () => {
-                const st = connectDialogStore.state;
-                if (st.phase !== 'play-world' || this.isConnecting) {
-                    return;
-                }
-                this.syncDesksFromStore();
-            },
-        });
-        // Safety: never leave a black stage if SELECTCHAR failed to appear.
-        this.time.delayedCall(2000, () => {
-            const st = connectDialogStore.state;
-            if (st.phase !== 'play-world' || this.isConnecting) {
-                return;
-            }
-            if (!this.selectCharDesk) {
-                console.warn('[LoginScreen] SELECTCHAR missing after deep link — rebuilding desks');
-                this.ensureDesks();
-            }
-            this.syncDesksFromStore();
-        });
+            setNetworkManager(this.game, undefined);
+        };
 
         const handleConnectToServer = async (payload: ConnectToServerPayload) => {
             if (this.isConnecting) {
@@ -203,8 +112,6 @@ export class LoginScreen extends Scene {
             clearPendingPlayerItemAppearancePrefetch(this.game);
             this.clearPendingInitialGameWorldStateListener();
             setConnectingDialogOpen(true);
-            // Destroy desks immediately so SELECTCHAR never composites under GameWorld / City Select.
-            this.destroyDeskInstances();
             forceClearLoginDeskCanvasPresentation(this);
             if (this.backgroundImage) {
                 this.backgroundImage.setVisible(false);
@@ -216,13 +123,7 @@ export class LoginScreen extends Scene {
                 }
                 this.clearPendingInitialGameWorldStateListener();
                 this.clearLoginPendingDisconnectListener();
-                this.isConnecting = false;
-                setConnectingDialogOpen(false);
-                setConnectDialogOpen(true);
-                setNetworkManager(this.game, undefined);
-                this.ensureDesks();
-                this.syncDesksFromStore();
-                // Name-taken / auth errors also arrive as SERVER_MESSAGE_RECEIVED (toast).
+                returnToReactSelectChar();
                 console.warn('[LoginScreen] Connection closed before initial game world state (e.g. auth rejected / name taken).');
             };
 
@@ -267,7 +168,6 @@ export class LoginScreen extends Scene {
                     EventBus.emit(OUT_UI_SET_SELECTED_MAP, data.gameWorldId);
                 }
                 getInventoryManager(this.game);
-                this.destroyDeskInstances();
                 forceClearLoginDeskCanvasPresentation(this);
                 this.scene.start('GameWorld');
             };
@@ -313,13 +213,8 @@ export class LoginScreen extends Scene {
             } catch (error) {
                 this.clearPendingInitialGameWorldStateListener();
                 this.clearLoginPendingDisconnectListener();
-                this.isConnecting = false;
-                setConnectingDialogOpen(false);
-                setConnectGatePhase('play-world');
-                clearPhaserWorldSession();
-                setConnectDialogOpen(true);
                 console.error('[LoginScreen] Failed to connect to the server.', error);
-                setNetworkManager(this.game, undefined);
+                returnToReactSelectChar();
             }
         };
 
@@ -338,181 +233,6 @@ export class LoginScreen extends Scene {
         EventBus.on(PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED, queuePrefetch);
 
         EventBus.emit(CURRENT_SCENE_READY, this);
-    }
-
-    /** Mirrors connectDialogStore desk phases onto Phaser SELECTCHAR / Create / Arena. */
-    private syncDesksFromStore(eventSlots?: CharacterSlotSummary[]): void {
-        const state = connectDialogStore.state;
-        if (state.phase === 'play-world' && !state.isOpen && !this.isConnecting) {
-            setConnectDialogOpen(true);
-        }
-        const showSelect = state.phase === 'play-world' && !this.isConnecting;
-        const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
-        const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
-
-        if ((showSelect || showCreate || showArena) && !this.isConnecting) {
-            if (!this.selectCharDesk || !this.createCharDesk || !this.arenaSelectCharDesk) {
-                this.ensureDesks();
-            }
-        }
-
-        const selectDesk = this.selectCharDesk;
-        const createDesk = this.createCharDesk;
-        const arenaDesk = this.arenaSelectCharDesk;
-        // World SELECTCHAR only needs selectDesk; arena/create optional if construct failed.
-        if (!selectDesk && !createDesk && !arenaDesk) {
-            return;
-        }
-
-        if (showSelect || showCreate || showArena) {
-            this.ensureSelectAppearanceSprites();
-        }
-
-        // Activate the incoming desk before hiding the others so shared canvas presentation
-        // does not briefly restore 800×600 between SELECTCHAR ↔ Create Character ↔ Arena.
-        try {
-            if (showCreate && createDesk) {
-                createDesk.setVisible(true, state.selectedSlotIndex);
-                selectDesk?.setVisible(false);
-                arenaDesk?.setVisible(false);
-            } else if (showSelect && selectDesk) {
-                // Hide sibling desks first (Create is depth 21) so Empty/Create chrome
-                // from those roots cannot cover occupied World SELECTCHAR labels.
-                createDesk?.setVisible(false);
-                arenaDesk?.setVisible(false);
-                const wallet =
-                    state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || '';
-                const cached = wallet ? peekCachedOccupiedCharacterList(wallet)?.slots ?? [] : [];
-                const characterSlots = resolveSelectCharSlotsForPaint(
-                    eventSlots,
-                    state.characterSlots,
-                    cached,
-                );
-                applyStoreToSelectCharDesk(selectDesk, {
-                    characterSlots,
-                    selectedSlotIndex: state.selectedSlotIndex,
-                    characterListLoading: state.characterListLoading,
-                });
-                const deskSlots = selectDesk.getCharacterSlots();
-                if (selectCharDeskIsMissingOccupiedSlots(characterSlots, deskSlots)) {
-                    selectDesk.setCharacterSlots(characterSlots);
-                    selectDesk.forceRebuild();
-                }
-                selectDesk.applyPaintedSlotRows(paintSelectCharSlotRows(characterSlots));
-                createDesk?.setVisible(false);
-                arenaDesk?.setVisible(false);
-                if (characterSlots.length > 0) {
-                    const names = characterSlots.map((s) => s.name).join(',');
-                    selectCharWarn(
-                        'LoginScreen SELECTCHAR desk sync slots=%d names=%s',
-                        characterSlots.length,
-                        names,
-                    );
-                } else {
-                    selectCharWarn(
-                        'LoginScreen SELECTCHAR desk sync slots=0 (empty shells) loading=%s store=%d',
-                        state.characterListLoading,
-                        state.characterSlots.length,
-                    );
-                }
-            } else if (showArena && arenaDesk) {
-                arenaDesk.setVisible(true);
-                selectDesk?.setVisible(false);
-                createDesk?.setVisible(false);
-                const wallet =
-                    state.walletSession?.wallet?.trim() || getStoredWalletPubkey()?.trim() || undefined;
-                arenaDesk.setKits(loadArenaKits(wallet));
-                arenaDesk.setSelectedDeskIndex(state.arenaDeskIndex);
-            } else {
-                selectDesk?.setVisible(false);
-                createDesk?.setVisible(false);
-                arenaDesk?.setVisible(false);
-            }
-
-            if (this.backgroundImage) {
-                this.backgroundImage.setVisible(!showSelect && !showCreate && !showArena);
-            }
-        } catch (err) {
-            console.error('[LoginScreen] SELECTCHAR desk sync failed', err);
-        }
-    }
-
-    /** Paper-doll packs for SELECTCHAR after the React hub (not at Boot). */
-    private ensureSelectAppearanceSprites(): void {
-        if (!LOAD_BOOT_SPRITES_ON_DEMAND || this.selectAppearanceLoad) {
-            return;
-        }
-        this.selectAppearanceLoad = loadSelectAppearanceSprites(this)
-            .then(() => {
-                this.syncDesksFromStore();
-            })
-            .catch((error) => {
-                console.warn('[LoginScreen] Select appearance sprites failed', error);
-                this.selectAppearanceLoad = undefined;
-            });
-    }
-
-    /** Store + EventBus desk sync without allocating SELECTCHAR GameObjects yet. */
-    private bindDeskStoreListeners(): void {
-        if (!this.storeUnsubscribe) {
-            this.storeUnsubscribe = connectDialogStore.subscribe(() => {
-                this.syncDesksFromStore();
-            });
-        }
-        if (!this.characterSlotsUpdatedHandler) {
-            this.characterSlotsUpdatedHandler = (slots?: CharacterSlotSummary[]) => {
-                this.syncDesksFromStore(Array.isArray(slots) ? slots : undefined);
-            };
-            EventBus.on(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
-        }
-    }
-
-    /** Creates SELECTCHAR / Create / Arena desks and store subscription if missing. */
-    private ensureDesks(): void {
-        // Create independently so one desk constructor crash cannot kill World SELECTCHAR.
-        if (!this.selectCharDesk) {
-            try {
-                this.selectCharDesk = new SelectCharDesk(this);
-            } catch (err) {
-                console.error('[LoginScreen] SelectCharDesk failed to construct', err);
-            }
-        }
-        if (!this.createCharDesk) {
-            try {
-                this.createCharDesk = new CreateCharDesk(this);
-            } catch (err) {
-                console.error('[LoginScreen] CreateCharDesk failed to construct', err);
-            }
-        }
-        if (!this.arenaSelectCharDesk) {
-            try {
-                this.arenaSelectCharDesk = new ArenaSelectCharDesk(this);
-            } catch (err) {
-                console.error('[LoginScreen] ArenaSelectCharDesk failed to construct', err);
-            }
-        }
-        this.bindDeskStoreListeners();
-    }
-
-    /** Destroys desk GameObjects and restores canvas; keeps the store subscription for reconnect. */
-    private destroyDeskInstances(): void {
-        this.selectCharDesk?.destroy();
-        this.selectCharDesk = undefined;
-        this.createCharDesk?.destroy();
-        this.createCharDesk = undefined;
-        this.arenaSelectCharDesk?.destroy();
-        this.arenaSelectCharDesk = undefined;
-        forceClearLoginDeskCanvasPresentation(this);
-    }
-
-    private teardownDesks(): void {
-        this.storeUnsubscribe?.();
-        this.storeUnsubscribe = undefined;
-        if (this.characterSlotsUpdatedHandler) {
-            EventBus.off(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
-            this.characterSlotsUpdatedHandler = undefined;
-        }
-        this.destroyDeskInstances();
     }
 
     private clearConnectToServerListener(): void {

@@ -376,7 +376,7 @@ function App()
     }, [travelerMode]);
 
     /**
-     * SELECTCHAR / Create Character live on LoginScreen. If isMapLoaded stayed true after
+     * SELECTCHAR / Create Character live on React ConnectDialog. If isMapLoaded stayed true after
      * a prior world session, HotkeyBar + dock would paint under/over the classic desk.
      * Reset world HUD ownership whenever we leave GameWorld.
      */

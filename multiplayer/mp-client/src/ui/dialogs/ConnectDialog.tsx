@@ -97,8 +97,8 @@ function slotForIndex(slots: CharacterSlotSummary[], index: number): CharacterSl
 
 /**
  * Login gate: hub (World | Goddesses | Arena portals).
- * World SELECTCHAR / Create Character / Arena kits are Phaser-only desks (wallet stays on the hub).
- * Host/port are hardcoded under the hood (never shown on World flow).
+ * World SELECTCHAR / Create Character / Arena kits are React desks (wallet stays on the hub).
+ * Phaser boots only on Start. Host/port are hardcoded under the hood.
  */
 export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     const {
@@ -821,7 +821,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             }
             EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, justAuthed ? 1200 : 400);
             if (justAuthed) {
-                // Let Phantom/KindGem close before LoginScreen allocates SELECTCHAR desks.
+                // Let Phantom/KindGem close before the React Explorer desk paints.
                 await yieldForWalletUi();
             }
             enterPlayWorldPhase(session);

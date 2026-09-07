@@ -105,6 +105,9 @@ var progressionConfig = await Config.LoadProgressionConfig();
 Progression.Initialize(progressionConfig);
 Console.WriteLine($"[Server] Progression loaded: maxLevel {progressionConfig.MaxLevel}, maxRebirth {progressionConfig.MaxRebirth}, {progressionConfig.Milestones.Length} milestones.");
 MobSpecialty.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Config"));
+GuildProgression.Initialize(
+    Path.Combine(Directory.GetCurrentDirectory(), "Config"),
+    Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
 var beginnerPathConfig = await Config.LoadBeginnerPathConfig();
 BeginnerPath.Initialize(beginnerPathConfig);
 Console.WriteLine($"[Server] BeginnerPath loaded: {beginnerPathConfig.Quests.Length} quests.");

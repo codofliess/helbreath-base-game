@@ -11,7 +11,10 @@ namespace Server.Helpers;
 public static class Referral {
     public static void Initialize(string charsDirectory) => ReferralStore.Initialize(charsDirectory);
 
-    public static void Tick(long nowMs) => ReferralStore.Tick(nowMs);
+    public static void Tick(long nowMs) {
+        ReferralStore.Tick(nowMs);
+        GuildProgression.Tick(nowMs);
+    }
 
     /// <summary>
     /// After character is in world: ensure code, apply ?ref=, grant pending invitee rewards, snapshot guild.
@@ -24,6 +27,7 @@ public static class Referral {
         }
 
         ReferralStore.RememberGuild(wallet, player.GuildId);
+        GuildProgression.RememberMemberStake(player.GuildId, wallet, player.StakedHell);
         var code = ReferralStore.GetOrCreateCode(wallet, player.CharacterName);
         if (!string.IsNullOrEmpty(code)) {
             Notify(player, $"Your code: {code} — share https://play.chainlords.net/?ref={code}");

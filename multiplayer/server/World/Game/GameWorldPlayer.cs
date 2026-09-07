@@ -534,9 +534,10 @@ public class GameWorldPlayer : GameWorldActionableEntity {
         hungerStatus = Math.Clamp(value, 0, Helpers.Hunger.MaxHunger);
     }
 
-    /// <summary>Sets mock/ledger staked $HELL used only for specialty effective level offset.</summary>
+    /// <summary>Sets mock/ledger staked $HELBREATH (personal specialty + guild pledge when guilded).</summary>
     public void SetStakedHell(long amount) {
         stakedHell = Math.Max(0, amount);
+        Helpers.GuildProgression.RememberMemberStake(guildId, accountWallet, stakedHell);
     }
 
     public void SetLastHungerTickUtc(DateTimeOffset utc) {
@@ -1245,6 +1246,9 @@ public class GameWorldPlayer : GameWorldActionableEntity {
             return;
         }
         contribution = Math.Max(0, contribution + delta);
+        if (delta > 0) {
+            Helpers.GuildProgression.AddActivity(guildId, contribution: delta);
+        }
     }
 
     public void SetGardenQuest(string questId, int progress) {

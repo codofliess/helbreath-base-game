@@ -71,6 +71,7 @@ public static class PvpAcademy {
             row.DisplayName = killer.CharacterName ?? row.DisplayName;
             SaveUnlocked();
         }
+        GuildProgression.AddActivity(killer.GuildId, enemyKills: 1);
     }
 
     public static int GetEkCount(GameWorldPlayer player) {

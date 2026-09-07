@@ -7555,6 +7555,30 @@ button.city-select-dialog-btn.olympia-text-btn {
     background: linear-gradient(90deg, #6a1010, #c03030);
 }
 
+.guild-progress {
+    position: relative;
+    z-index: 2;
+    margin: 8px 6px 0;
+    text-align: center;
+}
+
+.guild-progress-line {
+    margin: 2px 0 0;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #040032;
+}
+
+.guild-progress-split {
+    opacity: 0.78;
+}
+
+.guild-progress-maps {
+    max-height: 48px;
+    overflow: auto;
+    word-break: break-word;
+}
+
 .guild-menu-item-btn {
     display: block;
     width: 100%;

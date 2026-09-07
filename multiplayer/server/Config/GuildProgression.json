@@ -1,0 +1,69 @@
+{
+  "token": "$HELBREATH",
+  "stakePerGuildLevel": 1000000,
+  "activity": {
+    "pointsPerLevelBase": 100,
+    "contributionWeight": 1,
+    "ekWeight": 80,
+    "goldPerPoint": 10000,
+    "majesticWeight": 25
+  },
+  "ranks": [
+    {
+      "minLevel": 0,
+      "huntmaster": 0,
+      "raidmaster": 0,
+      "captains": 0,
+      "teleports": ["aregldhall", "elvgldhall"]
+    },
+    {
+      "minLevel": 1,
+      "huntmaster": 1,
+      "raidmaster": 0,
+      "captains": 1,
+      "teleports": ["middleland"]
+    },
+    {
+      "minLevel": 3,
+      "huntmaster": 2,
+      "raidmaster": 1,
+      "captains": 2,
+      "teleports": ["huntzone1", "huntzone2"]
+    },
+    {
+      "minLevel": 5,
+      "huntmaster": 3,
+      "raidmaster": 2,
+      "captains": 3,
+      "teleports": ["icebound", "huntzone3"]
+    },
+    {
+      "minLevel": 8,
+      "huntmaster": 4,
+      "raidmaster": 3,
+      "captains": 4,
+      "teleports": ["procella", "toh1"]
+    },
+    {
+      "minLevel": 10,
+      "huntmaster": 5,
+      "raidmaster": 4,
+      "captains": 5,
+      "teleports": ["promiseland", "abaddon"]
+    },
+    {
+      "minLevel": 15,
+      "huntmaster": 6,
+      "raidmaster": 5,
+      "captains": 6,
+      "teleports": ["toh2", "infernia-a"]
+    },
+    {
+      "minLevel": 20,
+      "huntmaster": 8,
+      "raidmaster": 6,
+      "captains": 8,
+      "teleports": ["toh3", "dglv2"]
+    }
+  ]
+}

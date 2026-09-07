@@ -4,7 +4,7 @@ import { DialogDragHandle, HeadlessDraggableDialog } from './HeadlessDraggableDi
 import { CharacterPaperDoll } from '../components/CharacterPaperDoll';
 import { OlympiaSpriteButton } from '../components/OlympiaSpriteButton';
 import { appStore } from '../store/App.store';
-import { guildStore } from '../store/Guild.store';
+import { guildProgressionFromStore, guildStore } from '../store/Guild.store';
 import { openGuildWarehouseDialog } from '../store/GuildWarehouseDialog.store';
 import { progressionStore } from '../store/Progression.store';
 import { partyStore } from '../store/Party.store';
@@ -681,6 +681,7 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
 
 function GuildPanel({ onBack }: { onBack: () => void }) {
     const guild = useStore(guildStore);
+    const progress = guildProgressionFromStore(guild);
     const menuItems: Array<{
         label: string;
         enabled: boolean;
@@ -722,10 +723,28 @@ function GuildPanel({ onBack }: { onBack: () => void }) {
                 ))}
             </ul>
             {guild.guildName.length > 0 && (
-                <p className="character-subpanel-hint character-subpanel-centered">
-                    {guild.guildName}
-                    {guild.isGuildMaster ? ' (Guildmaster)' : ''}
-                </p>
+                <div className="guild-progress">
+                    <p className="character-subpanel-hint character-subpanel-centered">
+                        {guild.guildName}
+                        {guild.isGuildMaster ? ' (Guildmaster)' : ''}
+                    </p>
+                    <p className="guild-progress-line">
+                        Guild Lv.{progress.effectiveLevel}{' '}
+                        <span className="guild-progress-split">
+                            (activity {progress.activityLevel} + stake {progress.stakeBonusLevels})
+                        </span>
+                    </p>
+                    <p className="guild-progress-line">
+                        Stake de esta guild: miembros suman · 1M $HELBREATH = +1
+                    </p>
+                    <p className="guild-progress-line">
+                        Huntmaster {progress.huntmaster} · Raidmaster {progress.raidmaster} · Captains{' '}
+                        {progress.captains}
+                    </p>
+                    <p className="guild-progress-line guild-progress-maps">
+                        Teleports: {progress.teleports.join(', ')}
+                    </p>
+                </div>
             )}
         </CharacterSubPanelShell>
     );

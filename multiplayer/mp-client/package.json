@@ -33,7 +33,7 @@
         "compress-assets:fast": "node ../../tools/compress-assets.js --ratio=1",
         "compress-assets:best": "node ../../tools/compress-assets.js --ratio=9",
         "lint": "pnpm exec tsc --noEmit",
-        "test:boot-smoke": "tsx --test scripts/boot-create-root-smoke.test.ts src/utils/walletAuth.hubSign.test.ts src/utils/characterListApi.test.ts src/game/ui/selectCharDeskSync.test.ts src/game/phaserWalletPark.test.ts src/ui/store/ConnectDialog.store.test.ts",
+        "test:boot-smoke": "tsx --test scripts/boot-create-root-smoke.test.ts src/utils/walletAuth.hubSign.test.ts src/utils/characterListApi.test.ts src/game/ui/selectCharDeskSync.test.ts src/game/phaserWalletPark.test.ts src/ui/store/ConnectDialog.store.test.ts src/constants/GuildProgression.test.ts",
         "test:map-stream": "tsx --test src/utils/mapViewportStream.test.ts src/utils/SpriteHttpLoader.test.ts src/utils/soundAlias.test.ts src/utils/bootCatalog.test.ts src/constants/Maps.lookup.test.ts src/utils/liveEnterElvine.test.ts src/utils/tileSheetFilter.test.ts src/utils/sprSheetSlice.test.ts src/utils/entitySheetFilter.test.ts src/utils/duelStreams.test.ts",
         "check:live-memory": "node scripts/assert-live-client-memory.mjs",
         "lint:eslint": "ESLINT_USE_FLAT_CONFIG=false eslint \"src/**/*.{ts,tsx}\""

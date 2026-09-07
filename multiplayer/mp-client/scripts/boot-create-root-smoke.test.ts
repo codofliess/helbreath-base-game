@@ -101,6 +101,8 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(src, /^import StartGame from '\.\/game\/main';/m);
         assert.doesNotMatch(src, /await import\('\.\/game\/main'\)/);
         assert.doesNotMatch(src, /useLayoutEffect\(/);
+        assert.match(src, /gatePhase === 'hub'/);
+        assert.match(src, /parkPhaserForWalletUi|setLivePhaserGame/);
     });
 
     it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {

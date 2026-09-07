@@ -1,9 +1,12 @@
 import { forwardRef, useEffect, useRef } from 'react';
+import { useStore } from '@tanstack/react-store';
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { EventBus } from './game/EventBus';
 import StartGame from './game/main';
+import { isPhaserParkedForWalletUi, setLivePhaserGame } from './game/phaserWalletPark';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
+import { connectDialogStore } from './ui/store/ConnectDialog.store';
 import { setWindowFocused } from './utils/RegistryUtils';
 import './ui/rpg-ui.css';
 
@@ -14,8 +17,10 @@ import './ui/rpg-ui.css';
  * second `EventBus` instance, so React slot emits never reached Phaser, and the
  * hashed `index-*.js` lacked SELECTCHAR desk-sync strings.
  *
- * Phaser still starts after two animation frames so the React hub can paint first.
- * Canvas 2D is the primary renderer; StartGame failures leave `#root` intact.
+ * Phaser does **not** boot on the React hub. KindGem Phantom connect/sign Aw Snaps
+ * (Error 9, firmas=0) if Canvas is compositing under the wallet overlay. StartGame
+ * waits until SELECTCHAR / Create / Arena (`phase !== 'hub'`). Canvas 2D is the
+ * primary renderer; StartGame failures leave `#root` intact.
  */
 
 export interface IRefPhaserGame
@@ -34,10 +39,16 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     const game = useRef<Phaser.Game | null>(null);
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
+    const gatePhase = useStore(connectDialogStore, (s) => s.phase);
 
-    // Hub paints first (rAF). Game module is static so EventBus is not split.
+    // Game module is static so EventBus is not split. Boot only after wallet seal
+    // opens a Phaser desk — hub Phantom UI must not share a live canvas.
     useEffect(() =>
     {
+        if (gatePhase === 'hub' || game.current !== null) {
+            return;
+        }
+
         let cancelled = false;
         let paintFrame = 0;
 
@@ -47,15 +58,18 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
                     return;
                 }
                 game.current = StartGame('game-container');
+                setLivePhaserGame(game.current);
             } catch (err) {
                 console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
                 game.current = null;
+                setLivePhaserGame(null);
             }
 
             if (cancelled) {
                 if (game.current) {
                     game.current.destroy(true);
                     game.current = null;
+                    setLivePhaserGame(null);
                 }
                 return;
             }
@@ -77,13 +91,18 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
         {
             cancelled = true;
             window.cancelAnimationFrame(paintFrame);
+        }
+    }, [gatePhase, ref]);
+
+    useEffect(() =>
+    {
+        return () =>
+        {
             if (game.current)
             {
                 game.current.destroy(true);
-                if (game.current !== null)
-                {
-                    game.current = null;
-                }
+                game.current = null;
+                setLivePhaserGame(null);
             }
         }
     }, [ref]);
@@ -166,7 +185,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
         const handleWindowBlur = () => {
             setWindowFocused(false);
-            if (!game.current) {
+            if (!game.current || isPhaserParkedForWalletUi()) {
                 return;
             }
             
@@ -192,7 +211,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
         const handleWindowFocus = () => {
             setWindowFocused(true);
-            if (!game.current) {
+            if (!game.current || isPhaserParkedForWalletUi()) {
                 return;
             }
             

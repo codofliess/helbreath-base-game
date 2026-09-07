@@ -83,6 +83,7 @@ import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
 import { HubWorldRankingButtons } from '../components/HubWorldRankingButtons';
 import { SelectCharOccupiedReactOverlay } from '../components/SelectCharOccupiedReactOverlay';
+import { yieldForWalletUi } from '../../game/phaserWalletPark';
 
 interface ConnectDialogProps {
     zIndex?: number;
@@ -842,6 +843,10 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                 return;
             }
             EventBus.emit(IN_UI_SUPPRESS_POINTER_INPUT, justAuthed ? 1200 : 400);
+            if (justAuthed) {
+                // Let Phantom/KindGem close before LoginScreen allocates SELECTCHAR desks.
+                await yieldForWalletUi();
+            }
             enterPlayWorldPhase(session);
             void loadCharacterListForPlayWorld(session);
             finishHubWorldEnter();

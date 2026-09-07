@@ -1,3 +1,5 @@
+import { parkPhaserForWalletUi } from '../game/phaserWalletPark';
+
 const DEFAULT_MIDDLEWARE_URL = 'http://localhost:3001';
 const PROD_MIDDLEWARE_URL =
     'https://chainlords-middleware-production.up.railway.app';
@@ -746,7 +748,7 @@ function resolvePhantomWalletAfterConnect(
     connectedWallet: string,
 ): Promise<string> {
     const immediate = readPhantomPublicKey(phantom, connectedWallet);
-    if (immediate && immediate !== connectedWallet) {
+    if (immediate) {
         return Promise.resolve(immediate);
     }
     if (typeof phantom.on !== 'function') {
@@ -773,7 +775,7 @@ function resolvePhantomWalletAfterConnect(
         timeoutId = window.setTimeout(() => {
             finish(readPhantomPublicKey(phantom, connectedWallet));
         }, 280);
-        phantom.on('accountChanged', onAccount);
+        phantom.on?.('accountChanged', onAccount);
     });
 }
 
@@ -783,28 +785,30 @@ async function connectSolanaAndAuthenticate(onSignPending?: () => void): Promise
         throw new Error('Phantom wallet not found. Install it from phantom.app');
     }
 
-    const { publicKey } = await phantom.connect({ onlyIfTrusted: false });
-    const connectedWallet = publicKey.toBase58();
-    const wallet = await resolvePhantomWalletAfterConnect(phantom, connectedWallet);
-    const middlewareUrl = getMiddlewareAuthUrl();
+    return parkPhaserForWalletUi(async () => {
+        const { publicKey } = await phantom.connect({ onlyIfTrusted: false });
+        const connectedWallet = publicKey.toBase58();
+        const wallet = await resolvePhantomWalletAfterConnect(phantom, connectedWallet);
+        const middlewareUrl = getMiddlewareAuthUrl();
 
-    const challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
-    onSignPending?.();
-    const signed = await signChallengeMessage(phantom, challengeBody.message);
-    const signedWallet = (signed.publicKey?.toBase58?.() ?? '').trim();
-    if (signedWallet && signedWallet !== wallet) {
-        console.warn(
-            '[walletAuth] signMessage pubkey differed from challenge wallet; verifying challenge wallet (no second sign)',
-            { challengeWallet: wallet, signedWallet },
-        );
-    }
+        const challengeBody = await requestChallenge(middlewareUrl, 'sol', wallet);
+        onSignPending?.();
+        const signed = await signChallengeMessage(phantom, challengeBody.message);
+        const signedWallet = (signed.publicKey?.toBase58?.() ?? '').trim();
+        if (signedWallet && signedWallet !== wallet) {
+            console.warn(
+                '[walletAuth] signMessage pubkey differed from challenge wallet; verifying challenge wallet (no second sign)',
+                { challengeWallet: wallet, signedWallet },
+            );
+        }
 
-    const signatureBytes = signed.signature instanceof Uint8Array
-        ? signed.signature
-        : new Uint8Array(signed.signature as ArrayLike<number>);
+        const signatureBytes = signed.signature instanceof Uint8Array
+            ? signed.signature
+            : new Uint8Array(signed.signature as ArrayLike<number>);
 
-    const challengeId = challengeBody.challengeId || challengeBody.challenge;
-    return verifySignature(middlewareUrl, 'sol', wallet, challengeId, toBase64(signatureBytes));
+        const challengeId = challengeBody.challengeId || challengeBody.challenge;
+        return verifySignature(middlewareUrl, 'sol', wallet, challengeId, toBase64(signatureBytes));
+    });
 }
 
 async function connectEvmAndAuthenticate(chainId: 'rh' | 'base'): Promise<WalletSession> {

@@ -154,6 +154,16 @@ assert(
     'LOAD_BOOT_SPRITES_ON_DEMAND must stay true so live does not decode body/UI .spr before the React hub',
 );
 
+const phaserGame = read('src/PhaserGame.tsx');
+const walletAuth = read('src/utils/walletAuth.ts');
+assert(
+    /gatePhase === 'hub'/.test(phaserGame) &&
+        /setLivePhaserGame/.test(phaserGame) &&
+        /parkPhaserForWalletUi/.test(walletAuth) &&
+        walletAuth.indexOf('parkPhaserForWalletUi') < walletAuth.indexOf('phantom.connect'),
+    'Phaser must not boot on the hub; Phantom connect/sign must park the canvas (KindGem Aw Snap 9)',
+);
+
 assert(
     /export const ENABLE_ZIP_LOADING = false;/.test(config),
     'ENABLE_ZIP_LOADING must stay false on live (zip decompress + register all files OOMs enter)',

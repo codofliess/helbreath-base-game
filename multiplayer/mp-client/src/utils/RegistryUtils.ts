@@ -1,12 +1,9 @@
-import { Scene, Game } from 'phaser';
-import { MusicManager } from './MusicManager';
+import type { PhaserGameLike, PhaserSceneLike } from '../game/phaserHubTypes';
 import { GameStateManager } from './GameStateManager';
 import { InventoryManager } from './InventoryManager';
-import { HBMap } from '../game/assets/HBMap';
 import { CachedMinimap, type PivotData, type PivotFrame } from '../Types';
 import type { SoundManager } from './SoundManager';
 import {
-    MUSIC_MANAGER_KEY,
     SOUND_MANAGER_KEY,
     GAME_STATE_MANAGER_KEY,
     INVENTORY_MANAGER_KEY,
@@ -27,7 +24,7 @@ import { parseGroundItemDisplaySize } from '../constants/GroundItemDisplay';
 import { NetworkManager } from './NetworkManager';
 import type { Gender, SkinColor, TeleportLocSet } from '../Types';
 import type { WeatherMode } from '../ui/store/MapDialog.store';
-import { mapBaseName, registryMapKey } from './mapCatalogLookup';
+import { mapBaseName } from './mapCatalogLookup';
 
 /**
  * Typed Phaser registry accessors: managers, binary/minimap cache, pivot tables, and UI flags.
@@ -58,33 +55,12 @@ export function isWindowFocused(): boolean {
 }
 
 /**
- * Gets or creates a MusicManager instance from the scene's registry.
- * If a MusicManager already exists in the registry, it will be reused and
- * its scene reference will be updated. Otherwise, a new instance will be created.
- * 
- * @param scene - The Phaser scene instance
- * @returns The MusicManager instance
- */
-export function getMusicManager(scene: Scene): MusicManager {
-    const existingMusicManager = getRegistryValue<MusicManager>(scene.registry, MUSIC_MANAGER_KEY);
-    if (existingMusicManager) {
-        // Update scene reference in case scene was recreated
-        existingMusicManager.setScene(scene);
-        return existingMusicManager;
-    } else {
-        const musicManager = new MusicManager(scene);
-        scene.registry.set(MUSIC_MANAGER_KEY, musicManager);
-        return musicManager;
-    }
-}
-
-/**
  * Creates a new GameStateManager instance and stores it in the game's registry.
  * 
  * @param game - The Phaser game instance
  * @returns The created GameStateManager instance
  */
-export function createGameStateManager(game: Game): GameStateManager {
+export function createGameStateManager(game: PhaserGameLike): GameStateManager {
     const gameStateManager = new GameStateManager();
     game.registry.set(GAME_STATE_MANAGER_KEY, gameStateManager);
     return gameStateManager;
@@ -97,7 +73,7 @@ export function createGameStateManager(game: Game): GameStateManager {
  * @param game - The Phaser game instance
  * @returns The SoundManager instance, or undefined
  */
-export function getSoundManager(game: Game): SoundManager | undefined {
+export function getSoundManager(game: PhaserGameLike): SoundManager | undefined {
     return getRegistryValue<SoundManager>(game.registry, SOUND_MANAGER_KEY);
 }
 
@@ -107,7 +83,7 @@ export function getSoundManager(game: Game): SoundManager | undefined {
  * @param game - The Phaser game instance
  * @param soundManager - The SoundManager instance to register
  */
-export function setSoundManager(game: Game, soundManager: SoundManager): void {
+export function setSoundManager(game: PhaserGameLike, soundManager: SoundManager): void {
     game.registry.set(SOUND_MANAGER_KEY, soundManager);
 }
 
@@ -117,7 +93,7 @@ export function setSoundManager(game: Game, soundManager: SoundManager): void {
  * @param game - The Phaser game instance
  * @returns The InventoryManager instance
  */
-export function getInventoryManager(game: Game): InventoryManager {
+export function getInventoryManager(game: PhaserGameLike): InventoryManager {
     const existing = getRegistryValue<InventoryManager>(game.registry, INVENTORY_MANAGER_KEY);
     if (existing) {
         return existing;
@@ -133,7 +109,7 @@ export function getInventoryManager(game: Game): InventoryManager {
  * @param game - The Phaser game instance
  * @returns The NetworkManager instance, or undefined
  */
-export function getNetworkManager(game: Game): NetworkManager | undefined {
+export function getNetworkManager(game: PhaserGameLike): NetworkManager | undefined {
     return getRegistryValue<NetworkManager>(game.registry, NETWORK_MANAGER_KEY);
 }
 
@@ -143,7 +119,7 @@ export function getNetworkManager(game: Game): NetworkManager | undefined {
  * @param game - The Phaser game instance
  * @param networkManager - The NetworkManager instance to register, or undefined to clear it
  */
-export function setNetworkManager(game: Game, networkManager: NetworkManager | undefined): void {
+export function setNetworkManager(game: PhaserGameLike, networkManager: NetworkManager | undefined): void {
     game.registry.set(NETWORK_MANAGER_KEY, networkManager);
 }
 
@@ -156,43 +132,12 @@ export function setNetworkManager(game: Game, networkManager: NetworkManager | u
  * @returns The GameStateManager instance
  * @throws Error if GameStateManager is not found in registry
  */
-export function getGameStateManager(game: Game): GameStateManager {
+export function getGameStateManager(game: PhaserGameLike): GameStateManager {
     const gameStateManager = getRegistryValue<GameStateManager>(game.registry, GAME_STATE_MANAGER_KEY);
     if (!gameStateManager) {
         throw new Error('[GameWorld] GameStateManager not found in registry. It should be created in LoginScreen.');
     }
     return gameStateManager;
-}
-
-/**
- * Stores a map in the scene's registry by key (e.g., 'map-aresden').
- *
- * @param scene - The Phaser scene instance
- * @param mapKey - The registry key (e.g., 'map-aresden')
- * @param map - The HBMap instance to store
- */
-export function setMap(scene: Scene, mapKey: string, map: HBMap): void {
-    scene.registry.set(registryMapKey(mapKey), map);
-}
-
-/**
- * Gets a map from the scene's registry based on the map name.
- * Converts map filename (e.g., 'aresden.amd') to registry key (e.g., 'map-aresden').
- */
-export function getMap(scene: Scene, mapName: string): HBMap {
-    const mapKey = registryMapKey(mapName);
-    const map = getRegistryValue<HBMap>(scene.registry, mapKey);
-
-    if (!map) {
-        throw Error(`Map not found in registry: ${mapKey}`);
-    }
-
-    return map;
-}
-
-/** Same keying as `getMap`, but no throw (e.g. before lazy map registration). */
-export function getMapIfPresent(scene: Scene, mapName: string): HBMap | undefined {
-    return getRegistryValue<HBMap>(scene.registry, registryMapKey(mapName));
 }
 
 /**
@@ -203,7 +148,7 @@ export function getMapIfPresent(scene: Scene, mapName: string): HBMap | undefine
  * @param mapName - The map filename (e.g., 'aresden.amd')
  * @returns The cached minimap data, or undefined if not found
  */
-export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap | undefined {
+export function getCachedMinimap(scene: PhaserSceneLike, mapName: string): CachedMinimap | undefined {
     const cacheKey = `minimap-${mapBaseName(mapName)}`;
     return getRegistryValue<CachedMinimap>(scene.registry, cacheKey);
 }
@@ -216,7 +161,7 @@ export function getCachedMinimap(scene: Scene, mapName: string): CachedMinimap |
  * @param mapName - The map filename (e.g., 'aresden.amd')
  * @param minimap - The minimap data to cache
  */
-export function setCachedMinimap(scene: Scene, mapName: string, minimap: CachedMinimap): void {
+export function setCachedMinimap(scene: PhaserSceneLike, mapName: string, minimap: CachedMinimap): void {
     const cacheKey = `minimap-${mapBaseName(mapName)}`;
     scene.registry.set(cacheKey, minimap);
 }
@@ -232,7 +177,7 @@ export function setCachedMinimap(scene: Scene, mapName: string, minimap: CachedM
  * @param mapObject - Whether this is a map object
  * @returns The pivot data, or undefined if not found
  */
-export function getPivotData(scene: Scene, textureKey: string, spriteName: string, mapObject: boolean): PivotData | undefined {
+export function getPivotData(scene: PhaserSceneLike, textureKey: string, spriteName: string, mapObject: boolean): PivotData | undefined {
     const pivotRegistryKey = mapObject
         ? `pivots-${textureKey}`
         : `pivots-sprite-${spriteName.toLowerCase()}`;
@@ -248,7 +193,7 @@ export function getPivotData(scene: Scene, textureKey: string, spriteName: strin
  * @param textureKey - The texture key (e.g., 'map-tile-123')
  * @param pivotData - The pivot data to store
  */
-export function setPivotDataByTextureKey(scene: Scene, textureKey: string, pivotData: PivotData): void {
+export function setPivotDataByTextureKey(scene: PhaserSceneLike, textureKey: string, pivotData: PivotData): void {
     const pivotRegistryKey = `pivots-${textureKey}`;
     scene.registry.set(pivotRegistryKey, pivotData);
 }
@@ -261,7 +206,7 @@ export function setPivotDataByTextureKey(scene: Scene, textureKey: string, pivot
  * @param spriteName - The sprite name (e.g., 'wm')
  * @param pivotData - The pivot data to store
  */
-export function setPivotDataBySpriteName(scene: Scene, spriteName: string, pivotData: PivotData): void {
+export function setPivotDataBySpriteName(scene: PhaserSceneLike, spriteName: string, pivotData: PivotData): void {
     const pivotRegistryKey = `pivots-${spriteName}`;
     scene.registry.set(pivotRegistryKey, pivotData);
 }
@@ -271,7 +216,7 @@ export function setPivotDataBySpriteName(scene: Scene, spriteName: string, pivot
  * Partial `.spr` loads must not replace earlier idle/combat sheets.
  */
 export function mergePivotSheetBySpriteCacheKey(
-    scene: Scene,
+    scene: PhaserSceneLike,
     cacheKey: string,
     sheetIndex: number,
     framePivots: PivotFrame[],
@@ -292,7 +237,7 @@ export function mergePivotSheetBySpriteCacheKey(
  * @param scene - The Phaser scene instance
  * @returns True if debug mode is enabled, false otherwise
  */
-export function isDebugModeEnabled(scene: Scene): boolean {
+export function isDebugModeEnabled(scene: PhaserSceneLike): boolean {
     return scene.registry.get(DEBUG_KEY) === true;
 }
 
@@ -302,31 +247,31 @@ export function isDebugModeEnabled(scene: Scene): boolean {
  * @param scene - The Phaser scene instance
  * @param enabled - Whether debug mode should be enabled
  */
-export function setDebugModeEnabled(scene: Scene, enabled: boolean): void {
+export function setDebugModeEnabled(scene: PhaserSceneLike, enabled: boolean): void {
     scene.registry.set(DEBUG_KEY, enabled);
 }
 
 /**
  * Returns the user-selected ground item display size from the scene registry.
  */
-export function getGroundItemDisplaySize(scene: Scene): GroundItemDisplaySize {
+export function getGroundItemDisplaySize(scene: PhaserSceneLike): GroundItemDisplaySize {
     return parseGroundItemDisplaySize(scene.registry.get(GROUND_ITEM_DISPLAY_SIZE_KEY));
 }
 
 /**
  * Persists the ground item display size in the scene registry.
  */
-export function setGroundItemDisplaySize(scene: Scene, size: GroundItemDisplaySize): void {
+export function setGroundItemDisplaySize(scene: PhaserSceneLike, size: GroundItemDisplaySize): void {
     scene.registry.set(GROUND_ITEM_DISPLAY_SIZE_KEY, size);
 }
 
 /** @deprecated Use getGroundItemDisplaySize(scene) === 'large' */
-export function isDisplayLargeItemsEnabled(scene: Scene): boolean {
+export function isDisplayLargeItemsEnabled(scene: PhaserSceneLike): boolean {
     return getGroundItemDisplaySize(scene) === 'large';
 }
 
 /** @deprecated Use setGroundItemDisplaySize */
-export function setDisplayLargeItemsEnabled(scene: Scene, enabled: boolean): void {
+export function setDisplayLargeItemsEnabled(scene: PhaserSceneLike, enabled: boolean): void {
     setGroundItemDisplaySize(scene, enabled ? 'large' : 'small');
 }
 
@@ -337,7 +282,7 @@ export function setDisplayLargeItemsEnabled(scene: Scene, enabled: boolean): voi
  * @param fileName - The filename/key of the binary resource
  * @returns The ArrayBuffer, or undefined if not found
  */
-export function getBinaryBuffer(scene: Scene, fileName: string): ArrayBuffer | undefined {
+export function getBinaryBuffer(scene: PhaserSceneLike, fileName: string): ArrayBuffer | undefined {
     return scene.cache.binary.get(fileName) as ArrayBuffer | undefined;
 }
 
@@ -348,14 +293,14 @@ export function getBinaryBuffer(scene: Scene, fileName: string): ArrayBuffer | u
  * @param scene - The Phaser scene (uses game registry)
  * @returns The texture key for the loading background, or undefined if not set
  */
-export function getLoadingBgKey(scene: Scene): string | undefined {
+export function getLoadingBgKey(scene: PhaserSceneLike): string | undefined {
     return getRegistryValue<string>(scene.registry, LOADING_BG_KEY);
 }
 
 /**
  * Login-screen background texture id (e.g. `login-screen-bg`). Set in Boot under `LOGIN_SCREEN_BG_KEY`.
  */
-export function getLoginScreenBgKey(scene: Scene): string | undefined {
+export function getLoginScreenBgKey(scene: PhaserSceneLike): string | undefined {
     return getRegistryValue<string>(scene.registry, LOGIN_SCREEN_BG_KEY);
 }
 
@@ -366,7 +311,7 @@ export function getLoginScreenBgKey(scene: Scene): string | undefined {
  * @param game - The Phaser game instance
  * @returns The HBSpriteSheet array, or undefined if not yet loaded
  */
-export function getItemPackSpriteSheets(game: Game): HBSpriteSheet[] | undefined {
+export function getItemPackSpriteSheets(game: PhaserGameLike): HBSpriteSheet[] | undefined {
     return getRegistryValue<HBSpriteSheet[]>(game.registry, ITEM_PACK_SPRITE_SHEETS_KEY);
 }
 
@@ -377,7 +322,7 @@ export function getItemPackSpriteSheets(game: Game): HBSpriteSheet[] | undefined
  * @param game - The Phaser game instance
  * @returns The Set of emitted tint keys, or undefined if not yet initialized
  */
-export function getItemPackEmittedTintKeys(game: Game): Set<string> | undefined {
+export function getItemPackEmittedTintKeys(game: PhaserGameLike): Set<string> | undefined {
     return getRegistryValue<Set<string>>(game.registry, ITEM_PACK_EMITTED_TINT_KEYS_KEY);
 }
 
@@ -387,7 +332,7 @@ export function getItemPackEmittedTintKeys(game: Game): Set<string> | undefined 
  * @param game - The Phaser game instance
  * @param spriteSheets - The HBSpriteSheet array from the loaded sprite-item-pack
  */
-export function setItemPackSpriteSheets(game: Game, spriteSheets: HBSpriteSheet[]): void {
+export function setItemPackSpriteSheets(game: PhaserGameLike, spriteSheets: HBSpriteSheet[]): void {
     game.registry.set(ITEM_PACK_SPRITE_SHEETS_KEY, spriteSheets);
 }
 
@@ -398,7 +343,7 @@ export function setItemPackSpriteSheets(game: Game, spriteSheets: HBSpriteSheet[
  * @param game - The Phaser game instance
  * @param emitted - The Set to track emitted tint keys
  */
-export function setItemPackEmittedTintKeys(game: Game, emitted: Set<string>): void {
+export function setItemPackEmittedTintKeys(game: PhaserGameLike, emitted: Set<string>): void {
     game.registry.set(ITEM_PACK_EMITTED_TINT_KEYS_KEY, emitted);
 }
 
@@ -409,7 +354,7 @@ export function setItemPackEmittedTintKeys(game: Game, emitted: Set<string>): vo
  * @param game - The Phaser game instance
  * @returns The player position { x, y }, or undefined if not yet set
  */
-export function getPlayerPosition(game: Game): { x: number; y: number } | undefined {
+export function getPlayerPosition(game: PhaserGameLike): { x: number; y: number } | undefined {
     return getRegistryValue<{ x: number; y: number }>(game.registry, PLAYER_POSITION_KEY);
 }
 
@@ -420,7 +365,7 @@ export function getPlayerPosition(game: Game): { x: number; y: number } | undefi
  * @param x - World X coordinate
  * @param y - World Y coordinate
  */
-export function setPlayerPosition(game: Game, x: number, y: number): void {
+export function setPlayerPosition(game: PhaserGameLike, x: number, y: number): void {
     game.registry.set(PLAYER_POSITION_KEY, { x, y });
 }
 
@@ -480,7 +425,7 @@ export interface InitialGameWorldState {
  * @param game - The Phaser game instance
  * @returns The initial game world state, or undefined if not set
  */
-export function getAndRemoveInitialGameWorldState(game: Game): InitialGameWorldState | undefined {
+export function getAndRemoveInitialGameWorldState(game: PhaserGameLike): InitialGameWorldState | undefined {
     const value = getRegistryValue<InitialGameWorldState>(game.registry, INITIAL_GAME_WORLD_STATE_KEY);
     if (value) {
         game.registry.remove(INITIAL_GAME_WORLD_STATE_KEY);
@@ -494,12 +439,12 @@ export function getAndRemoveInitialGameWorldState(game: Game): InitialGameWorldS
  * @param game - The Phaser game instance
  * @param data - The initial game world state (map name, player coordinates)
  */
-export function setInitialGameWorldState(game: Game, data: InitialGameWorldState): void {
+export function setInitialGameWorldState(game: PhaserGameLike, data: InitialGameWorldState): void {
     game.registry.set(INITIAL_GAME_WORLD_STATE_KEY, data);
 }
 
 /** Merge unique equipped appearance basenames until GameWorld drains them (InitialState prefetch). */
-export function appendPendingPlayerItemAppearancePrefetch(game: Game, spriteNames: string[]): void {
+export function appendPendingPlayerItemAppearancePrefetch(game: PhaserGameLike, spriteNames: string[]): void {
     if (!spriteNames.length) {
         return;
     }
@@ -509,7 +454,7 @@ export function appendPendingPlayerItemAppearancePrefetch(game: Game, spriteName
 }
 
 /** Remove and return queued prefetch basenames (caller starts loads on a stable scene). */
-export function takePendingPlayerItemAppearancePrefetch(game: Game): string[] {
+export function takePendingPlayerItemAppearancePrefetch(game: PhaserGameLike): string[] {
     const pending = getRegistryValue<string[]>(game.registry, PENDING_PLAYER_ITEM_APPEARANCE_PREFETCH_KEY);
     if (pending?.length) {
         game.registry.remove(PENDING_PLAYER_ITEM_APPEARANCE_PREFETCH_KEY);
@@ -518,6 +463,6 @@ export function takePendingPlayerItemAppearancePrefetch(game: Game): string[] {
     return [];
 }
 
-export function clearPendingPlayerItemAppearancePrefetch(game: Game): void {
+export function clearPendingPlayerItemAppearancePrefetch(game: PhaserGameLike): void {
     game.registry.remove(PENDING_PLAYER_ITEM_APPEARANCE_PREFETCH_KEY);
 }

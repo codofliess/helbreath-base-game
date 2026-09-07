@@ -182,4 +182,12 @@ describe('Phantom sign isolation', () => {
         assert.ok(parkIdx >= 0, 'must import parkPhaserForWalletUi');
         assert.ok(connectIdx > parkIdx, 'phantom.connect must run inside the park');
     });
+
+    it('EventBus used by wallet toast path does not import phaser', () => {
+        const bus = fs.readFileSync(
+            path.join(path.dirname(fileURLToPath(import.meta.url)), '../game/EventBus.ts'),
+            'utf8',
+        );
+        assert.doesNotMatch(bus, /from ['"]phaser['"]/);
+    });
 });

@@ -200,6 +200,9 @@ function unbindDeskCssResync(): void {
 }
 
 export function applyLoginDeskCanvasPresentation(scene: Scene, alreadyActive: boolean): boolean {
+    if (isPhaserParkedForWalletUi()) {
+        return alreadyActive;
+    }
     const game = scene.game;
     const canvas = game.canvas;
     if (!canvas) {

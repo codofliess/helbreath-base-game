@@ -9,6 +9,7 @@ import { TILE_SIZE } from '../assets/HBMap';
 import { ShadowManager } from '../../utils/ShadowManager';
 import type { SoundManager, SpatialConfig } from '../../utils/SoundManager';
 import type { MonsterStatesConfig, StateAnimationConfig } from '../../constants/Monsters';
+import { MonsterShadow } from '../../constants/Monsters';
 import { getSpriteFrameHeight } from '../../utils/SpriteUtils';
 import { idleEntitySheetIndices } from '../../utils/entitySheetFilter';
 import { loadMonsterAssetsOnDemand, shouldLoadMonsterAssetsOnDemand } from '../../utils/MonsterAssets';
@@ -28,6 +29,8 @@ import { AttackType, MonsterAllegiance, TemporaryEffectType } from '../../Types'
 import { calculateAnimationDuration, calculateFrameRateFromDuration } from '../../utils/AnimationUtils';
 import { MonsterEntityState } from '../../proto/generated/network';
 
+export { MonsterShadow } from '../../constants/Monsters';
+
 /**
  * Monster animation states mapping to sprite sheet indexes.
  */
@@ -46,16 +49,6 @@ export enum MonsterState {
     Dead = 5,
     /** Take damage with knockback - plays TakeDamage animation while moving 1 cell away from attacker */
     TakeDamageWithKnockback = 6,
-}
-
-/**
- * Shadow display options for monsters.
- */
-export enum MonsterShadow {
-    /** No shadow displayed */
-    NoShadow = 0,
-    /** Body shadow displayed beneath the monster */
-    BodyShadow = 1,
 }
 
 /**

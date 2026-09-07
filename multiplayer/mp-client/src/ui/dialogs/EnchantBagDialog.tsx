@@ -22,7 +22,7 @@ import {
     IN_UI_ENCHANT_MATERIAL_UPGRADE,
     IN_UI_GET_ENCHANT_MATERIALS,
 } from '../../constants/EventNames';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 
 interface EnchantBagDialogProps {

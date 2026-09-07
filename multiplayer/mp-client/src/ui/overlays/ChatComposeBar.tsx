@@ -11,7 +11,7 @@ import { CHAT_LOG_TABS, parseChatSendInput } from '../../constants/ChatChannels'
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_SUPPRESS_POINTER_INPUT } from '../../constants/EventNames';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import '../rpg-ui.css';
 
 interface ChatComposeBarProps {

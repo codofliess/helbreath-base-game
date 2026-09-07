@@ -4,7 +4,7 @@ import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
 import { LEVELSET_DIALOG_BG } from '../../constants/SpriteKeys';
 import { getItemById } from '../../constants/Items';
 import { AuctionListingMode } from '../../proto/generated/network';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getInventoryManager, getNetworkManager } from '../../utils/RegistryUtils';
 import {
     auctionBoardDialogStore,

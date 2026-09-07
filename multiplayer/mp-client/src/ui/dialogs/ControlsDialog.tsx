@@ -1,7 +1,7 @@
 import { useStore } from '@tanstack/react-store';
 import { DraggableDialog } from './DraggableDialog';
 import { RpgButton } from '../components/RpgButton';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { toggleMapDialog } from '../store/MapDialog.store';
 import { toggleServerDialog } from '../store/ServerDialog.store';
 import { togglePerformanceDialog } from '../store/PerformanceDialog.store';

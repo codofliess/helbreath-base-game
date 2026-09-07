@@ -14,7 +14,7 @@ import {
 import { setCharacterStats } from '../store/CharacterDialog.store';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_CHANGE_MAP } from '../../constants/EventNames';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 
 interface CitySelectDialogProps {
     position: { x: number; y: number };

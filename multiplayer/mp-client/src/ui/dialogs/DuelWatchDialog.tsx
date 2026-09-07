@@ -19,7 +19,7 @@ import {
     type GuideEvent,
 } from '../../utils/tvGuide';
 import { TOURNAMENT_DIALOG_BG } from '../../constants/SpriteKeys';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { EventBus } from '../../game/EventBus';
 import { TOAST_REQUESTED } from '../../constants/EventNames';

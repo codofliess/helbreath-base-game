@@ -28,7 +28,6 @@ import {
 import { InputManager } from '../../utils/InputManager';
 import { CameraManager } from '../../utils/CameraManager';
 import {
-    getMusicManager,
     getGameStateManager,
     getNetworkManager,
     getInventoryManager,
@@ -39,10 +38,11 @@ import {
     setPlayerPosition,
     setSoundManager,
     takePendingPlayerItemAppearancePrefetch,
-    getMapIfPresent,
     getGroundItemDisplaySize,
 } from '../../utils/RegistryUtils';
 import type { InitialGameWorldState } from '../../utils/RegistryUtils';
+import { getMapIfPresent } from '../../utils/mapRegistry';
+import { getMusicManager } from '../../utils/musicManagerRegistry';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';

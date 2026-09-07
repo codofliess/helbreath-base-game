@@ -1,51 +1,46 @@
 import { forwardRef, useEffect, useRef } from 'react';
 import { useStore } from '@tanstack/react-store';
-import { ToastContainer, Slide } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import type { Game, Scene } from 'phaser';
 import { EventBus } from './game/EventBus';
-import StartGame from './game/main';
+import type { IRefPhaserGame, PhaserGameLike } from './game/phaserHubTypes';
 import { isPhaserParkedForWalletUi, setLivePhaserGame } from './game/phaserWalletPark';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
-import { connectDialogStore } from './ui/store/ConnectDialog.store';
+import { connectDialogStore, shouldConstructPhaserAfterSeal } from './ui/store/ConnectDialog.store';
 import { setWindowFocused } from './utils/RegistryUtils';
 import './ui/rpg-ui.css';
 
-/**
- * Hosts the Phaser canvas in React. StartGame is a static import so production
- * Rollup keeps LoginScreen / SelectCharDesk / EventBus in the same entry chunk as
- * ConnectDialog.store. A dynamic `import('./game/main')` emitted `main-*.js` with a
- * second `EventBus` instance, so React slot emits never reached Phaser, and the
- * hashed `index-*.js` lacked SELECTCHAR desk-sync strings.
- *
- * Phaser does **not** boot on the React hub. KindGem Phantom connect/sign Aw Snaps
- * (Error 9, firmas=0) if Canvas is compositing under the wallet overlay. StartGame
- * waits until SELECTCHAR / Create / Arena (`phase !== 'hub'`). Canvas 2D is the
- * primary renderer; StartGame failures leave `#root` intact.
- */
+export type { IRefPhaserGame } from './game/phaserHubTypes';
 
-export interface IRefPhaserGame
-{
-    game: Phaser.Game | null;
-    scene: Phaser.Scene | null;
-}
+/**
+ * Hosts the Phaser canvas in React **after** a successful wallet seal.
+ *
+ * Do not static-import `./game/main`. PR #47 delayed `new Game()` until desk phase but
+ * still evaluated Phaser on the hub (EventBus + StartGame graph). KindGem Phantom overlay
+ * then Aw Snapped Chrome Error 9 before signMessage (firmas=0). StartGame is a dynamic
+ * import so the hub chunk never constructs Canvas/WebGL.
+ */
 
 interface IProps
 {
-    currentActiveScene?: (scene_instance: Phaser.Scene) => void
+    currentActiveScene?: (scene_instance: Scene) => void
+}
+
+function asHubGame(g: Game | null): PhaserGameLike | null {
+    return g as unknown as PhaserGameLike | null;
 }
 
 export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame({ currentActiveScene }, ref)
 {
-    const game = useRef<Phaser.Game | null>(null);
+    const game = useRef<Game | null>(null);
     const suppressedPointerInputUntilRef = useRef(0);
     const restoreInputTimeoutRef = useRef<number | undefined>(undefined);
     const gatePhase = useStore(connectDialogStore, (s) => s.phase);
+    const walletSession = useStore(connectDialogStore, (s) => s.walletSession);
+    const allowPhaser = shouldConstructPhaserAfterSeal({ phase: gatePhase, walletSession });
 
-    // Game module is static so EventBus is not split. Boot only after wallet seal
-    // opens a Phaser desk — hub Phantom UI must not share a live canvas.
     useEffect(() =>
     {
-        if (gatePhase === 'hub' || game.current !== null) {
+        if (!allowPhaser || game.current !== null) {
             return;
         }
 
@@ -53,34 +48,41 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
         let paintFrame = 0;
 
         const bootPhaser = () => {
-            try {
-                if (cancelled || game.current !== null) {
-                    return;
-                }
-                game.current = StartGame('game-container');
-                setLivePhaserGame(game.current);
-            } catch (err) {
-                console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
-                game.current = null;
-                setLivePhaserGame(null);
-            }
-
-            if (cancelled) {
-                if (game.current) {
-                    game.current.destroy(true);
+            void import('./game/main').then((mod) => {
+                try {
+                    if (cancelled || game.current !== null) {
+                        return;
+                    }
+                    if (!shouldConstructPhaserAfterSeal()) {
+                        return;
+                    }
+                    game.current = mod.default('game-container');
+                    setLivePhaserGame(asHubGame(game.current));
+                } catch (err) {
+                    console.error('[PhaserGame] StartGame threw; leaving canvas empty so React hub can paint', err);
                     game.current = null;
                     setLivePhaserGame(null);
                 }
-                return;
-            }
 
-            if (typeof ref === 'function')
-            {
-                ref({ game: game.current, scene: null });
-            } else if (ref)
-            {
-                ref.current = { game: game.current, scene: null };
-            }
+                if (cancelled) {
+                    if (game.current) {
+                        game.current.destroy(true);
+                        game.current = null;
+                        setLivePhaserGame(null);
+                    }
+                    return;
+                }
+
+                if (typeof ref === 'function')
+                {
+                    ref({ game: asHubGame(game.current), scene: null });
+                } else if (ref)
+                {
+                    ref.current = { game: asHubGame(game.current), scene: null };
+                }
+            }).catch((err) => {
+                console.error('[PhaserGame] game/main import failed', err);
+            });
         };
 
         paintFrame = window.requestAnimationFrame(() => {
@@ -92,7 +94,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
             cancelled = true;
             window.cancelAnimationFrame(paintFrame);
         }
-    }, [gatePhase, ref]);
+    }, [allowPhaser, ref]);
 
     useEffect(() =>
     {
@@ -274,7 +276,7 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
     useEffect(() =>
     {
-        const onCurrentSceneReady = (scene_instance: Phaser.Scene) =>
+        const onCurrentSceneReady = (scene_instance: Scene) =>
         {
             if (scene_instance.scene.key === 'GameWorld') {
                 document.body.classList.add('helbreath-game-active');
@@ -291,10 +293,10 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
             if (typeof ref === 'function')
             {
-                ref({ game: game.current, scene: scene_instance });
+                ref({ game: asHubGame(game.current), scene: scene_instance });
             } else if (ref)
             {
-                ref.current = { game: game.current, scene: scene_instance };
+                ref.current = { game: asHubGame(game.current), scene: scene_instance };
             }
             
         };
@@ -309,22 +311,6 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
     return (
         <div id="game-wrapper">
             <div id="game-container"></div>
-            <ToastContainer
-                /* Olympia: stack rises from bottom; never pass transition={undefined} (React #130). */
-                position="bottom-center"
-                autoClose={3000}
-                hideProgressBar
-                newestOnTop
-                closeOnClick
-                pauseOnHover={false}
-                pauseOnFocusLoss={false}
-                draggable={false}
-                limit={5}
-                transition={Slide}
-                className="rpg-toast-container rpg-toast-container--olympia"
-                toastClassName={(context) => `rpg-toast rpg-toast--${context?.type ?? 'default'}`}
-                progressClassName="rpg-toast-progress"
-            />
         </div>
     );
 

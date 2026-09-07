@@ -1,4 +1,4 @@
-import type { Game } from 'phaser';
+import type { PhaserGameLike } from '../game/phaserHubTypes';
 import { EventBus } from '../game/EventBus';
 import {
     type Effect,
@@ -53,7 +53,7 @@ import { characterDialogStore } from '../ui/store/CharacterDialog.store';
 import { Gender } from '../Types';
 import type { NetworkManager } from './NetworkManager';
 import type { InventorySnapshotEventData, ItemEquippedEventData, ItemUnequippedEventData } from '../Types';
-import { emitTintedInventorySpriteIfNeeded } from './SpriteUtils';
+import { emitTintedInventorySpriteIfNeeded } from './inventoryTintEmit';
 import { playerDialogStore } from '../ui/store/PlayerDialog.store';
 import {
     getNetworkManager,
@@ -97,7 +97,7 @@ export class InventoryManager {
     /** Self-only: drop request already sent; play the drop sound only when the server confirms bag removal. */
     private readonly pendingGroundDropSoundConfirmations = new Set<string>();
 
-    constructor(private readonly game: Game) {
+    constructor(private readonly game: PhaserGameLike) {
         const initialSnapshot = this.getNetworkManager()?.getLatestInventorySnapshot();
         if (initialSnapshot) {
             this.applySnapshot(initialSnapshot);

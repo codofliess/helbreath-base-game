@@ -4,7 +4,7 @@ import { EventBus } from '../../game/EventBus';
 import { OUT_UI_SET_MUSIC_VOLUME, OUT_UI_SET_SOUND_VOLUME } from '../../constants/EventNames';
 import { DIALOG_VOLUME_SLIDER, SYS_MENU_DIALOG_BG, SYS_MENU_DIALOG_TITLE } from '../../constants/SpriteKeys';
 import { performLogoutCleanup } from '../../utils/LogoutUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { OlympiaDialogShell } from '../components/OlympiaDialogShell';
 import { appStore } from '../store/App.store';

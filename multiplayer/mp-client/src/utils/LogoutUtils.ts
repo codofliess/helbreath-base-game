@@ -1,4 +1,4 @@
-import type { Game } from 'phaser';
+import type { PhaserGameLike } from '../game/phaserHubTypes';
 import { EventBus } from '../game/EventBus';
 import { IN_UI_REQUEST_PLAYER_LOGOUT } from '../constants/EventNames';
 import { INITIAL_GAME_WORLD_STATE_KEY } from '../constants/RegistryKeys';
@@ -42,10 +42,10 @@ import { resetMagicShopLearnedSpells, setMagicShopOpen } from '../ui/store/Magic
  * and emits IN_UI_REQUEST_PLAYER_LOGOUT for Phaser to handle (stop music, save state, navigate to LoginScreen).
  * Used by both the Log out button and the socket disconnected handler.
  */
-export function performLogoutCleanup(game?: Game): void {
+export function performLogoutCleanup(game?: PhaserGameLike): void {
     if (game) {
         setNetworkManager(game, undefined);
-        game.registry.remove(INITIAL_GAME_WORLD_STATE_KEY);
+        game.registry.remove?.(INITIAL_GAME_WORLD_STATE_KEY);
     }
 
     setSelectedMap('', false);

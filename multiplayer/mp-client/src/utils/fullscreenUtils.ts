@@ -1,37 +1,34 @@
-import type { Game } from 'phaser';
-import {
-    applyGameWorldCanvasPresentation,
-    publishCanvasLayoutVarsFromDom,
-    resyncGameWorldCanvasPresentationIfActive,
-} from '../game/ui/gameWorldCanvasPresentation';
+import type { PhaserGameLike } from '../game/phaserHubTypes';
 import { setIsFullscreen } from '../ui/store/ControlsDialog.store';
 
 let handlersBound = false;
 let resizeHandler: (() => void) | undefined;
 let refreshFrame: number | undefined;
 
-function scheduleLayoutPublish(game: Game): void {
+async function loadWorldCanvas(): Promise<typeof import('../game/ui/gameWorldCanvasPresentation')> {
+    return import('../game/ui/gameWorldCanvasPresentation');
+}
+
+function scheduleLayoutPublish(game: PhaserGameLike): void {
     if (refreshFrame !== undefined) {
         window.cancelAnimationFrame(refreshFrame);
     }
     refreshFrame = window.requestAnimationFrame(() => {
         refreshFrame = undefined;
         try {
-            game.scale.refresh();
+            game.scale?.refresh?.();
         } catch {
             // ignore
         }
         if (game.canvas) {
-            publishCanvasLayoutVarsFromDom(game.canvas);
+            void loadWorldCanvas().then((mod) => {
+                mod.publishCanvasLayoutVarsFromDom(game.canvas as HTMLCanvasElement);
+            });
         }
     });
 }
 
-/**
- * Fullscreen keeps the classic 1024×576 FOV (same vision range as windowed).
- * Only the presentation scales to the monitor — no extra map tiles (PvP-safe).
- */
-function enterFullscreenPresentation(game: Game): void {
+function enterFullscreenPresentation(game: PhaserGameLike): void {
     const wrapper = document.getElementById('game-wrapper');
     const container = document.getElementById('game-container');
     wrapper?.classList.add('fullscreen');
@@ -40,30 +37,31 @@ function enterFullscreenPresentation(game: Game): void {
     game.canvas?.classList.remove('game-world-expanded');
     document.body.classList.remove('game-world-expanded-vision');
 
-    // Same FOV as windowed — ENVELOP over the fullscreen parent.
-    resyncGameWorldCanvasPresentationIfActive(game);
-    // If GameWorld not marked active yet, still force classic size.
-    if (!document.body.classList.contains('game-world-active') && game.scene.isActive('GameWorld')) {
-        const scene = game.scene.getScene('GameWorld');
-        if (scene) {
-            applyGameWorldCanvasPresentation(scene);
+    void loadWorldCanvas().then((mod) => {
+        mod.resyncGameWorldCanvasPresentationIfActive(game as never);
+        if (!document.body.classList.contains('game-world-active') && game.scene?.isActive('GameWorld')) {
+            const scene = game.scene.getScene('GameWorld');
+            if (scene) {
+                mod.applyGameWorldCanvasPresentation(scene as never);
+            }
         }
-    }
-
-    scheduleLayoutPublish(game);
+        scheduleLayoutPublish(game);
+    });
 
     if (resizeHandler) {
         window.removeEventListener('resize', resizeHandler);
     }
     resizeHandler = () => {
-        resyncGameWorldCanvasPresentationIfActive(game);
-        scheduleLayoutPublish(game);
+        void loadWorldCanvas().then((mod) => {
+            mod.resyncGameWorldCanvasPresentationIfActive(game as never);
+            scheduleLayoutPublish(game);
+        });
     };
     window.addEventListener('resize', resizeHandler);
     setIsFullscreen(true);
 }
 
-function leaveFullscreenPresentation(game: Game): void {
+function leaveFullscreenPresentation(game: PhaserGameLike): void {
     const wrapper = document.getElementById('game-wrapper');
     const container = document.getElementById('game-container');
     const canvas = game.canvas;
@@ -82,13 +80,18 @@ function leaveFullscreenPresentation(game: Game): void {
         resizeHandler = undefined;
     }
 
-    resyncGameWorldCanvasPresentationIfActive(game);
-    scheduleLayoutPublish(game);
+    void loadWorldCanvas().then((mod) => {
+        mod.resyncGameWorldCanvasPresentationIfActive(game as never);
+        scheduleLayoutPublish(game);
+    });
     setIsFullscreen(false);
 }
 
-function ensureHandlers(game: Game): void {
+function ensureHandlers(game: PhaserGameLike): void {
     if (handlersBound) {
+        return;
+    }
+    if (!game.scale?.on) {
         return;
     }
     handlersBound = true;
@@ -104,9 +107,10 @@ function ensureHandlers(game: Game): void {
 
 /**
  * Toggle browser fullscreen. Vision range stays classic 1024×576 always.
+ * Presentation helpers load with Phaser after seal — hub must not import Scale/WebGL.
  */
-export function toggleGameFullscreen(game: Game | null | undefined): void {
-    if (!game) {
+export function toggleGameFullscreen(game: PhaserGameLike | null | undefined): void {
+    if (!game?.scale?.startFullscreen || !game.scale.stopFullscreen) {
         return;
     }
     ensureHandlers(game);
@@ -117,9 +121,9 @@ export function toggleGameFullscreen(game: Game | null | undefined): void {
     }
 }
 
-export function isGameFullscreen(game: Game | null | undefined): boolean {
+export function isGameFullscreen(game: PhaserGameLike | null | undefined): boolean {
     if (!game) {
         return !!document.fullscreenElement;
     }
-    return game.scale.isFullscreen;
+    return !!game.scale?.isFullscreen;
 }

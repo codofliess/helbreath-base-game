@@ -1,4 +1,4 @@
-import type { Scene } from 'phaser';
+import type { PhaserSceneLike } from '../game/phaserHubTypes';
 
 import { LOAD_ITEM_ICON_ASSETS_ON_DEMAND } from '../Config';
 import { AssetType, type AssetData } from '../constants/Assets';
@@ -30,7 +30,7 @@ export function shouldLoadItemIconAssetsOnDemand(): boolean {
 }
 
 export function areItemIconSheetsLoaded(
-    scene: Scene,
+    scene: PhaserSceneLike,
     packSheets?: ReadonlySet<number>,
     groundSheets?: ReadonlySet<number>,
 ): boolean {
@@ -52,7 +52,7 @@ export function areItemIconSheetsLoaded(
 }
 
 /** Legacy: both packs have sheet 0. Prefer {@link areItemIconSheetsLoaded} for pad/bag filters. */
-export function areItemIconAssetsLoaded(scene: Scene): boolean {
+export function areItemIconAssetsLoaded(scene: PhaserSceneLike): boolean {
     return scene.textures.exists(`${ITEM_PACK.key}-0`) && scene.textures.exists(`${ITEM_GROUND.key}-0`);
 }
 
@@ -65,7 +65,7 @@ export interface LoadItemIconOptions {
  * Registers only the item-pack / item-ground sheets needed for visible piles or bag items.
  * Does not dump every frame as a PNG data URL.
  */
-export function loadItemIconAssetsOnDemand(scene: Scene, options?: LoadItemIconOptions): Promise<void> {
+export function loadItemIconAssetsOnDemand(scene: PhaserSceneLike, options?: LoadItemIconOptions): Promise<void> {
     if (!LOAD_ITEM_ICON_ASSETS_ON_DEMAND) {
         return Promise.resolve();
     }
@@ -98,7 +98,7 @@ export function loadItemIconAssetsOnDemand(scene: Scene, options?: LoadItemIconO
 }
 
 async function loadItemIconSprite(
-    scene: Scene,
+    scene: PhaserSceneLike,
     asset: AssetData,
     capturePackSheets: boolean,
     sheetIndices: ReadonlySet<number>,

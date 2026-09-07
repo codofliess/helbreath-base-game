@@ -11,9 +11,11 @@ import {
     type MapTileRect,
 } from '../../utils/mapViewportStream';
 
-const ASCII_DECODER = new TextDecoder('ascii');
+import { TILE_SIZE } from '../../constants/TileSize';
 
-export const TILE_SIZE = 32; // Each tile is 32x32 pixels
+export { TILE_SIZE };
+
+const ASCII_DECODER = new TextDecoder('ascii');
 /**
  * Represents a single tile in the map grid.
  * Contains information about sprites, movement, teleports, farming, and tile type.

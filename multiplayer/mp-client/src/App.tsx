@@ -1,11 +1,18 @@
-import { useRef, useState, useEffect } from 'react';
+import { lazy, Suspense, useRef, useState, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer, Slide } from 'react-toastify';
 import type { Id } from 'react-toastify';
-import { IRefPhaserGame, PhaserGame } from './PhaserGame';
+import 'react-toastify/dist/ReactToastify.css';
+import type { IRefPhaserGame } from './game/phaserHubTypes';
 import { PhaserMountGuard } from './game/PhaserMountGuard';
 import './ui/rpg-ui.css';
+
+/** Phaser + canvas only after wallet seal. Hub must stay React-only for KindGem Phantom. */
+const PhaserGame = lazy(async () => {
+    const mod = await import('./PhaserGame');
+    return { default: mod.PhaserGame };
+});
 import { ControlsDialog } from './ui/dialogs/ControlsDialog';
 import { MapDialog } from './ui/dialogs/MapDialog';
 import { CameraDialog } from './ui/dialogs/CameraDialog';
@@ -71,7 +78,6 @@ import { AntiBotToolsDialog } from './ui/dialogs/AntiBotToolsDialog';
 import { EventBus, type ToastRequestedEvent } from './game/EventBus';
 import {
     CURRENT_SCENE_READY,
-    IN_UI_CHANGE_MAP,
     OUT_MAP_LOADED,
     OUT_UI_OPEN_MAGIC_SHOP,
     OUT_UI_OPEN_CASH_SHOP,
@@ -117,7 +123,7 @@ import { CURSOR_GRAB_1, CURSOR_GRAB_2 } from './constants/SpriteKeys';
 import { buildCssCursorValue, type CombatCursorMode } from './utils/CursorPresentation';
 import { deathDialogStore } from './ui/store/DeathDialog.store';
 import { connectingDialogStore } from './ui/store/ConnectingDialog.store';
-import { connectDialogStore } from './ui/store/ConnectDialog.store';
+import { connectDialogStore, shouldConstructPhaserAfterSeal } from './ui/store/ConnectDialog.store';
 import { serverMessageDialogStore, setServerMessageDialogOpen } from './ui/store/ServerMessageDialog.store';
 import { chatDialogStore, setChatDialogOpen } from './ui/store/ChatDialog.store';
 
@@ -211,6 +217,9 @@ function App()
     const showDeathDialog = useStore(deathDialogStore, (state) => state.isOpen);
     const showConnectingDialog = useStore(connectingDialogStore, (state) => state.isOpen);
     const showConnectDialog = useStore(connectDialogStore, (state) => state.isOpen);
+    const mountPhaserAfterSeal = useStore(connectDialogStore, (state) =>
+        shouldConstructPhaserAfterSeal(state),
+    );
     const showCitySelectDialog = useStore(citySelectDialogStore, (state) => state.isOpen);
     const showServerMessageDialog = useStore(serverMessageDialogStore, (state) => state.isOpen);
     const serverMessageDialogMessage = useStore(serverMessageDialogStore, (state) => state.message);
@@ -1115,9 +1124,28 @@ function App()
     return (
         <DndContext sensors={dialogDragSensors} onDragEnd={handleDragEnd}>
             <div id="app">
-                <PhaserMountGuard>
-                    <PhaserGame ref={phaserRef} />
-                </PhaserMountGuard>
+                <ToastContainer
+                    position="bottom-center"
+                    autoClose={3000}
+                    hideProgressBar
+                    newestOnTop
+                    closeOnClick
+                    pauseOnHover={false}
+                    pauseOnFocusLoss={false}
+                    draggable={false}
+                    limit={5}
+                    transition={Slide}
+                    className="rpg-toast-container rpg-toast-container--olympia"
+                    toastClassName={(context) => `rpg-toast rpg-toast--${context?.type ?? 'default'}`}
+                    progressClassName="rpg-toast-progress"
+                />
+                {mountPhaserAfterSeal && (
+                    <Suspense fallback={null}>
+                        <PhaserMountGuard>
+                            <PhaserGame ref={phaserRef} />
+                        </PhaserMountGuard>
+                    </Suspense>
+                )}
                 
                 {showControlsDialog && !travelerMode && (
                     <ControlsDialog

@@ -45,6 +45,7 @@ import { announcePlayClientEntry, unregisterStaleServiceWorkers } from './utils/
 captureReferralFromUrl();
 // Arena slim: URL ?arena=1 + world-id detection (colosseum / fightzone*)
 wireArenaSlimModeListeners();
+import { EventBus } from './game/EventBus';
 import { IN_UI_FORCE_CANCEL_CAST, IN_UI_TAKE_SCREENSHOT, TOAST_REQUESTED } from './constants/EventNames';
 import { getQuickPotionGame, useQuickPotion } from './utils/potionHotkeys';
 import { bootstrapWalletDeepLinkAtBoot } from './utils/walletAuth';

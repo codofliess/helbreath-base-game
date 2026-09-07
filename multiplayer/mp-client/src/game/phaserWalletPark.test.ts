@@ -18,6 +18,30 @@ describe('parkPhaserForWalletUi', () => {
         assert.equal(getLivePhaserGame() ?? null, null);
     });
 
+    it('removes orphan canvases when Phaser never booted', async () => {
+        setLivePhaserGame(null);
+        const canvas = { tagName: 'CANVAS', remove() { this.removed = true; }, removed: false };
+        const container = {
+            id: 'game-container',
+            style: { visibility: '' },
+            querySelectorAll: () => [canvas],
+        };
+        const prev = (globalThis as { document?: unknown }).document;
+        (globalThis as { document: { getElementById: (id: string) => unknown } }).document = {
+            getElementById: (id: string) => (id === 'game-container' ? container : null),
+        };
+        try {
+            await parkPhaserForWalletUi(async () => {
+                assert.equal(canvas.removed, true);
+                assert.equal(container.style.visibility, 'hidden');
+                return 'ok';
+            });
+        } finally {
+            (globalThis as { document?: unknown }).document = prev;
+            setLivePhaserGame(null);
+        }
+    });
+
     it('sleeps the game loop and hides the canvas around Phantom work', async () => {
         const sleeps: string[] = [];
         const canvas = { style: { visibility: 'visible', pointerEvents: 'auto' } };
@@ -29,7 +53,7 @@ describe('parkPhaserForWalletUi', () => {
             input: { enabled: true },
             canvas,
         };
-        setLivePhaserGame(fakeGame as unknown as Phaser.Game);
+        setLivePhaserGame(fakeGame as never);
         try {
             await parkPhaserForWalletUi(async () => {
                 assert.equal(isPhaserParkedForWalletUi(), true);

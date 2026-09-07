@@ -13,6 +13,23 @@ const phasermsg = () => {
         buildStart() {
             process.stdout.write(`Building for production...\n`);
         },
+        generateBundle(_opts, bundle) {
+            for (const [file, chunk] of Object.entries(bundle)) {
+                if (chunk.type !== 'chunk' || !chunk.isEntry) {
+                    continue;
+                }
+                if (!file.includes('index')) {
+                    continue;
+                }
+                const staticPhaser = (chunk.imports ?? []).some((id) => id.includes('phaser'));
+                const codeHasPhaser = /from["']\.\/phaser-/.test(chunk.code ?? '');
+                if (staticPhaser || codeHasPhaser) {
+                    throw new Error(
+                        `Hub index chunk must not static-import Phaser (KindGem Error 9). ${file} imports=${JSON.stringify(chunk.imports)}`,
+                    );
+                }
+            }
+        },
         buildEnd() {
             const line = '---------------------------------------------------------';
             const msg = `❤️❤️❤️ Tell us about your game! - games@phaser.io ❤️❤️❤️`;
@@ -54,11 +71,10 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             output: {
-                // Phaser library only. Do not async-split src/game/main — that
-                // duplicates EventBus and moves SELECTCHAR desk-sync out of index-*.js.
-                manualChunks: {
-                    phaser: ['phaser'],
-                },
+                // Do NOT put Phaser in manualChunks. That chunk also collects Vite CJS
+                // interop helpers, so index-*.js would static-import the whole Phaser
+                // bundle on the hub (KindGem Error 9). Phaser must load only via the
+                // dynamic StartGame import after seal.
             },
         },
         minify: 'terser',

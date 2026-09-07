@@ -1,6 +1,20 @@
-import type { Game } from 'phaser';
-import type { HBMap } from '../game/assets/HBMap';
-import { TILE_SIZE } from '../game/assets/HBMap';
+import type { PhaserGameLike } from '../game/phaserHubTypes';
+import { TILE_SIZE } from '../constants/TileSize';
+
+/** Walkability surface used by login/world path helpers — not the Phaser HBMap module. */
+interface WalkGrid {
+    sizeX: number;
+    sizeY: number;
+    getTile(
+        x: number,
+        y: number,
+    ): {
+        isMoveAllowed: boolean;
+        isWater?: boolean;
+        occupiedByGameObject?: unknown;
+        isTeleport?: boolean;
+    } | undefined;
+}
 
 /**
  * Converts canvas/viewport coordinates to screen (DOM) coordinates.
@@ -15,13 +29,16 @@ import { TILE_SIZE } from '../game/assets/HBMap';
 export function canvasToScreenPosition(
     canvasX: number,
     canvasY: number,
-    game: Game
+    game: PhaserGameLike
 ): { screenX: number; screenY: number } {
     const canvas = game.canvas;
+    if (!canvas) {
+        return { screenX: canvasX, screenY: canvasY };
+    }
     const rect = canvas.getBoundingClientRect();
     // Prefer live scale size (expanded fullscreen FOV) over fixed config 1024×576.
-    const baseWidth = game.scale.width || Number(game.config.width) || 1;
-    const baseHeight = game.scale.height || Number(game.config.height) || 1;
+    const baseWidth = game.scale?.width || Number(game.config?.width) || 1;
+    const baseHeight = game.scale?.height || Number(game.config?.height) || 1;
 
     return {
         screenX: rect.left + (canvasX / baseWidth) * rect.width,
@@ -78,8 +95,8 @@ export function randomPixelInRadius(radiusCells: number): { dx: number; dy: numb
         return { dx: 0, dy: 0 };
     }
     const radiusPx = radiusCells * TILE_SIZE;
-    const angle = Phaser.Math.FloatBetween(0, 2 * Math.PI);
-    const r = Math.sqrt(Phaser.Math.FloatBetween(0, 1)) * radiusPx;
+    const angle = Math.random() * 2 * Math.PI;
+    const r = Math.sqrt(Math.random()) * radiusPx;
     return {
         dx: Math.cos(angle) * r,
         dy: Math.sin(angle) * r,
@@ -234,7 +251,7 @@ export function getDirectionFromScreenSector(
     
     // Calculate angle in radians from positive X-axis, counter-clockwise.
     // In screen coordinates Y increases downward, so we use (dx, -dy) for correct angle.
-    const angleRadians = Phaser.Math.Angle.Between(0, 0, dx, -dy);
+    const angleRadians = Math.atan2(-dy, dx);
     
     // Convert to degrees
     let angleDegrees = angleRadians * (180 / Math.PI);
@@ -279,7 +296,7 @@ export function getDirectionFromScreenSector(
  * @returns Object with x and y coordinates of the first movable location found, or undefined if none found
  */
 export function findMovableLocation(
-    map: HBMap,
+    map: WalkGrid,
     startX: number,
     startY: number,
     maxRadius = 50
@@ -351,7 +368,7 @@ export function findMovableLocation(
  * @param y - Y coordinate in world grid
  * @returns True if the cell can be moved to
  */
-export function isCellMovable(map: HBMap, x: number, y: number): boolean {
+export function isCellMovable(map: WalkGrid, x: number, y: number): boolean {
     const tile = map.getTile(x, y);
     return !!(tile && tile.isMoveAllowed && !tile.occupiedByGameObject);
 }
@@ -362,7 +379,7 @@ export function isCellMovable(map: HBMap, x: number, y: number): boolean {
  * when possible so pathfinding does not chase an occupied stand or door warp.
  */
 export function findApproachCellNearTarget(
-    map: HBMap,
+    map: WalkGrid,
     seekerX: number,
     seekerY: number,
     targetX: number,

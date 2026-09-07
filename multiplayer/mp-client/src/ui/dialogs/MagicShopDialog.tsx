@@ -13,7 +13,7 @@ import {
 import { getMagicShopPrice, getMagicShopSpells, MAGIC_SHOP_SPELL_IDS } from '../../constants/SpellAcquisition';
 import { getSpellCircles, SPELLS } from '../../constants/Spells';
 import { getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { inventoryDialogStore } from '../store/InventoryDialog.store';
 
 interface MagicShopDialogProps {

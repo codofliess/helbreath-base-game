@@ -1,4 +1,4 @@
-import { CANVAS, type Scene } from 'phaser';
+import type { PhaserSceneLike } from '../../game/phaserHubTypes';
 import { EventBus } from '../EventBus';
 import type { PivotData } from '../../Types';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../../constants/EventNames';
@@ -6,6 +6,9 @@ import { getBinaryBuffer, setPivotDataByTextureKey, mergePivotSheetBySpriteCache
 import { sliceSprSheets } from '../../utils/sprSheetSlice';
 import { ITEMS, getItemSheetIndex, getItemSpriteIndex, getTintInventoryEffectColor } from '../../constants/Items';
 import { Gender } from '../../Types';
+
+/** Phaser `CONST.CANVAS` (1). Do not import `phaser` here — hub Asset/ItemIcon graph must stay GPU-free. */
+const PHASER_RENDERER_CANVAS = 1;
 
 /** Sprite category for loading/rendering (human, tiles, monster, item packs, etc.). */
 export enum SpriteType {
@@ -125,7 +128,7 @@ export class HBSpriteSheet {
      * @param customTextureKey - Optional custom texture key to use instead of default naming (default: undefined)
      */
     constructor(
-        scene: Scene,
+        scene: PhaserSceneLike,
         spriteName: string,
         spriteSheetIndex: number,
         frames: HBSpriteFrame[],
@@ -146,7 +149,7 @@ export class HBSpriteSheet {
             spriteSheetImage,
             frames,
             exportFramesAsDataUrls,
-            useCanvasTexture || scene.game.renderer.type === CANVAS,
+            useCanvasTexture || scene.game.renderer.type === PHASER_RENDERER_CANVAS,
         );
 
         if (exportFramesAsDataUrls) {
@@ -163,18 +166,19 @@ export class HBSpriteSheet {
      * @param frames - Array of frame definitions to slice from the texture
      */
     private createTexture(
-        scene: Scene,
+        scene: PhaserSceneLike,
         spriteSheetImage: DecodedSpriteImage,
         frames: HBSpriteFrame[],
         exportFramesAsDataUrls: boolean,
         useCanvasTexture: boolean
     ): void {
+        const textures = scene.textures;
         // Check if texture already exists
-        if (scene.textures.exists(this.textureKey)) {
+        if (textures.exists(this.textureKey)) {
             return;
         }
 
-        let texture: Phaser.Textures.Texture;
+        let texture: { source?: Array<{ scaleMode?: number }>; add: (...args: unknown[]) => unknown };
 
         if (useCanvasTexture) {
             this.canvas = document.createElement('canvas');
@@ -188,11 +192,16 @@ export class HBSpriteSheet {
 
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(spriteSheetImage.source, 0, 0);
-            scene.textures.addCanvas(this.textureKey, this.canvas);
-            texture = scene.textures.get(this.textureKey);
+            textures.addCanvas(this.textureKey, this.canvas);
+            texture = textures.get(this.textureKey);
         } else {
-            const textureManager = scene.textures as Phaser.Textures.TextureManager & {
-                create: (key: string, source: ImageBitmap, width?: number, height?: number) => Phaser.Textures.Texture | null;
+            const textureManager = textures as {
+                create: (
+                    key: string,
+                    source: ImageBitmap,
+                    width?: number,
+                    height?: number,
+                ) => { source?: Array<{ scaleMode?: number }>; add: (...args: unknown[]) => unknown } | null;
             };
             const createdTexture = textureManager.create(
                 this.textureKey,
@@ -200,7 +209,7 @@ export class HBSpriteSheet {
                 spriteSheetImage.width,
                 spriteSheetImage.height
             );
-            texture = createdTexture ?? scene.textures.get(this.textureKey);
+            texture = createdTexture ?? textures.get(this.textureKey);
         }
 
         // Set texture filter to NEAREST for pixel-perfect rendering
@@ -394,7 +403,7 @@ export class HBAnimation {
      * @param repeat - Number of times to repeat the animation (-1 for infinite, default: -1)
      */
     constructor(
-        scene: Scene,
+        scene: PhaserSceneLike,
         spriteCacheKey: string,
         spriteSheetIndex: number,
         sprites: HBSpriteFrame[],
@@ -424,7 +433,7 @@ export class HBAnimation {
      * @param repeat - Number of times to repeat the animation (-1 for infinite)
      */
     private registerAnimation(
-        scene: Scene,
+        scene: PhaserSceneLike,
         sprites: HBSpriteFrame[],
         frameRate: number,
         repeat: number
@@ -500,7 +509,7 @@ export class HBSpriteFile {
      * @throws Error if the sprite buffer is not found in cache
      * @param options.sheetIndices Local sheet indexes to decode. Omit to decode every sheet.
      */
-    public async load(scene: Scene, options?: { sheetIndices?: ReadonlySet<number> }): Promise<void> {
+    public async load(scene: PhaserSceneLike, options?: { sheetIndices?: ReadonlySet<number> }): Promise<void> {
         // Load binary from cache using fileName
         const buffer = getBinaryBuffer(scene, this.fileName);
         

@@ -1,13 +1,16 @@
+import type { PhaserGameLike } from './phaserHubTypes';
+
 /**
- * Parks the live Phaser canvas while Phantom (or another wallet overlay) is open.
+ * Parks leftover Phaser canvas while Phantom (or another wallet overlay) is open.
  *
- * KindGem + Phantom UI + an active Canvas/WebGL compositor is a Chrome Aw Snap 9
+ * KindGem + Phantom UI + any Canvas/WebGL compositor is a Chrome Aw Snap 9
  * (OOM) path: the crash happens before `signMessage` returns (firmas=0).
- * SELECTCHAR desks stay unbuilt until after a successful seal.
+ * Hub auth must not construct Phaser at all; this helper is a last-resort
+ * hide/remove if a canvas leaked into the tab.
  */
 
 type HelbreathPhaserGameGlobal = typeof globalThis & {
-    __helbreathPhaserGame?: Phaser.Game | null;
+    __helbreathPhaserGame?: PhaserGameLike | null;
 };
 
 type ParkedCanvasStyle = {
@@ -20,11 +23,11 @@ let parkDepth = 0;
 let parkedCanvasStyle: ParkedCanvasStyle | undefined;
 let loopWasSleeping = false;
 
-export function setLivePhaserGame(game: Phaser.Game | null): void {
+export function setLivePhaserGame(game: PhaserGameLike | null): void {
     (globalThis as HelbreathPhaserGameGlobal).__helbreathPhaserGame = game;
 }
 
-export function getLivePhaserGame(): Phaser.Game | null | undefined {
+export function getLivePhaserGame(): PhaserGameLike | null | undefined {
     return (globalThis as HelbreathPhaserGameGlobal).__helbreathPhaserGame;
 }
 
@@ -60,9 +63,24 @@ function getGameContainer(): HTMLElement | null {
     return document.getElementById('game-container');
 }
 
+function destroyOrphanCanvases(): void {
+    const container = getGameContainer();
+    if (!container) {
+        return;
+    }
+    container.querySelectorAll('canvas').forEach((node) => {
+        node.remove();
+    });
+}
+
 function parkLiveCanvas(): void {
     const game = getLivePhaserGame();
     if (!game) {
+        destroyOrphanCanvases();
+        const container = getGameContainer();
+        if (container) {
+            container.style.visibility = 'hidden';
+        }
         return;
     }
 

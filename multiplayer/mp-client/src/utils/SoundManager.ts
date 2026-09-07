@@ -1,4 +1,4 @@
-import { Scene } from 'phaser';
+import type { Scene } from 'phaser';
 import { isWindowFocused } from './RegistryUtils';
 import { loadSoundAssetOnDemand } from './SpriteHttpLoader';
 import { resolveSoundAsset } from './soundAlias';

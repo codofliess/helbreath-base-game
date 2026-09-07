@@ -1,9 +1,13 @@
-import { MonsterShadow } from '../game/objects/Monster';
-
 /**
  * Client defaults per monster sprite: sounds, per-state animation overrides, corpse fade.
  * Server sends display names; row comments tagged `asset:` flag uncertain art/audio.
  */
+
+/** Shadow display options for monsters. Lives here so the hub catalog does not import Phaser Monster. */
+export enum MonsterShadow {
+    NoShadow = 0,
+    BodyShadow = 1,
+}
 
 /**
  * Animation configuration for a specific state.

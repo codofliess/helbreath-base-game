@@ -26,7 +26,7 @@ import { formatOlympiaCompactAmount } from '../../utils/olympiaFormat';
 import { toggleGameFullscreen } from '../../utils/fullscreenUtils';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_SET_SUPER_ATTACK_ARMED, TOAST_REQUESTED } from '../../constants/EventNames';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { setQuickPotionGame, useQuickPotion } from '../../utils/potionHotkeys';
 
 /** Map / Required Exp cartridge flip interval. */

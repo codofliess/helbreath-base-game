@@ -15,7 +15,7 @@ import {
     warehouseDialogStore,
 } from '../store/WarehouseDialog.store';
 import { getInventoryManager, getNetworkManager } from '../../utils/RegistryUtils';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import {
     SERVER_INVENTORY_SNAPSHOT_RECEIVED,
     SERVER_ITEM_ADDED_TO_BAG_RECEIVED,

@@ -10,7 +10,7 @@ import {
     getTrainingPreset,
     type TrainingPresetId,
 } from '../../constants/TrainingPresets';
-import type { IRefPhaserGame } from '../../PhaserGame';
+import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { getNetworkManager } from '../../utils/RegistryUtils';
 import { EventBus } from '../../game/EventBus';
 import { SYSTEM_LOG_APPEND } from '../../constants/EventNames';

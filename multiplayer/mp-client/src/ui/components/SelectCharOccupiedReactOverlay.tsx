@@ -35,8 +35,9 @@ interface SelectCharOccupiedReactOverlayProps {
 
 /**
  * KindGem-visible occupied SELECTCHAR labels from the live React store.
- * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` and destroys
- * every waiting banner node so KindGem cannot screenshot a stale a11y tree.
+ * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` as the last
+ * child of `document.body` (not under #root / React overflow:hidden) so KindGem
+ * can screenshot unclipped `OCCUPIED Elon Lev.150`.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
@@ -84,6 +85,10 @@ export function SelectCharOccupiedReactOverlay({
             document.body.appendChild(root);
         }
         const painted = syncSelectCharReactOccupiedBannerDom(banner, root);
+        const kindgem = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+        if (kindgem) {
+            document.body.appendChild(kindgem);
+        }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
         if (occupiedNames.includes('Elon') && banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
             selectCharWarn(

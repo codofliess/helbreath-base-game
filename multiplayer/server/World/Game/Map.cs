@@ -8,7 +8,7 @@ namespace Server.World.Game;
 /// </summary>
 public static class Map {
     private const int HeaderSize = 256;
-    private const byte BlockedFlag = 0x80; // Bit 7: 1 = blocked, 0 = move allowed
+    public const byte BlockedFlag = 0x80; // Bit 7: 1 = blocked, 0 = move allowed
     private const byte TeleportFlag = 0x40; // Bit 6: blue teleport tile in classic .amd
     /// <summary>Classic Helbreath deep-water tileset; never a valid standing cell.</summary>
     private const short WaterSprite = 19;
@@ -91,6 +91,11 @@ public static class Map {
             blockedCells,
             allTeleportCells,
             wetCells);
+    }
+
+    /// <summary>Classic Helbreath movement: only AMD bit 0x80 blocks a step (water/shore sprites may be causeways).</summary>
+    public static bool IsMoveAllowedFlag(byte flags) {
+        return (flags & BlockedFlag) == 0;
     }
 
     /// <summary>Token-scans the 256-byte ASCII header for MAPSIZEX, MAPSIZEY, and TILESIZE key=value triples.</summary>

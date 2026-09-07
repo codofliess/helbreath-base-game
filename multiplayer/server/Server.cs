@@ -125,6 +125,7 @@ try {
 }
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
 var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+var occupancyByWorldId = new Dictionary<string, GameWorldOccupancyTracker>(StringComparer.Ordinal);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -134,7 +135,9 @@ foreach (var gw in gameWorlds) {
         mapsDirectory,
         gw.Map,
         teleportLocs.SelectMany(teleportLoc => teleportLoc.Locs));
+    occupancyByWorldId[gw.Id] = occupancyTracker;
     Config.ValidateGameWorldNpcBounds(gw, occupancyTracker);
+    Config.ValidateGameWorldTeleportTriggers(gw, occupancyTracker);
     var world = worldRegistry.RegisterGameWorld(
         gw.Id,
         gw.Map,
@@ -179,6 +182,7 @@ foreach (var gw in gameWorlds) {
     }
     Console.WriteLine($"[Server] Loaded game world '{gw.Id}' ({gw.Name}): map {gw.Map}, size {occupancyTracker.SizeX}x{occupancyTracker.SizeY}, {occupancyTracker.OccupiedCount} blocked cells, worker thread {world.WorkerThreadId}");
 }
+Config.ValidateGameWorldTeleportLandings(gameWorlds, occupancyByWorldId);
 var globalWorld = worldRegistry.RegisterGlobalWorld(new GlobalWorld("global", settings), settings.Threads.GlobalWorldWorkerThread);
 Console.WriteLine($"[Server] Loaded global world 'global': worker thread {globalWorld.WorkerThreadId}");
 

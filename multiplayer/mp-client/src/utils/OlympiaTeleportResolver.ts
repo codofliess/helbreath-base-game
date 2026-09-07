@@ -168,9 +168,17 @@ const DIRECT_TARGET_WORLD: Record<string, string> = {
 
     arebrk12: 'arebrk12',
 
+    arebrk21: 'arebrk21',
+
+    arebrk22: 'arebrk22',
+
     elvbrk11: 'elvbrk11',
 
     elvbrk12: 'elvbrk12',
+
+    elvbrk21: 'elvbrk21',
+
+    elvbrk22: 'elvbrk22',
 
     arejail: 'arejail',
 

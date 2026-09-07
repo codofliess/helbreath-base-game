@@ -58,10 +58,11 @@ export class HBMapTile {
 
         // Parse flags from byte 8
         const flags = view.getUint8(offset + 8);
-        // Tile sprite 19 = deep water; 18 = coastal shore (walkable in .amd flags but looks wet).
+        // Tile sprite 19 = deep water; 18 = coastal shore (looks wet; walkability is the 0x80 bit).
         this.isWater = this.sprite === 19 || this.sprite === 18;
-        // Shore/water are not standable — matches server Map.LoadOccupancy blocking wet sprites.
-        this.isMoveAllowed = (flags & 0x80) === 0 && !this.isWater;    // Bit 7: 1 = blocked, 0 = allowed
+        // Classic Helbreath / server Map.LoadOccupancy: movement uses bit 0x80 only.
+        // Shore causeways (e.g. Middleland 459,250 → Icebound pads) are sprite 18/19 with 0x80 clear.
+        this.isMoveAllowed = (flags & 0x80) === 0;
         this.isTeleport = (flags & 0x40) !== 0;       // Bit 6: 1 = teleport
         // Bit 5 (0x20): set when farming is allowed on this tile (unlike bit 7 move, where set = blocked).
         this.isFarmingAllowed = (flags & 0x20) !== 0;

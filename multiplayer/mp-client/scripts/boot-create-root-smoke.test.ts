@@ -175,12 +175,39 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_DOM_LOG/);
         assert.match(overlay, /SELECTCHAR_KINDGEM_ELON_LV150_TEXT/);
         assert.match(overlay, /syncSelectCharReactOccupiedBannerDom/);
+        assert.match(overlay, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
         assert.match(overlay, /createPortal/);
+        const reactDesk = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/SelectCharReactDesk.tsx'),
+            'utf8',
+        );
+        assert.match(reactDesk, /Explorer/);
+        assert.match(reactDesk, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
+        assert.match(reactDesk, /SelectCharReactDesk/);
+        const store = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/store/ConnectDialog.store.ts'),
+            'utf8',
+        );
+        assert.match(store, /phase === 'entering-world'/);
+        assert.match(store, /phaserWorldSession/);
+        assert.doesNotMatch(
+            store,
+            /return state\.phase === 'play-world' \|\| state\.phase === 'create-char' \|\| state\.phase === 'arena-lobby'/,
+        );
+        const arenaLobby = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/ArenaReactLobby.tsx'),
+            'utf8',
+        );
+        assert.match(arenaLobby, /ArenaReactLobby/);
+        assert.doesNotMatch(arenaLobby, /from ['"]phaser['"]/);
         const connect = fs.readFileSync(
             path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'),
             'utf8',
         );
         assert.match(connect, /SelectCharOccupiedReactOverlay/);
+        assert.match(connect, /SelectCharReactDesk/);
+        assert.match(connect, /ArenaReactLobby/);
+        assert.match(connect, /beginEnteringWorld/);
         assert.doesNotMatch(
             connect,
             /phase === 'play-world' \|\| phase === 'create-char' \|\| phase === 'arena-lobby'/,

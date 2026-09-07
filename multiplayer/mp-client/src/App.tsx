@@ -8,7 +8,7 @@ import type { IRefPhaserGame } from './game/phaserHubTypes';
 import { PhaserMountGuard } from './game/PhaserMountGuard';
 import './ui/rpg-ui.css';
 
-/** Phaser + canvas only after wallet seal. Hub must stay React-only for KindGem Phantom. */
+/** Phaser + canvas only after Start (entering-world). Hub / SELECTCHAR / Arena stay React. */
 const PhaserGame = lazy(async () => {
     const mod = await import('./PhaserGame');
     return { default: mod.PhaserGame };

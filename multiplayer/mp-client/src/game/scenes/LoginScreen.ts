@@ -29,6 +29,9 @@ import {
     openConnectDialogForLogin,
     setConnectDialogOpen,
     setConnectWalletSession,
+    takePendingWorldEnter,
+    setConnectGatePhase,
+    clearPhaserWorldSession,
 } from '../../ui/store/ConnectDialog.store';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
@@ -51,8 +54,8 @@ import { LOAD_BOOT_SPRITES_ON_DEMAND } from '../../Config';
 import { loadSelectAppearanceSprites } from '../../utils/bootCatalog';
 
 /**
- * Login screen. Hub is React; after Enter Helbreath World / Arena, Phaser owns the
- * SELECTCHAR desks. Transitions to GameWorld after connect.
+ * Login screen. Hub, SELECTCHAR, Create, and Arena are React.
+ * Phaser boots only for queued world enter (`entering-world`).
  */
 export class LoginScreen extends Scene {
     private backgroundImage!: Phaser.GameObjects.Image;
@@ -123,6 +126,7 @@ export class LoginScreen extends Scene {
         const alreadyEnteringWorld =
             !!connectDialogStore.state.walletSession &&
             connectDialogStore.state.phase !== 'hub';
+        const enteringWorld = connectDialogStore.state.phase === 'entering-world';
 
         const deepLink = consumeWalletDeepLink();
         if (deepLink) {
@@ -143,6 +147,9 @@ export class LoginScreen extends Scene {
                 setConnectWalletSession(deepLink.session);
                 openConnectDialogForLogin(gsm.getCharacterName() ?? '');
             }
+        } else if (enteringWorld) {
+            setConnectDialogOpen(false);
+            console.info('[LoginScreen] Phaser ready for queued world enter (no SELECTCHAR desks)');
         } else if (alreadyEnteringWorld) {
             // React hub already entered World before Phaser booted — keep SELECTCHAR.
             setConnectDialogOpen(true);
@@ -308,9 +315,9 @@ export class LoginScreen extends Scene {
                 this.clearLoginPendingDisconnectListener();
                 this.isConnecting = false;
                 setConnectingDialogOpen(false);
+                setConnectGatePhase('play-world');
+                clearPhaserWorldSession();
                 setConnectDialogOpen(true);
-                this.ensureDesks();
-                this.syncDesksFromStore();
                 console.error('[LoginScreen] Failed to connect to the server.', error);
                 setNetworkManager(this.game, undefined);
             }
@@ -318,6 +325,11 @@ export class LoginScreen extends Scene {
 
         this.connectToServerHandler = handleConnectToServer;
         EventBus.on(IN_UI_CONNECT_TO_SERVER, handleConnectToServer);
+
+        const queued = takePendingWorldEnter();
+        if (queued && connectDialogStore.state.phase === 'entering-world') {
+            void handleConnectToServer(queued);
+        }
 
         const queuePrefetch = (prefetch: PlayerItemAppearancePrefetchEventData) => {
             appendPendingPlayerItemAppearancePrefetch(this.game, prefetch.spriteNames);

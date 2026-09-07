@@ -15,6 +15,7 @@ import {
 import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
+    SELECTCHAR_OCCUPIED_SLOT_LABEL,
     SELECTCHAR_REACT_OCCUPIED_DOM_LOG,
     SELECTCHAR_REACT_OCCUPIED_ID,
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
@@ -161,6 +162,7 @@ export function SelectCharOccupiedReactOverlay({
                     data-react-slot={slotIndex}
                     data-occupied="1"
                 >
+                    <div className="selectchar-react-occupied__status">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>
                     <div className="selectchar-react-occupied__name">{row.name}</div>
                     <div className="selectchar-react-occupied__lev">{row.lev}</div>
                 </div>

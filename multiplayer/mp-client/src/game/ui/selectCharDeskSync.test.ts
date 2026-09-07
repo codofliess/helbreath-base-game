@@ -236,8 +236,8 @@ describe('paintSlotGlyphCanvas', () => {
             lev: 'Lev. 150',
             occupied: elon,
         });
-        assert.deepEqual(written, ['Elon', 'Lev. 150']);
-        assert.deepEqual(texts, ['Elon', 'Lev. 150']);
+        assert.deepEqual(written, ['Occupied', 'Elon', 'Lev. 150']);
+        assert.deepEqual(texts, ['Occupied', 'Elon', 'Lev. 150']);
         assert.equal(texts.includes('Empty'), false);
     });
 });
@@ -574,6 +574,7 @@ describe('occupiedSlotOverlayInnerHtml', () => {
         const rows = paintSelectCharSlotRows([elon]);
         const html = occupiedSlotOverlayInnerHtml(rows);
         assert.match(html, /data-occupied="1"/);
+        assert.match(html, />Occupied</);
         assert.match(html, />Elon</);
         assert.match(html, />Lev\. 150</);
         assert.equal(html.includes('Empty'), false);

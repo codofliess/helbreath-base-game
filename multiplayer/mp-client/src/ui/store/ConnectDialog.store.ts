@@ -7,6 +7,7 @@ import {
     IN_UI_CHARACTER_SLOTS_UPDATED,
     IN_UI_CONNECT_TO_SERVER,
     OUT_UI_SELECTCHAR_ACTION,
+    type ConnectToServerPayload,
 } from '../../constants/EventNames';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
@@ -14,12 +15,18 @@ import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 
 /**
  * Login gate phase:
- * - hub — React-only World | Goddesses | Arena (no Phaser/WebGL until seal)
- * - play-world — Phaser SELECTCHAR desk after a successful wallet seal
- * - create-char — Phaser Create Character desk (ND_NEWCHAR) for an empty slot
- * - arena-lobby — Phaser Arena SELECTCHAR desk (kits 160/90)
+ * - hub — React-only World | Goddesses | Arena (no Phaser/WebGL)
+ * - play-world — React SELECTCHAR (Occupied + names). Phaser stays off.
+ * - create-char — React Create Character. Phaser stays off.
+ * - arena-lobby — React Arena Pre-Ready. Phaser stays off.
+ * - entering-world — Start / Bleeding enter: the only gate that loads Phaser.
  */
-export type ConnectGatePhase = 'hub' | 'play-world' | 'create-char' | 'arena-lobby';
+export type ConnectGatePhase =
+    | 'hub'
+    | 'play-world'
+    | 'create-char'
+    | 'arena-lobby'
+    | 'entering-world';
 
 export interface ConnectDialogState {
     isOpen: boolean;
@@ -41,6 +48,10 @@ export interface ConnectDialogState {
     selectedSlotIndex: number;
     /** Selected Arena desk cradle 0–3 (Lv160 A/B, Lv90 A/B). */
     arenaDeskIndex: number;
+    /** Queued Start payload; LoginScreen consumes it after Phaser boots. */
+    pendingWorldEnter: ConnectToServerPayload | null;
+    /** Sticky: Phaser stays mounted after Start until hub/logout (GameWorld). */
+    phaserWorldSession: boolean;
 }
 
 const initialState: ConnectDialogState = {
@@ -54,6 +65,8 @@ const initialState: ConnectDialogState = {
     characterListLoading: false,
     selectedSlotIndex: 0,
     arenaDeskIndex: 0,
+    pendingWorldEnter: null,
+    phaserWorldSession: false,
 };
 
 const { store: connectDialogStore, setOpen: setConnectDialogOpenBase } = createDialogStore(initialState);
@@ -90,6 +103,8 @@ export const openConnectDialogForLogin = (defaultCharacterName: string) => {
             characterListLoading: keepDesk ? state.characterListLoading : false,
             selectedSlotIndex: keepDesk ? state.selectedSlotIndex : 0,
             arenaDeskIndex: 0,
+            pendingWorldEnter: keepDesk ? state.pendingWorldEnter : null,
+            phaserWorldSession: keepDesk ? state.phaserWorldSession : false,
         };
     });
 };
@@ -110,20 +125,58 @@ export const setConnectGatePhase = (phase: ConnectGatePhase) => {
             ...state,
             phase: 'hub',
             isOpen: true,
+            phaserWorldSession: false,
         }));
         return;
     }
-    connectDialogStore.setState((state) => ({ ...state, phase }));
+    connectDialogStore.setState((state) => ({
+        ...state,
+        phase,
+        phaserWorldSession: phase === 'hub' ? false : state.phaserWorldSession,
+    }));
 };
 
-/** Phaser/WebGL only after a successful seal AND a desk phase. Hub stays React-only. */
+/**
+ * Phaser/WebGL only after Start (or Arena world enter). SELECTCHAR / Arena lobby
+ * stay React so KindGem Occupied smoke and Arena clicks cannot Aw Snap Error 9.
+ */
 export function shouldConstructPhaserAfterSeal(
-    state: Pick<ConnectDialogState, 'phase' | 'walletSession'> = connectDialogStore.state,
+    state: Pick<ConnectDialogState, 'phase' | 'walletSession' | 'phaserWorldSession'> = connectDialogStore.state,
 ): boolean {
     if (!state.walletSession) {
         return false;
     }
-    return state.phase === 'play-world' || state.phase === 'create-char' || state.phase === 'arena-lobby';
+    return state.phase === 'entering-world' || state.phaserWorldSession;
+}
+
+/** Safe gate: boot Phaser, then LoginScreen connects with this payload. */
+export function beginEnteringWorld(payload: ConnectToServerPayload): void {
+    connectDialogStore.setState((state) => ({
+        ...state,
+        isOpen: false,
+        phase: 'entering-world',
+        pendingWorldEnter: payload,
+        phaserWorldSession: true,
+    }));
+}
+
+/** Drop Phaser after a failed Start so SELECTCHAR stays React. */
+export function clearPhaserWorldSession(): void {
+    connectDialogStore.setState((state) => ({
+        ...state,
+        phaserWorldSession: false,
+        pendingWorldEnter: null,
+    }));
+}
+
+/** LoginScreen: take the queued Start payload once the connect listener is live. */
+export function takePendingWorldEnter(): ConnectToServerPayload | null {
+    const pending = connectDialogStore.state.pendingWorldEnter;
+    if (!pending) {
+        return null;
+    }
+    connectDialogStore.setState((state) => ({ ...state, pendingWorldEnter: null }));
+    return pending;
 }
 
 /**
@@ -151,6 +204,7 @@ export const setConnectWalletSession = (walletSession: WalletSession | null) => 
             ...state,
             walletSession,
             phase: walletSession ? state.phase : 'hub',
+            phaserWorldSession: walletSession ? state.phaserWorldSession : false,
             characterSlots: switchedToDifferentWallet ? [] : state.characterSlots,
             referralInfo: switchedToDifferentWallet ? null : state.referralInfo,
         };

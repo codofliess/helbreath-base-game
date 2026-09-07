@@ -71,11 +71,10 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             output: {
-                // Phaser stays in its own chunk and must not load until StartGame
-                // (post-seal). EventBus is Phaser-free so index-*.js can boot the hub.
-                manualChunks: {
-                    phaser: ['phaser'],
-                },
+                // Do NOT put Phaser in manualChunks. That chunk also collects Vite CJS
+                // interop helpers, so index-*.js would static-import the whole Phaser
+                // bundle on the hub (KindGem Error 9). Phaser must load only via the
+                // dynamic StartGame import after seal.
             },
         },
         minify: 'terser',

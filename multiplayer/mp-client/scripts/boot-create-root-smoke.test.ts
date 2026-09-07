@@ -123,6 +123,8 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(coords, /Phaser\.Math/);
         const sprite = fs.readFileSync(path.join(clientRoot, 'src/game/assets/HBSprite.ts'), 'utf8');
         assert.doesNotMatch(sprite, /import \{ CANVAS/);
+        const vite = fs.readFileSync(path.join(clientRoot, 'vite/config.prod.mjs'), 'utf8');
+        assert.doesNotMatch(vite, /phaser:\s*\[\s*['"]phaser['"]\s*\]/);
     });
 
     it('LoginScreen and SelectCharDesk keep occupied paint + desk-sync strings in the boot graph', () => {

@@ -5,6 +5,14 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startGameWithRendererFallback } from '../src/game/startGameWithRendererFallback';
 import {
+    buildSelectCharReactOccupiedBanner,
+    clearSelectCharReactOccupiedBannerSticky,
+    SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
+    syncSelectCharReactOccupiedBannerDom,
+} from '../src/game/ui/selectCharSlotGlyphs';
+import { paintSelectCharSlotRows } from '../src/game/ui/selectCharDeskSync';
+import type { CharacterSlotSummary } from '../src/utils/characterListApi';
+import {
     bootstrapWalletDeepLinkAtBoot,
     consumePreferredAuthChain,
     consumeWalletDeepLink,
@@ -124,6 +132,9 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(glyphs, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(glyphs, /React SELECTCHAR occupied painted names=/);
         assert.match(glyphs, /React SELECTCHAR occupied DOM textContent=/);
+        assert.match(glyphs, /React SELECTCHAR KindGem visible=/);
+        assert.match(glyphs, /OCCUPIED Elon Lev\.150/);
+        assert.match(glyphs, /destroySelectCharWaitingBannerNodes/);
         assert.match(glyphs, /paintSelectCharReactOccupiedBannerNodes/);
         assert.match(glyphs, /syncSelectCharReactOccupiedBannerDom/);
         const overlay = fs.readFileSync(
@@ -134,6 +145,7 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_ID/);
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG/);
         assert.match(overlay, /SELECTCHAR_REACT_OCCUPIED_DOM_LOG/);
+        assert.match(overlay, /SELECTCHAR_KINDGEM_ELON_LV150_TEXT/);
         assert.match(overlay, /syncSelectCharReactOccupiedBannerDom/);
         assert.match(overlay, /createPortal/);
         const connect = fs.readFileSync(
@@ -181,6 +193,185 @@ describe('createRoot boot path (no wallet)', () => {
     });
 });
 
+describe('KindGem occupied overlay mount (Elon lv150)', () => {
+    it('paints #selectchar-kindgem-occupied-banner with OCCUPIED Elon Lev.150 and no waiting', () => {
+        class FakeStyle {
+            display = '';
+            visibility = '';
+            opacity = '';
+            zIndex = '';
+            color = '';
+            fontSize = '';
+            position = '';
+            pointerEvents = '';
+            background = '';
+            top = '';
+            left = '';
+            transform = '';
+            minWidth = '';
+            minHeight = '';
+            cssText = '';
+            [key: string]: string;
+        }
+        class FakeEl {
+            id = '';
+            className = '';
+            textContent = '';
+            children: FakeEl[] = [];
+            parentNode: FakeEl | null = null;
+            style = new FakeStyle();
+            attrs = new Map<string, string>();
+            get innerText(): string {
+                return this.textContent || this.children.map((c) => c.innerText).join(' ');
+            }
+            setAttribute(name: string, value: string) {
+                this.attrs.set(name, value);
+            }
+            getAttribute(name: string) {
+                return this.attrs.get(name) ?? null;
+            }
+            matchesOne(part: string): boolean {
+                const sel = part.trim();
+                if (sel.startsWith('#')) {
+                    return this.id === sel.slice(1);
+                }
+                if (sel.startsWith('.')) {
+                    return this.className.split(/\s+/).includes(sel.slice(1));
+                }
+                const eq = sel.match(/^\[([^=\]]+)=["']?([^"'\]]+)["']?\]$/);
+                if (eq) {
+                    return this.getAttribute(eq[1]) === eq[2];
+                }
+                return false;
+            }
+            matches(sel: string): boolean {
+                return sel.split(',').some((part) => this.matchesOne(part));
+            }
+            querySelectorAll(sel: string): FakeEl[] {
+                const out: FakeEl[] = [];
+                const walk = (n: FakeEl) => {
+                    if (n.matches(sel)) {
+                        out.push(n);
+                    }
+                    n.children.forEach(walk);
+                };
+                this.children.forEach(walk);
+                return out;
+            }
+            querySelector(sel: string): FakeEl | null {
+                return this.querySelectorAll(sel)[0] ?? null;
+            }
+            appendChild(child: FakeEl): FakeEl {
+                if (child.parentNode) {
+                    child.parentNode.removeChild(child);
+                }
+                child.parentNode = this;
+                this.children.push(child);
+                return child;
+            }
+            removeChild(child: FakeEl): FakeEl {
+                this.children = this.children.filter((c) => c !== child);
+                child.parentNode = null;
+                return child;
+            }
+            remove() {
+                this.parentNode?.removeChild(this);
+            }
+            contains(other: FakeEl): boolean {
+                return other === this || this.children.some((c) => c.contains(other));
+            }
+            getBoundingClientRect() {
+                const hidden =
+                    this.style.display === 'none' ||
+                    this.style.visibility === 'hidden' ||
+                    this.style.opacity === '0';
+                const fontPx = parseFloat(this.style.fontSize) || 0;
+                const width = hidden ? 0 : Math.max(280, parseFloat(this.style.minWidth) || 280);
+                const height = hidden ? 0 : Math.max(44, fontPx > 0 ? fontPx + 16 : 44);
+                return { width, height, top: 16, left: 120, bottom: 16 + height, right: 120 + width };
+            }
+        }
+        class FakeDoc {
+            body = new FakeEl();
+            createElement() {
+                return new FakeEl();
+            }
+            getElementById(id: string): FakeEl | null {
+                const walk = (n: FakeEl): FakeEl | null => {
+                    if (n.id === id) {
+                        return n;
+                    }
+                    for (const c of n.children) {
+                        const hit = walk(c);
+                        if (hit) {
+                            return hit;
+                        }
+                    }
+                    return null;
+                };
+                return walk(this.body);
+            }
+            querySelector(sel: string) {
+                return this.body.querySelector(sel);
+            }
+            querySelectorAll(sel: string) {
+                return this.body.querySelectorAll(sel);
+            }
+        }
+
+        const elon: CharacterSlotSummary = {
+            slotIndex: 0,
+            name: 'Elon',
+            level: 150,
+            exp: 0,
+            rebirth: 0,
+            hoursPlayed: 0,
+            str: 10,
+            vit: 10,
+            dex: 10,
+            intel: 10,
+            mag: 10,
+            chr: 10,
+            gender: 0,
+            skinColor: 0,
+            hairStyleIndex: 0,
+            underwearColorIndex: 0,
+            citizenshipSide: 'traveler',
+        };
+        const doc = new FakeDoc();
+        const waiting = new FakeEl();
+        waiting.className = 'selectchar-react-occupied__banner';
+        waiting.textContent = 'ConnectDialog React SELECTCHAR occupied — waiting';
+        waiting.setAttribute('data-selectchar-react-banner', '1');
+        doc.body.appendChild(waiting);
+
+        clearSelectCharReactOccupiedBannerSticky();
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+
+        const painted = doc.querySelector('#selectchar-kindgem-occupied-banner');
+        assert.ok(painted);
+        assert.match(painted!.textContent, /OCCUPIED/);
+        assert.match(painted!.textContent, /Elon/);
+        assert.match(painted!.textContent, /150/);
+        assert.equal(painted!.id, SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+
+        const bannerInner = doc.body
+            .querySelectorAll(
+                '[data-selectchar-react-banner="1"], .selectchar-react-occupied__banner, #selectchar-kindgem-occupied-banner',
+            )
+            .map((n) => n.innerText)
+            .join('\n');
+        assert.equal(bannerInner.toLowerCase().includes('waiting'), false);
+        assert.equal(waiting.parentNode, null);
+
+        const box = painted!.getBoundingClientRect();
+        assert.ok(box.width > 0);
+        assert.ok(box.height > 0);
+        assert.notEqual(painted!.style.opacity, '0');
+    });
+});
+
 describe('hub Phantom sign path (source)', () => {
     it('ConnectDialog always re-authenticates Phantom Sol and surfaces the extension toast', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'), 'utf8');
@@ -223,5 +414,8 @@ describe('production index-*.js (when dist exists)', () => {
         assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
         assert.match(entry, /React SELECTCHAR occupied painted names=/);
         assert.match(entry, /React SELECTCHAR occupied DOM textContent=/);
+        assert.match(entry, /React SELECTCHAR KindGem visible=/);
+        assert.match(entry, /OCCUPIED Elon Lev\.150/);
+        assert.match(entry, /selectchar-kindgem-occupied-banner/);
     });
 });

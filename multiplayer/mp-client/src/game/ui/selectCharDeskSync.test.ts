@@ -11,6 +11,8 @@ import {
     type SelectCharDeskPaintTarget,
 } from './selectCharDeskSync';
 import {
+    SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
+    SELECTCHAR_KINDGEM_OCCUPIED_PREFIX,
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
     occupiedSlotOverlayInnerHtml,
@@ -18,6 +20,7 @@ import {
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
     selectCharOccupiedNamesRequireVisibleBanner,
+    syncSelectCharReactOccupiedBannerDom,
 } from './selectCharSlotGlyphs';
 
 const elon: CharacterSlotSummary = {
@@ -239,13 +242,14 @@ describe('paintSlotGlyphCanvas', () => {
 });
 
 describe('buildSelectCharReactOccupiedBanner', () => {
-    it('puts Elon Lev. 150 in a KindGem-visible ConnectDialog banner', () => {
+    it('puts Elon Lev.150 in a KindGem-visible OCCUPIED banner', () => {
         clearSelectCharReactOccupiedBannerSticky();
         const rows = paintSelectCharSlotRows([elon]);
         const banner = buildSelectCharReactOccupiedBanner(rows, [elon]);
-        assert.match(banner, /ConnectDialog React SELECTCHAR occupied/);
+        assert.equal(banner, 'OCCUPIED Elon Lev.150');
+        assert.match(banner, new RegExp(SELECTCHAR_KINDGEM_OCCUPIED_PREFIX));
         assert.match(banner, /Elon/);
-        assert.match(banner, /Lev\. 150/);
+        assert.match(banner, /Lev\.150/);
         assert.equal(banner.includes('waiting'), false);
     });
 
@@ -253,8 +257,7 @@ describe('buildSelectCharReactOccupiedBanner', () => {
         clearSelectCharReactOccupiedBannerSticky();
         const emptyRows = paintSelectCharSlotRows([]);
         const banner = buildSelectCharReactOccupiedBanner(emptyRows, [elon]);
-        assert.match(banner, /Elon/);
-        assert.match(banner, /150/);
+        assert.equal(banner, 'OCCUPIED Elon Lev.150');
         assert.equal(banner.includes('waiting'), false);
     });
 
@@ -269,8 +272,7 @@ describe('buildSelectCharReactOccupiedBanner', () => {
         clearSelectCharReactOccupiedBannerSticky();
         buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
         const later = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
-        assert.match(later, /Elon/);
-        assert.match(later, /150/);
+        assert.equal(later, 'OCCUPIED Elon Lev.150');
         assert.equal(later.includes('waiting'), false);
     });
 });
@@ -302,6 +304,8 @@ describe('paintSelectCharReactOccupiedBannerNodes — DOM not console', () => {
         assert.equal(selectCharOccupiedNamesRequireVisibleBanner('Elon', painted.joined), true);
         assert.equal(stale.style.visibility, 'visible');
         assert.equal(stale.style.opacity, '1');
+        assert.equal(stale.style.fontSize, '28px');
+        assert.equal(stale.style.color, '#1a1008');
         assert.equal(attrs.get('data-selectchar-banner-text'), banner);
     });
 
@@ -313,6 +317,203 @@ describe('paintSelectCharReactOccupiedBannerNodes — DOM not console', () => {
             ),
             false,
         );
+    });
+});
+
+function installFakeSelectCharDocument() {
+    class FakeStyle {
+        display = '';
+        visibility = '';
+        opacity = '';
+        zIndex = '';
+        color = '';
+        fontSize = '';
+        position = '';
+        pointerEvents = '';
+        background = '';
+        top = '';
+        left = '';
+        transform = '';
+        minWidth = '';
+        minHeight = '';
+        cssText = '';
+        [key: string]: string;
+    }
+
+    class FakeEl {
+        id = '';
+        className = '';
+        textContent = '';
+        children: FakeEl[] = [];
+        parentNode: FakeEl | null = null;
+        style = new FakeStyle();
+        attrs = new Map<string, string>();
+
+        get innerText(): string {
+            if (this.textContent) {
+                return this.textContent;
+            }
+            return this.children.map((c) => c.innerText).join(' ');
+        }
+
+        setAttribute(name: string, value: string) {
+            this.attrs.set(name, value);
+        }
+
+        getAttribute(name: string) {
+            return this.attrs.get(name) ?? null;
+        }
+
+        matchesOne(part: string): boolean {
+            const sel = part.trim();
+            if (sel.startsWith('#')) {
+                return this.id === sel.slice(1);
+            }
+            if (sel.startsWith('.')) {
+                return this.className.split(/\s+/).includes(sel.slice(1));
+            }
+            const eq = sel.match(/^\[([^=\]]+)=["']?([^"'\]]+)["']?\]$/);
+            if (eq) {
+                return this.getAttribute(eq[1]) === eq[2];
+            }
+            const bare = sel.match(/^\[([^\]]+)\]$/);
+            if (bare) {
+                return this.attrs.has(bare[1]);
+            }
+            return false;
+        }
+
+        matches(sel: string): boolean {
+            return sel.split(',').some((part) => this.matchesOne(part));
+        }
+
+        querySelectorAll(sel: string): FakeEl[] {
+            const out: FakeEl[] = [];
+            const walk = (n: FakeEl) => {
+                if (n.matches(sel)) {
+                    out.push(n);
+                }
+                n.children.forEach(walk);
+            };
+            this.children.forEach(walk);
+            return out;
+        }
+
+        querySelector(sel: string): FakeEl | null {
+            return this.querySelectorAll(sel)[0] ?? null;
+        }
+
+        appendChild(child: FakeEl): FakeEl {
+            if (child.parentNode) {
+                child.parentNode.removeChild(child);
+            }
+            child.parentNode = this;
+            this.children.push(child);
+            return child;
+        }
+
+        removeChild(child: FakeEl): FakeEl {
+            this.children = this.children.filter((c) => c !== child);
+            child.parentNode = null;
+            return child;
+        }
+
+        remove() {
+            this.parentNode?.removeChild(this);
+        }
+
+        contains(other: FakeEl): boolean {
+            if (other === this) {
+                return true;
+            }
+            return this.children.some((c) => c.contains(other));
+        }
+
+        getBoundingClientRect() {
+            const hidden =
+                this.style.display === 'none' ||
+                this.style.visibility === 'hidden' ||
+                this.style.opacity === '0';
+            const fontPx = parseFloat(this.style.fontSize) || 0;
+            const minW = parseFloat(this.style.minWidth) || 0;
+            const width = hidden ? 0 : Math.max(280, minW, fontPx > 0 ? 280 : 0);
+            const height = hidden ? 0 : Math.max(44, fontPx > 0 ? fontPx + 16 : 0);
+            return { width, height, top: 16, left: 120, bottom: 16 + height, right: 120 + width, x: 120, y: 16 };
+        }
+    }
+
+    class FakeDoc {
+        body = new FakeEl();
+        documentElement = new FakeEl();
+
+        createElement(_tag: string) {
+            return new FakeEl();
+        }
+
+        getElementById(id: string): FakeEl | null {
+            const walk = (n: FakeEl): FakeEl | null => {
+                if (n.id === id) {
+                    return n;
+                }
+                for (const c of n.children) {
+                    const hit = walk(c);
+                    if (hit) {
+                        return hit;
+                    }
+                }
+                return null;
+            };
+            return walk(this.body);
+        }
+
+        querySelector(sel: string) {
+            return this.body.querySelector(sel);
+        }
+
+        querySelectorAll(sel: string) {
+            return this.body.querySelectorAll(sel);
+        }
+    }
+
+    const doc = new FakeDoc();
+    return { doc, FakeEl };
+}
+
+describe('syncSelectCharReactOccupiedBannerDom — fail-closed KindGem paint', () => {
+    it('destroys waiting banners and paints a visible OCCUPIED Elon Lev.150 singleton', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const { doc, FakeEl } = installFakeSelectCharDocument();
+        const waiting = new FakeEl();
+        waiting.id = 'stale-waiting-banner';
+        waiting.className = 'selectchar-react-occupied__banner';
+        waiting.textContent = 'ConnectDialog React SELECTCHAR occupied — waiting';
+        waiting.setAttribute('data-selectchar-react-banner', '1');
+        doc.body.appendChild(waiting);
+
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        const painted = syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+
+        const kindgem = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+        assert.ok(kindgem);
+        assert.equal(kindgem?.textContent, 'OCCUPIED Elon Lev.150');
+        assert.match(kindgem?.textContent ?? '', /OCCUPIED/);
+        assert.match(kindgem?.textContent ?? '', /Elon/);
+        assert.match(kindgem?.textContent ?? '', /150/);
+        assert.equal((kindgem?.textContent ?? '').includes('waiting'), false);
+        assert.equal(waiting.parentNode, null);
+        assert.equal(painted.hasWaiting, false);
+
+        const bannerText = doc.body
+            .querySelectorAll('[data-selectchar-react-banner="1"], .selectchar-react-occupied__banner, #selectchar-kindgem-occupied-banner')
+            .map((n) => n.innerText)
+            .join(' ');
+        assert.equal(bannerText.includes('waiting'), false);
+
+        const rect = kindgem!.getBoundingClientRect();
+        assert.ok(rect.width > 0);
+        assert.ok(rect.height > 0);
+        assert.notEqual(kindgem!.style.opacity, '0');
+        assert.equal(kindgem!.style.fontSize, '28px');
     });
 });
 

@@ -113,6 +113,10 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(app, /ToastContainer/);
         assert.match(app, /from '\.\/game\/phaserHubTypes'/);
         assert.doesNotMatch(app, /from ['"]\.\/PhaserGame['"]/);
+        assert.doesNotMatch(app, /from ['"]\.\/ui\/components\/HotkeyBar['"]/);
+        assert.doesNotMatch(app, /from ['"]\.\/ui\/dialogs\/ControlsDialog['"]/);
+        assert.match(app, /import\('\.\/ui\/components\/HotkeyBar'\)/);
+        assert.match(app, /import\('\.\/ui\/dialogs\/ControlsDialog'\)/);
         const registry = fs.readFileSync(path.join(clientRoot, 'src/utils/RegistryUtils.ts'), 'utf8');
         assert.match(registry, /from '\.\.\/game\/phaserHubTypes'/);
         assert.doesNotMatch(registry, /from ['"]phaser['"]/);
@@ -220,6 +224,9 @@ describe('createRoot boot path (no wallet)', () => {
         assert.match(connect, /SelectCharOccupiedReactOverlay/);
         assert.match(connect, /SelectCharReactDesk/);
         assert.match(connect, /ArenaReactLobby/);
+        assert.match(connect, /import\('\.\.\/components\/SelectCharReactDesk'\)/);
+        assert.match(connect, /import\('\.\.\/components\/ArenaReactLobby'\)/);
+        assert.doesNotMatch(connect, /from ['"]\.\.\/components\/SelectCharReactDesk['"]/);
         assert.match(connect, /beginEnteringWorld/);
         assert.doesNotMatch(
             connect,
@@ -494,10 +501,18 @@ describe('production index-*.js (when dist exists)', () => {
         assert.doesNotMatch(entry, /Cannot create WebGL context, aborting/);
         assert.doesNotMatch(entry, /buildGameConfig\(parent/);
         assert.doesNotMatch(entry, /from["']\.\/phaser-/);
-        assert.match(entry, /ConnectDialog React SELECTCHAR occupied/);
-        assert.match(entry, /OCCUPIED Elon Lev\.150/);
-        assert.match(entry, /selectchar-kindgem-occupied-banner/);
+        assert.doesNotMatch(entry, /gameWorldCanvasPresentation/);
+        assert.doesNotMatch(entry, /ConnectDialog React SELECTCHAR occupied/);
+        assert.doesNotMatch(entry, /OCCUPIED Elon Lev\.150/);
+        const occupiedChunk = files.some((f) => {
+            if (!f.endsWith('.js') || /^index-/.test(f)) {
+                return false;
+            }
+            const src = fs.readFileSync(path.join(distAssets, f), 'utf8');
+            return src.includes('OCCUPIED Elon Lev.150') && src.includes('ConnectDialog React SELECTCHAR occupied');
+        });
+        assert.equal(occupiedChunk, true, 'Occupied Elon banner must live in a post-seal lazy chunk, not hub index');
         const html = fs.readFileSync(path.join(clientRoot, 'dist/index.html'), 'utf8');
-        assert.doesNotMatch(html, /modulepreload[^>]+(?:phaser-|PhaserGame)/i);
+        assert.doesNotMatch(html, /modulepreload[^>]+(?:phaser-|PhaserGame|gameWorldCanvasPresentation)/i);
     });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import { selectCharWarn } from '../../utils/selectCharTrace';
@@ -81,11 +81,25 @@ import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
 import { HubGlobalPvpRail, HubWorldStreamersRail } from '../components/HubCarteleraRails';
 import { HubWorldRankingButtons } from '../components/HubWorldRankingButtons';
-import { SelectCharOccupiedReactOverlay } from '../components/SelectCharOccupiedReactOverlay';
-import { SelectCharReactDesk } from '../components/SelectCharReactDesk';
-import { ArenaReactLobby } from '../components/ArenaReactLobby';
-import { CreateCharReactPanel } from '../components/CreateCharReactPanel';
 import { yieldForWalletUi } from '../../game/phaserWalletPark';
+
+/** Post-seal desks — keep them off the hub connect chunk so Phantom can seal (Error9=NO / firmas≥1). */
+const SelectCharOccupiedReactOverlay = lazy(async () => {
+    const mod = await import('../components/SelectCharOccupiedReactOverlay');
+    return { default: mod.SelectCharOccupiedReactOverlay };
+});
+const SelectCharReactDesk = lazy(async () => {
+    const mod = await import('../components/SelectCharReactDesk');
+    return { default: mod.SelectCharReactDesk };
+});
+const ArenaReactLobby = lazy(async () => {
+    const mod = await import('../components/ArenaReactLobby');
+    return { default: mod.ArenaReactLobby };
+});
+const CreateCharReactPanel = lazy(async () => {
+    const mod = await import('../components/CreateCharReactPanel');
+    return { default: mod.CreateCharReactPanel };
+});
 
 interface ConnectDialogProps {
     zIndex?: number;
@@ -879,21 +893,29 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
 
     // React owns SELECTCHAR / Create / Arena until Start (entering-world).
     if (phase === 'create-char') {
-        return <CreateCharReactPanel />;
+        return (
+            <Suspense fallback={null}>
+                <CreateCharReactPanel />
+            </Suspense>
+        );
     }
     if (phase === 'arena-lobby') {
-        return <ArenaReactLobby />;
+        return (
+            <Suspense fallback={null}>
+                <ArenaReactLobby />
+            </Suspense>
+        );
     }
     if (phase === 'play-world') {
         return (
-            <>
+            <Suspense fallback={null}>
                 <SelectCharReactDesk />
                 <SelectCharOccupiedReactOverlay
                     zIndex={zIndex}
                     characterSlots={characterSlots}
                     characterListLoading={characterListLoading}
                 />
-            </>
+            </Suspense>
         );
     }
     if (phase === 'entering-world') {

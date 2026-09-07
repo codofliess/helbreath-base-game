@@ -21,9 +21,9 @@ const phasermsg = () => {
             for (const [file, chunk] of Object.entries(bundle)) {
                 if (chunk.type === 'asset' && file.endsWith('.html')) {
                     const html = String(chunk.source ?? '');
-                    if (/modulepreload[^>]+(?:phaser-|PhaserGame)/i.test(html)) {
+                    if (/modulepreload[^>]+(?:phaser-|PhaserGame|gameWorldCanvasPresentation)/i.test(html)) {
                         throw new Error(
-                            `Hub index.html must not modulepreload Phaser (KindGem Error 9 after seal). ${file}`,
+                            `Hub index.html must not modulepreload Phaser (KindGem Error 9 on hub connect). ${file}`,
                         );
                     }
                     continue;
@@ -36,9 +36,10 @@ const phasermsg = () => {
                 }
                 const staticPhaser = (chunk.imports ?? []).some((id) => id.includes('phaser'));
                 const codeHasPhaser = /from["']\.\/phaser-/.test(chunk.code ?? '');
-                if (staticPhaser || codeHasPhaser) {
+                const codeHasWorldCanvas = /gameWorldCanvasPresentation/.test(chunk.code ?? '');
+                if (staticPhaser || codeHasPhaser || codeHasWorldCanvas) {
                     throw new Error(
-                        `Hub index chunk must not static-import Phaser (KindGem Error 9). ${file} imports=${JSON.stringify(chunk.imports)}`,
+                        `Hub index chunk must not load Phaser/WebGL (KindGem Error 9 before connect UI). ${file} imports=${JSON.stringify(chunk.imports)}`,
                     );
                 }
             }

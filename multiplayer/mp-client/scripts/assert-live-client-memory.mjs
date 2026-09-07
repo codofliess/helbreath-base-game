@@ -29,6 +29,8 @@ const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
 const gameWorld = read('src/game/scenes/GameWorld.ts');
 const loginScreen = read('src/game/scenes/LoginScreen.ts');
+const appHub = read('src/App.tsx');
+const connectDialog = read('src/ui/dialogs/ConnectDialog.tsx');
 const maps = read('src/constants/Maps.ts');
 const mapCatalogLookup = read('src/utils/mapCatalogLookup.ts');
 const mapViewportStream = read('src/utils/mapViewportStream.ts');
@@ -430,6 +432,16 @@ assert(
         !/loadSelectAppearanceSprites/.test(loginScreen) &&
         !/ensureDesks/.test(loginScreen),
     'LoginScreen must not construct Phaser SELECTCHAR desks or load paper-dolls (KindGem Error 9 before Occupied)',
+);
+
+assert(
+    !/from ['"]\.\/ui\/components\/HotkeyBar['"]/.test(appHub) &&
+        !/from ['"]\.\/ui\/dialogs\/ControlsDialog['"]/.test(appHub) &&
+        /import\('\.\/ui\/components\/HotkeyBar'\)/.test(appHub) &&
+        /import\('\.\/ui\/dialogs\/ControlsDialog'\)/.test(appHub) &&
+        !/from ['"]\.\.\/components\/SelectCharReactDesk['"]/.test(connectDialog) &&
+        /import\('\.\.\/components\/SelectCharReactDesk'\)/.test(connectDialog),
+    'Hub entry must not static-import HotkeyBar/ControlsDialog/Explorer (Phaser canvas + Occupied must stay off connect UI)',
 );
 
 assert(

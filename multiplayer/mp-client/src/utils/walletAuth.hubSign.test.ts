@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
     clearStoredWalletAuth,
     getReusableHubWalletSession,
@@ -165,5 +168,18 @@ describe('resolveHubPhantomAuthAction — one signMessage per hub Connect', () =
         assert.equal(third.token, 'fresh-sol-token');
         assert.equal(peekSolSignRequestCount(), 0);
         resetWalletAuthClientStateForTests();
+    });
+});
+
+describe('Phantom sign isolation', () => {
+    it('connectSolana parks Phaser before phantom.connect', () => {
+        const auth = fs.readFileSync(
+            path.join(path.dirname(fileURLToPath(import.meta.url)), 'walletAuth.ts'),
+            'utf8',
+        );
+        const parkIdx = auth.indexOf('parkPhaserForWalletUi');
+        const connectIdx = auth.indexOf('phantom.connect');
+        assert.ok(parkIdx >= 0, 'must import parkPhaserForWalletUi');
+        assert.ok(connectIdx > parkIdx, 'phantom.connect must run inside the park');
     });
 });

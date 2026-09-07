@@ -1,4 +1,5 @@
 import { Scale, type Scene } from 'phaser';
+import { isPhaserParkedForWalletUi } from '../phaserWalletPark';
 
 /**
  * Logical SELECTCHAR / NEWCHAR buffer (classic ND_SELECTCHAR art = 800×600).
@@ -137,6 +138,9 @@ function applyDeskPresentation(scene: Scene): void {
 }
 
 function resyncBoundDeskCss(): void {
+    if (isPhaserParkedForWalletUi()) {
+        return;
+    }
     const scene = resyncBoundScene;
     if (!scene || !sharedResizedForDesk || sharedActiveOwners <= 0) {
         return;
@@ -251,6 +255,9 @@ export function applyLoginDeskCanvasPresentation(scene: Scene, alreadyActive: bo
 }
 
 export function resyncLoginDeskCanvasPresentation(scene: Scene): void {
+    if (isPhaserParkedForWalletUi()) {
+        return;
+    }
     if (!sharedResizedForDesk || sharedActiveOwners <= 0) {
         return;
     }

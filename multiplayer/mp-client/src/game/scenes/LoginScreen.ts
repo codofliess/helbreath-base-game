@@ -28,7 +28,6 @@ import {
     enterPlayWorldPhase,
     openConnectDialogForLogin,
     setConnectDialogOpen,
-    setConnectGatePhase,
     setConnectWalletSession,
 } from '../../ui/store/ConnectDialog.store';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
@@ -116,8 +115,8 @@ export class LoginScreen extends Scene {
     public create() {
         const gsm = getGameStateManager(this.game);
 
-        // Desks + store subscription first so play-world phase is applied onto SELECTCHAR.
-        this.ensureDesks();
+        // Subscribe first; SELECTCHAR GameObjects wait until a desk phase after Phantom seal.
+        this.bindDeskStoreListeners();
 
         // Landing Play Now: ?wallet=&token=&mode=world → character list (SELECTCHAR).
         // Deep-link stays in sessionStorage until desk is shown (Strict Mode safe).
@@ -330,13 +329,18 @@ export class LoginScreen extends Scene {
 
     /** Mirrors connectDialogStore desk phases onto Phaser SELECTCHAR / Create / Arena. */
     private syncDesksFromStore(eventSlots?: CharacterSlotSummary[]): void {
-        // Recreate after destroyDeskInstances (connect attempt) — never leave play-world with
-        // hub unmounted and no desks (black login-selectchar stage / empty camera).
-        if (!this.selectCharDesk || !this.createCharDesk || !this.arenaSelectCharDesk) {
-            if (this.isConnecting) {
-                return;
+        const state = connectDialogStore.state;
+        if (state.phase === 'play-world' && !state.isOpen && !this.isConnecting) {
+            setConnectDialogOpen(true);
+        }
+        const showSelect = state.phase === 'play-world' && !this.isConnecting;
+        const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
+        const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
+
+        if ((showSelect || showCreate || showArena) && !this.isConnecting) {
+            if (!this.selectCharDesk || !this.createCharDesk || !this.arenaSelectCharDesk) {
+                this.ensureDesks();
             }
-            this.ensureDesks();
         }
 
         const selectDesk = this.selectCharDesk;
@@ -347,13 +351,6 @@ export class LoginScreen extends Scene {
             return;
         }
 
-        const state = connectDialogStore.state;
-        if (state.phase === 'play-world' && !state.isOpen && !this.isConnecting) {
-            setConnectDialogOpen(true);
-        }
-        const showSelect = state.phase === 'play-world' && !this.isConnecting;
-        const showCreate = state.isOpen && state.phase === 'create-char' && !this.isConnecting;
-        const showArena = state.isOpen && state.phase === 'arena-lobby' && !this.isConnecting;
         if (showSelect || showCreate || showArena) {
             this.ensureSelectAppearanceSprites();
         }
@@ -442,6 +439,21 @@ export class LoginScreen extends Scene {
             });
     }
 
+    /** Store + EventBus desk sync without allocating SELECTCHAR GameObjects yet. */
+    private bindDeskStoreListeners(): void {
+        if (!this.storeUnsubscribe) {
+            this.storeUnsubscribe = connectDialogStore.subscribe(() => {
+                this.syncDesksFromStore();
+            });
+        }
+        if (!this.characterSlotsUpdatedHandler) {
+            this.characterSlotsUpdatedHandler = (slots?: CharacterSlotSummary[]) => {
+                this.syncDesksFromStore(Array.isArray(slots) ? slots : undefined);
+            };
+            EventBus.on(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
+        }
+    }
+
     /** Creates SELECTCHAR / Create / Arena desks and store subscription if missing. */
     private ensureDesks(): void {
         // Create independently so one desk constructor crash cannot kill World SELECTCHAR.
@@ -466,17 +478,7 @@ export class LoginScreen extends Scene {
                 console.error('[LoginScreen] ArenaSelectCharDesk failed to construct', err);
             }
         }
-        if (!this.storeUnsubscribe) {
-            this.storeUnsubscribe = connectDialogStore.subscribe(() => {
-                this.syncDesksFromStore();
-            });
-        }
-        if (!this.characterSlotsUpdatedHandler) {
-            this.characterSlotsUpdatedHandler = (slots?: CharacterSlotSummary[]) => {
-                this.syncDesksFromStore(Array.isArray(slots) ? slots : undefined);
-            };
-            EventBus.on(IN_UI_CHARACTER_SLOTS_UPDATED, this.characterSlotsUpdatedHandler);
-        }
+        this.bindDeskStoreListeners();
     }
 
     /** Destroys desk GameObjects and restores canvas; keeps the store subscription for reconnect. */

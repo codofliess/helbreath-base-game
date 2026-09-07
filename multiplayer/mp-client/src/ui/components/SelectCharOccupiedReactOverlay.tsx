@@ -1,7 +1,12 @@
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useStore } from '@tanstack/react-store';
 import { selectCharWarn } from '../../utils/selectCharTrace';
-import { paintSelectCharSlotRows } from '../../game/ui/selectCharDeskSync';
+import {
+    namedOccupiedCharacterSlots,
+    paintSelectCharSlotRows,
+    resolveSelectCharSlotsForPaint,
+} from '../../game/ui/selectCharDeskSync';
 import {
     SELECTCHAR_LINE_NAME_Y,
     SELECTCHAR_SLOT_NAME_X,
@@ -9,10 +14,12 @@ import {
 } from '../../game/ui/selectCharSlotLayout';
 import {
     SELECTCHAR_REACT_OCCUPIED_ID,
+    SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
     projectDeskPointToCss,
 } from '../../game/ui/selectCharSlotGlyphs';
-import type { CharacterSlotSummary } from '../../utils/characterListApi';
+import { peekCachedOccupiedCharacterList, type CharacterSlotSummary } from '../../utils/characterListApi';
+import { connectDialogStore } from '../store/ConnectDialog.store';
 
 interface SelectCharOccupiedReactOverlayProps {
     zIndex: number;
@@ -21,19 +28,40 @@ interface SelectCharOccupiedReactOverlayProps {
 }
 
 /**
- * KindGem-visible occupied SELECTCHAR labels from the React store.
- * Mounts whenever ConnectDialog is in play-world — cannot silently no-op if Elon is in store.
+ * KindGem-visible occupied SELECTCHAR labels from the live React store.
+ * Subscribes to characterSlots itself so a late CharacterList cannot leave
+ * the portal on «waiting» after ConnectDialog's first empty play-world paint.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
     characterSlots,
     characterListLoading,
 }: SelectCharOccupiedReactOverlayProps) {
-    const rows = paintSelectCharSlotRows(characterSlots);
-    const banner = buildSelectCharReactOccupiedBanner(rows);
+    const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
+    const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
+    const wallet = useStore(
+        connectDialogStore,
+        (s) => s.walletSession?.wallet?.trim() || '',
+    );
+
+    const liveSlots = useMemo(() => {
+        const cached = wallet ? peekCachedOccupiedCharacterList(wallet)?.slots ?? [] : [];
+        const storeNamed = namedOccupiedCharacterSlots(storeSlots);
+        return namedOccupiedCharacterSlots(
+            resolveSelectCharSlotsForPaint(
+                storeNamed.length > 0 ? storeNamed : undefined,
+                characterSlots,
+                cached,
+            ),
+        );
+    }, [characterSlots, storeSlots, wallet]);
+
+    const loading = storeLoading || characterListLoading;
+    const rows = paintSelectCharSlotRows(liveSlots);
+    const banner = buildSelectCharReactOccupiedBanner(rows, liveSlots);
     const occupied = rows
         .map((row, slotIndex) => ({ row, slotIndex }))
-        .filter((entry) => entry.row.occupied);
+        .filter((entry) => entry.row.occupied || (entry.row.name !== 'Empty' && entry.row.name.trim()));
 
     const occupiedNames = occupied.map((entry) => entry.row.name).join(',');
 
@@ -41,9 +69,14 @@ export function SelectCharOccupiedReactOverlay({
         selectCharWarn(
             'ConnectDialog React SELECTCHAR occupied names=%s loading=%s',
             occupiedNames || '(none)',
-            characterListLoading,
+            loading,
         );
+        selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG, occupiedNames || '(none)');
         const root = document.getElementById(SELECTCHAR_REACT_OCCUPIED_ID);
+        const bannerNode = root?.querySelector<HTMLElement>('[data-selectchar-react-banner="1"]');
+        if (bannerNode) {
+            bannerNode.textContent = banner;
+        }
         const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
         const rect = canvas?.getBoundingClientRect();
         if (!root || !rect || rect.width < 2 || rect.height < 2) {
@@ -63,7 +96,7 @@ export function SelectCharOccupiedReactOverlay({
             node.style.left = `${Math.round(pos.left)}px`;
             node.style.top = `${Math.round(pos.top)}px`;
         });
-    }, [banner, characterListLoading, occupiedNames]);
+    }, [banner, loading, occupiedNames]);
 
     return createPortal(
         <div
@@ -71,6 +104,7 @@ export function SelectCharOccupiedReactOverlay({
             className="selectchar-react-occupied"
             data-selectchar-react-occupied="1"
             data-occupied-count={occupied.length}
+            data-occupied-names={occupiedNames}
             style={{ zIndex: Math.max(zIndex + 22, 10040) }}
             aria-live="polite"
         >

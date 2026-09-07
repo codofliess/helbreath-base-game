@@ -232,6 +232,16 @@ describe('createRoot boot path (no wallet)', () => {
             connect,
             /phase === 'play-world' \|\| phase === 'create-char' \|\| phase === 'arena-lobby'/,
         );
+        const createPanel = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/CreateCharReactPanel.tsx'),
+            'utf8',
+        );
+        assert.match(createPanel, /setGender\('female'\)/);
+        assert.match(createPanel, /applyReferralCodeFromUser/);
+        assert.match(createPanel, /remainingCreateStatPoints/);
+        assert.match(createPanel, /Friend&apos;s referral/);
+        assert.doesNotMatch(createPanel, /str: 14/);
+        assert.doesNotMatch(createPanel, /gender: 'male',\s*skinColor: 'light'/);
     });
 
     it('App mounts PhaserGame only after seal and guards render throws', () => {

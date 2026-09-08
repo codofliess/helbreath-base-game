@@ -71,7 +71,19 @@ describe('bootCatalog deferral sets', () => {
         );
         assert.ok(!bald.some((j) => j.name === 'whr' || j.name === 'ym' || j.name === 'bm'));
         const armourSettle = settleAppearanceSheetIndices('mhpmail2');
-        assert.deepEqual([...armourSettle].sort((a, b) => a - b), [0, 2]);
+        assert.deepEqual([...armourSettle].sort((a, b) => a - b), [0, 1, 2, 3]);
         assert.ok(jobs[0].sheets.length > armourSettle.size);
+    });
+
+    it('synthesizes unknown clothes as EquipmentPack (Elvine hauberk is not Weapons)', () => {
+        const src = fs.readFileSync(path.join(root, '../constants/Assets.ts'), 'utf8');
+        assert.match(src, /spriteTypeForEquippedAppearance/);
+        assert.match(src, /SpriteType\.EquipmentPack/);
+        assert.match(src, /itemType === ItemTypes\.WEAPON/);
+        assert.match(src, /itemType === ItemTypes\.SHIELD/);
+        assert.doesNotMatch(
+            src.slice(src.indexOf('export function getPlayerItemAppearanceAssetData')),
+            /spriteType: SpriteType\.Weapons,\s*\n\s*};/,
+        );
     });
 });

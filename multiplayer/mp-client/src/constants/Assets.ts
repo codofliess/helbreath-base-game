@@ -30,7 +30,7 @@ import {
 import { getMonsterData, MONSTERS, type MonsterData, type MonsterStateConfig } from './Monsters';
 import { NPC_SPRITE_NAMES } from './NPCs';
 import { EFFECTS } from './Effects';
-import { ITEMS } from './Items';
+import { getItemByEquippedSprite, ITEMS, ItemTypes } from './Items';
 
 /** One row in `ASSETS`: registry key, load path, `AssetType`, and type-specific fields. */
 export interface AssetData {
@@ -287,7 +287,9 @@ export function getItemEquippedAppearanceSpriteNames(): ReadonlySet<string> {
 }
 
 /**
- * Resolve load metadata for one equipped appearance `.spr` (static {@link ASSETS} row or synthesized Weapons row).
+ * Resolve load metadata for one equipped appearance `.spr`.
+ * Catalog rows win. Otherwise synthesize from the item type — Elvine clothes
+ * (`mhhauberk1`, `mhauberk`, `whauberk`) must be EquipmentPack, not Weapons.
  */
 export function getPlayerItemAppearanceAssetData(spriteName: string): AssetData {
     const key = `sprite-${spriteName}`;
@@ -299,8 +301,19 @@ export function getPlayerItemAppearanceAssetData(spriteName: string): AssetData 
         key,
         fileName: `${spriteName}.spr`,
         assetType: AssetType.SPRITE,
-        spriteType: SpriteType.Weapons,
+        spriteType: spriteTypeForEquippedAppearance(spriteName),
     };
+}
+
+function spriteTypeForEquippedAppearance(spriteName: string): SpriteType {
+    const item = getItemByEquippedSprite(spriteName);
+    if (item?.itemType === ItemTypes.WEAPON) {
+        return SpriteType.Weapons;
+    }
+    if (item?.itemType === ItemTypes.SHIELD) {
+        return SpriteType.Shields;
+    }
+    return SpriteType.EquipmentPack;
 }
 
 /**

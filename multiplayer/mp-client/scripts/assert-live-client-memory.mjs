@@ -27,6 +27,12 @@ const mapManager = read('src/utils/MapManager.ts');
 const mapAssets = read('src/utils/MapAssets.ts');
 const loadingScreen = read('src/game/scenes/LoadingScreen.ts');
 const assets = read('src/constants/Assets.ts');
+assert(
+    /spriteTypeForEquippedAppearance/.test(assets) &&
+        /SpriteType\.EquipmentPack/.test(assets) &&
+        /getItemByEquippedSprite/.test(assets),
+    'Unknown equipped clothes (Elvine hauberk) must synthesize as EquipmentPack, not Weapons',
+);
 const gameWorld = read('src/game/scenes/GameWorld.ts');
 const loginScreen = read('src/game/scenes/LoginScreen.ts');
 const appHub = read('src/App.tsx');
@@ -48,6 +54,16 @@ assert(
         /if \(!config\.mapObject\)/.test(gameAsset) &&
         /this\.debugGraphics = scene\.add\.graphics/.test(gameAsset),
     'GameAsset must not allocate debug Graphics for every map object on plaza enter',
+);
+
+const playerTs = read('src/game/objects/Player.ts');
+assert(
+    /delayedCall\(0/.test(playerTs) && /IN_UI_PAPERDOLL_CAPTURE/.test(playerTs),
+    'Player must defer F5 capture after gear bind (sync capture can blank the world canvas)',
+);
+assert(
+    /Keep pending so the 1/.test(gameAsset) && /generateTexture placeholder/.test(gameAsset),
+    'GameAsset.promote must not clear pending when the real sheet is missing',
 );
 
 assert(
@@ -85,16 +101,20 @@ const itemAppearanceSheets = read('src/utils/itemAppearanceSheets.ts');
 const paperDollCapture = read('src/utils/paperDollCapture.ts');
 const characterPaperDoll = read('src/ui/components/CharacterPaperDoll.tsx');
 assert(
-    /ARMOUR_SETTLE_SHEETS = \[0, 2\]/.test(itemAppearanceSheets) &&
+    /ARMOUR_SETTLE_SHEETS = \[0, 1, 2, 3\]/.test(itemAppearanceSheets) &&
         /WEAPON_SETTLE_SHEETS = \[0, 1, 2, 3, 4, 5, 6, 7\]/.test(itemAppearanceSheets) &&
         /paperDollLayerSheetIndices/.test(itemAppearanceSheets) &&
-        /paperDollPendingGearJobs/.test(itemAppearanceSheets),
-    'Armour settle must be idle+walk (0,2); F5 paper-doll must request one south sheet per layer',
+        /paperDollPendingGearJobs/.test(itemAppearanceSheets) &&
+        /packBase/.test(itemAppearanceSheets),
+    'Armour settle must be stand+walk peace/combat (0–3); F5 paper-doll must request one south sheet per layer',
 );
 assert(
     /runPaperDollCapture/.test(paperDollCapture) &&
         /paperDollPendingGearJobs/.test(paperDollCapture) &&
         /sheetIndices: new Set\(job\.sheets\)/.test(paperDollCapture) &&
+        /arePlayerItemAppearanceSheetsLoaded/.test(paperDollCapture) &&
+        /queuePaperDollPendingGearLoads/.test(paperDollCapture) &&
+        /PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE/.test(paperDollCapture) &&
         !/pending\.map\(\(name\) =>/.test(paperDollCapture),
     'F5 capture must coalesce and load only paper-doll south sheets, not Promise.all settle 0–7',
 );

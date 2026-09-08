@@ -6,8 +6,9 @@ import { olympiaItemColorToSpriteTint } from '../constants/OlympiaItemName';
 import { getPivotData } from './RegistryUtils';
 import {
     loadPlayerItemAppearanceOnDemand,
-    arePlayerItemAppearanceLoaded,
+    arePlayerItemAppearanceSheetsLoaded,
 } from './ItemAssets';
+import { PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE } from '../Config';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
 import { paperDollLookKey, paperDollPendingGearJobs } from './itemAppearanceSheets';
@@ -474,11 +475,26 @@ export function capturePaperDollFromLivePlayer(
     return true;
 }
 
+function isUnsafePaperDollTextureKey(key: string | undefined): boolean {
+    return (
+        !key ||
+        key === '__DEFAULT' ||
+        key === '__MISSING' ||
+        key === PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE
+    );
+}
+
 function extractSpriteFrameDataUrl(sprite: PaperDollSprite): string | undefined {
     try {
         const texture = sprite.texture;
         const frame = sprite.frame;
-        if (!texture || !frame || frame.cutWidth <= 0 || frame.cutHeight <= 0) {
+        if (
+            !texture ||
+            isUnsafePaperDollTextureKey(texture.key) ||
+            !frame ||
+            frame.cutWidth <= 0 ||
+            frame.cutHeight <= 0
+        ) {
             return undefined;
         }
         const canvas = document.createElement('canvas');
@@ -527,7 +543,7 @@ function compositePhaserSprites(sprites: PaperDollSprite[]): string | undefined 
             continue;
         }
         const tex = spr.texture;
-        if (!tex) {
+        if (!tex || isUnsafePaperDollTextureKey(tex.key)) {
             continue;
         }
         try {
@@ -687,7 +703,7 @@ export function capturePaperDollBodyLayers(
     const baseNames = new Set(['wm', 'ym', 'bm', 'ww', 'yw', 'bw', 'mhr', 'whr', 'mpt', 'wpt']);
     const gearJobs = paperDollPendingGearJobs(layers, baseNames);
     const pending = gearJobs.filter(
-        (job) => !arePlayerItemAppearanceLoaded(scene, job.name),
+        (job) => !arePlayerItemAppearanceSheetsLoaded(scene, job.name, new Set(job.sheets)),
     );
     const reemitComposite = () => {
         const url = compositeIdleSouth(scene, layers);
@@ -740,6 +756,7 @@ export function isPaperDollCompositeCached(): boolean {
 /**
  * One F5 snapshot: prefer live map pixels, then idle-south rebuild if nude/missing.
  * Does not invalidate cache or recapture three times — that thrashed Elvine after pad.
+ * Live success still queues missing south sheets (no extra PNG) so equip can finish the kit.
  */
 export function runPaperDollCapture(
     scene: PaperDollScene,
@@ -756,6 +773,14 @@ export function runPaperDollCapture(
     if (opts.player && liveLayers.length >= 1) {
         const liveOk = capturePaperDollFromLivePlayer(scene, opts.player, false);
         if (liveOk && liveLayers.length >= 2) {
+            queuePaperDollPendingGearLoads(
+                scene,
+                opts.gender,
+                opts.skinColor,
+                opts.hairStyleIndex,
+                opts.underwearColorIndex,
+                opts.equippedItems,
+            );
             return;
         }
     }
@@ -768,4 +793,39 @@ export function runPaperDollCapture(
         opts.equippedItems,
         false,
     );
+}
+
+/** Fetch F5 idle-south sheets only — no composite toDataURL. */
+function queuePaperDollPendingGearLoads(
+    scene: PaperDollScene,
+    gender: Gender,
+    skinColor: SkinColor,
+    hairStyleIndex: number,
+    underwearColorIndex: number,
+    equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
+): void {
+    if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+        return;
+    }
+    const layers = buildCompositeLayers(
+        gender,
+        skinColor,
+        hairStyleIndex,
+        underwearColorIndex,
+        equippedItems,
+    );
+    const baseNames = new Set(['wm', 'ym', 'bm', 'ww', 'yw', 'bw', 'mhr', 'whr', 'mpt', 'wpt']);
+    const pending = paperDollPendingGearJobs(layers, baseNames).filter(
+        (job) => !arePlayerItemAppearanceSheetsLoaded(scene, job.name, new Set(job.sheets)),
+    );
+    if (pending.length === 0) {
+        return;
+    }
+    void (async () => {
+        for (const job of pending) {
+            await loadPlayerItemAppearanceOnDemand(scene, job.name, {
+                sheetIndices: new Set(job.sheets),
+            }).catch(() => undefined);
+        }
+    })();
 }

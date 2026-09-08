@@ -338,7 +338,11 @@ export class Player extends GameObject {
             () => {
                 this.switchPlayerState(this.currentState, true);
                 if (this.isLocalPlayer) {
-                    EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+                    // After textures bind — sync capture during setTexture can read the
+                    // pending generateTexture source (world canvas) and blank the map.
+                    this.scene.time.delayedCall(0, () => {
+                        EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+                    });
                 }
             },
         );

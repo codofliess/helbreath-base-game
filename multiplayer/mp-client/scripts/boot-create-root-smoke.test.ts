@@ -155,6 +155,15 @@ describe('createRoot boot path (no wallet)', () => {
         );
         assert.match(gameWorld, /loadWorldEnterAppearanceSprites/);
         assert.match(gameWorld, /IN_UI_PAPERDOLL_CAPTURE/);
+        assert.match(gameWorld, /runPaperDollCapture/);
+        assert.match(gameWorld, /evictAllMapTileTextures/);
+        assert.doesNotMatch(gameWorld, /invalidatePaperDollCache/);
+        const paperDoll = fs.readFileSync(
+            path.join(clientRoot, 'src/ui/components/CharacterPaperDoll.tsx'),
+            'utf8',
+        );
+        assert.match(paperDoll, /paperDollLookKey/);
+        assert.doesNotMatch(paperDoll, /80, 250, 600, 1200, 2200, 4000/);
         assert.doesNotMatch(login, /syncDesksFromStore/);
         assert.doesNotMatch(login, /alreadyEnteringWorld/);
         const desk = fs.readFileSync(path.join(clientRoot, 'src/game/ui/SelectCharDesk.ts'), 'utf8');

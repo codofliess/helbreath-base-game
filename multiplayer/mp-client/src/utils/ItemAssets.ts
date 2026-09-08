@@ -6,6 +6,7 @@ import { ItemTypes, getItemById, type EquipmentSlot, type InventoryItem } from '
 import { Gender } from '../Types';
 import { HBSpriteFile } from '../game/assets/HBSprite';
 import { enqueueSpriteDecode, fetchGameAssetArrayBuffer } from './SpriteHttpLoader';
+import { settleAppearanceSheetIndices } from './itemAppearanceSheets';
 
 const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
     ItemTypes.WEAPON,
@@ -22,8 +23,8 @@ const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
 const playerItemAppearanceLoadPromises = new Map<string, Promise<void>>();
 const playerItemAssetLoadPromises = new Map<string, Promise<void>>();
 
-/** Idle-peace facings (and armour idle+near states). Never the whole Hero-kit `.spr` on enter. */
-const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+/** Weapon idle-peace facings (assert + docs). Clothes use {@link settleAppearanceSheetIndices} (0, 2). */
+export const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
 
 /** False during map first-paint / brief stand so 9 equipped packs cannot join tile GC. */
 let playerItemAppearanceDecodeAllowed = false;
@@ -114,7 +115,7 @@ export function loadPlayerItemAppearanceOnDemand(
     if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !playerItemAppearanceDecodeAllowed) {
         return Promise.resolve();
     }
-    const sheetIndices = options?.sheetIndices ?? SETTLE_APPEARANCE_SHEETS;
+    const sheetIndices = options?.sheetIndices ?? settleAppearanceSheetIndices(spriteName);
     if (arePlayerItemAppearanceSheetsLoaded(scene, spriteName, sheetIndices)) {
         return Promise.resolve();
     }

@@ -23,6 +23,7 @@ import {
     PAPERDOLL_COMPOSITE_KEY,
     PAPERDOLL_HAIR_KEY,
     PAPERDOLL_UNDERWEAR_KEY,
+    paperDollLookKey,
 } from '../../utils/paperDollCapture';
 
 /**
@@ -67,14 +68,29 @@ export function CharacterPaperDoll() {
     const hairStyleIndex = useStore(playerDialogStore, (s) => s.hairStyleIndex);
     const spriteFrameMap = useStore(appStore, (s) => s.spriteFrameMap);
 
-    // Re-capture avatar whenever looks/gear change (bursts while textures load).
+    const lookKey = paperDollLookKey(
+        genderLook,
+        skinColor,
+        hairStyleIndex,
+        underwearColorIndex,
+        equippedItems,
+    );
+
+    // One capture + two retries only while the composite is still missing.
+    // Six timed recaptures (and equippedItems identity) used to OOM Elvine F5.
     useEffect(() => {
         EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
-        const bursts = [80, 250, 600, 1200, 2200, 4000].map((ms) =>
-            window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), ms),
+        const retries = [400, 1600].map((ms) =>
+            window.setTimeout(() => {
+                const url = appStore.state.spriteFrameMap.get(PAPERDOLL_COMPOSITE_KEY);
+                if (url && url.length > 32) {
+                    return;
+                }
+                EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+            }, ms),
         );
-        return () => bursts.forEach((id) => window.clearTimeout(id));
-    }, [genderLook, skinColor, underwearColorIndex, hairStyleIndex, equippedItems]);
+        return () => retries.forEach((id) => window.clearTimeout(id));
+    }, [lookKey]);
 
     const resolveSlotItem = useCallback(
         (slot: EquipmentSlot): { slot: EquipmentSlot; equipped: InventoryItem | undefined } => {

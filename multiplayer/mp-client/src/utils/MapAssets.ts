@@ -224,6 +224,11 @@ function listMapTileTextureKeys(scene: Scene): string[] {
  * Drops Canvas `map-tile-*` sheets that are not in the current stream keep-set.
  * Walking must not accumulate every Elvine pack sheet for the whole session.
  */
+/** Drops every `map-tile-*` canvas. World switch / scene.restart must not keep Elvine plaza sheets. */
+export function evictAllMapTileTextures(scene: Scene): number {
+    return evictUnusedMapTileTextures(scene, new Set());
+}
+
 export function evictUnusedMapTileTextures(scene: Scene, keepGlobalIndices: ReadonlySet<number>): number {
     const evict = mapTileKeysToEvict(listMapTileTextureKeys(scene), keepGlobalIndices);
     let removed = 0;

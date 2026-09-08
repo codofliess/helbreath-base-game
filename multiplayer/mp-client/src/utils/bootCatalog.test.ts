@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { settleAppearanceSheetIndices } from './itemAppearanceSheets';
 import { worldEnterAppearanceSheetJobs } from './worldEnterAppearance';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -69,5 +70,8 @@ describe('bootCatalog deferral sets', () => {
             ['ww', 'wpt'],
         );
         assert.ok(!bald.some((j) => j.name === 'whr' || j.name === 'ym' || j.name === 'bm'));
+        const armourSettle = settleAppearanceSheetIndices('mhpmail2');
+        assert.deepEqual([...armourSettle].sort((a, b) => a - b), [0, 2]);
+        assert.ok(jobs[0].sheets.length > armourSettle.size);
     });
 });

@@ -10,6 +10,7 @@ import {
 } from './ItemAssets';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
+import { paperDollPendingGearJobs } from './itemAppearanceSheets';
 
 type PaperDollScene = {
     registry: { get: (key: string) => unknown };
@@ -430,6 +431,17 @@ function compositeIdleSouth(scene: PaperDollScene, layers: CompositeLayer[]): st
     }
 }
 
+/** Stable F5 look key — object identity of `equippedItems` must not restart capture bursts. */
+export function paperDollLookKey(
+    gender: Gender,
+    skinColor: SkinColor,
+    hairStyleIndex: number,
+    underwearColorIndex: number,
+    equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
+): string {
+    return equipHash(gender, skinColor, hairStyleIndex, underwearColorIndex, equippedItems);
+}
+
 function equipHash(
     gender: Gender,
     skinColor: SkinColor,
@@ -706,7 +718,10 @@ export function capturePaperDollBodyLayers(
     );
 
     const baseNames = new Set(['wm', 'ym', 'bm', 'ww', 'yw', 'bw', 'mhr', 'whr', 'mpt', 'wpt']);
-    const pending: string[] = [];
+    const gearJobs = paperDollPendingGearJobs(layers, baseNames);
+    const pending = gearJobs.filter(
+        (job) => !arePlayerItemAppearanceLoaded(scene, job.name),
+    );
     const reemitComposite = () => {
         const url = compositeIdleSouth(scene, layers);
         if (url) {
@@ -716,26 +731,17 @@ export function capturePaperDollBodyLayers(
         }
     };
 
-    if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
-        for (const layer of layers) {
-            if (baseNames.has(layer.spriteName)) {
-                continue;
+    if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND && pending.length > 0) {
+        // Idle-south sheets only — Promise.all of settle 0–7 per pack OOMs Elvine F5.
+        console.debug('[paperdoll] loading gear textures:', pending.map((j) => j.name).join(', '));
+        void (async () => {
+            for (const job of pending) {
+                await loadPlayerItemAppearanceOnDemand(scene, job.name, {
+                    sheetIndices: new Set(job.sheets),
+                }).catch(() => undefined);
             }
-            if (!arePlayerItemAppearanceLoaded(scene, layer.spriteName)) {
-                pending.push(layer.spriteName);
-            }
-        }
-        // Load all missing gear packs, then re-composite once (real clothes, not bag icons).
-        if (pending.length > 0) {
-            console.debug('[paperdoll] loading gear textures:', pending.join(', '));
-            void Promise.all(
-                pending.map((name) =>
-                    loadPlayerItemAppearanceOnDemand(scene, name).catch(() => undefined),
-                ),
-            ).then(() => {
-                reemitComposite();
-            });
-        }
+            reemitComposite();
+        })();
     }
 
     const compositeUrl = compositeIdleSouth(scene, layers);
@@ -757,4 +763,42 @@ export function capturePaperDollBodyLayers(
 export function invalidatePaperDollCache(): void {
     lastCaptureKey = '';
     lastCompositeOk = false;
+}
+
+/** True when the last capture produced a usable composite for the current look. */
+export function isPaperDollCompositeCached(): boolean {
+    return lastCompositeOk && lastCaptureKey.length > 0;
+}
+
+/**
+ * One F5 snapshot: prefer live map pixels, then idle-south rebuild if nude/missing.
+ * Does not invalidate cache or recapture three times — that thrashed Elvine after pad.
+ */
+export function runPaperDollCapture(
+    scene: PaperDollScene,
+    opts: {
+        player?: PaperDollLivePlayer;
+        gender: Gender;
+        skinColor: SkinColor;
+        hairStyleIndex: number;
+        underwearColorIndex: number;
+        equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>;
+    },
+): void {
+    const liveLayers = opts.player?.getVisibleSpritesForPaperDoll?.() ?? [];
+    if (opts.player && liveLayers.length >= 1) {
+        const liveOk = capturePaperDollFromLivePlayer(scene, opts.player, false);
+        if (liveOk && liveLayers.length >= 2) {
+            return;
+        }
+    }
+    capturePaperDollBodyLayers(
+        scene,
+        opts.gender,
+        opts.skinColor,
+        opts.hairStyleIndex,
+        opts.underwearColorIndex,
+        opts.equippedItems,
+        false,
+    );
 }

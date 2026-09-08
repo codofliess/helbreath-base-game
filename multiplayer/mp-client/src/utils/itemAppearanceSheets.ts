@@ -1,4 +1,5 @@
-import { getItemByEquippedSprite, ItemTypes } from '../constants/Items';
+import { getItemByEquippedSprite, ItemTypes, type EquipmentSlot, type InventoryItem } from '../constants/Items';
+import { Gender, SkinColor } from '../Types';
 
 /**
  * Weapon idle-peace is one sheet per facing (base + 0..7).
@@ -60,6 +61,33 @@ export function paperDollLayerSheetIndices(kind: PaperDollLayerKind, sheetPack: 
         default:
             return [pack];
     }
+}
+
+/** Stable F5 look key — object identity of `equippedItems` must not restart capture bursts. */
+export function paperDollLookKey(
+    gender: Gender,
+    skinColor: SkinColor,
+    hairStyleIndex: number,
+    underwearColorIndex: number,
+    equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
+): string {
+    const parts: string[] = [
+        String(gender),
+        String(skinColor),
+        String(hairStyleIndex),
+        String(underwearColorIndex),
+    ];
+    const slots = Object.keys(equippedItems).sort();
+    for (const s of slots) {
+        const it = equippedItems[s as EquipmentSlot];
+        if (!it) {
+            continue;
+        }
+        parts.push(
+            `${s}:${it.itemId}:${it.itemUid ?? 0}:${it.itemAttribute ?? 0}:${it.itemColor ?? 0}`,
+        );
+    }
+    return parts.join('|');
 }
 
 export function paperDollPendingGearJobs(

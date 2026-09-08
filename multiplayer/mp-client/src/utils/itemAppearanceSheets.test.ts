@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { Gender, SkinColor } from '../Types';
+import { ItemTypes } from '../constants/Items';
 import {
     ACCESSORY_SETTLE_SHEETS,
     ARMOUR_SETTLE_SHEETS,
     WEAPON_SETTLE_SHEETS,
     paperDollLayerSheetIndices,
+    paperDollLookKey,
     paperDollPendingGearJobs,
     settleAppearanceSheetIndices,
 } from './itemAppearanceSheets';
@@ -51,5 +54,20 @@ describe('itemAppearanceSheets', () => {
         assert.deepEqual(jobs[0].sheets, [0]);
         assert.deepEqual(jobs[1].sheets, [4]);
         assert.ok(jobs.every((j) => j.sheets.length === 1));
+    });
+
+    it('paperDollLookKey is stable across equippedItems object identity', () => {
+        const item = { itemId: 1, itemUid: 'u1', itemColor: 0 };
+        const a = paperDollLookKey(Gender.MALE, SkinColor.Light, 1, 3, {
+            [ItemTypes.WEAPON]: item,
+        });
+        const b = paperDollLookKey(Gender.MALE, SkinColor.Light, 1, 3, {
+            [ItemTypes.WEAPON]: { ...item },
+        });
+        assert.equal(a, b);
+        const c = paperDollLookKey(Gender.MALE, SkinColor.Light, 1, 3, {
+            [ItemTypes.WEAPON]: { ...item, itemUid: 'u2' },
+        });
+        assert.notEqual(a, c);
     });
 });

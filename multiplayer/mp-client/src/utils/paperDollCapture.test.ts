@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Gender, SkinColor } from '../Types';
 import { ItemTypes } from '../constants/Items';
-import { paperDollLookKey } from './paperDollCapture';
+import { paperDollLookKey } from './itemAppearanceSheets';
 
 describe('paperDollLookKey', () => {
     it('is stable across equippedItems object identity', () => {

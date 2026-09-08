@@ -10,7 +10,9 @@ import {
 } from './ItemAssets';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
-import { paperDollPendingGearJobs } from './itemAppearanceSheets';
+import { paperDollLookKey, paperDollPendingGearJobs } from './itemAppearanceSheets';
+
+export { paperDollLookKey };
 
 type PaperDollScene = {
     registry: { get: (key: string) => unknown };
@@ -431,41 +433,6 @@ function compositeIdleSouth(scene: PaperDollScene, layers: CompositeLayer[]): st
     }
 }
 
-/** Stable F5 look key — object identity of `equippedItems` must not restart capture bursts. */
-export function paperDollLookKey(
-    gender: Gender,
-    skinColor: SkinColor,
-    hairStyleIndex: number,
-    underwearColorIndex: number,
-    equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
-): string {
-    return equipHash(gender, skinColor, hairStyleIndex, underwearColorIndex, equippedItems);
-}
-
-function equipHash(
-    gender: Gender,
-    skinColor: SkinColor,
-    hairStyleIndex: number,
-    underwearColorIndex: number,
-    equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
-): string {
-    const parts: string[] = [
-        String(gender),
-        String(skinColor),
-        String(hairStyleIndex),
-        String(underwearColorIndex),
-    ];
-    const slots = Object.keys(equippedItems).sort();
-    for (const s of slots) {
-        const it = equippedItems[s as EquipmentSlot];
-        if (!it) continue;
-        parts.push(
-            `${s}:${it.itemId}:${it.itemUid ?? 0}:${it.itemAttribute ?? 0}:${it.itemColor ?? 0}`,
-        );
-    }
-    return parts.join('|');
-}
-
 /**
  * Snapshot the **exact** map avatar (current textures/frames/gear on the live Player).
  * Prefer this over rebuilt idle-south layers — store skin/hair can lag and produce a wrong mannequin.
@@ -640,7 +607,7 @@ export function capturePaperDollBodyLayers(
     equippedItems: Partial<Record<EquipmentSlot, InventoryItem>> = {},
     force = false,
 ): void {
-    const key = equipHash(gender, skinColor, hairStyleIndex, underwearColorIndex, equippedItems);
+    const key = paperDollLookKey(gender, skinColor, hairStyleIndex, underwearColorIndex, equippedItems);
     if (!force && key === lastCaptureKey && lastCompositeOk) {
         return;
     }

@@ -780,7 +780,7 @@ export class GameWorld extends Scene {
         subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
             try {
                 const inv = getInventoryManager(this.game);
-                runPaperDollCapture(this, {
+                runPaperDollCapture(this as never, {
                     player: this.player,
                     gender: this.player?.getGender?.() ?? playerDialogStore.state.gender,
                     skinColor: playerDialogStore.state.skinColor,

@@ -13,14 +13,25 @@ import {
 } from './itemAppearanceSheets';
 
 describe('itemAppearanceSheets', () => {
-    it('settle decodes armour idle+walk only (not combat 0–7)', () => {
-        assert.deepEqual([...ARMOUR_SETTLE_SHEETS], [0, 2]);
+    it('settle decodes armour stand+walk peace and combat (not run/bow 4–7)', () => {
+        assert.deepEqual([...ARMOUR_SETTLE_SHEETS], [0, 1, 2, 3]);
         const armor = settleAppearanceSheetIndices('mhpmail2');
-        assert.deepEqual([...armor].sort((a, b) => a - b), [0, 2]);
+        assert.deepEqual([...armor].sort((a, b) => a - b), [0, 1, 2, 3]);
+        const hauberk = settleAppearanceSheetIndices('mhauberk');
+        assert.deepEqual([...hauberk].sort((a, b) => a - b), [0, 1, 2, 3]);
+        const elvineHauberk = settleAppearanceSheetIndices('mhhauberk1');
+        assert.deepEqual([...elvineHauberk].sort((a, b) => a - b), [0, 1, 2, 3]);
         const boots = settleAppearanceSheetIndices('mshoes');
-        assert.deepEqual([...boots].sort((a, b) => a - b), [0, 2]);
+        assert.deepEqual([...boots].sort((a, b) => a - b), [0, 1, 2, 3]);
         const unknown = settleAppearanceSheetIndices('not-a-real-pack');
-        assert.deepEqual([...unknown].sort((a, b) => a - b), [0, 2]);
+        assert.deepEqual([...unknown].sort((a, b) => a - b), [0, 1, 2, 3]);
+    });
+
+    it('settle shifts weapon/shield sheets by packBase (shared msh / weapon packs)', () => {
+        const targe = settleAppearanceSheetIndices('msh', { packBase: 14 });
+        assert.deepEqual([...targe].sort((a, b) => a - b), [14, 15, 16, 17]);
+        const weapon = settleAppearanceSheetIndices('msw', { packBase: 8 });
+        assert.deepEqual([...weapon].sort((a, b) => a - b), [8, 9, 10, 11, 12, 13, 14, 15]);
     });
 
     it('settle keeps weapon idle facings 0–7 and angel idle 40–47', () => {
@@ -70,4 +81,5 @@ describe('itemAppearanceSheets', () => {
         });
         assert.notEqual(a, c);
     });
+
 });

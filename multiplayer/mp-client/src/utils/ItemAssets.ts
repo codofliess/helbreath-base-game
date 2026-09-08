@@ -23,7 +23,7 @@ const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
 const playerItemAppearanceLoadPromises = new Map<string, Promise<void>>();
 const playerItemAssetLoadPromises = new Map<string, Promise<void>>();
 
-/** Weapon idle-peace facings (assert + docs). Clothes use {@link settleAppearanceSheetIndices} (0, 2). */
+/** Weapon idle-peace facings (assert + docs). Clothes use {@link settleAppearanceSheetIndices} (0–3). */
 export const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
 
 /** False during map first-paint / brief stand so 9 equipped packs cannot join tile GC. */
@@ -79,12 +79,16 @@ export function isPlayerItemAppearanceLoadInFlight(spriteName: string): boolean 
 }
 
 /**
- * True when the `.spr` for this basename has finished registering with Phaser (not merely sheet 0).
- * During `HBSpriteFile.load`, sheet 0 can appear before higher indices; treat that window as not loaded.
+ * True when every settle sheet for this basename is registered (not merely sheet 0).
+ * Paper-doll may decode only idle-south (0); world stand defaults to combat idle (1).
  */
-export function arePlayerItemAppearanceLoaded(scene: PhaserSceneLike, spriteName: string): boolean {
-    const asset = getPlayerItemAppearanceAssetData(spriteName);
-    if (asset.assetType !== AssetType.SPRITE || !scene.textures.exists(`${asset.key}-0`)) {
+export function arePlayerItemAppearanceLoaded(
+    scene: PhaserSceneLike,
+    spriteName: string,
+    options?: { packBase?: number },
+): boolean {
+    const sheets = settleAppearanceSheetIndices(spriteName, options);
+    if (!arePlayerItemAppearanceSheetsLoaded(scene, spriteName, sheets)) {
         return false;
     }
     return !isPlayerItemAppearanceLoadInFlight(spriteName);
@@ -102,8 +106,10 @@ export function isPlayerItemAppearanceLazyEligible(scene: PhaserSceneLike, sprit
 }
 
 export interface LoadPlayerItemAppearanceOptions {
-    /** Local sheet indexes to decode. Defaults to idle 0–7, never the full pack. */
+    /** Local sheet indexes to decode. Defaults to {@link settleAppearanceSheetIndices}. */
     sheetIndices?: ReadonlySet<number>;
+    /** Weapon/shield `startSpriteSheetIndex`. Clothes omit (0). */
+    packBase?: number;
 }
 
 /** Fetches and registers equipped item appearance sheets (idle by default). */
@@ -115,7 +121,8 @@ export function loadPlayerItemAppearanceOnDemand(
     if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !playerItemAppearanceDecodeAllowed) {
         return Promise.resolve();
     }
-    const sheetIndices = options?.sheetIndices ?? settleAppearanceSheetIndices(spriteName);
+    const sheetIndices =
+        options?.sheetIndices ?? settleAppearanceSheetIndices(spriteName, { packBase: options?.packBase });
     if (arePlayerItemAppearanceSheetsLoaded(scene, spriteName, sheetIndices)) {
         return Promise.resolve();
     }
@@ -143,7 +150,8 @@ export function loadPlayerItemAppearanceOnDemand(
     return promise;
 }
 
-function arePlayerItemAppearanceSheetsLoaded(
+/** True when every requested local sheet exists as `sprite-{name}-{n}`. */
+export function arePlayerItemAppearanceSheetsLoaded(
     scene: PhaserSceneLike,
     spriteName: string,
     sheetIndices: ReadonlySet<number>,

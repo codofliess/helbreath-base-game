@@ -1392,12 +1392,12 @@ export class GameAsset {
         }
 
         const textureKey = this.resolveLoadedPlayerItemTextureKey();
-        this.pendingLazyPlayerItemAppearance = false;
-
         if (!textureKey || this.spriteSheetIndex === undefined) {
-            // Sheets are registered; state refresh will play the correct animation key next.
+            // Keep pending so the 1×1 generateTexture placeholder cannot paint
+            // (that source can be the world canvas → black screen after equip).
             return;
         }
+        this.pendingLazyPlayerItemAppearance = false;
 
         const pivotData = getPivotData(this.scene, textureKey, this.spriteName, false);
         if (pivotData && pivotData.spriteSheetPivots[this.spriteSheetIndex] !== undefined) {

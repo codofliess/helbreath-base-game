@@ -1163,7 +1163,8 @@ export class PlayerAppearanceManager {
         if (!getItemEquippedAppearanceSpriteNames().has(sprite)) {
             return false;
         }
-        if (arePlayerItemAppearanceLoaded(this.scene, sprite)) {
+        const packBase = this.settlePackBaseForSprite(sprite);
+        if (arePlayerItemAppearanceLoaded(this.scene, sprite, { packBase })) {
             // Sheets already registered: promote synchronously so the following setVisible / state
             // refresh is not blocked by a leftover unequipped-placeholder pending flag.
             if (asset.isPendingLazyPlayerItemAppearance() && asset.getSpriteName() === sprite) {
@@ -1174,15 +1175,16 @@ export class PlayerAppearanceManager {
         if (!asset.isPendingLazyPlayerItemAppearance()) {
             asset.retargetPlayerItemAppearanceToPending(this.scene);
         }
-        if (!this.lazyItemAppearanceLoadsStarted.has(sprite)) {
-            this.lazyItemAppearanceLoadsStarted.add(sprite);
-            loadPlayerItemAppearanceOnDemand(this.scene, sprite)
+        const loadKey = `${sprite}:${packBase}`;
+        if (!this.lazyItemAppearanceLoadsStarted.has(loadKey)) {
+            this.lazyItemAppearanceLoadsStarted.add(loadKey);
+            loadPlayerItemAppearanceOnDemand(this.scene, sprite, { packBase })
                 .then(() => {
-                    this.lazyItemAppearanceLoadsStarted.delete(sprite);
+                    this.lazyItemAppearanceLoadsStarted.delete(loadKey);
                     this.flushPendingLazyItemPromotionForSprite(sprite);
                 })
                 .catch((err) => {
-                    this.lazyItemAppearanceLoadsStarted.delete(sprite);
+                    this.lazyItemAppearanceLoadsStarted.delete(loadKey);
                     console.error(`[PlayerItemAppearanceLoader] Failed to load equipped appearance '${sprite}'`, err);
                 });
         }
@@ -1205,6 +1207,17 @@ export class PlayerAppearanceManager {
                 this.onLazyItemAppearanceLoaded?.();
             });
         });
+    }
+
+    /** Weapon/shield pack offset for settle decode. Clothes/hauberk stay 0. */
+    private settlePackBaseForSprite(sprite: string): number {
+        if (this.weapon !== undefined && sprite === this.weapon) {
+            return Math.max(0, this.weaponStartSpriteSheetIndex ?? 0);
+        }
+        if (this.shield !== undefined && sprite === this.shield) {
+            return Math.max(0, this.shieldStartSpriteSheetIndex ?? 0);
+        }
+        return 0;
     }
 
     /** Gear slots that may use `.spr` on-demand loading (matches equip handlers). */

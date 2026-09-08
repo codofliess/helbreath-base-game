@@ -93,6 +93,9 @@ assert(
         /WORLD_ENTER_HUD_FRAME_KEYS/.test(bootCatalog) &&
         /evictUnusedSelectAppearanceSprites/.test(bootCatalog) &&
         /trimSelectAppearanceToIdleSheets/.test(bootCatalog) &&
+        /loadWorldEnterAppearanceSprites/.test(bootCatalog) &&
+        /worldEnterAppearanceSheetJobs/.test(bootCatalog) &&
+        /sheetIndices: new Set\(job\.sheets\)/.test(bootCatalog) &&
         !/getMonsterPlaceholderAsset\(\)/.test(
             bootCatalog.slice(bootCatalog.indexOf('export async function loadWorldDeferredSprites')),
         ),
@@ -293,6 +296,7 @@ assert(
         /waitForBrowserFrames/.test(gameWorld) &&
         /evictUnusedSelectAppearanceSprites/.test(gameWorld) &&
         /trimSelectAppearanceToIdleSheets/.test(gameWorld) &&
+        /loadWorldEnterAppearanceSprites/.test(gameWorld) &&
         /firstPaint: true/.test(gameWorld) &&
         /includeObjectSprites: false/.test(gameWorld) &&
         /enableTreesAfterFirstPaint/.test(gameWorld) &&
@@ -430,6 +434,7 @@ assert(
         !/from ['"]\.\.\/ui\/CreateCharDesk['"]/.test(loginScreen) &&
         !/from ['"]\.\.\/ui\/ArenaSelectCharDesk['"]/.test(loginScreen) &&
         !/loadSelectAppearanceSprites/.test(loginScreen) &&
+        !/loadWorldEnterAppearanceSprites/.test(loginScreen) &&
         !/ensureDesks/.test(loginScreen),
     'LoginScreen must not construct Phaser SELECTCHAR desks or load paper-dolls (KindGem Error 9 before Occupied)',
 );

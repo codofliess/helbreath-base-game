@@ -26,6 +26,7 @@ import {
 import { SpriteType } from '../game/assets/HBSprite';
 import { EventBus } from '../game/EventBus';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../constants/EventNames';
+import { idleEntitySheetIndices } from './entitySheetFilter';
 import { loadSpriteAssetOnDemand, evictSpriteSheetTextures } from './SpriteHttpLoader';
 
 /**
@@ -115,6 +116,53 @@ async function loadSpriteList(scene: Scene, assets: AssetData[], label: string):
 /** Sequential decode of SELECTCHAR paper-doll packs (after React hub / when leaving hub). */
 export function loadSelectAppearanceSprites(scene: Scene): Promise<void> {
     return loadSpriteList(scene, getSelectAppearanceAssets(), 'select');
+}
+
+/** Look used to decode only the live character's body/hair/underwear idle sheets. */
+export type WorldEnterAppearanceLook = {
+    humanSpriteName: string;
+    hairSpriteName: string;
+    underwearSpriteName: string;
+    hairStyleIndex: number;
+    underwearColorIndex: number;
+};
+
+/** Idle (+ walk) local sheets for one occupied look — never all 10 SELECTCHAR packs. */
+export function worldEnterAppearanceSheetJobs(
+    look: WorldEnterAppearanceLook,
+): Array<{ name: string; sheets: number[] }> {
+    const hairStyle = Math.max(0, Math.min(7, look.hairStyleIndex));
+    const underwearColor = Math.max(0, Math.min(7, look.underwearColorIndex));
+    const jobs: Array<{ name: string; sheets: number[] }> = [
+        { name: look.humanSpriteName, sheets: [...idleEntitySheetIndices()].sort((a, b) => a - b) },
+    ];
+    if (hairStyle !== 2) {
+        const hairIdle = hairStyle * 12;
+        jobs.push({ name: look.hairSpriteName, sheets: [hairIdle, hairIdle + 2] });
+    }
+    const underwearIdle = underwearColor * 12;
+    jobs.push({ name: look.underwearSpriteName, sheets: [underwearIdle, underwearIdle + 2] });
+    return jobs;
+}
+
+/**
+ * After React Explorer (no Phaser SELECTCHAR), GameWorld must fetch the occupied
+ * character's idle body/hair/underwear `.spr` sheets before Player / F5 paper-doll.
+ * Do not decode all 10 SELECTCHAR packs — that OOMs enter. LoginScreen must not call this.
+ */
+export async function loadWorldEnterAppearanceSprites(
+    scene: Scene,
+    look: WorldEnterAppearanceLook,
+): Promise<void> {
+    for (const job of worldEnterAppearanceSheetJobs(look)) {
+        try {
+            await loadSpriteAssetOnDemand(scene, assetForSpriteName(job.name, SpriteType.Human), {
+                sheetIndices: new Set(job.sheets),
+            });
+        } catch (error) {
+            console.warn(`[bootCatalog] world appearance skipped ${job.name}.spr`, error);
+        }
+    }
 }
 
 /**

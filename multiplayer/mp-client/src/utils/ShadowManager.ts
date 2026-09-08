@@ -118,6 +118,11 @@ export class ShadowManager {
             shadowAnimationKey = shadowTextureKey;
         }
 
+        if (!this.scene.textures.exists(shadowTextureKey)) {
+            console.warn(`[ShadowManager] Missing texture ${shadowTextureKey}; skipping shadow`);
+            return;
+        }
+
         // Get pivot data for shadow sprite
         const pivotData = getPivotData(this.scene, shadowTextureKey, this.shadowSpriteName, this.mapObject);
         const pivotIndex = this.mapObject ? 0 : this.shadowSpriteSheetIndex;

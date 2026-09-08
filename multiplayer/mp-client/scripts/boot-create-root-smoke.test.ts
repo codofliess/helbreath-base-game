@@ -147,7 +147,14 @@ describe('createRoot boot path (no wallet)', () => {
         assert.doesNotMatch(login, /from ['"]\.\.\/ui\/CreateCharDesk['"]/);
         assert.doesNotMatch(login, /from ['"]\.\.\/ui\/ArenaSelectCharDesk['"]/);
         assert.doesNotMatch(login, /loadSelectAppearanceSprites/);
+        assert.doesNotMatch(login, /loadWorldEnterAppearanceSprites/);
         assert.doesNotMatch(login, /ensureDesks/);
+        const gameWorld = fs.readFileSync(
+            path.join(clientRoot, 'src/game/scenes/GameWorld.ts'),
+            'utf8',
+        );
+        assert.match(gameWorld, /loadWorldEnterAppearanceSprites/);
+        assert.match(gameWorld, /IN_UI_PAPERDOLL_CAPTURE/);
         assert.doesNotMatch(login, /syncDesksFromStore/);
         assert.doesNotMatch(login, /alreadyEnteringWorld/);
         const desk = fs.readFileSync(path.join(clientRoot, 'src/game/ui/SelectCharDesk.ts'), 'utf8');

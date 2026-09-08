@@ -154,12 +154,9 @@ export class GameAsset {
 
         // Check if texture exists — equipment packs may lag; prefer lazy placeholder over hard throw.
         if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
-            const looksLikePlayerEquipLayer =
-                !config.mapObject &&
-                typeof config.spriteName === 'string' &&
-                !/^(wm|ww|ym|yw|bm|bw|mhr|whr|mpt|wpt)$/i.test(config.spriteName);
-            if (looksLikePlayerEquipLayer && scene.textures.exists(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE)) {
-                // Degrade to invisible pending layer instead of aborting map setup.
+            // Body + gear: missing sheet must not abort setupMap. React Explorer no longer
+            // preloads wm/mhr/mpt; GameWorld loads idle sheets, then this layer promotes.
+            if (!config.mapObject && scene.textures.exists(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE)) {
                 usePendingItemPlaceholder = true;
                 textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
                 animationKey = textureKey;

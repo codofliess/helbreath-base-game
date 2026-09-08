@@ -181,10 +181,11 @@ public static class CashShopBoosts {
                 return true;
 
             case TownChangeTicket:
-                // Flip citizenship aresden ↔ elvine and recall to new city pad.
+                // Flip citizenship aresden ↔ elvine, convert Hero kit to the new city, recall to pad.
                 var side = (player.CitizenshipSide ?? "").Trim().ToLowerInvariant();
                 var next = side == "aresden" ? "elvine" : "aresden";
                 player.SetCitizenshipSide(next);
+                Inventory.SanitizeHeroFactionKit(wr, player, notify: true);
                 if (Recall.TryPickRandomCityPad(next, out var tx, out var ty)) {
                     player.RequestWorldChange(new WorldTransferDestination(next, tx, ty));
                 }

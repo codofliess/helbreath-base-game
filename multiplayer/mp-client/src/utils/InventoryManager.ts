@@ -55,10 +55,12 @@ import type { NetworkManager } from './NetworkManager';
 import type { InventorySnapshotEventData, ItemEquippedEventData, ItemUnequippedEventData } from '../Types';
 import { emitTintedInventorySpriteIfNeeded } from './inventoryTintEmit';
 import { playerDialogStore } from '../ui/store/PlayerDialog.store';
+import { citySelectDialogStore } from '../ui/store/CitySelectDialog.store';
 import {
     getNetworkManager,
     getSoundManager,
 } from './RegistryUtils';
+import { canEquipHeroItemOnKit } from './heroFactionKit';
 
 type EquipItemEventPayload = {
     itemType: EquipmentSlot;
@@ -264,6 +266,11 @@ export class InventoryManager {
                     return;
                 }
             }
+            const ownedIds = this.collectOwnedCatalogIds();
+            const city = citySelectDialogStore.state.chosenCity;
+            if (!canEquipHeroItemOnKit(item.itemId, city, ownedIds)) {
+                return;
+            }
 
             const targetSlot: EquipmentSlot = payload.itemType === ItemTypes.RING
                 ? (payload.targetSlot ?? this.resolveRingTargetSlot())
@@ -352,6 +359,22 @@ export class InventoryManager {
     public getEquippedWeaponDef() {
         const equipped = this.equippedItems[ItemTypes.WEAPON];
         return equipped ? getItemById(equipped.itemId) : undefined;
+    }
+
+    /** Equipped + bag catalog ids for Hero city-kit lock. */
+    private collectOwnedCatalogIds(): number[] {
+        const ids: number[] = [];
+        for (const equipped of Object.values(this.equippedItems)) {
+            if (equipped?.itemId) {
+                ids.push(equipped.itemId);
+            }
+        }
+        for (const bag of this.baggedItems) {
+            if (bag.itemId) {
+                ids.push(bag.itemId);
+            }
+        }
+        return ids;
     }
 
     private getNetworkManager(): NetworkManager | undefined {

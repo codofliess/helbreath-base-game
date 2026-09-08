@@ -1206,6 +1206,12 @@ public class GameWorldPlayer : GameWorldActionableEntity {
                 }
             }
         }
+
+        // City Hero kit: convert mixed a/e pieces as soon as the snapshot lands (before arena stash).
+        var kitSide = Helpers.HeroFactionKit.ResolveSide(citizenshipSide, inventoryManager.EnumerateCatalogItemIds());
+        if (kitSide is not null) {
+            inventoryManager.TryRewriteHeroFactionItems(kitSide, out _);
+        }
     }
 
     /// <summary>Sets Howard guild-hall interest flag (persisted with the character).</summary>

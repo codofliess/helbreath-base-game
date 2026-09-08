@@ -10,7 +10,7 @@ const file = fs.readFileSync(path, 'utf8');
 /** Known Olympia body sheet basenames for hero pieces missing on female rows. */
 const FORCED = {
     416: { equippedSpriteMale: 'mhrobe2', equippedSpriteFemale: 'whrobe2' }, // a Hero Robe(W)
-    420: { equippedSpriteMale: 'mhhauberk2', equippedSpriteFemale: 'whhauberk1' }, // a Hero Hauberk(W)
+    420: { equippedSpriteMale: 'mhhauberk2', equippedSpriteFemale: 'whhauberk2' }, // a Hero Hauberk(W)
 };
 
 // Parse items as loose objects by id

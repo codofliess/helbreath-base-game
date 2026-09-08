@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using Npgsql;
+using Server.Helpers;
 using Server.Utils;
 using Server.World.Game;
 
@@ -594,6 +595,7 @@ public static class GamePersistence {
         string characterName,
         PlayerPersistenceState state,
         bool travelerMode = false) {
+        state = HeroFactionKit.RewritePersistence(state);
         // Always dual-write PostgreSQL when available (including traveler). JSON remains the traveler
         // load primary / GM sandbox namespace so OP kits never mix across modes.
         if (persistence is not null) {
@@ -923,12 +925,30 @@ public static class GamePersistence {
             return null;
         }
 
+        var rawIds = new List<int>(state.EquippedItems.Length);
+        foreach (var row in state.EquippedItems) {
+            if (row.Item.ItemId > 0) {
+                rawIds.Add(row.Item.ItemId);
+            }
+        }
+        if (state.BagItems is { Length: > 0 }) {
+            foreach (var bag in state.BagItems) {
+                if (bag.ItemId > 0) {
+                    rawIds.Add(bag.ItemId);
+                }
+            }
+        }
+        var kitSide = HeroFactionKit.ResolveSide(state.CitizenshipSide, rawIds);
+
         var equipped = new List<CharacterListEquipPreview>(state.EquippedItems.Length);
         foreach (var row in state.EquippedItems) {
             if (string.IsNullOrWhiteSpace(row.Slot) || row.Item.ItemId <= 0) {
                 continue;
             }
-            equipped.Add(new CharacterListEquipPreview(row.Slot, row.Item.ItemId));
+            var itemId = kitSide is null
+                ? row.Item.ItemId
+                : HeroFactionKit.ToSide(row.Item.ItemId, kitSide);
+            equipped.Add(new CharacterListEquipPreview(row.Slot, itemId));
         }
 
         return equipped.Count > 0 ? equipped : null;

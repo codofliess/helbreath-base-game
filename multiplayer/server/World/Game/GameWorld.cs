@@ -1461,7 +1461,14 @@ public sealed class GameWorld : IWorkerWorld {
         var loadout = tournamentConfig.Loadout;
         // Path-aware fallback: invalid/missing kit + path=mage → Cap/Robe/wand (not war FH + Long Sword).
         var peekPath = ArenaLoadout.TryPeekPath(player.ArenaKitJson);
-        var equippedIds = ArenaLoadout.BuildFallbackEquippedIds(peekPath, player.GenderValue, loadout).ToList();
+        if (realState is not null) {
+            realState = HeroFactionKit.RewritePersistence(realState);
+        }
+        var equippedIds = ArenaLoadout.BuildFallbackEquippedIds(
+            peekPath,
+            player.GenderValue,
+            loadout,
+            player.CitizenshipSide).ToList();
 
         // Prefer Arena kit level (150) when a kit is present; otherwise max-level equal footing.
         var maxLevel = !string.IsNullOrWhiteSpace(player.ArenaKitJson)

@@ -96,6 +96,7 @@ assert(
         /loadWorldEnterAppearanceSprites/.test(bootCatalog) &&
         /worldEnterAppearanceSheetJobs/.test(bootCatalog) &&
         /sheetIndices: new Set\(job\.sheets\)/.test(bootCatalog) &&
+        /hairStyle \* 12/.test(read('src/utils/worldEnterAppearance.ts')) &&
         !/getMonsterPlaceholderAsset\(\)/.test(
             bootCatalog.slice(bootCatalog.indexOf('export async function loadWorldDeferredSprites')),
         ),
@@ -335,7 +336,7 @@ assert(
 assert(
     !/tryDecodeWithImageDecoder/.test(hbSprite) &&
         /ImageDecoder\/VideoFrame is not used/.test(hbSprite) &&
-        /scene\.game\.renderer\.type === CANVAS/.test(hbSprite) &&
+        /scene\.game\.renderer\.type === PHASER_RENDERER_CANVAS/.test(hbSprite) &&
         /sheetIndices/.test(hbSprite) &&
         /Partial loads keep it/.test(hbSprite) &&
         /Yield so Canvas-first Chrome can GC ImageBitmaps/.test(hbSprite) &&

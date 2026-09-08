@@ -26,8 +26,11 @@ import {
 import { SpriteType } from '../game/assets/HBSprite';
 import { EventBus } from '../game/EventBus';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../constants/EventNames';
-import { idleEntitySheetIndices } from './entitySheetFilter';
 import { loadSpriteAssetOnDemand, evictSpriteSheetTextures } from './SpriteHttpLoader';
+import { worldEnterAppearanceSheetJobs, type WorldEnterAppearanceLook } from './worldEnterAppearance';
+
+export type { WorldEnterAppearanceLook };
+export { worldEnterAppearanceSheetJobs };
 
 /**
  * Body / underwear / hair packs for SELECTCHAR and Create Character paper-dolls.
@@ -116,33 +119,6 @@ async function loadSpriteList(scene: Scene, assets: AssetData[], label: string):
 /** Sequential decode of SELECTCHAR paper-doll packs (after React hub / when leaving hub). */
 export function loadSelectAppearanceSprites(scene: Scene): Promise<void> {
     return loadSpriteList(scene, getSelectAppearanceAssets(), 'select');
-}
-
-/** Look used to decode only the live character's body/hair/underwear idle sheets. */
-export type WorldEnterAppearanceLook = {
-    humanSpriteName: string;
-    hairSpriteName: string;
-    underwearSpriteName: string;
-    hairStyleIndex: number;
-    underwearColorIndex: number;
-};
-
-/** Idle (+ walk) local sheets for one occupied look — never all 10 SELECTCHAR packs. */
-export function worldEnterAppearanceSheetJobs(
-    look: WorldEnterAppearanceLook,
-): Array<{ name: string; sheets: number[] }> {
-    const hairStyle = Math.max(0, Math.min(7, look.hairStyleIndex));
-    const underwearColor = Math.max(0, Math.min(7, look.underwearColorIndex));
-    const jobs: Array<{ name: string; sheets: number[] }> = [
-        { name: look.humanSpriteName, sheets: [...idleEntitySheetIndices()].sort((a, b) => a - b) },
-    ];
-    if (hairStyle !== 2) {
-        const hairIdle = hairStyle * 12;
-        jobs.push({ name: look.hairSpriteName, sheets: [hairIdle, hairIdle + 2] });
-    }
-    const underwearIdle = underwearColor * 12;
-    jobs.push({ name: look.underwearSpriteName, sheets: [underwearIdle, underwearIdle + 2] });
-    return jobs;
 }
 
 /**

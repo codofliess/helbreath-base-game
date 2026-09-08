@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { worldEnterAppearanceSheetJobs } from './bootCatalog';
+import { worldEnterAppearanceSheetJobs } from './worldEnterAppearance';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 

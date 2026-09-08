@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { worldEnterAppearanceSheetJobs } from './worldEnterAppearance';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -33,5 +34,40 @@ describe('bootCatalog deferral sets', () => {
         const loadFn = src.slice(src.indexOf('export async function loadWorldDeferredSprites'));
         assert.doesNotMatch(loadFn, /getMonsterPlaceholderAsset/);
         assert.doesNotMatch(src, /exportFramesAsDataUrls: true/);
+        assert.match(src, /loadWorldEnterAppearanceSprites/);
+        assert.match(src, /worldEnterAppearanceSheetJobs/);
+        assert.match(src, /sheetIndices: new Set\(job\.sheets\)/);
+        const loadWorld = src.slice(src.indexOf('export async function loadWorldEnterAppearanceSprites'));
+        assert.doesNotMatch(loadWorld, /getSelectAppearanceAssets/);
+        assert.doesNotMatch(loadWorld, /loadSpriteList/);
+    });
+
+    it('world enter appearance decodes only the occupied look idle sheets', () => {
+        const jobs = worldEnterAppearanceSheetJobs({
+            humanSpriteName: 'wm',
+            hairSpriteName: 'mhr',
+            underwearSpriteName: 'mpt',
+            hairStyleIndex: 1,
+            underwearColorIndex: 3,
+        });
+        assert.deepEqual(
+            jobs.map((j) => j.name),
+            ['wm', 'mhr', 'mpt'],
+        );
+        assert.deepEqual(jobs[0].sheets, [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert.deepEqual(jobs[1].sheets, [12, 14]);
+        assert.deepEqual(jobs[2].sheets, [36, 38]);
+        const bald = worldEnterAppearanceSheetJobs({
+            humanSpriteName: 'ww',
+            hairSpriteName: 'whr',
+            underwearSpriteName: 'wpt',
+            hairStyleIndex: 2,
+            underwearColorIndex: 0,
+        });
+        assert.deepEqual(
+            bald.map((j) => j.name),
+            ['ww', 'wpt'],
+        );
+        assert.ok(!bald.some((j) => j.name === 'whr' || j.name === 'ym' || j.name === 'bm'));
     });
 });

@@ -27,6 +27,10 @@ import { SpriteType } from '../game/assets/HBSprite';
 import { EventBus } from '../game/EventBus';
 import { OUT_SPRITE_FRAME_EXTRACTED } from '../constants/EventNames';
 import { loadSpriteAssetOnDemand, evictSpriteSheetTextures } from './SpriteHttpLoader';
+import { worldEnterAppearanceSheetJobs, type WorldEnterAppearanceLook } from './worldEnterAppearance';
+
+export type { WorldEnterAppearanceLook };
+export { worldEnterAppearanceSheetJobs };
 
 /**
  * Body / underwear / hair packs for SELECTCHAR and Create Character paper-dolls.
@@ -115,6 +119,26 @@ async function loadSpriteList(scene: Scene, assets: AssetData[], label: string):
 /** Sequential decode of SELECTCHAR paper-doll packs (after React hub / when leaving hub). */
 export function loadSelectAppearanceSprites(scene: Scene): Promise<void> {
     return loadSpriteList(scene, getSelectAppearanceAssets(), 'select');
+}
+
+/**
+ * After React Explorer (no Phaser SELECTCHAR), GameWorld must fetch the occupied
+ * character's idle body/hair/underwear `.spr` sheets before Player / F5 paper-doll.
+ * Do not decode all 10 SELECTCHAR packs — that OOMs enter. LoginScreen must not call this.
+ */
+export async function loadWorldEnterAppearanceSprites(
+    scene: Scene,
+    look: WorldEnterAppearanceLook,
+): Promise<void> {
+    for (const job of worldEnterAppearanceSheetJobs(look)) {
+        try {
+            await loadSpriteAssetOnDemand(scene, assetForSpriteName(job.name, SpriteType.Human), {
+                sheetIndices: new Set(job.sheets),
+            });
+        } catch (error) {
+            console.warn(`[bootCatalog] world appearance skipped ${job.name}.spr`, error);
+        }
+    }
 }
 
 /**

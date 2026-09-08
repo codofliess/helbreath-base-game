@@ -64,7 +64,7 @@ import {
     loadPlayerItemAppearanceOnDemand,
     setPlayerItemAppearanceDecodeAllowed,
 } from '../../utils/ItemAssets';
-import { evictUnusedSelectAppearanceSprites, loadWorldDeferredSprites, trimSelectAppearanceToIdleSheets } from '../../utils/bootCatalog';
+import { evictUnusedSelectAppearanceSprites, loadWorldDeferredSprites, loadWorldEnterAppearanceSprites, trimSelectAppearanceToIdleSheets } from '../../utils/bootCatalog';
 import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
@@ -2439,6 +2439,7 @@ export class GameWorld extends Scene {
         this.displayedMap = map;
         // Now initialize game objects (player, NPCs, etc.)
         this.initializeGameObjects();
+        EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
 
         // Apply camera zoom AFTER minimap snapshot has been taken
         // This ensures the zoom is applied to the main camera, not the minimap snapshot camera
@@ -3074,6 +3075,18 @@ export class GameWorld extends Scene {
                     includeTreeShadows: false,
                 });
             }
+
+            // React Explorer never decoded wm/mhr/mpt. Without this, Player body textures
+            // are missing → F5 stays on «Cargando figura…» and setupMap can abort tiles.
+            await loadWorldEnterAppearanceSprites(this, {
+                humanSpriteName: human,
+                hairSpriteName: hair,
+                underwearSpriteName: undies,
+                hairStyleIndex: playerDialogStore.state.hairStyleIndex,
+                underwearColorIndex: playerDialogStore.state.underwearColorIndex,
+            });
+            this.noteMapSetupProgress();
+            EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
 
             this.noteMapSetupProgress();
             await waitMs(120);

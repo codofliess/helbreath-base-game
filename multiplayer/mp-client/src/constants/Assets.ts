@@ -289,7 +289,8 @@ export function getItemEquippedAppearanceSpriteNames(): ReadonlySet<string> {
 /**
  * Resolve load metadata for one equipped appearance `.spr`.
  * Catalog rows win. Otherwise synthesize from the item type — Elvine clothes
- * (`mhhauberk1`, `mhauberk`, `whauberk`) must be EquipmentPack, not Weapons.
+ * (`mhhauberk1`, `mhauberk`, `whauberk`, `whhauberk1` Hero Hauberk(W))
+ * must be EquipmentPack, not Weapons.
  */
 export function getPlayerItemAppearanceAssetData(spriteName: string): AssetData {
     const key = `sprite-${spriteName}`;

@@ -62,7 +62,12 @@ class HelbreathEventBus {
             return false;
         }
         for (const fn of [...set]) {
-            fn(...args);
+            try {
+                fn(...args);
+            } catch (error) {
+                // Equip/F5 must not throw out of React click → remount hub (landing).
+                console.error(`[EventBus] listener failed for ${String(event)}`, error);
+            }
         }
         return true;
     }

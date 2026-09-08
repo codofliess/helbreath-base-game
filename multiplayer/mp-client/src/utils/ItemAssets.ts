@@ -23,8 +23,8 @@ const PREFETCH_EQUIPMENT_SLOTS: EquipmentSlot[] = [
 const playerItemAppearanceLoadPromises = new Map<string, Promise<void>>();
 const playerItemAssetLoadPromises = new Map<string, Promise<void>>();
 
-/** Weapon idle-peace facings (assert + docs). Clothes use {@link settleAppearanceSheetIndices} (0–3). */
-export const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+/** Docs/assert alias. Clothes 0–3; weapons idle peace+combat 0–15 via {@link settleAppearanceSheetIndices}. */
+export const SETTLE_APPEARANCE_SHEETS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
 /** False during map first-paint / brief stand so 9 equipped packs cannot join tile GC. */
 let playerItemAppearanceDecodeAllowed = false;

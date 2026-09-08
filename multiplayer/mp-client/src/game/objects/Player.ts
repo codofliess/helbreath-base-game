@@ -338,8 +338,8 @@ export class Player extends GameObject {
             () => {
                 this.switchPlayerState(this.currentState, true);
                 if (this.isLocalPlayer) {
-                    // After textures bind — sync capture during setTexture can read the
-                    // pending generateTexture source (world canvas) and blank the map.
+                    // After textures bind — sync capture during setTexture can read a
+                    // pending texture whose source is the world canvas and blank the map.
                     this.scene.time.delayedCall(0, () => {
                         EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
                     });
@@ -463,9 +463,14 @@ export class Player extends GameObject {
         effectOverrides?: Effect[],
         itemColor?: number,
     ): void {
-        this.appearanceManager.handleEquip(itemType, itemId, effectOverrides, itemColor);
-        this.switchPlayerState(this.currentState, true);
-        this.updatePixelPosition();
+        try {
+            this.appearanceManager.handleEquip(itemType, itemId, effectOverrides, itemColor);
+            this.switchPlayerState(this.currentState, true);
+            this.updatePixelPosition();
+        } catch (error) {
+            // Equip must not throw to React/EventBus — that hard-leaves GameWorld to landing.
+            console.error('[Player] onEquipItem failed', itemType, itemId, error);
+        }
     }
 
     public setRemoteVisibleEquippedItem(

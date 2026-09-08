@@ -15,6 +15,7 @@ import {
     arePlayerItemAppearanceLoaded,
     isPlayerItemAppearanceLoadInFlight,
 } from '../../utils/ItemAssets';
+import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
 import { getPivotData, isDebugModeEnabled } from '../../utils/RegistryUtils';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { IN_DEBUG_MODE_CHANGE, OUT_UI_HOVER_SPRITE_FRAME_DEBUG } from '../../constants/EventNames';
@@ -144,6 +145,7 @@ export class GameAsset {
             textureKey = config.spriteName;
             animationKey = config.spriteName;
         } else if (usePendingItemPlaceholder) {
+            ensurePendingPlayerItemAppearanceTexture(scene);
             textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
             animationKey = textureKey;
             this.pendingLazyPlayerItemAppearance = true;
@@ -152,11 +154,10 @@ export class GameAsset {
             animationKey = textureKey;
         }
 
-        // Check if texture exists — equipment packs may lag; prefer lazy placeholder over hard throw.
+        // Missing sheet must not throw — that aborts GameWorld / remounts the hub (landing).
         if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
-            // Body + gear: missing sheet must not abort setupMap. React Explorer no longer
-            // preloads wm/mhr/mpt; GameWorld loads idle sheets, then this layer promotes.
-            if (!config.mapObject && scene.textures.exists(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE)) {
+            if (!config.mapObject) {
+                ensurePendingPlayerItemAppearanceTexture(scene);
                 usePendingItemPlaceholder = true;
                 textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
                 animationKey = textureKey;
@@ -1393,8 +1394,8 @@ export class GameAsset {
 
         const textureKey = this.resolveLoadedPlayerItemTextureKey();
         if (!textureKey || this.spriteSheetIndex === undefined) {
-            // Keep pending so the 1×1 generateTexture placeholder cannot paint
-            // (that source can be the world canvas → black screen after equip).
+            // Keep pending so the 1×1 isolated placeholder cannot paint
+            // (a generateTexture alias of the world canvas blanks the map → landing).
             return;
         }
         this.pendingLazyPlayerItemAppearance = false;
@@ -1456,6 +1457,7 @@ export class GameAsset {
         if (this.sprite.anims.isPlaying) {
             this.sprite.anims.stop();
         }
+        ensurePendingPlayerItemAppearanceTexture(scene);
         this.sprite.setTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 0);
         this.spriteSheetPivots = undefined;
         this.sprite.setVisible(false);
@@ -1471,6 +1473,7 @@ export class GameAsset {
         if (this.sprite.anims.isPlaying) {
             this.sprite.anims.stop();
         }
+        ensurePendingPlayerItemAppearanceTexture(this.scene);
         this.sprite.setTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 0);
         this.spriteSheetPivots = undefined;
         this.sprite.setVisible(false);

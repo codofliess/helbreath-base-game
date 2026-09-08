@@ -10,6 +10,7 @@ import {
     paperDollLookKey,
     paperDollPendingGearJobs,
     settleAppearanceSheetIndices,
+    weaponAppearanceSheetIndex,
 } from './itemAppearanceSheets';
 
 describe('itemAppearanceSheets', () => {
@@ -21,6 +22,8 @@ describe('itemAppearanceSheets', () => {
         assert.deepEqual([...hauberk].sort((a, b) => a - b), [0, 1, 2, 3]);
         const elvineHauberk = settleAppearanceSheetIndices('mhhauberk1');
         assert.deepEqual([...elvineHauberk].sort((a, b) => a - b), [0, 1, 2, 3]);
+        const heroHauberkW = settleAppearanceSheetIndices('whhauberk1');
+        assert.deepEqual([...heroHauberkW].sort((a, b) => a - b), [0, 1, 2, 3]);
         const boots = settleAppearanceSheetIndices('mshoes');
         assert.deepEqual([...boots].sort((a, b) => a - b), [0, 1, 2, 3]);
         const unknown = settleAppearanceSheetIndices('not-a-real-pack');
@@ -31,15 +34,30 @@ describe('itemAppearanceSheets', () => {
         const targe = settleAppearanceSheetIndices('msh', { packBase: 14 });
         assert.deepEqual([...targe].sort((a, b) => a - b), [14, 15, 16, 17]);
         const weapon = settleAppearanceSheetIndices('msw', { packBase: 8 });
-        assert.deepEqual([...weapon].sort((a, b) => a - b), [8, 9, 10, 11, 12, 13, 14, 15]);
+        assert.deepEqual(
+            [...weapon].sort((a, b) => a - b),
+            [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        );
     });
 
-    it('settle keeps weapon idle facings 0–7 and angel idle 40–47', () => {
-        assert.deepEqual([...WEAPON_SETTLE_SHEETS], [0, 1, 2, 3, 4, 5, 6, 7]);
+    it('settle keeps weapon idle-peace + idle-combat facings (not walk 16+)', () => {
+        assert.deepEqual(
+            [...WEAPON_SETTLE_SHEETS],
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        );
         const weapon = settleAppearanceSheetIndices('msw');
-        assert.deepEqual([...weapon].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert.deepEqual(
+            [...weapon].sort((a, b) => a - b),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        );
         const staff = settleAppearanceSheetIndices('mstaff2');
-        assert.deepEqual([...staff].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert.deepEqual(
+            [...staff].sort((a, b) => a - b),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        );
+        assert.equal(weaponAppearanceSheetIndex(0, 1, 4), 12);
+        assert.equal(weaponAppearanceSheetIndex(8, 1, 4), 20);
+        assert.ok(weapon.has(12), 'combat-idle south must be in settle (attackMode default)');
         assert.deepEqual([...ACCESSORY_SETTLE_SHEETS], [40, 41, 42, 43, 44, 45, 46, 47]);
     });
 

@@ -81,6 +81,7 @@ describe('bootCatalog deferral sets', () => {
         assert.match(src, /SpriteType\.EquipmentPack/);
         assert.match(src, /itemType === ItemTypes\.WEAPON/);
         assert.match(src, /itemType === ItemTypes\.SHIELD/);
+        assert.match(src, /whhauberk1/);
         assert.doesNotMatch(
             src.slice(src.indexOf('export function getPlayerItemAppearanceAssetData')),
             /spriteType: SpriteType\.Weapons,\s*\n\s*};/,

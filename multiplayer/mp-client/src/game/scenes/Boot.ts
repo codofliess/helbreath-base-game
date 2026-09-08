@@ -1,8 +1,8 @@
 import { Scene } from 'phaser';
-import { PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE } from '../../Config';
 import { LOADING_BG_KEY, LOGIN_SCREEN_BG_KEY } from '../../constants/RegistryKeys';
 import { GROUND_ITEM_DISPLAY_STORAGE_KEY, loadGroundItemDisplaySizeFromStorage } from '../../constants/GroundItemDisplay';
 import { setDebugModeEnabled, setGroundItemDisplaySize } from '../../utils/RegistryUtils';
+import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
 
 /**
  * Initial Phaser scene. Loads loading/login backgrounds, sets registry flags (debug, displayLargeItems),
@@ -23,11 +23,9 @@ export class Boot extends Scene {
         setDebugModeEnabled(this, false);
         setGroundItemDisplaySize(this, loadGroundItemDisplaySizeFromStorage(GROUND_ITEM_DISPLAY_STORAGE_KEY));
 
-        const pendingG = this.make.graphics({ x: 0, y: 0 });
-        pendingG.fillStyle(0x000000, 0);
-        pendingG.fillRect(0, 0, 1, 1);
-        pendingG.generateTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 1, 1);
-        pendingG.destroy();
+        // Isolated 1×1 canvas. generateTexture snapshots the game canvas and
+        // later equip/F5 blit blanks the world (kick to landing).
+        ensurePendingPlayerItemAppearanceTexture(this);
 
         this.registry.set(LOADING_BG_KEY, 'loading-bg');
         this.registry.set(LOGIN_SCREEN_BG_KEY, 'login-screen-bg');

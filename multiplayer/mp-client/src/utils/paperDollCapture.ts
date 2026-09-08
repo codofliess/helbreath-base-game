@@ -8,14 +8,18 @@ import {
     loadPlayerItemAppearanceOnDemand,
     arePlayerItemAppearanceSheetsLoaded,
 } from './ItemAssets';
-import { PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE } from '../Config';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
 import { paperDollLookKey, paperDollPendingGearJobs } from './itemAppearanceSheets';
+import {
+    isWorldCanvasImageSource,
+    PENDING_APPEARANCE_TEXTURE_KEY,
+} from './pendingAppearanceTexture';
 
 export { paperDollLookKey };
 
 type PaperDollScene = {
+    game?: { canvas?: unknown };
     registry: { get: (key: string) => unknown };
     textures: {
         exists: (key: string) => boolean;
@@ -181,6 +185,9 @@ function extractFrameToCanvas(
         }
         ctx.imageSmoothingEnabled = false;
         const source = texture.getSourceImage() as CanvasImageSource;
+        if (isWorldCanvasImageSource(source, scene.game?.canvas)) {
+            return undefined;
+        }
         ctx.drawImage(
             source,
             frame.cutX,
@@ -454,7 +461,10 @@ export function capturePaperDollFromLivePlayer(
         return true;
     }
 
-    const url = compositePhaserSprites(layers.map((l) => l.sprite));
+    const url = compositePhaserSprites(
+        layers.map((l) => l.sprite),
+        _scene.game?.canvas,
+    );
     if (!url) {
         return false;
     }
@@ -467,7 +477,7 @@ export function capturePaperDollFromLivePlayer(
         ['wm', 'ym', 'bm', 'ww', 'yw', 'bw'].includes(l.spriteName),
     );
     if (human) {
-        const bodyUrl = extractSpriteFrameDataUrl(human.sprite);
+        const bodyUrl = extractSpriteFrameDataUrl(human.sprite, _scene.game?.canvas);
         if (bodyUrl) {
             EventBus.emit(OUT_SPRITE_FRAME_EXTRACTED, PAPERDOLL_BODY_KEY, bodyUrl);
         }
@@ -475,16 +485,16 @@ export function capturePaperDollFromLivePlayer(
     return true;
 }
 
-function isUnsafePaperDollTextureKey(key: string | undefined): boolean {
+export function isUnsafePaperDollTextureKey(key: string | undefined): boolean {
     return (
         !key ||
         key === '__DEFAULT' ||
         key === '__MISSING' ||
-        key === PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE
+        key === PENDING_APPEARANCE_TEXTURE_KEY
     );
 }
 
-function extractSpriteFrameDataUrl(sprite: PaperDollSprite): string | undefined {
+function extractSpriteFrameDataUrl(sprite: PaperDollSprite, worldCanvas?: unknown): string | undefined {
     try {
         const texture = sprite.texture;
         const frame = sprite.frame;
@@ -506,6 +516,9 @@ function extractSpriteFrameDataUrl(sprite: PaperDollSprite): string | undefined 
         }
         ctx.imageSmoothingEnabled = false;
         const source = texture.getSourceImage?.() as CanvasImageSource;
+        if (isWorldCanvasImageSource(source, worldCanvas)) {
+            return undefined;
+        }
         ctx.drawImage(
             source,
             frame.cutX,
@@ -526,7 +539,7 @@ function extractSpriteFrameDataUrl(sprite: PaperDollSprite): string | undefined 
 /**
  * Composite live Phaser sprites (same pixels as on the map) into a single data URL.
  */
-function compositePhaserSprites(sprites: PaperDollSprite[]): string | undefined {
+function compositePhaserSprites(sprites: PaperDollSprite[], worldCanvas?: unknown): string | undefined {
     type Placed = { canvas: HTMLCanvasElement; x: number; y: number; w: number; h: number };
     const placed: Placed[] = [];
     let minX = Infinity;
@@ -556,6 +569,9 @@ function compositePhaserSprites(sprites: PaperDollSprite[]): string | undefined 
             }
             ctx.imageSmoothingEnabled = false;
             const source = tex.getSourceImage?.() as CanvasImageSource;
+            if (isWorldCanvasImageSource(source, worldCanvas)) {
+                continue;
+            }
             ctx.drawImage(
                 source,
                 frame.cutX,

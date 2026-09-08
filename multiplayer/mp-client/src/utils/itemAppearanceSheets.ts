@@ -2,10 +2,27 @@ import { getItemByEquippedSprite, ItemTypes, type EquipmentSlot, type InventoryI
 import { Gender, SkinColor } from '../Types';
 
 /**
- * Weapon idle-peace is one sheet per facing (pack + 0..7).
- * Soft-walk / combat sheets stay on-demand — dumping 0–7 of every armour pack OOMs Elvine F5.
+ * Weapon sheets are one facing per sheet: `pack + state*8 + dir`.
+ * IdlePeace=0 → pack+0..7 (F5 south = pack+4). IdleCombat=1 → pack+8..15.
+ * `Player.attackMode` defaults true, so stand uses pack+8+dir — PR #60's 0–7
+ * (peace only) left Hero Hauberk(W) ON and **weapon NO**, then a pending
+ * `generateTexture` blit of the world canvas kicked Elvine back to landing.
+ * Walk/run/melee (16+) stay on-demand — do not dump 32 weapon sheets.
  */
-export const WEAPON_SETTLE_SHEETS = [0, 1, 2, 3, 4, 5, 6, 7] as const;
+export const WEAPON_SETTLE_SHEETS = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+] as const;
+
+/** `packBase + armamentStateIndex * 8 + direction` (IdleCombat south = pack+12). */
+export function weaponAppearanceSheetIndex(
+    packBase: number,
+    armamentStateIndex: number,
+    direction: number,
+): number {
+    const state = armamentStateIndex >= 0 ? armamentStateIndex : 1;
+    const dir = ((direction % 8) + 8) % 8;
+    return Math.max(0, packBase) + state * 8 + dir;
+}
 
 /**
  * Armour / shield / cape / boots (`ARMOUR_SPRITESHEET_BASE` / shield `ARMAMENT_STATE_INDEX`):
@@ -41,7 +58,8 @@ function offsetSheets(bases: readonly number[], packBase: number): Set<number> {
 /**
  * Stand + soft-walk sheets after map settle.
  * Clothes: idle/walk × peace/combat (never run/bow/melee 4–7).
- * Weapons/shields: same states, shifted by {@link SettleAppearanceOptions.packBase}.
+ * Weapons: idle-peace + idle-combat facings (0–15), shifted by packBase.
+ * Shields: same 4 armour states, shifted by {@link SettleAppearanceOptions.packBase}.
  */
 export function settleAppearanceSheetIndices(
     spriteName: string,

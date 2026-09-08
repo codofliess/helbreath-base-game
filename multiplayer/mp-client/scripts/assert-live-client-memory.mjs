@@ -30,8 +30,9 @@ const assets = read('src/constants/Assets.ts');
 assert(
     /spriteTypeForEquippedAppearance/.test(assets) &&
         /SpriteType\.EquipmentPack/.test(assets) &&
-        /getItemByEquippedSprite/.test(assets),
-    'Unknown equipped clothes (Elvine hauberk) must synthesize as EquipmentPack, not Weapons',
+        /getItemByEquippedSprite/.test(assets) &&
+        /whhauberk1/.test(assets),
+    'Unknown equipped clothes (Elvine hauberk / Hero Hauberk(W)) must synthesize as EquipmentPack, not Weapons',
 );
 const gameWorld = read('src/game/scenes/GameWorld.ts');
 const loginScreen = read('src/game/scenes/LoginScreen.ts');
@@ -62,8 +63,25 @@ assert(
     'Player must defer F5 capture after gear bind (sync capture can blank the world canvas)',
 );
 assert(
-    /Keep pending so the 1/.test(gameAsset) && /generateTexture placeholder/.test(gameAsset),
-    'GameAsset.promote must not clear pending when the real sheet is missing',
+    /Keep pending so the 1/.test(gameAsset) &&
+        /ensurePendingPlayerItemAppearanceTexture/.test(gameAsset) &&
+        /Missing sheet must not throw/.test(gameAsset),
+    'GameAsset.promote must not clear pending when the real sheet is missing; missing player textures must not throw',
+);
+
+const bootTs = read('src/game/scenes/Boot.ts');
+const pendingTex = read('src/utils/pendingAppearanceTexture.ts');
+const eventBusTs = read('src/game/EventBus.ts');
+assert(
+    /ensurePendingPlayerItemAppearanceTexture/.test(bootTs) &&
+        !/\.generateTexture\(/.test(bootTs) &&
+        /addCanvas/.test(pendingTex) &&
+        /isWorldCanvasImageSource/.test(pendingTex),
+    'Pending appearance texture must be an isolated addCanvas, not generateTexture of the world canvas',
+);
+assert(
+    /listener failed for/.test(eventBusTs) && /onEquipItem failed/.test(playerTs),
+    'EventBus and Player.equip must swallow throws so F5/equip cannot remount the landing hub',
 );
 
 assert(
@@ -102,11 +120,13 @@ const paperDollCapture = read('src/utils/paperDollCapture.ts');
 const characterPaperDoll = read('src/ui/components/CharacterPaperDoll.tsx');
 assert(
     /ARMOUR_SETTLE_SHEETS = \[0, 1, 2, 3\]/.test(itemAppearanceSheets) &&
-        /WEAPON_SETTLE_SHEETS = \[0, 1, 2, 3, 4, 5, 6, 7\]/.test(itemAppearanceSheets) &&
+        /WEAPON_SETTLE_SHEETS = \[/.test(itemAppearanceSheets) &&
+        /8, 9, 10, 11, 12, 13, 14, 15/.test(itemAppearanceSheets) &&
+        /weaponAppearanceSheetIndex/.test(itemAppearanceSheets) &&
         /paperDollLayerSheetIndices/.test(itemAppearanceSheets) &&
         /paperDollPendingGearJobs/.test(itemAppearanceSheets) &&
         /packBase/.test(itemAppearanceSheets),
-    'Armour settle must be stand+walk peace/combat (0–3); F5 paper-doll must request one south sheet per layer',
+    'Armour settle 0–3; weapon settle idle-peace+combat 0–15 (attackMode stand is pack+8+dir)',
 );
 assert(
     /runPaperDollCapture/.test(paperDollCapture) &&
@@ -114,9 +134,10 @@ assert(
         /sheetIndices: new Set\(job\.sheets\)/.test(paperDollCapture) &&
         /arePlayerItemAppearanceSheetsLoaded/.test(paperDollCapture) &&
         /queuePaperDollPendingGearLoads/.test(paperDollCapture) &&
-        /PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE/.test(paperDollCapture) &&
+        /PENDING_APPEARANCE_TEXTURE_KEY/.test(paperDollCapture) &&
+        /isWorldCanvasImageSource/.test(paperDollCapture) &&
         !/pending\.map\(\(name\) =>/.test(paperDollCapture),
-    'F5 capture must coalesce and load only paper-doll south sheets, not Promise.all settle 0–7',
+    'F5 capture must coalesce, skip world-canvas sources, and load only paper-doll south sheets',
 );
 assert(
     /paperDollLookKey/.test(characterPaperDoll) &&

@@ -1090,6 +1090,12 @@ export class PlayerAppearanceManager {
             asset.setVisible(this.isSlotVisible(slot));
 
             const { animationKey, animationDirection, animationType } = this.getAnimationConfigForAsset(spriteName, newState, direction, i);
+            if (
+                this.isLazyPlayerItemAppearanceSlot(slot)
+                && this.scheduleMissingAnimationSheetIfNeeded(spriteName, asset, animationKey)
+            ) {
+                continue;
+            }
             const animationFrameRate = slot === 'accessory'
                 ? this.getAccessoryAnimationFrameRate(newState, animationConfig)
                 : this.getAnimationFrameRate(newState, animationConfig);
@@ -1189,6 +1195,54 @@ export class PlayerAppearanceManager {
                 });
         }
         return true;
+    }
+
+    /**
+     * Settle covers stand (weapon 0–15 / clothes 0–3). Walk/run sheets stay
+     * one-off — do not hide a bound idle pose while that extra sheet fetches.
+     */
+    private scheduleMissingAnimationSheetIfNeeded(
+        sprite: string,
+        asset: GameAsset,
+        animationKey: string,
+    ): boolean {
+        if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+            return false;
+        }
+        if (!getItemEquippedAppearanceSpriteNames().has(sprite)) {
+            return false;
+        }
+        if (this.scene.textures.exists(animationKey) && this.scene.anims.exists(animationKey)) {
+            return false;
+        }
+        const match = /^sprite-(.+)-(\d+)$/.exec(animationKey);
+        if (!match) {
+            return false;
+        }
+        const sheet = Number(match[2]);
+        if (!Number.isFinite(sheet)) {
+            return false;
+        }
+        if (!isPlayerItemAppearanceDecodeAllowed()) {
+            return asset.isPendingLazyPlayerItemAppearance();
+        }
+        const loadKey = `${sprite}:sheet:${sheet}`;
+        if (!this.lazyItemAppearanceLoadsStarted.has(loadKey)) {
+            this.lazyItemAppearanceLoadsStarted.add(loadKey);
+            loadPlayerItemAppearanceOnDemand(this.scene, sprite, { sheetIndices: new Set([sheet]) })
+                .then(() => {
+                    this.lazyItemAppearanceLoadsStarted.delete(loadKey);
+                    this.flushPendingLazyItemPromotionForSprite(sprite);
+                })
+                .catch((err) => {
+                    this.lazyItemAppearanceLoadsStarted.delete(loadKey);
+                    console.error(
+                        `[PlayerItemAppearanceLoader] Failed to load '${sprite}' sheet ${sheet}`,
+                        err,
+                    );
+                });
+        }
+        return asset.isPendingLazyPlayerItemAppearance();
     }
 
     /**

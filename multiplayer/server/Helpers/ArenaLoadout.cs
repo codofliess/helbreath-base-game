@@ -297,7 +297,9 @@ public static class ArenaLoadout {
         }
 
         // —— Starter Hero set (full 5-piece). Equip only — no bag copies (avoids duplicate clutter).
-        EquipPathHeroSetForced(path, gender, PutEquipped);
+        // City papers pick Elvine vs Aresden ids so Occupied Coliseum cannot mix sides.
+        var heroSide = HeroFactionKit.ResolveSide(player.CitizenshipSide, []) ?? HeroFactionKit.Aresden;
+        EquipPathHeroSetForced(path, gender, heroSide, PutEquipped);
         var hero = ResolveHeroSet(cat.Starter, path, gender);
         if (hero is not null) {
             foreach (var piece in hero) {
@@ -310,10 +312,10 @@ public static class ArenaLoadout {
                 if (path == "war" && IsMageHeroCorePiece(piece.ItemId)) {
                     continue;
                 }
-                PutEquipped(piece.ItemId, piece.Slot ?? "");
+                PutEquipped(HeroFactionKit.ToSide(piece.ItemId, heroSide), piece.Slot ?? "");
             }
         }
-        EquipPathHeroSetForced(path, gender, PutEquipped);
+        EquipPathHeroSetForced(path, gender, heroSide, PutEquipped);
         if (cat.Starter?.FixedEquipped is not null) {
             foreach (var fx in cat.Starter.FixedEquipped) {
                 if (fx.ItemId <= 0) {
@@ -323,7 +325,7 @@ public static class ArenaLoadout {
                 PutEquipped(fx.ItemId, fx.Slot ?? "", attr: 0, maxLife: maxLife);
             }
         }
-        EnsureHeroHauberkEquipped(path, gender, PutEquipped);
+        EnsureHeroHauberkEquipped(path, gender, heroSide, PutEquipped);
 
         // Free stat capes only — never grant a plain “Cape” (item 400) with no magic.
         // CIC+7 may also carry HP Recovery 50%. Second free cape: MC + MP Recovery 50%.
@@ -512,8 +514,9 @@ public static class ArenaLoadout {
     private static void EquipPathHeroSetForced(
         string path,
         int gender,
+        string side,
         Action<int, string, uint, int, int, int, int> putEquipped) {
-        foreach (var (id, slot) in PathHeroPieces(path, gender)) {
+        foreach (var (id, slot) in PathHeroPieces(path, gender, side)) {
             putEquipped(id, slot, 0, 0, 0, 0, 0);
         }
     }
@@ -521,26 +524,34 @@ public static class ArenaLoadout {
     private static void EnsureHeroHauberkEquipped(
         string path,
         int gender,
+        string side,
         Action<int, string, uint, int, int, int, int> putEquipped) {
         var isFemale = gender == 1;
-        var hauberkId = isFemale ? 420 : 419; // a Hero Hauberk W/M
+        var hauberkId = HeroFactionKit.ToSide(isFemale ? 420 : 419, side);
         putEquipped(hauberkId, "hauberk", 0, 0, 0, 0, 0);
         // Mage also re-force robe on body slot so it is never left empty after bag swaps.
         if (path == "mage") {
-            putEquipped(isFemale ? 416 : 415, "armor", 0, 0, 0, 0, 0);
+            putEquipped(HeroFactionKit.ToSide(isFemale ? 416 : 415, side), "armor", 0, 0, 0, 0, 0);
         }
     }
 
-    private static (int Id, string Slot)[] PathHeroPieces(string path, int gender) {
+    private static (int Id, string Slot)[] PathHeroPieces(string path, int gender, string side) {
         var isFemale = gender == 1;
         var isMage = path == "mage";
-        return isMage
-            ? isFemale
+        (int Id, string Slot)[] aresden;
+        if (isMage) {
+            aresden = isFemale
                 ? [(408, "helmet"), (416, "armor"), (420, "hauberk"), (424, "leggings"), (451, "boots")]
-                : [(407, "helmet"), (415, "armor"), (419, "hauberk"), (423, "leggings"), (451, "boots")]
-            : isFemale
+                : [(407, "helmet"), (415, "armor"), (419, "hauberk"), (423, "leggings"), (451, "boots")];
+        } else {
+            aresden = isFemale
                 ? [(404, "helmet"), (412, "armor"), (420, "hauberk"), (424, "leggings"), (451, "boots")]
                 : [(403, "helmet"), (411, "armor"), (419, "hauberk"), (423, "leggings"), (451, "boots")];
+        }
+        if (HeroFactionKit.Normalize(side) != HeroFactionKit.Elvine) {
+            return aresden;
+        }
+        return aresden.Select(p => (HeroFactionKit.ToSide(p.Id, HeroFactionKit.Elvine), p.Slot)).ToArray();
     }
 
     private static bool IsWarHeroCorePiece(int itemId) =>
@@ -872,17 +883,21 @@ public static class ArenaLoadout {
     /// Mage-safe equal-footing ids when kit fails but player is path=mage (or unknown prefers cast-safe).
     /// War path keeps Tournament.json war set (Hero Helm + Long Sword).
     /// </summary>
-    public static IReadOnlyList<int> BuildFallbackEquippedIds(string? path, int genderValue, TournamentLoadoutConfig? loadout) {
+    public static IReadOnlyList<int> BuildFallbackEquippedIds(
+        string? path,
+        int genderValue,
+        TournamentLoadoutConfig? loadout,
+        string? citizenshipSide = null) {
+        var side = HeroFactionKit.ResolveSide(citizenshipSide, []) ?? HeroFactionKit.Aresden;
         var isFemale = genderValue == 1;
+        int[] raw;
         if (string.Equals(path, "mage", StringComparison.OrdinalIgnoreCase)) {
             // Cap + Robe + hauberk/legs/boots + Magic Wand(M.Shield) — NO plain cape (400).
-            return isFemale
-                ? new[] { 259, 416, 408, 420, 424, 451 } // wand, robe(W), cap(W), hauberk, legs, boots
-                : new[] { 259, 415, 407, 419, 423, 451 };
-        }
-
-        // War / unknown: honor Tournament.json when present (filter plain cape).
-        if (loadout?.Equipped is { Length: > 0 }) {
+            raw = isFemale
+                ? [259, 416, 408, 420, 424, 451] // wand, robe(W), cap(W), hauberk, legs, boots
+                : [259, 415, 407, 419, 423, 451];
+        } else if (loadout?.Equipped is { Length: > 0 }) {
+            // War / unknown: honor Tournament.json when present (filter plain cape).
             var list = new List<int>(loadout.Equipped.Length);
             foreach (var entry in loadout.Equipped) {
                 var itemId = entry.Any ?? (genderValue == 0 ? entry.Male : entry.Female);
@@ -890,15 +905,22 @@ public static class ArenaLoadout {
                     list.Add(itemId.Value);
                 }
             }
-            if (list.Count > 0) {
-                return list;
-            }
+            raw = list.Count > 0
+                ? [.. list]
+                : isFemale
+                    ? [19, 87, 412, 404, 420, 424, 451]
+                    : [19, 87, 411, 403, 419, 423, 451];
+        } else {
+            // Last-ditch war set — no plain cape.
+            raw = isFemale
+                ? [19, 87, 412, 404, 420, 424, 451]
+                : [19, 87, 411, 403, 419, 423, 451];
         }
 
-        // Last-ditch war set — no plain cape.
-        return isFemale
-            ? new[] { 19, 87, 412, 404, 420, 424, 451 }
-            : new[] { 19, 87, 411, 403, 419, 423, 451 };
+        for (var i = 0; i < raw.Length; i++) {
+            raw[i] = HeroFactionKit.ToSide(raw[i], side);
+        }
+        return raw;
     }
 
     // —— DTOs matching client arenaKits.ts / ArenaKitCatalog.json ——

@@ -136,8 +136,8 @@ const APPR_BODY_SPRITES = {
     3: {
         1: ['mshirt', 'wchemiss'],
         2: ['mhauberk', 'wshirt'],
-        3: ['mhhauberk1', 'whauberk'],
-        4: ['mhhauberk2', 'whhauberk1'],
+        3: ['mhhauberk1', 'whhauberk1'],
+        4: ['mhhauberk2', 'whhauberk2'],
         6: ['mhhauberk2', 'whhauberk2'],
     },
     // EPos 4 leggings
@@ -146,8 +146,8 @@ const APPR_BODY_SPRITES = {
         2: ['mhtrouser', 'wtrouser'],
         3: ['mchoses', 'whtrouser'],
         4: ['mleggings', 'wchoses'],
-        5: ['mhleggings1', 'wleggings'],
-        6: ['mhleggings2', 'whleggings1'],
+        5: ['mhleggings1', 'whleggings1'],
+        6: ['mhleggings2', 'whleggings2'],
         7: ['mhleggings2', 'whleggings2'],
     },
     // EPos 5 boots
@@ -164,6 +164,37 @@ const APPR_BODY_SPRITES = {
         5: ['mmantle05', 'wmantle05'],
         6: ['mmantle06', 'wmantle06'],
     },
+};
+
+/**
+ * City Hero packs: suffix 1 = Elvine, 2 = Aresden. Do not pair male Aresden with female Elvine
+ * (ApprV sibling-copy + missing-sprite fill used to mix both sides on one item).
+ */
+const HERO_SPRITE_BY_ID = {
+    403: ['mhhelm2', 'whhelm2'],
+    404: ['mhhelm2', 'whhelm2'],
+    405: ['mhhelm1', 'whhelm1'],
+    406: ['mhhelm1', 'whhelm1'],
+    407: ['mhcap2', 'whcap2'],
+    408: ['mhcap2', 'whcap2'],
+    409: ['mhcap1', 'whcap1'],
+    410: ['mhcap1', 'whcap1'],
+    411: ['mhpmail2', 'whpmail2'],
+    412: ['mhpmail2', 'whpmail2'],
+    413: ['mhpmail1', 'whpmail1'],
+    414: ['mhpmail1', 'whpmail1'],
+    415: ['mhrobe2', 'whrobe2'],
+    416: ['mhrobe2', 'whrobe2'],
+    417: ['mhrobe1', 'whrobe1'],
+    418: ['mhrobe1', 'whrobe1'],
+    419: ['mhhauberk2', 'whhauberk2'],
+    420: ['mhhauberk2', 'whhauberk2'],
+    421: ['mhhauberk1', 'whhauberk1'],
+    422: ['mhhauberk1', 'whhauberk1'],
+    423: ['mhleggings2', 'whleggings2'],
+    424: ['mhleggings2', 'whleggings2'],
+    425: ['mhleggings1', 'whleggings1'],
+    426: ['mhleggings1', 'whleggings1'],
 };
 
 /** Infer equippedSprite basenames from equipPos + apprValue when legacy override is absent. */
@@ -570,6 +601,12 @@ function buildClientRow(row, legacyByName) {
         if (!client.equippedSpriteFemale) {
             client.equippedSpriteFemale = fromAppr.female;
         }
+    }
+
+    const heroPair = HERO_SPRITE_BY_ID[row.id];
+    if (heroPair) {
+        client.equippedSpriteMale = heroPair[0];
+        client.equippedSpriteFemale = heroPair[1];
     }
 
     // Weapons: ApprV → msw/maxe/mstaff… + sheet index (world appearance).

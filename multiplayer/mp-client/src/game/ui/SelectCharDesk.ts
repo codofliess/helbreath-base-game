@@ -29,6 +29,7 @@ import {
     SLOT_GLYPH_W,
 } from './selectCharSlotGlyphs';
 import { Gender, SkinColor } from '../../Types';
+import { heroItemToSide, resolveHeroKitSide } from '../../utils/heroFactionKit';
 import {
     applyLoginDeskCanvasPresentation,
     holdLoginDeskCanvasPresentation,
@@ -591,13 +592,16 @@ export class SelectCharDesk {
     private classifyEquipped(slot: CharacterSlotSummary): { legendary: string[]; rare: string[] } {
         const legendary: string[] = [];
         const rare: string[] = [];
+        const rawIds = (slot.equipped ?? []).map((eq) => eq?.itemId ?? 0).filter((id) => id > 0);
+        const kitSide = resolveHeroKitSide(slot.citizenshipSide, rawIds);
         for (const eq of slot.equipped ?? []) {
             if (!eq?.itemId) {
                 continue;
             }
-            const def = getItemById(eq.itemId);
-            const name = def?.name?.trim() || `Item ${eq.itemId}`;
-            if (OLYMPIA_SUPER_RARE_ITEM_IDS.has(eq.itemId)) {
+            const itemId = kitSide ? heroItemToSide(eq.itemId, kitSide) : eq.itemId;
+            const def = getItemById(itemId);
+            const name = def?.name?.trim() || `Item ${itemId}`;
+            if (OLYMPIA_SUPER_RARE_ITEM_IDS.has(itemId)) {
                 legendary.push(name);
             } else {
                 // Equipped non-legendary shown as rare candidates (list has no magic-roll attr yet).
@@ -1411,9 +1415,15 @@ export class SelectCharDesk {
                 : occupied.skinColor === 1
                   ? SkinColor.Tanned
                   : SkinColor.Light;
-        const equipped = (occupied.equipped ?? [])
-            .filter((e) => e && e.itemId > 0 && e.slot)
-            .map((e) => ({ slot: e.slot, itemId: e.itemId }));
+        const rawEquipped = (occupied.equipped ?? []).filter((e) => e && e.itemId > 0 && e.slot);
+        const kitSide = resolveHeroKitSide(
+            occupied.citizenshipSide,
+            rawEquipped.map((e) => e.itemId),
+        );
+        const equipped = rawEquipped.map((e) => ({
+            slot: e.slot,
+            itemId: kitSide ? heroItemToSide(e.itemId, kitSide) : e.itemId,
+        }));
 
         // Auto-fit: body frame height → fills most of the oval (container scale, not lost on walk).
         const mini = createMenuCharacterPreview(

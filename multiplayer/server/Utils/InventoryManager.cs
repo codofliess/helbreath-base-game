@@ -1,3 +1,4 @@
+using Server.Helpers;
 using Server.World;
 using Server.World.Game;
 
@@ -913,6 +914,51 @@ public sealed class InventoryManager {
 
     /// <summary>Public bag slot allocator for arena loadout construction.</summary>
     public (int BagX, int BagY) AllocateBagSlotPublic(int index) => AllocateBagSlot(index);
+
+    /// <summary>Equipped + bag catalog ids (Hero faction lock / sanitize).</summary>
+    public IEnumerable<int> EnumerateCatalogItemIds() {
+        foreach (var item in equippedItems.Values) {
+            yield return item.ItemId;
+        }
+        foreach (var item in bagItems) {
+            yield return item.ItemId;
+        }
+    }
+
+    /// <summary>
+    /// Rewrites city Hero pieces to <paramref name="side"/> in place (equipped + bag).
+    /// Equipped changes re-broadcast as equip; bag changes as remove+add so the client refreshes names.
+    /// </summary>
+    public bool TryRewriteHeroFactionItems(string side, out InventoryMutationResult result) {
+        result = new InventoryMutationResult();
+        if (HeroFactionKit.Normalize(side) is null) {
+            return false;
+        }
+
+        var changed = false;
+        foreach (var (slot, item) in equippedItems) {
+            var nextId = HeroFactionKit.ToSide(item.ItemId, side);
+            if (nextId == item.ItemId) {
+                continue;
+            }
+            item.TransformItemId(nextId);
+            result.Equipped.Add(new InventoryEquippedItemChange(slot, item.Clone()));
+            changed = true;
+        }
+
+        foreach (var item in bagItems) {
+            var nextId = HeroFactionKit.ToSide(item.ItemId, side);
+            if (nextId == item.ItemId) {
+                continue;
+            }
+            item.TransformItemId(nextId);
+            result.RemovedFromBagItemUids.Add(item.ItemUid);
+            result.AddedToBag.Add(item.Clone());
+            changed = true;
+        }
+
+        return changed;
+    }
 
     /// <summary>Replaces equipped + bag wholesale (Arena kit loadout).</summary>
     public void ReplaceEquippedAndBag(

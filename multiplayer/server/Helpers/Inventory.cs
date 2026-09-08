@@ -178,7 +178,37 @@ public static class Inventory {
             }
         }
 
+        if (!HeroFactionKit.CanEquipOnKit(
+            item.ItemId,
+            player.CitizenshipSide,
+            player.InventoryManager.EnumerateCatalogItemIds())) {
+            error = "That Hero piece is the other city. A kit cannot mix Elvine and Aresden.";
+            return false;
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Converts equipped + bag city Hero pieces to one side (citizenship, else majority).
+    /// Call on join before <see cref="Spawn.SendInitialState"/> and after town-change.
+    /// </summary>
+    public static void SanitizeHeroFactionKit(GameWorldRef wr, GameWorldPlayer player, bool notify) {
+        ArgumentNullException.ThrowIfNull(player);
+        var side = HeroFactionKit.ResolveSide(
+            player.CitizenshipSide,
+            player.InventoryManager.EnumerateCatalogItemIds());
+        if (side is null) {
+            return;
+        }
+        if (!player.InventoryManager.TryRewriteHeroFactionItems(side, out var result)) {
+            return;
+        }
+        if (notify) {
+            ApplyInventoryMutation(wr, player, result);
+            return;
+        }
+        HeroSetBonus.Recompute(player);
     }
 
     /// <summary>After the player’s gender changes, removes equipped items that are restricted to another gender; notifies the player and nearby observers for visible slots.</summary>

@@ -48,6 +48,7 @@ import {
     type ArenaSlotIndex,
 } from '../../utils/arenaKits';
 import { ARENA_STARTER_CREDITS } from '../../constants/ArenaKitCatalog';
+import { citySelectDialogStore } from '../../ui/store/CitySelectDialog.store';
 import { getOlympiaSkillById } from '../../constants/OlympiaSkills';
 
 /**
@@ -735,7 +736,7 @@ export class ArenaSelectCharDesk {
         const skinColor =
             kit.skinColor === 2 ? SkinColor.Dark : kit.skinColor === 1 ? SkinColor.Tanned : SkinColor.Light;
         // Hero set + catalog weapon/shield/armor (e.g. Berserk MS.20 / ZW-style staff).
-        const equipped = resolveArenaKitEquippedPreview(kit);
+        const equipped = resolveArenaKitEquippedPreview(kit, citySelectDialogStore.state.chosenCity);
 
         const mini = createMenuCharacterPreview(this.scene, this.root, visual.feetX, visual.feetY, {
             gender,

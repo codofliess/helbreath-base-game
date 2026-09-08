@@ -216,6 +216,9 @@ public static class Spawn {
         HellMining.OnPlayerJoined(player);
         // Floor every skill to 20% (skill manuals removed from shop).
         Skills.ApplyStartingDefaults(player);
+        // Gender-locked leftovers (e.g. Hero Hauberk(W) on a male) and mixed city Hero kits.
+        Inventory.UnequipItemsInvalidForCurrentGender(wr, player);
+        Inventory.SanitizeHeroFactionKit(wr, player, notify: false);
         // Strip gear that fails Str/level (e.g. Horned with low Str) before snapshot.
         Inventory.UnequipItemsInvalidForStats(wr, player);
         // Equip Merien/Xelima/Ice SA from currently worn gear (silent on join).

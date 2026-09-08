@@ -2587,8 +2587,8 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSheetIndexFemale: 12,
         itemSpriteIndexFemale: 9,
         gender: 1,
-        equippedSpriteMale: "mhrobe1",
-        equippedSpriteFemale: "whrobe1",
+        equippedSpriteMale: "mhpmail2",
+        equippedSpriteFemale: "whpmail2",
     },
     {
         id: 413,
@@ -2607,8 +2607,8 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSheetIndexFemale: 12,
         itemSpriteIndexFemale: 8,
         gender: 1,
-        equippedSpriteMale: "mhpmail2",
-        equippedSpriteFemale: "whpmail2",
+        equippedSpriteMale: "mhpmail1",
+        equippedSpriteFemale: "whpmail1",
     },
     {
         id: 415,
@@ -2647,8 +2647,8 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSheetIndexFemale: 12,
         itemSpriteIndexFemale: 10,
         gender: 1,
-        equippedSpriteMale: "mhrobe2",
-        equippedSpriteFemale: "whrobe2",
+        equippedSpriteMale: "mhrobe1",
+        equippedSpriteFemale: "whrobe1",
     },
     {
         id: 419,
@@ -2658,7 +2658,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSpriteIndexMale: 3,
         gender: 0,
         equippedSpriteMale: "mhhauberk2",
-        equippedSpriteFemale: "whhauberk1",
+        equippedSpriteFemale: "whhauberk2",
     },
     {
         id: 420,
@@ -2668,7 +2668,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSpriteIndexFemale: 4,
         gender: 1,
         equippedSpriteMale: "mhhauberk2",
-        equippedSpriteFemale: "whhauberk1",
+        equippedSpriteFemale: "whhauberk2",
     },
     {
         id: 421,
@@ -2678,7 +2678,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSpriteIndexMale: 2,
         gender: 0,
         equippedSpriteMale: "mhhauberk1",
-        equippedSpriteFemale: "whauberk",
+        equippedSpriteFemale: "whhauberk1",
     },
     {
         id: 422,
@@ -2687,7 +2687,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSheetIndexFemale: 10,
         itemSpriteIndexFemale: 3,
         gender: 1,
-        equippedSpriteMale: "mhhauberk2",
+        equippedSpriteMale: "mhhauberk1",
         equippedSpriteFemale: "whhauberk1",
     },
     {
@@ -2698,7 +2698,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSpriteIndexMale: 5,
         gender: 0,
         equippedSpriteMale: "mhleggings2",
-        equippedSpriteFemale: "whleggings1",
+        equippedSpriteFemale: "whleggings2",
     },
     {
         id: 424,
@@ -2718,7 +2718,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSpriteIndexMale: 4,
         gender: 0,
         equippedSpriteMale: "mhleggings1",
-        equippedSpriteFemale: "wleggings",
+        equippedSpriteFemale: "whleggings1",
     },
     {
         id: 426,
@@ -2727,7 +2727,7 @@ export const OLYMPIA_GENERATED_ITEMS: OlympiaGeneratedItemRow[] = [
         itemSheetIndexFemale: 11,
         itemSpriteIndexFemale: 5,
         gender: 1,
-        equippedSpriteMale: "mhleggings2",
+        equippedSpriteMale: "mhleggings1",
         equippedSpriteFemale: "whleggings1",
     },
     {

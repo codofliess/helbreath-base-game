@@ -21,6 +21,7 @@ import {
 import { getItemById } from '../constants/Items';
 import { OLYMPIA_SKILLS } from '../constants/OlympiaSkills';
 import { getStoredWalletPubkey } from './walletAuth';
+import { heroItemToSide, resolveHeroKitSide, type HeroFaction } from './heroFactionKit';
 
 export type ArenaSlotIndex = 0 | 1 | 2 | 3;
 
@@ -260,12 +261,17 @@ export function formatArenaCatalogLines(kit: ArenaKit): string[] {
  * Equipped rows for walk avatar: Hero set for path/gender, then catalog overrides
  * (weapon / shield / cape / armor pieces). Rings/pots/spells are not visual.
  */
-export function resolveArenaKitEquippedPreview(kit: ArenaKit): Array<{ slot: string; itemId: number }> {
+export function resolveArenaKitEquippedPreview(
+    kit: ArenaKit,
+    citizenshipSide?: string,
+): Array<{ slot: string; itemId: number }> {
     const path = kit.path === 'war' ? 'war' : 'mage';
     const gender = kit.gender === 'female' ? 'female' : 'male';
     const bySlot = new Map<string, number>();
+    const previewIds = ARENA_HERO_SET_PREVIEW[path][gender].map((e) => e.itemId);
+    const side: HeroFaction = resolveHeroKitSide(citizenshipSide, previewIds) ?? 'aresden';
     for (const e of ARENA_HERO_SET_PREVIEW[path][gender]) {
-        bySlot.set(e.slot, e.itemId);
+        bySlot.set(e.slot, heroItemToSide(e.itemId, side));
     }
 
     const expandSku = (sku: string): string[] => {

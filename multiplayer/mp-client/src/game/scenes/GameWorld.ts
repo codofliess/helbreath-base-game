@@ -46,7 +46,7 @@ import { getMusicManager } from '../../utils/musicManagerRegistry';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
 import { MapManager } from '../../utils/MapManager';
-import { loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
+import { evictAllMapTileTextures, loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import {
     growMapTileRectToward,
@@ -74,11 +74,7 @@ import { GROUND_ITEM_DISPLAY_CONFIG } from '../../constants/GroundItemDisplay';
 
 import { getSpriteForCatalogNpcId } from '../../constants/NPCs';
 import { extractMonsterMinimapThumbDataUrl } from '../../utils/SpriteUtils';
-import {
-    capturePaperDollBodyLayers,
-    capturePaperDollFromLivePlayer,
-    invalidatePaperDollCache,
-} from '../../utils/paperDollCapture';
+import { runPaperDollCapture } from '../../utils/paperDollCapture';
 import {
     CURRENT_SCENE_READY,
     INITIAL_GAME_WORLD_STATE_RECEIVED,
@@ -531,6 +527,7 @@ export class GameWorld extends Scene {
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
             setPlayerItemAppearanceDecodeAllowed(false);
+            evictAllMapTileTextures(this);
             this.clearMapSetupWatchdog();
 
             this.loadingOverlayController = new LoadingOverlayController(this);
@@ -782,31 +779,18 @@ export class GameWorld extends Scene {
 
         subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
             try {
-                // Always recapture on F5 — stale cache was the #1 "wrong mannequin" cause.
-                invalidatePaperDollCache();
                 const inv = getInventoryManager(this.game);
-                const gender = this.player?.getGender?.() ?? playerDialogStore.state.gender;
-                const skin = playerDialogStore.state.skinColor;
-                const hair =
-                    this.player?.getHairStyleIndex?.() ?? playerDialogStore.state.hairStyleIndex;
-                const uw =
-                    this.player?.getUnderwearColorIndex?.() ??
-                    playerDialogStore.state.underwearColorIndex;
-                const equipped = inv?.equippedItems ?? {};
-
-                // 1) Prefer live map pixels first (even 1 layer = body) — most reliable for F5.
-                const liveLayers = this.player?.getVisibleSpritesForPaperDoll?.() ?? [];
-                if (this.player && liveLayers.length >= 1) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
-                }
-
-                // 2) Idle-south rebuild (fills gear when packs finish loading; upgrades nude→geared).
-                capturePaperDollBodyLayers(this, gender, skin, hair, uw, equipped, true);
-
-                // 3) Live again if multi-layer (gear) so F5 matches the world character.
-                if (this.player && liveLayers.length >= 2) {
-                    capturePaperDollFromLivePlayer(this, this.player, true);
-                }
+                runPaperDollCapture(this as never, {
+                    player: this.player,
+                    gender: this.player?.getGender?.() ?? playerDialogStore.state.gender,
+                    skinColor: playerDialogStore.state.skinColor,
+                    hairStyleIndex:
+                        this.player?.getHairStyleIndex?.() ?? playerDialogStore.state.hairStyleIndex,
+                    underwearColorIndex:
+                        this.player?.getUnderwearColorIndex?.() ??
+                        playerDialogStore.state.underwearColorIndex,
+                    equippedItems: inv?.equippedItems ?? {},
+                });
             } catch (err) {
                 console.warn('[GameWorld] paper-doll capture failed', err);
             }
@@ -3055,6 +3039,7 @@ export class GameWorld extends Scene {
         this.mapPrepareInFlight = true;
         this.noteMapSetupProgress();
         try {
+            evictAllMapTileTextures(this);
             const gender = playerDialogStore.state.gender;
             const skinColor = playerDialogStore.state.skinColor;
             const human = PlayerAppearanceManager.getHumanSpriteName(gender, skinColor);

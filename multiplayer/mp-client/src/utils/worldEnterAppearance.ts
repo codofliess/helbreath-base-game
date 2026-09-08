@@ -9,7 +9,9 @@ export type WorldEnterAppearanceLook = {
     underwearColorIndex: number;
 };
 
-/** Idle (+ walk) local sheets for one occupied look — never all 10 SELECTCHAR packs. */
+/** Idle (+ walk) local sheets for one occupied look — never all 10 SELECTCHAR packs.
+ * Elvine F5 OOM is paper-doll/settle gear, not this enter set (PR #58 path stays).
+ */
 export function worldEnterAppearanceSheetJobs(
     look: WorldEnterAppearanceLook,
 ): Array<{ name: string; sheets: number[] }> {

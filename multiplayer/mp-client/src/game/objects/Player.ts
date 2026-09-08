@@ -44,7 +44,7 @@ import { mapDialogStore } from '../../ui/store/MapDialog.store';
 import { playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { PLAYER_RUNNING, PLAYER_WALKING, PLAYER_MELEE_ATTACK, PLAYER_TAKE_UNARMED_DAMAGE, PLAYER_CAST, SPELL_CAST_FAILED, MALE_CRITICAL_ATTACK, FEMALE_CRITICAL_ATTACK, MALE_DEATH, FEMALE_DEATH, MALE_RESET_POSITION, FEMALE_RESET_POSITION } from '../../constants/SoundFileNames';
 import { EventBus } from '../EventBus';
-import { PLAYER_POSITION_CHANGED, TILE_OCCUPANCY_REAPPLY_REQUESTED, OUT_UI_PLAYER_DIED, OUT_UI_CAST_STARTED, OUT_UI_CAST_READY, OUT_UI_CAST_REMOVED, PLAYER_CAST_ANIMATION_STARTED, PLAYER_CONFIRM_SPELL_TARGET, EQUIP_ITEM, IN_UI_CHANGE_GENDER, IN_UI_CHANGE_SKIN_COLOR, IN_UI_CHANGE_UNDERWEAR_COLOR, IN_UI_CHANGE_HAIR_STYLE, SYSTEM_LOG_APPEND } from '../../constants/EventNames';
+import { PLAYER_POSITION_CHANGED, TILE_OCCUPANCY_REAPPLY_REQUESTED, OUT_UI_PLAYER_DIED, OUT_UI_CAST_STARTED, OUT_UI_CAST_READY, OUT_UI_CAST_REMOVED, PLAYER_CAST_ANIMATION_STARTED, PLAYER_CONFIRM_SPELL_TARGET, EQUIP_ITEM, IN_UI_CHANGE_GENDER, IN_UI_CHANGE_SKIN_COLOR, IN_UI_CHANGE_UNDERWEAR_COLOR, IN_UI_CHANGE_HAIR_STYLE, IN_UI_PAPERDOLL_CAPTURE, SYSTEM_LOG_APPEND } from '../../constants/EventNames';
 import { AttackType, Gender, MonsterAttackType, SkinColor, TemporaryEffectType } from '../../Types';
 import { calculateAnimationDuration, calculateFrameRateFromDuration } from '../../utils/AnimationUtils';
 import { FloatingText, formatOlympiaSpellAnnounce } from '../effects/FloatingText';
@@ -335,7 +335,12 @@ export class Player extends GameObject {
             resolvedGear,
             assetIndices,
             scene,
-            () => this.switchPlayerState(this.currentState, true),
+            () => {
+                this.switchPlayerState(this.currentState, true);
+                if (this.isLocalPlayer) {
+                    EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+                }
+            },
         );
         this.soundManager = soundManager;
         this.hp = 1000;

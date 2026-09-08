@@ -23,6 +23,7 @@ import { Gender } from '../../Types';
 import {
     PAPERDOLL_BODY_KEY,
     PAPERDOLL_COMPOSITE_KEY,
+    paperDollLookKey,
 } from '../../utils/paperDollCapture';
 
 const STORAGE_KEY = 'cl-arena-bag-mini-loadout-open';
@@ -97,17 +98,29 @@ export function ArenaBagMiniLoadout() {
         });
     }, []);
 
+    const lookKey = paperDollLookKey(
+        genderLook,
+        skinColor,
+        hairStyleIndex,
+        underwearColorIndex,
+        equippedItems,
+    );
+
     // Light capture only when strip is open (arena CPU budget).
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            return;
+        }
         EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
-        const t1 = window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), 200);
-        const t2 = window.setTimeout(() => EventBus.emit(IN_UI_PAPERDOLL_CAPTURE), 900);
-        return () => {
-            window.clearTimeout(t1);
-            window.clearTimeout(t2);
-        };
-    }, [open, genderLook, skinColor, underwearColorIndex, hairStyleIndex, equippedItems]);
+        const retry = window.setTimeout(() => {
+            const url = appStore.state.spriteFrameMap.get(PAPERDOLL_COMPOSITE_KEY);
+            if (url && url.length > 32) {
+                return;
+            }
+            EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+        }, 800);
+        return () => window.clearTimeout(retry);
+    }, [open, lookKey]);
 
     const gender = playerGender ?? Gender.MALE;
 

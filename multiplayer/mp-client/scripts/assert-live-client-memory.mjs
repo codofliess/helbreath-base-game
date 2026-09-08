@@ -74,10 +74,35 @@ assert(
 
 assert(
     /SETTLE_APPEARANCE_SHEETS/.test(itemAssets) &&
+        /settleAppearanceSheetIndices/.test(itemAssets) &&
+        /sheetIndices \?\? settleAppearanceSheetIndices/.test(itemAssets) &&
         /sheetIndices: new Set\(stillMissing\)/.test(itemAssets) &&
         /playerItemAppearanceDecodeAllowed/.test(itemAssets) &&
         !/hbFile\.load\(scene\);/.test(itemAssets),
     'ItemAssets must decode idle appearance sheets only after settle, never the full .spr on enter',
+);
+const itemAppearanceSheets = read('src/utils/itemAppearanceSheets.ts');
+const paperDollCapture = read('src/utils/paperDollCapture.ts');
+const characterPaperDoll = read('src/ui/components/CharacterPaperDoll.tsx');
+assert(
+    /ARMOUR_SETTLE_SHEETS = \[0, 2\]/.test(itemAppearanceSheets) &&
+        /WEAPON_SETTLE_SHEETS = \[0, 1, 2, 3, 4, 5, 6, 7\]/.test(itemAppearanceSheets) &&
+        /paperDollLayerSheetIndices/.test(itemAppearanceSheets) &&
+        /paperDollPendingGearJobs/.test(itemAppearanceSheets),
+    'Armour settle must be idle+walk (0,2); F5 paper-doll must request one south sheet per layer',
+);
+assert(
+    /runPaperDollCapture/.test(paperDollCapture) &&
+        /paperDollPendingGearJobs/.test(paperDollCapture) &&
+        /sheetIndices: new Set\(job\.sheets\)/.test(paperDollCapture) &&
+        !/pending\.map\(\(name\) =>/.test(paperDollCapture),
+    'F5 capture must coalesce and load only paper-doll south sheets, not Promise.all settle 0–7',
+);
+assert(
+    /paperDollLookKey/.test(characterPaperDoll) &&
+        /\[400, 1600\]/.test(characterPaperDoll) &&
+        !/80, 250, 600, 1200, 2200, 4000/.test(characterPaperDoll),
+    'F5 paper-doll must not burst six recaptures on equippedItems identity',
 );
 
 assert(
@@ -285,7 +310,8 @@ assert(
 );
 
 assert(
-    /export function evictUnusedMapTileTextures/.test(mapAssets),
+    /export function evictUnusedMapTileTextures/.test(mapAssets) &&
+        /export function evictAllMapTileTextures/.test(mapAssets),
     'MapAssets must evict map-tile textures outside the current stream keep-set',
 );
 
@@ -298,6 +324,9 @@ assert(
         /evictUnusedSelectAppearanceSprites/.test(gameWorld) &&
         /trimSelectAppearanceToIdleSheets/.test(gameWorld) &&
         /loadWorldEnterAppearanceSprites/.test(gameWorld) &&
+        /runPaperDollCapture/.test(gameWorld) &&
+        /evictAllMapTileTextures/.test(gameWorld) &&
+        !/invalidatePaperDollCache/.test(gameWorld) &&
         /firstPaint: true/.test(gameWorld) &&
         /includeObjectSprites: false/.test(gameWorld) &&
         /enableTreesAfterFirstPaint/.test(gameWorld) &&

@@ -156,7 +156,7 @@ describe('protectWorldCanvasInPool', () => {
 });
 
 describe('lockWorldCanvasPresentationSize', () => {
-    it('refuses pool 1×1 and same-size Scale.refresh wipe on select/prepare', () => {
+    it('refuses pool 1×1, same-size wipe, and F7/Scale FOV rewrite on select/prepare', () => {
         const world: WorldCanvasLike = { width: 1024, height: 576 };
         lockWorldCanvasPresentationSize(world);
         world.width = 1;
@@ -167,6 +167,29 @@ describe('lockWorldCanvasPresentationSize', () => {
         world.height = 576;
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
+        world.width = 800;
+        world.height = 450;
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+
+    it('ignores getContext attribute objects that would reset the 2d buffer', () => {
+        let attrsSeen = 0;
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: (type: string, attrs?: unknown) => {
+                if (attrs !== undefined) {
+                    attrsSeen += 1;
+                }
+                return { type };
+            },
+        };
+        lockWorldCanvasPresentationSize(world);
+        const ctx = world.getContext?.('2d', { willReadFrequently: false });
+        assert.deepEqual(ctx, { type: '2d' });
+        assert.equal(attrsSeen, 0);
+        assert.equal(world.getContext?.('webgl'), null);
     });
 });
 

@@ -148,6 +148,7 @@ assert(
         && /occupyWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
         && /sealWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
         && /lockWorldCanvasPresentationSize/.test(worldCanvasPoolGuard)
+        && /__hbWorldCanvasGetContextLock/.test(worldCanvasPoolGuard)
         && /refuseWorldCanvasTextureBind/.test(worldCanvasPoolGuard)
         && /refuseWorldCanvasGenerateTexture/.test(worldCanvasPoolGuard)
         && /withWorldCanvasBoxGuard/.test(worldCanvasPoolGuard)
@@ -168,6 +169,12 @@ assert(
         && /installWorldCanvasPoolGuard/.test(read('src/game/scenes/Boot.ts'))
         && /installWorldCanvasPoolGuard/.test(gameWorld),
     'StartGame / Boot / GameWorld must install the world-canvas CanvasPool guard',
+);
+const gameWorldCanvasPresentation = read('src/game/ui/gameWorldCanvasPresentation.ts');
+assert(
+    /lockWorldCanvasPresentationSize/.test(gameWorldCanvasPresentation)
+        && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation),
+    'Game-world FOV presentation must lock game.canvas size/getContext (F7 close / Scale.refresh wipe)',
 );
 const pkgJson = read('package.json');
 assert(

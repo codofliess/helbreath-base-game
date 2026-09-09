@@ -1,6 +1,7 @@
 import { Scale, type Game, type Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { IN_UI_GAME_VIEWPORT_RESIZED } from '../../constants/EventNames';
+import { lockWorldCanvasPresentationSize } from '../../utils/worldCanvasPoolGuard';
 
 /**
  * Classic-safe camera FOV (world pixels). TILE_SIZE = 32 → ~32×18 tiles @ 1024×576.
@@ -113,6 +114,8 @@ function applyClassicFovPresentation(game: Game): void {
     if (!canvas) {
         return;
     }
+    // F7 book close / Scale.refresh can assign canvas.width and wipe the FOV.
+    lockWorldCanvasPresentationSize(canvas);
 
     document.body.classList.remove('login-charui-active', 'login-selectchar-active', 'game-world-expanded-vision');
     document.body.classList.add('game-world-active');

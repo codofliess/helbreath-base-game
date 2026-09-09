@@ -6,6 +6,7 @@ import { convertWorldPosToPixelPos } from './CoordinateUtils';
 import type { SoundManager } from './SoundManager';
 import { TILE_SIZE } from '../game/assets/HBMap';
 import { areEffectSpriteLoaded, loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from './EffectAssets';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from './worldCanvasTextureSafety';
 
 /**
  * Builds the texture key for an effect config.
@@ -32,7 +33,8 @@ export function ensureEffectAnimation(
 ): string {
     const { frameRate, repeat = 0, animKey } = options;
     try {
-        if (!scene.textures.exists(textureKey)) {
+        removeWorldCanvasAliasedTexture(scene, textureKey);
+        if (!isSafeDrawableTexture(scene, textureKey)) {
             throw new Error(`Texture "${textureKey}" does not exist`);
         }
 
@@ -122,14 +124,9 @@ export function drawEffectAtPixelCoords(
         return undefined;
     }
 
-    if (shouldLoadEffectAssetsOnDemand() && !areEffectSpriteLoaded(scene, config.sprite, config.spriteSheetIndex)) {
-        void loadEffectAssetsOnDemand(scene, config).catch((error) => {
-            console.warn(`[EffectUtils] Failed to lazy-load effect sprite '${config.sprite}'`, error);
-        });
-        return undefined;
-    }
-
-    const effect = new Effect(scene, {
+    const textureKey = getTextureKeyFromEffectConfig(config);
+    removeWorldCanvasAliasedTexture(scene, textureKey);
+    const createConfig = {
         config,
         pixelX,
         pixelY,
@@ -142,9 +139,26 @@ export function drawEffectAtPixelCoords(
         startAnimationFrame: options?.startAnimationFrame,
         depthOffset: options?.depthOffset,
         usePlayerDepthForDepth: options?.usePlayerDepthForDepth,
-    });
+    };
+    if (
+        (shouldLoadEffectAssetsOnDemand() && !areEffectSpriteLoaded(scene, config.sprite, config.spriteSheetIndex))
+        || !isSafeDrawableTexture(scene, textureKey)
+    ) {
+        void loadEffectAssetsOnDemand(scene, config)
+            .then(() => {
+                removeWorldCanvasAliasedTexture(scene, textureKey);
+                if (!isSafeDrawableTexture(scene, textureKey)) {
+                    return;
+                }
+                new Effect(scene, createConfig);
+            })
+            .catch((error) => {
+                console.warn(`[EffectUtils] Failed to lazy-load effect sprite '${config.sprite}'`, error);
+            });
+        return undefined;
+    }
 
-    return effect;
+    return new Effect(scene, createConfig);
 }
 
 /**

@@ -21,7 +21,10 @@ import { TILE_SIZE } from '../assets/HBMap';
 import { CriticalStrikeProjectile } from '../effects/CriticalStrikeProjectile';
 import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
-import { drawEffect, drawEffectAtPixelCoords } from '../../utils/EffectUtils';
+import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
+import { loadEffectAssetsOnDemand } from '../../utils/EffectAssets';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
+import { shouldAdvanceCastToReady } from '../../utils/castPresentation';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -166,6 +169,9 @@ export class Player extends GameObject {
 
     /** Casting circle effect instance (created when entering Cast state) */
     private castingCircleEffect: ReturnType<typeof drawEffect> | undefined = undefined;
+
+    /** `performance.now()` when this body entered Cast — used when CAST sheets never play. */
+    private castStartedAtMs = 0;
 
     /** SoundManager instance for playing sound effects */
     private readonly soundManager: SoundManager;
@@ -337,13 +343,20 @@ export class Player extends GameObject {
             scene,
             () => {
                 this.switchPlayerState(this.currentState, true);
-                if (this.isLocalPlayer) {
-                    // After textures bind — sync capture during setTexture can read a
-                    // pending texture whose source is the world canvas and blank the map.
-                    this.scene.time.delayedCall(0, () => {
-                        EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
-                    });
+                if (!this.isLocalPlayer) {
+                    return;
                 }
+                // F5 blit during Missile prepare: CAST sheet bind + sync capture can
+                // read a world-canvas alias and black the map. Recapture only in idle.
+                if (
+                    this.currentState === PlayerState.Cast
+                    || this.currentState === PlayerState.CastReady
+                ) {
+                    return;
+                }
+                this.scene.time.delayedCall(0, () => {
+                    EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+                });
             },
         );
         this.soundManager = soundManager;
@@ -812,6 +825,7 @@ export class Player extends GameObject {
 
         // Create casting circle effect when entering Cast state
         if (newState === PlayerState.Cast && previousState !== PlayerState.Cast) {
+            this.castStartedAtMs = performance.now();
             this.createCastingCircleEffect();
             // Create floating text with spell name in green color
             this.createSpellNameFloatingText();
@@ -2986,7 +3000,14 @@ export class Player extends GameObject {
             return;
         }
 
-        if (this.currentState === PlayerState.Cast && !this.isPrimaryAssetAnimationPlaying()) {
+        if (
+            this.currentState === PlayerState.Cast
+            && shouldAdvanceCastToReady(
+                this.isPrimaryAssetAnimationPlaying(),
+                performance.now() - this.castStartedAtMs,
+                this.castSpeed,
+            )
+        ) {
             this.switchPlayerState(PlayerState.CastReady);
             if (this.isLocalPlayer) {
                 EventBus.emit(OUT_UI_CAST_READY);
@@ -3402,30 +3423,47 @@ export class Player extends GameObject {
     /**
      * Creates the casting circle effect at the player's location.
      * Effect duration matches castSpeed and does not loop.
+     * Does not call `textures.get` on a missing key (that is `__MISSING`, not "absent")
+     * and never binds a world-canvas alias as the circle sheet.
      */
     private createCastingCircleEffect(): void {
-        // Get the effect config to determine frame count
         const effectConfig = getEffectByKey(EFFECT_CASTING_CIRCLE);
         if (!effectConfig) {
             return;
         }
 
-        // Get texture to determine frame count
-        const textureKey = `sprite-${effectConfig.sprite}-${effectConfig.spriteSheetIndex}`;
-        const texture = this.scene.textures.get(textureKey);
-        if (!texture) {
+        const textureKey = getTextureKeyFromEffectConfig(effectConfig);
+        removeWorldCanvasAliasedTexture(this.scene, textureKey);
+        if (!isSafeDrawableTexture(this.scene, textureKey)) {
+            void loadEffectAssetsOnDemand(this.scene, effectConfig)
+                .then(() => {
+                    if (this.currentState !== PlayerState.Cast || this.castingCircleEffect) {
+                        return;
+                    }
+                    removeWorldCanvasAliasedTexture(this.scene, textureKey);
+                    if (!isSafeDrawableTexture(this.scene, textureKey)) {
+                        return;
+                    }
+                    this.spawnCastingCircleEffect(effectConfig);
+                })
+                .catch((error) => {
+                    console.warn('[Player] Failed to lazy-load casting-circle effect5 sheet 7', error);
+                });
             return;
         }
 
+        this.spawnCastingCircleEffect(effectConfig);
+    }
+
+    private spawnCastingCircleEffect(effectConfig: NonNullable<ReturnType<typeof getEffectByKey>>): void {
+        const textureKey = getTextureKeyFromEffectConfig(effectConfig);
+        const texture = this.scene.textures.get(textureKey);
         const frameCount = Object.keys(texture.frames).length;
         if (frameCount === 0) {
             return;
         }
 
-        // Calculate frame rate to match castSpeed duration
         const frameRate = calculateFrameRateFromDuration(frameCount, this.castSpeed);
-
-        // Create the effect with calculated frame rate, no looping
         this.castingCircleEffect = drawEffect(
             this.scene,
             this.worldX,
@@ -3437,7 +3475,7 @@ export class Player extends GameObject {
                 playerWorldY: this.worldY,
                 infiniteLoop: false,
                 frameRate: frameRate,
-            }
+            },
         );
     }
 

@@ -3,17 +3,22 @@ import { describe, it } from 'node:test';
 import { SPELL_MAGIC_MISSILE_ID } from '../constants/Spells';
 import { getOlympiaServerSpellId } from '../constants/OlympiaServerSpellMap';
 import {
+    applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
     endMagiasRitual,
     shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
 import {
     attachWorldCanvasPoolGuard,
+    lockWorldCanvasPresentationSize,
     occupyWorldCanvasPoolSlot,
     protectWorldCanvasInPool,
+    refuseWorldCanvasGenerateTexture,
     refuseWorldCanvasTextureBind,
     restoreWorldCanvasBoxIfStolen,
+    sealWorldCanvasPoolSlot,
     snapshotWorldCanvasBox,
+    withWorldCanvasBoxGuard,
     type CanvasPoolContainer,
     type WorldCanvasLike,
     type WorldCanvasPoolApi,
@@ -150,6 +155,46 @@ describe('protectWorldCanvasInPool', () => {
     });
 });
 
+describe('lockWorldCanvasPresentationSize', () => {
+    it('refuses pool 1×1 and same-size Scale.refresh wipe on select/prepare', () => {
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        lockWorldCanvasPresentationSize(world);
+        world.width = 1;
+        world.height = 1;
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        world.width = 1024;
+        world.height = 576;
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+});
+
+describe('sealWorldCanvasPoolSlot', () => {
+    it('Phaser first() cannot free or reuse game.canvas after unwrapped remove', () => {
+        const game = { id: 'phaser-game' };
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const pool = createPhaserStylePool();
+        pool.pool.push({ parent: game, canvas: world });
+        protectWorldCanvasInPool(pool, world, game);
+        sealWorldCanvasPoolSlot(pool);
+
+        pool.pool[0].parent = null;
+        pool.pool[0].parent = { id: 'phaser-text' };
+        assert.notEqual(pool.pool[0].parent, null);
+        assert.notEqual(pool.pool[0].parent, pool.pool[0].canvas);
+        assert.equal(
+            pool.pool.find((row) => !row.parent),
+            undefined,
+        );
+
+        const created = pool.create({ id: 'announce-text' }, 32, 16);
+        assert.notEqual(created, world);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+});
+
 describe('refuseWorldCanvasTextureBind', () => {
     it('addCanvas(game.canvas) receives an isolated canvas, not the world surface', () => {
         const world: WorldCanvasLike = { width: 1024, height: 576 };
@@ -221,6 +266,79 @@ describe('F7 select Missile must not clear the world canvas', () => {
         assert.equal(shouldSkipCastCanvasWorkOnState('Cast'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        assert.equal(pool.pool[0].canvas, world);
+        endMagiasRitual();
+    });
+});
+
+describe('refuseWorldCanvasGenerateTexture', () => {
+    it('soft-cast confirm must not snapshot game.canvas', () => {
+        const textures = {
+            generateTexture: () => {
+                throw new Error('generateTexture must not run');
+            },
+        };
+        refuseWorldCanvasGenerateTexture(textures);
+        assert.equal(textures.generateTexture('magias-confirm'), false);
+    });
+});
+
+describe('withWorldCanvasBoxGuard', () => {
+    it('restores FOV size if confirm-time code 1×1s the world canvas', () => {
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const result = withWorldCanvasBoxGuard(world, () => {
+            world.width = 1;
+            world.height = 1;
+            return 'ok';
+        });
+        assert.equal(result, 'ok');
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+});
+
+describe('soft-cast / target-mob confirm must not clear the world canvas', () => {
+    it('confirm plan + guarded pool leave 1024×576 intact', () => {
+        const game = { id: 'phaser-game' };
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const pool = createPhaserStylePool();
+        pool.pool.push({ parent: game, canvas: world });
+        const textures = {
+            addCanvas: (_key: string, source: unknown) => source,
+            remove: () => undefined,
+            generateTexture: () => {
+                throw new Error('confirm must not generateTexture');
+            },
+        };
+        attachWorldCanvasPoolGuard({ canvas: world, textures }, pool);
+
+        endMagiasRitual();
+        const plan = applyMagiasSoftCastConfirmVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: {
+                    text: () => {
+                        throw new Error('Missile confirm must not create Phaser Text');
+                    },
+                },
+                textures,
+            },
+        );
+        pool.remove(world);
+        pool.remove(game);
+        pool.create({ id: 'confirm-text' }, 1, 1);
+        pool.create2D?.({ id: 'text-style' }, 8, 8);
+        textures.addCanvas('magias-confirm', world);
+        assert.equal(textures.generateTexture('magias-confirm'), false);
+
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.applyIdleAppearanceOnConfirm, false);
+        assert.equal(plan.spawnProjectileGameAsset, false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
         assert.equal(pool.pool[0].canvas, world);

@@ -72,11 +72,13 @@ assert(
         && /castAppearanceSkipped/.test(playerTs)
         && /fail-closed/.test(playerTs)
         && /shouldSkipCastCanvasWorkOnState/.test(playerTs)
-        && /restoreWorldCanvasBoxIfStolen/.test(playerTs)
-        && /snapshotWorldCanvasBox/.test(playerTs)
+        && /withWorldCanvasBoxGuard/.test(playerTs)
+        && /finishSkippedCastAppearance/.test(playerTs)
+        && /IdleFromCast/.test(playerTs)
+        && /onLeftClickAt/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
-    'Missile select/prepare must not generateTexture or lazy-load effect5-7; skip F5 blit, Phaser Text, and Cast/CastReady appearance; snapshot-restore world canvas; wait castSpeed if CAST anim never plays',
+    'Missile select/prepare/confirm must not generateTexture or lazy-load effect5-7; skip F5 blit, Phaser Text, Cast/CastReady/IdleFromCast appearance; box-guard world canvas; wait castSpeed if CAST anim never plays',
 );
 const createCircle = playerTs.slice(
     playerTs.indexOf('private createCastingCircleEffect'),
@@ -90,14 +92,24 @@ assert(
     'createCastingCircleEffect must refuse fogata on Missile prepare even when effect5-7 looks safe',
 );
 const appearanceMgr = read('src/utils/PlayerAppearanceManager.ts');
+const refuseMagiasFetch = appearanceMgr.slice(
+    appearanceMgr.indexOf('private shouldRefuseMagiasAppearanceFetch'),
+    appearanceMgr.indexOf('private scheduleLazyItemAppearanceIfNeeded'),
+);
+assert(
+    /canFetchAppearanceSheetOnStateEnter/.test(refuseMagiasFetch)
+        && /PlayerState\.Cast/.test(refuseMagiasFetch)
+        && /PlayerState\.CastReady/.test(refuseMagiasFetch)
+        && /IdleFromCast/.test(refuseMagiasFetch)
+        && /isMagiasRitualActive/.test(refuseMagiasFetch),
+    'Cast / CastReady / IdleFromCast must not fetch clothes CAST sheet 8 / idle pack / pending addCanvas',
+);
 const scheduleMissing = appearanceMgr.slice(
     appearanceMgr.indexOf('private scheduleMissingAnimationSheetIfNeeded'),
     appearanceMgr.indexOf('private flushPendingLazyItemPromotionForSprite'),
 );
 assert(
-    /canFetchAppearanceSheetOnStateEnter/.test(scheduleMissing)
-        && /PlayerState\.Cast/.test(scheduleMissing)
-        && /PlayerState\.CastReady/.test(scheduleMissing),
+    /shouldRefuseMagiasAppearanceFetch/.test(scheduleMissing),
     'Cast / CastReady must not fetch clothes CAST sheet 8 / angelic CAST sheets',
 );
 const scheduleLazy = appearanceMgr.slice(
@@ -105,9 +117,7 @@ const scheduleLazy = appearanceMgr.slice(
     appearanceMgr.indexOf('private scheduleMissingAnimationSheetIfNeeded'),
 );
 assert(
-    /canFetchAppearanceSheetOnStateEnter/.test(scheduleLazy)
-        && /PlayerState\.Cast/.test(scheduleLazy)
-        && /PlayerState\.CastReady/.test(scheduleLazy),
+    /shouldRefuseMagiasAppearanceFetch/.test(scheduleLazy),
     'Cast / CastReady must not HTTP the clothes idle pack (scheduleLazyItemAppearanceIfNeeded)',
 );
 const castPresentation = read('src/utils/castPresentation.ts');
@@ -117,6 +127,10 @@ assert(
         && /planCastEnterVisuals/.test(castPresentation)
         && /planMagiasSpellSelect/.test(castPresentation)
         && /applyMagiasSpellSelectVisuals/.test(castPresentation)
+        && /planMagiasSoftCastConfirm/.test(castPresentation)
+        && /applyMagiasSoftCastConfirmVisuals/.test(castPresentation)
+        && /canMutateWorldCanvasTexturesOnCastConfirm/.test(castPresentation)
+        && /IdleFromCast/.test(castPresentation)
         && /beginMagiasRitual/.test(castPresentation)
         && /canTouchCanvasPoolOnMagiasSelect/.test(castPresentation)
         && /canSpawnCastingCircleOnPrepare/.test(castPresentation)
@@ -124,18 +138,23 @@ assert(
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect')))
-        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canSpawnCastingCircleOnPrepare'))),
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canSpawnCastingCircleOnPrepare')))
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastConfirm'))),
     'Magias select/Cast path must refuse Phaser Text, CanvasPool(game.canvas), generateTexture, addCanvas, textures.remove',
 );
 const worldCanvasPoolGuard = read('src/utils/worldCanvasPoolGuard.ts');
 assert(
     /protectWorldCanvasInPool/.test(worldCanvasPoolGuard)
         && /occupyWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
+        && /sealWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
+        && /lockWorldCanvasPresentationSize/.test(worldCanvasPoolGuard)
         && /refuseWorldCanvasTextureBind/.test(worldCanvasPoolGuard)
+        && /refuseWorldCanvasGenerateTexture/.test(worldCanvasPoolGuard)
+        && /withWorldCanvasBoxGuard/.test(worldCanvasPoolGuard)
         && /restoreWorldCanvasBoxIfStolen/.test(worldCanvasPoolGuard)
         && /attachWorldCanvasPoolGuard/.test(worldCanvasPoolGuard)
         && /create2D closes over the \*inner\* create/.test(worldCanvasPoolGuard),
-    'World canvas pool guard must wrap CanvasPool remove/create and refuse addCanvas(game.canvas)',
+    'World canvas pool guard must wrap CanvasPool remove/create, seal the world slot, lock FOV size, and refuse addCanvas(game.canvas) / generateTexture',
 );
 const worldCanvasPoolGuardInstall = read('src/utils/worldCanvasPoolGuardInstall.ts');
 assert(

@@ -29,7 +29,11 @@ import {
     loadPlayerItemAppearanceOnDemand,
 } from './ItemAssets';
 import { getHumanSpriteName as getHumanSpriteNameLook, resolveGearFromEquippedItems as resolveGearFromEquippedItemsLook } from './playerAppearanceLook';
-import { canFetchAppearanceSheetOnStateEnter } from './castPresentation';
+import {
+    canFetchAppearanceSheetOnStateEnter,
+    isMagiasRitualActive,
+    shouldSkipCastCanvasWorkOnState,
+} from './castPresentation';
 import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
 
 export enum PlayerState {
@@ -1155,6 +1159,24 @@ export class PlayerAppearanceManager {
     }
 
     /**
+     * Cast / CastReady / Idle-from-Magias-confirm must not HTTP clothes sheets
+     * or retarget-to-pending (`ensurePending` / `setTexture` / addCanvas).
+     */
+    private shouldRefuseMagiasAppearanceFetch(state: PlayerState): boolean {
+        if (state === PlayerState.Cast || state === PlayerState.CastReady) {
+            return !canFetchAppearanceSheetOnStateEnter(true);
+        }
+        if (
+            (state === PlayerState.IdlePeaceMode || state === PlayerState.IdleCombatMode)
+            && isMagiasRitualActive()
+            && shouldSkipCastCanvasWorkOnState('IdleFromCast')
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * When lazy item appearance is enabled and the `.spr` is missing, starts fetch and keeps the layer hidden
      * until load completes. Returns true if load was deferred (caller must not force visible yet).
      * Cast / CastReady must not start this pack fetch or retarget-to-pending (ensurePending / setTexture).
@@ -1163,12 +1185,7 @@ export class PlayerAppearanceManager {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
             return false;
         }
-        if (
-            state !== undefined
-            && !canFetchAppearanceSheetOnStateEnter(
-                state === PlayerState.Cast || state === PlayerState.CastReady,
-            )
-        ) {
+        if (state !== undefined && this.shouldRefuseMagiasAppearanceFetch(state)) {
             return false;
         }
         if (!isPlayerItemAppearanceDecodeAllowed()) {
@@ -1229,11 +1246,7 @@ export class PlayerAppearanceManager {
         if (this.scene.textures.exists(animationKey) && this.scene.anims.exists(animationKey)) {
             return !isSafeDrawableTexture(this.scene, animationKey);
         }
-        if (
-            !canFetchAppearanceSheetOnStateEnter(
-                state === PlayerState.Cast || state === PlayerState.CastReady,
-            )
-        ) {
+        if (this.shouldRefuseMagiasAppearanceFetch(state)) {
             return false;
         }
         const match = /^sprite-(.+)-(\d+)$/.exec(animationKey);

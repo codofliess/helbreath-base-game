@@ -39,9 +39,14 @@ export type WorldCanvasPoolApi = {
 
 export type TextureBindApi = {
     addCanvas?: (key: string, source: unknown, ...rest: unknown[]) => unknown;
+    generateTexture?: (...args: unknown[]) => unknown;
 };
 
 type GuardedFn = { __hbWorldCanvasGuard?: boolean };
+
+type SealedPoolContainer = CanvasPoolContainer & { __hbWorldSlotSealed?: boolean };
+
+type SizeLockedCanvas = WorldCanvasLike & { __hbWorldCanvasSizeLock?: boolean };
 
 const WORLD_SLOT_SENTINEL = { hbWorldCanvasSlot: true };
 
@@ -71,18 +76,126 @@ function isWorldContainer(container: CanvasPoolContainer): boolean {
     return container.canvas != null && container.canvas === guardState.worldCanvas;
 }
 
+/**
+ * Phaser `first()` treats any falsy parent as free. The inner `create` closes
+ * over that `first` — wrapping `pool.create` is not enough if a caller still
+ * holds the original `create` / `create2D`. Seal the world slot so parent
+ * cannot be nulled or reparented onto Text / TextureManager.
+ */
+export function sealWorldCanvasPoolSlot(pool: WorldCanvasPoolApi): void {
+    const world = guardState.worldCanvas;
+    if (!world) {
+        return;
+    }
+    let container = pool.pool.find((row) => row.canvas === world) as SealedPoolContainer | undefined;
+    if (!container) {
+        container = {
+            parent: guardState.worldParent ?? WORLD_SLOT_SENTINEL,
+            canvas: world,
+        };
+        pool.pool.push(container);
+    }
+    if (container.__hbWorldSlotSealed) {
+        if (!container.parent) {
+            container.parent = guardState.worldParent ?? WORLD_SLOT_SENTINEL;
+        }
+        return;
+    }
+    let parent = container.parent || guardState.worldParent || WORLD_SLOT_SENTINEL;
+    Object.defineProperty(container, 'parent', {
+        configurable: true,
+        enumerable: true,
+        get() {
+            return parent || guardState.worldParent || WORLD_SLOT_SENTINEL;
+        },
+        set(next: unknown) {
+            if (next == null) {
+                parent = guardState.worldParent || WORLD_SLOT_SENTINEL;
+                return;
+            }
+            if (
+                next !== guardState.worldParent
+                && next !== guardState.worldCanvas
+                && next !== WORLD_SLOT_SENTINEL
+            ) {
+                return;
+            }
+            parent = next;
+        },
+    });
+    container.__hbWorldSlotSealed = true;
+}
+
 /** Keep the world slot occupied so `create` will not reuse `game.canvas`. */
 export function occupyWorldCanvasPoolSlot(pool: WorldCanvasPoolApi): void {
     const world = guardState.worldCanvas;
     if (!world) {
         return;
     }
+    sealWorldCanvasPoolSlot(pool);
     for (const container of pool.pool) {
         // Phaser `first()` treats any falsy parent as free.
         if (container.canvas === world && !container.parent) {
             container.parent = guardState.worldParent ?? WORLD_SLOT_SENTINEL;
         }
     }
+}
+
+/**
+ * HTMLCanvasElement: assigning `width`/`height` clears pixels even when the
+ * value is unchanged (Scale.refresh / F7 book close). Pool `remove` writes 1×1.
+ * Refuse those writes so select/prepare cannot wipe the live FOV buffer.
+ */
+export function lockWorldCanvasPresentationSize(canvas: WorldCanvasLike | undefined): void {
+    if (!canvas || (canvas as SizeLockedCanvas).__hbWorldCanvasSizeLock) {
+        return;
+    }
+    const proto = Object.getPrototypeOf(canvas) as object | undefined;
+    const widthDesc = Object.getOwnPropertyDescriptor(canvas, 'width')
+        ?? (proto ? Object.getOwnPropertyDescriptor(proto, 'width') : undefined);
+    const heightDesc = Object.getOwnPropertyDescriptor(canvas, 'height')
+        ?? (proto ? Object.getOwnPropertyDescriptor(proto, 'height') : undefined);
+
+    let width = canvas.width;
+    let height = canvas.height;
+    const nativeGetWidth = widthDesc?.get?.bind(canvas);
+    const nativeSetWidth = widthDesc?.set?.bind(canvas);
+    const nativeGetHeight = heightDesc?.get?.bind(canvas);
+    const nativeSetHeight = heightDesc?.set?.bind(canvas);
+
+    Object.defineProperty(canvas, 'width', {
+        configurable: true,
+        enumerable: true,
+        get() {
+            return nativeGetWidth ? nativeGetWidth() : width;
+        },
+        set(next: number) {
+            const n = Number(next);
+            const current = nativeGetWidth ? nativeGetWidth() : width;
+            if (!Number.isFinite(n) || n <= 1 || n === current) {
+                return;
+            }
+            width = n;
+            nativeSetWidth?.(n);
+        },
+    });
+    Object.defineProperty(canvas, 'height', {
+        configurable: true,
+        enumerable: true,
+        get() {
+            return nativeGetHeight ? nativeGetHeight() : height;
+        },
+        set(next: number) {
+            const n = Number(next);
+            const current = nativeGetHeight ? nativeGetHeight() : height;
+            if (!Number.isFinite(n) || n <= 1 || n === current) {
+                return;
+            }
+            height = n;
+            nativeSetHeight?.(n);
+        },
+    });
+    (canvas as SizeLockedCanvas).__hbWorldCanvasSizeLock = true;
 }
 
 export function createDetachedCanvas(width: number, height: number): WorldCanvasLike {
@@ -217,6 +330,7 @@ export function protectWorldCanvasInPool(
 ): void {
     guardState.worldCanvas = worldCanvas;
     guardState.worldParent = worldParent;
+    lockWorldCanvasPresentationSize(worldCanvas);
     occupyWorldCanvasPoolSlot(pool);
     wrapCreate(pool, pool.create.bind(pool));
     wrapCreate2D(pool);
@@ -251,6 +365,21 @@ export function refuseWorldCanvasTextureBind(
 }
 
 /**
+ * `generateTexture` snapshots the live renderer (`game.canvas`). Later blit
+ * of that key blacks the map. Soft-cast confirm must not take that snapshot.
+ */
+export function refuseWorldCanvasGenerateTexture(textures: TextureBindApi | undefined): void {
+    if (!textures?.generateTexture || isGuarded(textures.generateTexture)) {
+        return;
+    }
+    const wrapped = function (..._args: unknown[]): boolean {
+        return false;
+    };
+    markGuarded(wrapped);
+    textures.generateTexture = wrapped;
+}
+
+/**
  * Point the global pool + TextureManager at this game's presentation canvas.
  * `pool` is required the first time (Phaser.Display.Canvas.CanvasPool).
  */
@@ -261,8 +390,23 @@ export function attachWorldCanvasPoolGuard(
     if (!game.canvas) {
         return;
     }
+    lockWorldCanvasPresentationSize(game.canvas);
     if (pool) {
         protectWorldCanvasInPool(pool, game.canvas, game);
     }
     refuseWorldCanvasTextureBind(game.textures, game.canvas);
+    refuseWorldCanvasGenerateTexture(game.textures);
+}
+
+/** Snapshot → run → restore if Magias confirm/select stole the FOV buffer. */
+export function withWorldCanvasBoxGuard<T>(
+    canvas: WorldCanvasLike | undefined,
+    fn: () => T,
+): T {
+    const box = snapshotWorldCanvasBox(canvas);
+    try {
+        return fn();
+    } finally {
+        restoreWorldCanvasBoxIfStolen(canvas, box);
+    }
 }

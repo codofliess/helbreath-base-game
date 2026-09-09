@@ -32,10 +32,7 @@ import {
     shouldAdvanceCastToReady,
     shouldSkipCastCanvasWorkOnState,
 } from '../../utils/castPresentation';
-import {
-    restoreWorldCanvasBoxIfStolen,
-    snapshotWorldCanvasBox,
-} from '../../utils/worldCanvasPoolGuard';
+import { withWorldCanvasBoxGuard } from '../../utils/worldCanvasPoolGuard';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -185,8 +182,11 @@ export class Player extends GameObject {
     private castStartedAtMs = 0;
 
     /**
-     * True when Cast skipped applyStateAppearance / shadow (fail-closed).
-     * Idle may still be looping — CastReady must then use elapsed time only.
+     * True when Magias skipped applyStateAppearance / shadow (fail-closed).
+     * Armed on requestCast (Cast *and* soft-cast / animation OFF). Idle may
+     * still be looping — CastReady uses elapsed time only. Confirm vs mob
+     * must keep this set through switchToIdle / turnTowardsDirection so Idle
+     * does not rebind a leftover world-canvas alias (select PASS, confirm FAIL).
      */
     private castAppearanceSkipped = false;
 
@@ -861,16 +861,6 @@ export class Player extends GameObject {
         // Destroy casting circle effect when leaving Cast state
         if (previousState === PlayerState.Cast && newState !== PlayerState.Cast) {
             this.destroyCastingCircleEffect();
-            if (newState !== PlayerState.CastReady) {
-                this.castAppearanceSkipped = false;
-            }
-        }
-        if (
-            previousState === PlayerState.CastReady
-            && newState !== PlayerState.Cast
-            && newState !== PlayerState.CastReady
-        ) {
-            this.castAppearanceSkipped = false;
         }
 
         const stepMsForAnim = this.moving ? this.activeStepDurationMs : this.movementSpeedMs;
@@ -900,18 +890,27 @@ export class Player extends GameObject {
                 appearanceAnimConfig.bowStanceAnimationDurationMs = this.remoteBowStanceAnimationDurationMs;
             }
         }
+        const idleFromSkippedCast =
+            this.castAppearanceSkipped
+            && (newState === PlayerState.IdlePeaceMode || newState === PlayerState.IdleCombatMode);
         const skipCastCanvasWork = shouldSkipCastCanvasWorkOnState(
             newState === PlayerState.Cast
                 ? 'Cast'
                 : newState === PlayerState.CastReady
                     ? 'CastReady'
-                    : 'Idle',
+                    : idleFromSkippedCast
+                        ? 'IdleFromCast'
+                        : 'Idle',
         );
         if (!skipCastCanvasWork) {
             try {
                 this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
             } catch (error) {
-                if (newState === PlayerState.Cast || newState === PlayerState.CastReady) {
+                if (
+                    newState === PlayerState.Cast
+                    || newState === PlayerState.CastReady
+                    || idleFromSkippedCast
+                ) {
                     console.warn('[Player] Cast appearance skipped (fail-closed)', error);
                 } else {
                     throw error;
@@ -928,12 +927,27 @@ export class Player extends GameObject {
             try {
                 this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
             } catch (error) {
-                if (newState === PlayerState.Cast || newState === PlayerState.CastReady) {
+                if (
+                    newState === PlayerState.Cast
+                    || newState === PlayerState.CastReady
+                    || idleFromSkippedCast
+                ) {
                     console.warn('[Player] Cast shadow skipped (fail-closed)', error);
                 } else {
                     throw error;
                 }
             }
+        }
+
+        // Remotes: skip this Idle rebind, then drop the latch. Do not call
+        // finishSkippedCastAppearance — that would end the *local* Magias ritual.
+        if (
+            !this.isLocalPlayer
+            && this.castAppearanceSkipped
+            && newState !== PlayerState.Cast
+            && newState !== PlayerState.CastReady
+        ) {
+            this.castAppearanceSkipped = false;
         }
     }
 
@@ -1050,6 +1064,7 @@ export class Player extends GameObject {
         this.correctionStartOffsetY = undefined;
         this.correctionDurationMs = undefined;
         this.clearSpellState();
+        this.finishSkippedCastAppearance();
         if (this.currentState === PlayerState.Cast) {
             this.soundTracker.stopSound(PlayerState.Cast);
         }
@@ -1089,6 +1104,7 @@ export class Player extends GameObject {
         this.correctionStartOffsetY = undefined;
         this.correctionDurationMs = undefined;
         this.clearSpellState();
+        this.finishSkippedCastAppearance();
         if (this.currentState === PlayerState.Cast) {
             this.soundTracker.stopSound(PlayerState.Cast);
         }
@@ -1175,6 +1191,7 @@ export class Player extends GameObject {
         this.correctionStartOffsetY = undefined;
         this.correctionDurationMs = undefined;
         this.clearSpellState();
+        this.finishSkippedCastAppearance();
         this.movement.pendingSyncCommands = [];
         this.movement.pendingRemoteIdleSwitchMs = undefined;
         if (this.currentState === PlayerState.Cast) {
@@ -1246,6 +1263,7 @@ export class Player extends GameObject {
         this.dashMode = false;
         this.queuedDashModeForNextMove = undefined;
         this.clearSpellState();
+        this.finishSkippedCastAppearance();
         if (this.currentState === PlayerState.Cast) {
             this.soundTracker.stopSound(PlayerState.Cast);
         }
@@ -1515,9 +1533,7 @@ export class Player extends GameObject {
      * Always stops movement immediately and starts cast (no finish-the-walk).
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
-        const worldCanvas = this.scene.game?.canvas;
-        const worldBox = snapshotWorldCanvasBox(worldCanvas);
-        try {
+        withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
             if (this.dead || this.hasPendingSpell()) {
                 endMagiasRitual();
                 return;
@@ -1537,6 +1553,12 @@ export class Player extends GameObject {
             this.hardStopForCast();
             this.pendingSpellId = spellId;
             this.pendingUseCastAnimation = useCastAnimation;
+            // Soft-cast (animation OFF) never enters Cast, so Cast-enter cannot
+            // arm this latch. Confirm vs mob / click-through SELECT still
+            // switchToIdle + turnTowardsDirection.
+            this.castAppearanceSkipped =
+                shouldSkipCastCanvasWorkOnState('Cast')
+                || shouldSkipCastCanvasWorkOnState('IdleFromCast');
             if (useCastAnimation) {
                 this.switchPlayerState(PlayerState.Cast, true);
                 this.emitCastStarted(spellId);
@@ -1546,11 +1568,7 @@ export class Player extends GameObject {
                     this.tryAutoConfirmSelfSpell();
                 }
             }
-        } finally {
-            // Pool steal / addCanvas(game.canvas) can 1×1 the presentation
-            // buffer on Missile select. Restore FOV size so the next frame paints.
-            restoreWorldCanvasBoxIfStolen(worldCanvas, worldBox);
-        }
+        });
     }
 
     /** Self-target spells (Recall, Heal, shields…) fire immediately without a ground click. */
@@ -1565,21 +1583,22 @@ export class Player extends GameObject {
         const spellId = this.pendingSpellId;
         this.pendingSpellId = undefined;
         this.pendingUseCastAnimation = false;
-        if (this.currentState === PlayerState.CastReady || this.currentState === PlayerState.Cast) {
+        try {
             this.switchToIdle();
+            this.activeSpellName = undefined;
+            const originPixelX = this.getAnimatedPixelX();
+            const originPixelY = this.getAnimatedPixelY();
+            EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
+                spellId,
+                originPixelX,
+                originPixelY,
+                targetPixelX: originPixelX,
+                targetPixelY: originPixelY,
+            });
+            EventBus.emit(OUT_UI_CAST_REMOVED);
+        } finally {
+            this.finishSkippedCastAppearance();
         }
-        this.activeSpellName = undefined;
-        endMagiasRitual();
-        const originPixelX = this.getAnimatedPixelX();
-        const originPixelY = this.getAnimatedPixelY();
-        EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
-            spellId,
-            originPixelX,
-            originPixelY,
-            targetPixelX: originPixelX,
-            targetPixelY: originPixelY,
-        });
-        EventBus.emit(OUT_UI_CAST_REMOVED);
     }
 
     /**
@@ -1593,44 +1612,46 @@ export class Player extends GameObject {
         if (this.pendingUseCastAnimation && this.currentState !== PlayerState.CastReady) {
             return false;
         }
-        // Confirming aim must never path-run to the click cell.
-        this.hardStopForCast();
-        const spellId = this.pendingSpellId;
-        this.pendingSpellId = undefined;
-        this.pendingUseCastAnimation = false;
-        if (this.currentState === PlayerState.CastReady) {
-            this.switchToIdle();
-        }
-        this.activeSpellName = undefined;
-        endMagiasRitual();
-        
-        // Turn player towards the spell target direction (same logic as right-click in idle mode)
-        const originPixelX = this.getAnimatedPixelX();
-        const originPixelY = this.getAnimatedPixelY();
-        const targetWorldX = convertPixelPosToWorldPos(cursorPixelX);
-        const targetWorldY = convertPixelPosToWorldPos(cursorPixelY);
-        
-        const direction = getNextDirection(
-            this.worldX,
-            this.worldY,
-            targetWorldX,
-            targetWorldY
-        );
-        
-        // Turn player towards cursor direction
-        if (direction !== Direction.None) {
-            this.turnTowardsDirection(direction);
-        }
-        
-        EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
-            spellId,
-            originPixelX,
-            originPixelY,
-            targetPixelX: cursorPixelX,
-            targetPixelY: cursorPixelY,
+        return withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
+            // Confirming aim must never path-run to the click cell.
+            this.hardStopForCast();
+            const spellId = this.pendingSpellId;
+            this.pendingSpellId = undefined;
+            this.pendingUseCastAnimation = false;
+            try {
+                this.switchToIdle();
+                this.activeSpellName = undefined;
+
+                const originPixelX = this.getAnimatedPixelX();
+                const originPixelY = this.getAnimatedPixelY();
+                const targetWorldX = convertPixelPosToWorldPos(cursorPixelX);
+                const targetWorldY = convertPixelPosToWorldPos(cursorPixelY);
+
+                const direction = getNextDirection(
+                    this.worldX,
+                    this.worldY,
+                    targetWorldX,
+                    targetWorldY,
+                );
+
+                if (direction !== Direction.None) {
+                    this.turnTowardsDirection(direction);
+                }
+
+                EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
+                    spellId,
+                    originPixelX,
+                    originPixelY,
+                    targetPixelX: cursorPixelX,
+                    targetPixelY: cursorPixelY,
+                });
+                EventBus.emit(OUT_UI_CAST_REMOVED);
+                return true;
+            } finally {
+                // After emit: confirm listeners (aim-assist / local VFX) ran under the ritual.
+                this.finishSkippedCastAppearance();
+            }
         });
-        EventBus.emit(OUT_UI_CAST_REMOVED);
-        return true;
     }
 
     /**
@@ -1658,7 +1679,7 @@ export class Player extends GameObject {
         this.soundTracker.playOnceUntracked(SPELL_CAST_FAILED);
 
         if (!this.hasPendingSpell()) {
-            endMagiasRitual();
+            this.finishSkippedCastAppearance();
             return;
         }
         this.clearSpellState();
@@ -1668,6 +1689,7 @@ export class Player extends GameObject {
             }
             this.switchToIdle();
         }
+        this.finishSkippedCastAppearance();
         EventBus.emit(OUT_UI_CAST_REMOVED);
     }
 
@@ -1686,6 +1708,7 @@ export class Player extends GameObject {
             }
             this.switchToIdle();
         }
+        this.finishSkippedCastAppearance();
         if (this.isLocalPlayer) {
             getNetworkManager(this.scene.game)?.sendSpellCastCancelRequest();
         }
@@ -1710,6 +1733,7 @@ export class Player extends GameObject {
             }
             this.switchToIdle();
         }
+        this.finishSkippedCastAppearance();
         EventBus.emit(OUT_UI_CAST_REMOVED);
     }
 
@@ -1988,6 +2012,7 @@ export class Player extends GameObject {
         this.markCurrentTileOccupied();
 
         this.clearSpellState();
+        this.finishSkippedCastAppearance();
 
         const initialShadowSpriteSheetIndex = this.appearanceManager.getShadowSpriteSheetIndex(PlayerState.IdlePeaceMode, this.direction);
         this.shadowManager = new ShadowManager({
@@ -2027,6 +2052,7 @@ export class Player extends GameObject {
 
         if (this.hasPendingSpell()) {
             this.clearSpellState();
+            this.finishSkippedCastAppearance();
             if (this.currentState === PlayerState.Cast) {
                 this.soundTracker.stopSound(PlayerState.Cast);
             }
@@ -3629,13 +3655,21 @@ export class Player extends GameObject {
         EventBus.emit(PLAYER_CAST_ANIMATION_STARTED, { spellId });
     }
 
+    /**
+     * After confirm/cancel idle apply (still skipped while the latch is set),
+     * drop the skip flag and ungated FloatingText.
+     */
+    private finishSkippedCastAppearance(): void {
+        this.castAppearanceSkipped = false;
+        endMagiasRitual();
+    }
+
     private clearSpellState(): void {
         this.pendingSpellId = undefined;
         this.queuedCastSpellId = undefined;
         this.pendingUseCastAnimation = true;
         this.queuedCastUseAnimation = true;
         this.activeSpellName = undefined;
-        endMagiasRitual();
     }
 
     /**

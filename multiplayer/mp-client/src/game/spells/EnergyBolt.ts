@@ -9,6 +9,8 @@ import { calculateSpatialAudio } from '../../utils/SpatialAudioUtils';
 import type { SoundManager } from '../../utils/SoundManager';
 import type { CameraManager } from '../../utils/CameraManager';
 import { LightningBlast } from './LightningBlast';
+import { loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from '../../utils/EffectAssets';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
 
 export type EnergyBoltConfig = {
     /** Projectile speed in pixels per second */
@@ -27,20 +29,22 @@ export type EnergyBoltConfig = {
 const ENERGY_BOLT_ORIGIN_OFFSET_Y = 50;
 
 /**
- * Energy Bolt spell. Fires a single projectile from origin (pixels) to target (world cell).
- * Uses Energy Bolt Projectile effect (sprite effect index 0, frames 2-5). On arrival, plays Energy Bolt Explosion.
+ * Energy Bolt / Magic Missile projectile. Travels origin (pixels) → target cell.
+ * Uses effect sheet 0 frames 2–5; impact is Energy Bolt Explosion.
+ * Must not bind `sprite-effect-0` when that key is a world-canvas alias (F5 class).
  */
 export class EnergyBolt {
     private scene: Scene;
     private config: EnergyBoltConfig;
-    private asset: GameAsset;
+    private asset: GameAsset | undefined;
     private originX: number;
     private originY: number;
     private destPixelX: number;
     private destPixelY: number;
     private totalDistance: number;
     private traveledDistance: number = 0;
-    private updateCallback: (time: number, delta: number) => void;
+    private updateCallback: ((time: number, delta: number) => void) | undefined;
+    private destroyed = false;
 
     constructor(
         scene: Scene,
@@ -65,9 +69,44 @@ export class EnergyBolt {
         );
 
         const projectileConfig = getEffectByKey(ENERGY_BOLT_PROJECTILE);
-        const textureKey = getTextureKeyFromEffectConfig(projectileConfig!);
-        const [startFrame, endFrame] = projectileConfig!.animationFrames ?? [2, 5];
-        const frameRate = projectileConfig!.frameRate ?? 20;
+        if (!projectileConfig) {
+            this.destroyed = true;
+            return;
+        }
+        const textureKey = getTextureKeyFromEffectConfig(projectileConfig);
+        removeWorldCanvasAliasedTexture(scene, textureKey);
+
+        if (isSafeDrawableTexture(scene, textureKey)) {
+            this.bindProjectile(projectileConfig, textureKey);
+            return;
+        }
+
+        if (!shouldLoadEffectAssetsOnDemand()) {
+            this.destroyed = true;
+            return;
+        }
+        void loadEffectAssetsOnDemand(scene, projectileConfig)
+            .then(() => {
+                if (this.destroyed) {
+                    return;
+                }
+                removeWorldCanvasAliasedTexture(this.scene, textureKey);
+                if (!isSafeDrawableTexture(this.scene, textureKey)) {
+                    return;
+                }
+                this.bindProjectile(projectileConfig, textureKey);
+            })
+            .catch((error) => {
+                console.warn('[EnergyBolt] Failed to lazy-load effect.spr sheet 0', error);
+            });
+    }
+
+    private bindProjectile(
+        projectileConfig: NonNullable<ReturnType<typeof getEffectByKey>>,
+        textureKey: string,
+    ): void {
+        const [startFrame, endFrame] = projectileConfig.animationFrames ?? [2, 5];
+        const frameRate = projectileConfig.frameRate ?? 20;
 
         const animKey = ensureEffectAnimation(this.scene, textureKey, {
             frameRate,
@@ -77,11 +116,11 @@ export class EnergyBolt {
             animKey: `${textureKey}-projectile-${startFrame}-${endFrame}`,
         });
 
-        this.asset = new GameAsset(scene, {
+        this.asset = new GameAsset(this.scene, {
             x: this.originX,
             y: this.originY,
-            spriteName: 'effect',
-            spriteSheetIndex: 0,
+            spriteName: projectileConfig.sprite,
+            spriteSheetIndex: projectileConfig.spriteSheetIndex,
             frameIndex: startFrame,
         });
 
@@ -109,6 +148,9 @@ export class EnergyBolt {
     }
 
     private update(delta: number): void {
+        if (!this.asset) {
+            return;
+        }
         const speedPxPerMs = this.config.projectileSpeed / 1000;
         const moveDistance = speedPxPerMs * delta;
         this.traveledDistance += moveDistance;
@@ -140,7 +182,12 @@ export class EnergyBolt {
     }
 
     public destroy(): void {
-        this.scene.events.off('update', this.updateCallback);
-        this.asset.destroy();
+        this.destroyed = true;
+        if (this.updateCallback) {
+            this.scene.events.off('update', this.updateCallback);
+            this.updateCallback = undefined;
+        }
+        this.asset?.destroy();
+        this.asset = undefined;
     }
 }

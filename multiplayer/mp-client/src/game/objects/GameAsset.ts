@@ -16,6 +16,7 @@ import {
     isPlayerItemAppearanceLoadInFlight,
 } from '../../utils/ItemAssets';
 import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
+import { isSafeDrawableTexture, isWorldCanvasTextureKey, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
 import { getPivotData, isDebugModeEnabled } from '../../utils/RegistryUtils';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { IN_DEBUG_MODE_CHANGE, OUT_UI_HOVER_SPRITE_FRAME_DEBUG } from '../../constants/EventNames';
@@ -155,6 +156,11 @@ export class GameAsset {
         }
 
         // Missing sheet must not throw — that aborts GameWorld / remounts the hub (landing).
+        // A generateTexture / addCanvas alias of the live world canvas is the same class as
+        // F5 settle: binding it as a missile / cast-circle sprite blacks the map.
+        if (!usePendingItemPlaceholder && !config.mapObject && isWorldCanvasTextureKey(scene, textureKey)) {
+            removeWorldCanvasAliasedTexture(scene, textureKey);
+        }
         if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
             if (!config.mapObject) {
                 ensurePendingPlayerItemAppearanceTexture(scene);
@@ -1420,16 +1426,18 @@ export class GameAsset {
     private resolveLoadedPlayerItemTextureKey(): string | undefined {
         if (this.spriteSheetIndex !== undefined) {
             const preferred = `sprite-${this.spriteName}-${this.spriteSheetIndex}`;
-            if (this.scene.textures.exists(preferred)) {
+            if (isSafeDrawableTexture(this.scene, preferred)) {
                 return preferred;
             }
+            removeWorldCanvasAliasedTexture(this.scene, preferred);
         }
         for (let sheetIndex = 0; sheetIndex < 256; sheetIndex++) {
             const candidate = `sprite-${this.spriteName}-${sheetIndex}`;
-            if (this.scene.textures.exists(candidate)) {
+            if (isSafeDrawableTexture(this.scene, candidate)) {
                 this.spriteSheetIndex = sheetIndex;
                 return candidate;
             }
+            removeWorldCanvasAliasedTexture(this.scene, candidate);
         }
         return undefined;
     }

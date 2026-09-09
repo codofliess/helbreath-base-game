@@ -63,10 +63,33 @@ assert(
     'Player must defer F5 capture after gear bind (sync capture can blank the world canvas)',
 );
 assert(
+    /currentState === PlayerState\.Cast/.test(playerTs)
+        && /shouldAdvanceCastToReady/.test(playerTs)
+        && /removeWorldCanvasAliasedTexture/.test(playerTs)
+        && !/\.generateTexture\(/.test(playerTs),
+    'Missile prepare must not generateTexture the world canvas; skip F5 blit in Cast; wait castSpeed if CAST anim never plays',
+);
+const energyBolt = read('src/game/spells/EnergyBolt.ts');
+const effectTs = read('src/game/effects/Effect.ts');
+const effectUtils = read('src/utils/EffectUtils.ts');
+assert(
+    /isSafeDrawableTexture/.test(energyBolt)
+        && /loadEffectAssetsOnDemand/.test(energyBolt)
+        && !/\.generateTexture\(/.test(energyBolt)
+        && /isSafeDrawableTexture/.test(effectTs)
+        && /pendingLazyPlayerItemAppearance/.test(effectTs) === false
+        && /isSafeDrawableTexture/.test(effectUtils),
+    'Cast FX / Missile projectile must refuse a world-canvas texture alias and must not use the paperdoll pending GameAsset',
+);
+assert(
     /Keep pending so the 1/.test(gameAsset) &&
         /ensurePendingPlayerItemAppearanceTexture/.test(gameAsset) &&
         /Missing sheet must not throw/.test(gameAsset),
     'GameAsset.promote must not clear pending when the real sheet is missing; missing player textures must not throw',
+);
+assert(
+    /isWorldCanvasTextureKey/.test(gameAsset) && /removeWorldCanvasAliasedTexture/.test(gameAsset),
+    'GameAsset must not bind a generateTexture alias of the live world canvas (Missile / Heal prepare)',
 );
 
 const bootTs = read('src/game/scenes/Boot.ts');

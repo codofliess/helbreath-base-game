@@ -8,6 +8,7 @@ import { getTextureKeyFromEffectConfig, ensureEffectAnimation } from '../../util
 import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { createLightRadiusOverlay } from '../../utils/SpriteUtils';
 import { loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from '../../utils/EffectAssets';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
 
 const DEFAULT_FRAME_RATE = 10;
 
@@ -43,7 +44,7 @@ export type EffectCreateConfig = {
  * Destroys when the animation reaches its end frame.
  */
 export class Effect {
-    private asset: GameAsset;
+    private asset: GameAsset | undefined;
     private overlaySprite: Phaser.GameObjects.Sprite | undefined;
     private onDestroyCallback?: () => void;
     private depthOffset: number;
@@ -66,18 +67,18 @@ export class Effect {
 
         const frameRate = providedFrameRate ?? (config.frameRate ?? DEFAULT_FRAME_RATE);
         const textureKey = getTextureKeyFromEffectConfig(config);
+        removeWorldCanvasAliasedTexture(scene, textureKey);
 
-        if (shouldLoadEffectAssetsOnDemand() && !scene.textures.exists(textureKey)) {
+        // Missing / world-canvas-aliased FX must not construct a GameAsset (pending
+        // without a sheet index throws; a world-canvas bind blacks the map).
+        if (
+            (shouldLoadEffectAssetsOnDemand() && !scene.textures.exists(textureKey))
+            || !isSafeDrawableTexture(scene, textureKey)
+        ) {
             void loadEffectAssetsOnDemand(scene, config).catch((error) => {
                 console.warn(`[Effect] Failed to lazy-load '${config.sprite}'`, error);
             });
-            this.asset = new GameAsset(scene, {
-                x: drawX,
-                y: drawY,
-                spriteName: config.sprite,
-                pendingLazyPlayerItemAppearance: true,
-            });
-            this.destroy();
+            this.destroyed = true;
             return;
         }
 
@@ -111,7 +112,7 @@ export class Effect {
 
         // Create GameAsset with first frame (static) to avoid auto-play
         const scale = config.scale ?? 1;
-        this.asset = new GameAsset(scene, {
+        const asset = new GameAsset(scene, {
             x: drawX,
             y: drawY,
             spriteName: config.sprite,
@@ -119,10 +120,11 @@ export class Effect {
             frameIndex: initialTextureFrame,
             ...(scale !== 1 ? { scaleX: scale, scaleY: scale } : {}),
         });
+        this.asset = asset;
 
         // Use world Y position for depth (same as Player, Monster, map objects)
         const worldY = usePlayerDepthForDepth && playerWorldY != null ? playerWorldY : convertPixelPosToWorldPos(drawY);
-        this.asset.setDepth(worldY * DEPTH_MULTIPLIER + this.depthOffset);
+        asset.setDepth(worldY * DEPTH_MULTIPLIER + this.depthOffset);
 
         if (config.drawLightRadius) {
             this.overlaySprite = createLightRadiusOverlay(scene, drawX, drawY);
@@ -141,10 +143,10 @@ export class Effect {
         // Stop default animation and play our custom one (from initial frame if specified)
         // Phaser's startFrame is the index within the animation's frames array (0-based), NOT the texture frame index
         const animationFrameIndex = initialTextureFrame - startFrame;
-        this.asset.sprite.anims.stop();
+        asset.sprite.anims.stop();
         let playOk = false;
         try {
-            this.asset.sprite.play({
+            asset.sprite.play({
                 key: effectAnimKey,
                 startFrame: animationFrameIndex,
             });
@@ -156,7 +158,7 @@ export class Effect {
         // Destroy when animation completes (only for non-looping effects)
         if (!infiniteLoop) {
             if (playOk) {
-                this.asset.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                asset.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
                     this.destroy();
                 });
             }
@@ -177,12 +179,12 @@ export class Effect {
                 const frameIndex = frame.frame?.name != null ? parseInt(String(frame.frame.name), 10) : frame.index;
                 if (frameIndex >= fadeOutStart) {
                     const progress = remainingFrames > 0 ? (frameIndex - fadeOutStart) / remainingFrames : 1;
-                    this.asset.sprite.setAlpha(1 - progress);
+                    asset.sprite.setAlpha(1 - progress);
                 }
             };
-            this.asset.sprite.on(Phaser.Animations.Events.ANIMATION_UPDATE, onFrameUpdate);
+            asset.sprite.on(Phaser.Animations.Events.ANIMATION_UPDATE, onFrameUpdate);
             this.fadeOutUnsubscribe = () => {
-                this.asset.sprite.off(Phaser.Animations.Events.ANIMATION_UPDATE, onFrameUpdate);
+                asset.sprite.off(Phaser.Animations.Events.ANIMATION_UPDATE, onFrameUpdate);
             };
         }
 
@@ -208,6 +210,9 @@ export class Effect {
      * @param pixelY - New Y coordinate in pixels
      */
     public setPosition(pixelX: number, pixelY: number): void {
+        if (!this.asset) {
+            return;
+        }
         const drawX = pixelX + this.offsetX;
         const drawY = pixelY + this.offsetY;
         this.asset.setPosition(drawX, drawY);
@@ -236,6 +241,7 @@ export class Effect {
             this.overlaySprite.destroy();
             this.overlaySprite = undefined;
         }
-        this.asset.destroy();
+        this.asset?.destroy();
+        this.asset = undefined;
     }
 }

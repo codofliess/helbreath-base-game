@@ -2,7 +2,10 @@ using Server.Utils;
 
 namespace Server.Helpers;
 
-/// <summary>Maintains a rolling buffer of ping interval deltas and exposes the maximum delta magnitude in the window for kick and movement tolerance.</summary>
+/// <summary>
+/// Rolling buffer of ping-interval deltas. Window max is for movement/cast slack;
+/// the latest interval delta is what ping-kick uses so one hitch cannot poison 20 samples.
+/// </summary>
 public sealed class PlayerPingTracker {
     private readonly int sampleSize;
     /// <summary>Ring of |actualInterval - expectedInterval| samples in receive order until full.</summary>
@@ -12,6 +15,13 @@ public sealed class PlayerPingTracker {
     private long lastPingTimeMs;
     /// <summary>Latest computed spread statistic (max of delta magnitudes in the sample window).</summary>
     private double pingVariance;
+    /// <summary>Most recent |actualInterval - expectedInterval|; 0 before the second ping.</summary>
+    private long lastIntervalDeltaMs;
+
+    public double PingVariance => pingVariance;
+    public long LastPingTimeMs => lastPingTimeMs;
+    /// <summary>Latest ping-interval delta magnitude in ms; 0 when fewer than two pings have been recorded.</summary>
+    public long LastIntervalDeltaMs => lastIntervalDeltaMs;
 
     public PlayerPingTracker(int sampleSize) {
         if (sampleSize <= 0) {
@@ -22,12 +32,10 @@ public sealed class PlayerPingTracker {
         varianceScratch = new long[sampleSize];
     }
 
-    public double PingVariance => pingVariance;
-    public long LastPingTimeMs => lastPingTimeMs;
-
     public void Reset() {
         lastPingTimeMs = 0;
         pingVariance = 0;
+        lastIntervalDeltaMs = 0;
         deltaSamples = new RingBuffer<long>(sampleSize);
     }
 
@@ -41,6 +49,7 @@ public sealed class PlayerPingTracker {
         if (lastPingTimeMs > 0) {
             var delta = currentMs - lastPingTimeMs;
             pingDelta = Math.Abs(delta - pingIntervalMs);
+            lastIntervalDeltaMs = pingDelta.Value;
             AddDeltaSample(pingDelta.Value);
         }
         lastPingTimeMs = currentMs;

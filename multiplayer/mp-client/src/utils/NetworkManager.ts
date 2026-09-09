@@ -79,6 +79,11 @@ import {
 import { EventBus, type ToastRequestedEvent } from '../game/EventBus';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { buildGameWebSocketUrl } from './gameWebSocketUrl';
+import {
+    nextPingSequenceUint32,
+    pingResponseMatchesPending,
+    shouldSendClientPing,
+} from './pingInFlight';
 import { runSafeSync } from './SafeEntry';
 import {
     CAST_AOE_SPELL_RECEIVED,
@@ -740,13 +745,12 @@ export class NetworkManager {
                     runSafeSync('NetworkManager:close', () => {
                         console.log('[NetworkManager] WebSocket connection closed.');
                         this.clearPingInterval();
-                        this.pingSentAt = undefined;
+                        this.clearInFlightPing();
                         this.latestPing = undefined;
                         this.latestPingVariance = undefined;
                         this.latestGameWorldQueueLength = undefined;
                         this.latestPlayersInMap = undefined;
                         this.currentGameWorldId = undefined;
-                        this.pendingPingSequence = undefined;
                         this.selfPlayerId = undefined;
                         this.selfTemporaryEffects.clear();
                         this.pendingSpawnProtectionForSelf = false;
@@ -1414,8 +1418,8 @@ export class NetworkManager {
             }
 
             this.clearPingInterval();
+            this.clearInFlightPing();
             this.clearLogoutCountdown();
-            this.pendingPingSequence = undefined;
             this.currentGameWorldId = undefined;
             this.selfPlayerId = undefined;
             this.selfTemporaryEffects.clear();
@@ -1629,12 +1633,22 @@ export class NetworkManager {
         }
     }
 
+    /** Drops the RTT lock so the next interval can send even if a response never matched. */
+    private clearInFlightPing(): void {
+        this.pingSentAt = undefined;
+        this.pendingPingSequence = undefined;
+    }
+
     private sendPing(): void {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN || this.pingSentAt !== undefined) {
+        const socketOpen = !!this.socket && this.socket.readyState === WebSocket.OPEN;
+        const now = performance.now();
+        if (!shouldSendClientPing(socketOpen, this.pingSentAt, now, this.pingIntervalMs)) {
             return;
         }
+        this.clearInFlightPing();
 
-        const sequence = this.nextPingSequence++;
+        const { sequence, next } = nextPingSequenceUint32(this.nextPingSequence);
+        this.nextPingSequence = next;
         const command = ClientMessage.encode({
             payload: {
                 $case: 'pingRequest',
@@ -1645,8 +1659,8 @@ export class NetworkManager {
         }).finish();
 
         this.pendingPingSequence = sequence;
-        this.pingSentAt = performance.now();
-        this.sendPacket(command);
+        this.pingSentAt = now;
+        this.sendPacket(command, false, 'high', 'pingRequest');
     }
 
     private sleep(ms: number): Promise<void> {
@@ -2195,15 +2209,17 @@ export class NetworkManager {
     }
 
     private handlePingResponse(pingResponse: PingResponse): void {
-        if (this.pingSentAt === undefined || this.pendingPingSequence !== pingResponse.sequence) {
+        const sentAt = this.pingSentAt;
+        if (!pingResponseMatchesPending(sentAt, this.pendingPingSequence, pingResponse.sequence) || sentAt === undefined) {
+            // Stale or mismatched sequence must not hold the send lock.
+            this.clearInFlightPing();
             return;
         }
-        this.latestPing = Math.round(performance.now() - this.pingSentAt);
+        this.latestPing = Math.round(performance.now() - sentAt);
         this.latestPingVariance = pingResponse.pingVariance;
         this.latestGameWorldQueueLength = pingResponse.gameWorldQueueLength;
         this.latestPlayersInMap = pingResponse.playersInMap;
-        this.pendingPingSequence = undefined;
-        this.pingSentAt = undefined;
+        this.clearInFlightPing();
     }
 
     private handleInitialState(data: InitialState): void {
@@ -2296,6 +2312,7 @@ export class NetworkManager {
 
         if (data.pingIntervalMs > 0) {
             this.pingIntervalMs = data.pingIntervalMs;
+            this.clearInFlightPing();
             this.startPingInterval();
             this.sendPing();
         }

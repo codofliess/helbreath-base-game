@@ -693,7 +693,10 @@ public static class GamePersistence {
 
         var scoreA = PersistenceProgressScore(a);
         var scoreB = PersistenceProgressScore(b);
-        return scoreB > scoreA ? b : a;
+        var winner = scoreB > scoreA ? b : a;
+        var loser = ReferenceEquals(winner, a) ? b : a;
+        // PreferFresher can drop a MAGO grant that only landed on the lower-XP store.
+        return MagicBookSync.MergeGrantFields(winner, loser);
     }
 
     static long PersistenceProgressScore(PlayerPersistenceState state) {

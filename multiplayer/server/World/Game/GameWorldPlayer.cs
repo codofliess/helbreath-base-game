@@ -1111,6 +1111,10 @@ public class GameWorldPlayer : GameWorldActionableEntity {
             inventoryManager.TryUnequipAllGenderMismatchedEquipment(genderValue, out _);
             inventoryManager.TryUnequipAllTypeMismatchedEquipment(out _);
         }
+        // Ops sometimes write persist Gold=N without bag item 90 Quantity. Gandalf spends item 90 only.
+        if (state.Gold > 0) {
+            inventoryManager.EnsureGoldAtLeast(state.Gold);
+        }
         if (!string.IsNullOrWhiteSpace(state.CharacterName)) {
             SetCharacterName(state.CharacterName);
         }
@@ -1486,7 +1490,8 @@ public class GameWorldPlayer : GameWorldActionableEntity {
             contribution,
             gardenQuestId,
             gardenQuestProgress,
-            rebirthRollback);
+            rebirthRollback,
+            inventoryManager.CountGold());
     }
 
     /// <summary>Add Olympia shard/fragment stack (disenchant / craft).</summary>

@@ -134,7 +134,12 @@ public sealed record PlayerPersistenceState(
     /// <summary>Kills toward the active Garden quest.</summary>
     int GardenQuestProgress = 0,
     /// <summary>Pre-rebirth snapshot for cancel/rollback (Olympia-like undo). Null = no cancel available.</summary>
-    PersistedRebirthRollbackSnapshot? RebirthRollback = null);
+    PersistedRebirthRollbackSnapshot? RebirthRollback = null,
+    /// <summary>
+    /// Ops grant convenience only. F7 / Gandalf spend <b>bag item 90 Quantity</b>, not this scalar.
+    /// On load, if bag gold is 0 and this is &gt; 0, a gold stack is created. Do not double-count.
+    /// </summary>
+    int Gold = 0);
 
 /// <summary>Full character progression snapshot taken immediately before a successful rebirth.</summary>
 public sealed record PersistedRebirthRollbackSnapshot(

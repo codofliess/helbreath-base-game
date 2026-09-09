@@ -6,9 +6,9 @@ using Server.World.Game;
 namespace Server.Helpers;
 
 /// <summary>
-/// Gandalf / Magic Tower: proximity-checked classic spell purchases (gold from bag).
-/// Client sends <see cref="CityNpcServiceRequest"/> with action <c>open</c> or <c>buy_spell</c>
-/// (spell id in <c>donate_gold</c> = Olympia Magic.cfg id).
+/// Gandalf / Magic Tower: proximity-checked classic spell purchases (gold from bag item 90).
+/// Client sends <see cref="CityNpcServiceRequest"/> with action <c>open</c> or <c>learn:ID</c>
+/// (Olympia Magic.cfg id). Join also ACKs <c>learned=</c> so F7 Circle hydrates without talking to Gandalf.
 /// </summary>
 public static class MagicTower {
     public const int GandalfCatalogNpcId = 1;
@@ -158,7 +158,7 @@ public static class MagicTower {
 
         var dist = Math.Max(Math.Abs(player.PosX - npc.PosX), Math.Abs(player.PosY - npc.PosY));
         if (dist > MaxInteractDistance) {
-            Send(player, ok: false, "Move closer to Gandalf.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+            SendBookSnapshot(player, ok: false, "Move closer to Gandalf.");
             return true;
         }
 
@@ -168,12 +168,10 @@ public static class MagicTower {
             $"[MagicTower] {player.CharacterName} action='{actionRaw}' gold={CountGold(player)} hasDonate={request.HasDonateGold} donate={request.DonateGold}");
 
         if (action is "" or "open") {
-            Send(
+            SendBookSnapshot(
                 player,
                 ok: true,
-                "Magic Tower — Learn spends bag gold; Unlearn frees the book slot (no refund).",
-                goldBalance: CountGold(player),
-                learned: player.GetLearnedOlympiaSpellIds());
+                "Magic Tower — Learn spends bag gold; Unlearn frees the book slot (no refund).");
             return true;
         }
 
@@ -194,7 +192,7 @@ public static class MagicTower {
             return true;
         }
 
-        Send(player, ok: false, $"Unknown Magic Tower action '{actionRaw}'.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+        SendBookSnapshot(player, ok: false, $"Unknown Magic Tower action '{actionRaw}'.");
         return true;
     }
 
@@ -219,23 +217,19 @@ public static class MagicTower {
 
     static void HandleBuySpell(GameWorldRef wr, GameWorldPlayer player, int olympiaSpellId) {
         if (!SpellGoldPrices.TryGetValue(olympiaSpellId, out var cost)) {
-            Send(player, ok: false, "That spell is not sold here.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+            SendBookSnapshot(player, ok: false, "That spell is not sold here.");
             return;
         }
 
         if (player.HasLearnedOlympiaSpell(olympiaSpellId)) {
-            Send(player, ok: false, "You already know that magic.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+            // Persist already has the id — still ACK the Olympia book so F7 Circle fills.
+            SendBookSnapshot(player, ok: true, "Already in your book — open F7 Circle.");
             return;
         }
 
         var have = player.InventoryManager.CountGold();
         if (!player.InventoryManager.TrySpendGold(cost, out var spendResult)) {
-            Send(
-                player,
-                ok: false,
-                $"Need {cost} gold (you have {have}).",
-                goldBalance: have,
-                learned: player.GetLearnedOlympiaSpellIds());
+            SendBookSnapshot(player, ok: false, $"Need {cost} gold (you have {have}).");
             return;
         }
 
@@ -252,23 +246,21 @@ public static class MagicTower {
             spellName = cfg.Name;
         }
 
-        Send(
+        SendBookSnapshot(
             player,
             ok: true,
             $"Learned {spellName} for {cost} gold.",
-            goldBalance: CountGold(player),
-            learned: player.GetLearnedOlympiaSpellIds(),
             goldSpent: cost);
     }
 
     static void HandleUnlearnSpell(GameWorldRef wr, GameWorldPlayer player, int olympiaSpellId) {
         if (olympiaSpellId < 0) {
-            Send(player, ok: false, "Pick a spell to unlearn.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+            SendBookSnapshot(player, ok: false, "Pick a spell to unlearn.");
             return;
         }
 
         if (!player.UnlearnOlympiaSpell(olympiaSpellId)) {
-            Send(player, ok: false, "You do not have that magic memorized.", goldBalance: CountGold(player), learned: player.GetLearnedOlympiaSpellIds());
+            SendBookSnapshot(player, ok: false, "You do not have that magic memorized.");
             return;
         }
 
@@ -276,12 +268,7 @@ public static class MagicTower {
         ResyncTravelerSpells(wr, player);
 
         // No gold refund — same as forgetting a scroll/manual in classic play.
-        Send(
-            player,
-            ok: true,
-            "Spell unlearned (no gold refund).",
-            goldBalance: CountGold(player),
-            learned: player.GetLearnedOlympiaSpellIds());
+        SendBookSnapshot(player, ok: true, "Spell unlearned (no gold refund).");
     }
 
     /// <summary>
@@ -294,20 +281,31 @@ public static class MagicTower {
         }
 
         Spawn.SendInitialState(wr, player, includeSpells: true);
+        // InitialState carries Spells.json ids; F7 Circle reads Olympia ids from this ACK.
+        SendBookSnapshot(player, ok: true, "Magic book synced.");
+    }
+
+    /// <summary>
+    /// Pushes persist <c>LearnedOlympiaSpellIds</c> + bag gold (item 90) to the live client
+    /// <c>learnedSpellIds</c> store. Does not open the Gandalf dialog. Skip in tournament arena
+    /// so kit credits are not overwritten by the city book.
+    /// </summary>
+    public static void SendJoinBookSnapshot(GameWorldPlayer player) {
+        ArgumentNullException.ThrowIfNull(player);
+        // GM sandbox starts with the full shop book; this ACK replaces it with persist ids.
+        if (!player.TravelerMode || player.InTournamentArena) {
+            return;
+        }
+
+        SendBookSnapshot(player, ok: true, "Magic book synced.");
     }
 
     static int CountGold(GameWorldPlayer player) => player.InventoryManager.CountGold();
 
-    static void Send(
-        GameWorldPlayer player,
-        bool ok,
-        string message,
-        int goldBalance,
-        IReadOnlyCollection<int> learned,
-        int goldSpent = 0) {
-        var learnedCsv = learned.Count == 0 ? "" : string.Join(',', learned);
-        // For magic-shop, GoldSpent carries current bag gold balance so the client always has a number
-        // even if it fails to parse cityServicesSummary.
+    static void SendBookSnapshot(GameWorldPlayer player, bool ok, string message, int goldSpent = 0) {
+        var goldBalance = CountGold(player);
+        var learned = player.GetLearnedOlympiaSpellIds();
+        // GoldSpent carries current bag gold so the client has a number if summary parse fails.
         NetworkManager.SendToPlayer(
             player,
             NetworkManager.CreateCityNpcServiceResult(
@@ -316,7 +314,7 @@ public static class MagicTower {
                 role: "magic-shop",
                 npcName: "Gandalf",
                 guildInterestRegistered: player.GuildInterestRegistered,
-                cityServicesSummary: $"gold={goldBalance};learned={learnedCsv}",
+                cityServicesSummary: MagicBookSync.FormatCityServicesSummary(goldBalance, learned),
                 citizenshipSide: player.CitizenshipSide ?? "",
                 hp: player.Hp,
                 maxHp: player.MaxHp,

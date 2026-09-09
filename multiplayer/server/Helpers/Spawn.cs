@@ -210,7 +210,7 @@ public static class Spawn {
                 wr.World.CurrentWeather));
     }
 
-    /// <summary>Sends <see cref="Mmorpg.Network.InitialState"/> (spells only on first join / reconnect), then <see cref="Mmorpg.Network.InitialGameWorldState"/>, spawn protection, visibility.</summary>
+    /// <summary>Sends <see cref="Mmorpg.Network.InitialState"/> (spells only on first join / reconnect), then world snapshot, Magic Tower book ACK, spawn protection, visibility.</summary>
     public static void CompletePlayerJoin(GameWorldRef wr, GameWorldPlayer player, bool includeSpellsInInitialState) {
         // Play-mine: first presence of the UTC day earns +1 credit (testing-week friendly).
         HellMining.OnPlayerJoined(player);
@@ -225,6 +225,8 @@ public static class Spawn {
         SpecialAbility.RecomputeFromEquipment(wr, player, notify: false);
         SendInitialState(wr, player, includeSpellsInInitialState);
         SendInitialGameWorldState(wr, player);
+        // Live F7 Circle reads Olympia ids from magic-shop learned= — not InitialState Spells.json ids.
+        MagicTower.SendJoinBookSnapshot(player);
         Progression.SendProgressionState(wr, player);
         Skills.SendSkillsState(player);
         if (player.SpecialAbilityType != 0) {

@@ -77,6 +77,7 @@ assert(
         && /IdleFromCast/.test(playerTs)
         && /MoveDuringPrepare/.test(playerTs)
         && /isMagiasRitualActive/.test(playerTs)
+        && /snapshotWorldCanvasPixels/.test(playerTs)
         && /onLeftClickAt/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
@@ -144,6 +145,9 @@ assert(
         && /canMutateWorldCanvasOnMoveDuringPrepare/.test(castPresentation)
         && /canRebuildMapTilesetOnMagiasPrepare/.test(castPresentation)
         && /MoveDuringPrepare/.test(castPresentation)
+        && /setWorldCanvasClearRefused/.test(castPresentation)
+        && /snapshotWorldCanvasPixels/.test(castPresentation)
+        && /restoreWorldCanvasPixels/.test(castPresentation)
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasOnMoveDuringPrepare')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
@@ -167,6 +171,13 @@ assert(
         && /reassertWorldCanvasPresentationGuard/.test(worldCanvasPoolGuard)
         && /refuseWorldCanvasCreateCanvas/.test(worldCanvasPoolGuard)
         && /__hbWorldCanvasAttrLock/.test(worldCanvasPoolGuard)
+        && /setWorldCanvasClearRefused/.test(worldCanvasPoolGuard)
+        && /refuseFullCanvasClear/.test(worldCanvasPoolGuard)
+        && /lockWorldCanvasRendererClear/.test(worldCanvasPoolGuard)
+        && /clearBeforeRender/.test(worldCanvasPoolGuard)
+        && /postrender/.test(worldCanvasPoolGuard)
+        && /snapshotWorldCanvasPixels/.test(worldCanvasPoolGuard)
+        && /restoreWorldCanvasPixels/.test(worldCanvasPoolGuard)
         && /create2D closes over the \*inner\* create/.test(worldCanvasPoolGuard),
     'World canvas pool guard must wrap CanvasPool remove/create, seal the world slot, lock FOV size, and refuse addCanvas(game.canvas) / generateTexture',
 );
@@ -186,8 +197,10 @@ assert(
 const gameWorldCanvasPresentation = read('src/game/ui/gameWorldCanvasPresentation.ts');
 assert(
     /lockWorldCanvasPresentationSize/.test(gameWorldCanvasPresentation)
-        && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation),
-    'Game-world FOV presentation must lock game.canvas size/getContext (F7 close / Scale.refresh wipe)',
+        && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation)
+        && /isMagiasRitualActive/.test(gameWorldCanvasPresentation)
+        && /canMutateWorldCanvasOnMoveDuringPrepare/.test(gameWorldCanvasPresentation),
+    'Game-world FOV presentation must lock game.canvas size/getContext and skip Scale.refresh during Magias prepare',
 );
 assert(
     /isMagiasRitualActive/.test(mapManager)
@@ -196,14 +209,16 @@ assert(
 );
 assert(
     /isMagiasRitualActive/.test(gameWorld)
-        && /reassertWorldCanvasPresentationGuard/.test(gameWorld),
-    'GameWorld must re-lock the world canvas on camera follow during Magias prepare',
+        && /reassertWorldCanvasPresentationGuard/.test(gameWorld)
+        && /transparent = isMagiasRitualActive\(\)/.test(gameWorld),
+    'GameWorld must re-lock the world canvas and skip camera #000 fill during Magias prepare',
 );
 const mainTsx = read('src/main.tsx');
 assert(
     /isMagiasMoveDuringPrepareKey/.test(mainTsx)
         && /noteMagiasMoveDuringPrepareHotkey/.test(mainTsx)
-        && /reassertWorldCanvasPresentationGuard/.test(mainTsx),
+        && /reassertWorldCanvasPresentationGuard/.test(mainTsx)
+        && /stopImmediatePropagation/.test(mainTsx),
     'WASD / arrows mid-prepare must reassert the world-canvas guard and not confirm the spell',
 );
 const pkgJson = read('package.json');

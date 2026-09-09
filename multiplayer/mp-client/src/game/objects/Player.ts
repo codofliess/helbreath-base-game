@@ -33,7 +33,11 @@ import {
     shouldAdvanceCastToReady,
     shouldSkipCastCanvasWorkOnState,
 } from '../../utils/castPresentation';
-import { reassertWorldCanvasPresentationGuard, withWorldCanvasBoxGuard } from '../../utils/worldCanvasPoolGuard';
+import {
+    reassertWorldCanvasPresentationGuard,
+    snapshotWorldCanvasPixels,
+    withWorldCanvasBoxGuard,
+} from '../../utils/worldCanvasPoolGuard';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -1542,6 +1546,7 @@ export class Player extends GameObject {
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
         withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
+            snapshotWorldCanvasPixels(this.scene.game?.canvas);
             if (this.dead || this.hasPendingSpell()) {
                 endMagiasRitual();
                 return;

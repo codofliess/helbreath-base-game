@@ -2805,6 +2805,11 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
+                // Camera fillRect(#000) is the WASD-mid-prepare wipe after #72:
+                // size-write never fires; Phaser still blacks the FOV then fails to redraw.
+                if (this.cameras?.main) {
+                    this.cameras.main.transparent = isMagiasRitualActive();
+                }
                 if (isMagiasRitualActive()) {
                     reassertWorldCanvasPresentationGuard(this.game);
                 }

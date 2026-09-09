@@ -6,12 +6,14 @@ import {
     applyMagiasMoveDuringPrepareVisuals,
     applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
+    beginMagiasRitual,
     endMagiasRitual,
     shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
 import {
     attachWorldCanvasPoolGuard,
     lockWorldCanvasPresentationSize,
+    lockWorldCanvasRendererClear,
     occupyWorldCanvasPoolSlot,
     protectWorldCanvasInPool,
     reassertWorldCanvasPresentationGuard,
@@ -19,8 +21,11 @@ import {
     refuseWorldCanvasGenerateTexture,
     refuseWorldCanvasTextureBind,
     restoreWorldCanvasBoxIfStolen,
+    restoreWorldCanvasPixels,
     sealWorldCanvasPoolSlot,
+    setWorldCanvasClearRefused,
     snapshotWorldCanvasBox,
+    snapshotWorldCanvasPixels,
     withWorldCanvasBoxGuard,
     type CanvasPoolContainer,
     type WorldCanvasLike,
@@ -209,10 +214,104 @@ describe('lockWorldCanvasPresentationSize', () => {
             },
         };
         lockWorldCanvasPresentationSize(world);
-        const ctx = world.getContext?.('2d', { willReadFrequently: false });
-        assert.deepEqual(ctx, { type: '2d' });
+        const ctx = world.getContext?.('2d', { willReadFrequently: false }) as { type?: string };
+        assert.equal(ctx?.type, '2d');
         assert.equal(attrsSeen, 0);
         assert.equal(world.getContext?.('webgl'), null);
+    });
+
+    it('refuses full-canvas fillRect/clearRect while Magias prepare is armed', () => {
+        let fillCalls = 0;
+        let clearCalls = 0;
+        const ctx = {
+            fillRect() {
+                fillCalls += 1;
+            },
+            clearRect() {
+                clearCalls += 1;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        beginMagiasRitual();
+        lockWorldCanvasPresentationSize(world);
+        world.getContext?.('2d');
+        ctx.fillRect(0, 0, 1024, 576);
+        ctx.clearRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 0);
+        assert.equal(clearCalls, 0);
+        endMagiasRitual();
+        ctx.fillRect(0, 0, 1024, 576);
+        ctx.clearRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 1);
+        assert.equal(clearCalls, 1);
+    });
+
+    it('restores painted FOV pixels after a move-during-prepare wipe', () => {
+        const pixels = { id: 'painted-fov' };
+        let restored: unknown;
+        const ctx = {
+            getImageData: () => pixels,
+            putImageData(data: unknown) {
+                restored = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        assert.equal(snapshotWorldCanvasPixels(world), true);
+        restored = undefined;
+        assert.equal(restoreWorldCanvasPixels(world), true);
+        assert.equal(restored, pixels);
+        setWorldCanvasClearRefused(false);
+    });
+
+    it('disables Phaser clearBeforeRender and restores after postrender wipe', () => {
+        const pixels = { id: 'painted-fov' };
+        let restored: unknown;
+        let postrender: (() => void) | undefined;
+        const ctx = {
+            fillRect() {
+                restored = undefined;
+            },
+            getImageData: () => pixels,
+            putImageData(data: unknown) {
+                restored = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        const renderer = {
+            gameContext: ctx,
+            config: { clearBeforeRender: true },
+        };
+        const game = {
+            canvas: world,
+            renderer,
+            events: {
+                on(_event: string, fn: () => void) {
+                    postrender = fn;
+                },
+            },
+        };
+        assert.equal(snapshotWorldCanvasPixels(world), true);
+        beginMagiasRitual();
+        lockWorldCanvasRendererClear(game);
+        assert.equal(renderer.config.clearBeforeRender, false);
+        ctx.fillRect();
+        assert.equal(restored, undefined);
+        postrender?.();
+        assert.equal(restored, pixels);
+        endMagiasRitual();
+        assert.equal(renderer.config.clearBeforeRender, true);
     });
 });
 

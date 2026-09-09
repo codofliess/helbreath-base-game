@@ -295,6 +295,7 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
             if (isMagiasRitualActive() && isMagiasMoveDuringPrepareKey(e)) {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 noteMagiasMoveDuringPrepareHotkey();
                 reassertWorldCanvasPresentationGuard();
                 return;

@@ -1,3 +1,9 @@
+import {
+    restoreWorldCanvasPixels,
+    setWorldCanvasClearRefused,
+    snapshotWorldCanvasPixels,
+} from './worldCanvasPoolGuard';
+
 /**
  * Cast ritual → CastReady. Missing CAST body/clothes sheets never start an
  * animation; treating that as "done" skips the bar and lets an F7 click-through
@@ -204,6 +210,7 @@ export function applyMagiasSpellSelectVisuals(
     mapToServerCatalog: (olympiaSpellId: number) => number | undefined,
 ): MagiasSpellSelectPlan {
     beginMagiasRitual();
+    snapshotWorldCanvasPixels(scene.game.canvas);
     const plan = planMagiasSpellSelect(spellId, mapToServerCatalog, false);
     if (
         plan.createPhaserText
@@ -325,6 +332,7 @@ export function applyMagiasMoveDuringPrepareVisuals(
     scene: MagiasSelectSceneProbe,
 ): MagiasMoveDuringPreparePlan {
     beginMagiasRitual();
+    restoreWorldCanvasPixels(scene.game.canvas);
     const plan = planMagiasMoveDuringPrepare(spellId);
     if (
         plan.createPhaserText
@@ -361,10 +369,14 @@ let magiasRitualActive = false;
  */
 export function beginMagiasRitual(): void {
     magiasRitualActive = true;
+    // Phaser CanvasRenderer.preRender fillRect(#000) wipes without assigning
+    // .width — that is why #72 select PASS / WASD mid-prepare FAIL.
+    setWorldCanvasClearRefused(true);
 }
 
 export function endMagiasRitual(): void {
     magiasRitualActive = false;
+    setWorldCanvasClearRefused(false);
 }
 
 export function isMagiasRitualActive(): boolean {

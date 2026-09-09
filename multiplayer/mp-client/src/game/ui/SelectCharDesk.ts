@@ -48,6 +48,7 @@ import { getStoredWalletPubkey, getStoredWalletToken } from '../../utils/walletA
 import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CHAIN_LORDS_BRAND } from './charUiMode';
 import { getItemById } from '../../constants/Items';
+import { PLAYER_TOKEN_DISPLAY, playerTokenCopy } from '../../constants/PlayerTokenTicker';
 import { OLYMPIA_SUPER_RARE_ITEM_IDS } from '../../utils/olympiaDropRules';
 import { fetchUnclaimedDrops, type UnclaimedDrop } from '../../utils/dropLedger';
 import {
@@ -695,7 +696,7 @@ export class SelectCharDesk {
             vaultY,
             vaultW,
             vaultH,
-            'Wallet / $HELL',
+            `Wallet / ${PLAYER_TOKEN_DISPLAY}`,
             () => this.openWalletPanel(),
             true,
         );
@@ -749,7 +750,7 @@ export class SelectCharDesk {
             { headers },
         );
         if (!res.ok) {
-            throw new Error(`$HELL status failed (${res.status})`);
+            throw new Error(`${PLAYER_TOKEN_DISPLAY} status failed (${res.status})`);
         }
         const body = (await res.json()) as {
             pendingHell?: number | null;
@@ -798,7 +799,7 @@ export class SelectCharDesk {
         );
         panel.add(
             this.scene.add
-                .text(px + pw / 2, py + 48, 'Helbreath - Chain Lords · $HELL & NFTs', clTitleStyle({
+                .text(px + pw / 2, py + 48, `Helbreath - Chain Lords · ${PLAYER_TOKEN_DISPLAY} & NFTs`, clTitleStyle({
                     fontSize: '22px',
                 }))
                 .setOrigin(0.5, 0),
@@ -878,7 +879,7 @@ export class SelectCharDesk {
         add(px + 28, y, `Seal  ${shortW}`, clBodyStyle({ fontSize: '15px', color: CL_MUTED }));
         y += 28;
 
-        add(px + 28, y, '$HELL TOKEN', clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
+        add(px + 28, y, `${PLAYER_TOKEN_DISPLAY} TOKEN`, clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
         y += 22;
         const pending = hell.pendingHell ?? 0;
         const claimed = hell.claimedHell ?? 0;
@@ -891,8 +892,8 @@ export class SelectCharDesk {
             [
                 `Active mint: ${mintShort}`,
                 `Mining vault: ${hell.miningConfigured ? 'ready' : 'offline'}`,
-                `Credits / pending $HELL:  ${pending}`,
-                `Claimed / stacked $HELL:  ${claimed}`,
+                `Credits / pending ${PLAYER_TOKEN_DISPLAY}:  ${pending}`,
+                `Claimed / stacked ${PLAYER_TOKEN_DISPLAY}:  ${claimed}`,
                 '',
                 'Earned by mode (play-mine):',
                 '  · Monster kills → credits  (500 kills/day → tokens)',
@@ -939,7 +940,7 @@ export class SelectCharDesk {
                 `Rare:  ${rare.length}`,
                 rareLine,
                 '',
-                hell.note || 'Pending $HELL is utility mining — not ROI.',
+                playerTokenCopy(hell.note || `Pending ${PLAYER_TOKEN_DISPLAY} is utility mining — not ROI.`),
             ].join('\n'),
             clBodyStyle({
                 fontSize: '15px',

@@ -1,4 +1,5 @@
 import { Store } from '@tanstack/react-store';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
 import { setCrusadeHudFromStatus } from './CrusadeHud.store';
 
 export type NpcTalkRole =
@@ -70,7 +71,7 @@ export const setNpcTalkDialogOpen = (value: boolean) => {
 export const setNpcTalkStatusMessage = (message: string) => {
     npcTalkDialogStore.setState((state) => ({
         ...state,
-        statusMessage: message,
+        statusMessage: playerTokenCopy(message),
     }));
 };
 
@@ -96,10 +97,10 @@ export const applyCityNpcServiceResult = (result: {
         }
         return {
             ...state,
-            statusMessage: result.message || (result.ok ? 'Done.' : 'Request failed.'),
+            statusMessage: playerTokenCopy(result.message || (result.ok ? 'Done.' : 'Request failed.')),
             guildInterestRegistered: result.guildInterestRegistered ?? state.guildInterestRegistered,
             citizenshipSide: result.citizenshipSide || state.citizenshipSide,
-            cityServicesSummary: result.cityServicesSummary || state.cityServicesSummary,
+            cityServicesSummary: playerTokenCopy(result.cityServicesSummary || state.cityServicesSummary),
             crusadeStatus: result.crusadeStatus || state.crusadeStatus,
             hp: result.hp ?? state.hp,
             maxHp: result.maxHp ?? state.maxHp,

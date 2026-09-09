@@ -1,5 +1,6 @@
 import { EventBus } from '../../game/EventBus';
 import { SERVER_MESSAGE_RECEIVED, TOAST_REQUESTED } from '../../constants/EventNames';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
 import { createDialogStore } from './utils';
 
 interface ServerMessageDialogState {
@@ -34,7 +35,7 @@ let lastAt = 0;
  * NEVER open a blocking "Server Message" modal mid-fight (shield unequip, SA release, etc.).
  */
 EventBus.on(SERVER_MESSAGE_RECEIVED, ({ message }: { message: string }) => {
-    const text = (message ?? '').trim();
+    const text = playerTokenCopy((message ?? '').trim());
     if (!text) {
         return;
     }

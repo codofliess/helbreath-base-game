@@ -25,6 +25,7 @@ import { appStore } from '../store/App.store';
 import { getItemById, getItemInventorySpriteKeyWithOverrides } from '../../constants/Items';
 import { Gender } from '../../Types';
 import { inventoryDialogStore } from '../store/InventoryDialog.store';
+import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 interface CashShopDialogProps {
     position: { x: number; y: number };
@@ -91,13 +92,15 @@ export function CashShopDialog({
             return;
         }
         if (market === 'hell' && !skuAcceptsHell(sku)) {
-            setCashShopStatusMessage('Stablecoin only (USDC/USDT) — this product does not accept $HELL.');
+            setCashShopStatusMessage(
+                `Stablecoin only (USDC/USDT) — this product does not accept ${PLAYER_TOKEN_DISPLAY}.`,
+            );
             return;
         }
         const currency = cashCurrencyFromMarket(market);
         const priceLabel =
             market === 'hell'
-                ? `${sku.priceHell * qty} $HELL`
+                ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
                 : `${formatStablePrice(sku.priceStableUsdCents * qty)} stable`;
         setCashShopStatusMessage(`Buying ${sku.name} for ${priceLabel}…`);
         nm.requestBuyCashShopItem({
@@ -164,14 +167,14 @@ export function CashShopDialog({
                             cursor: 'pointer',
                         }}
                     >
-                        $HELL Market
+                        {PLAYER_TOKEN_DISPLAY} Market
                     </button>
                 </div>
 
                 <p style={{ margin: '0 0 8px', color: '#ccc', fontSize: 12 }}>
                     {market === 'stablecoin'
                         ? 'List prices in USDT (or USDC). Bound gear is stablecoin-only.'
-                        : '$HELL market (design FDV +20%). Gear may be stable-only.'}
+                        : `${PLAYER_TOKEN_DISPLAY} market (design FDV +20%). Gear may be stable-only.`}
                 </p>
 
                 {market === 'stablecoin' && (
@@ -269,7 +272,7 @@ export function CashShopDialog({
                 >
                     {rows.length === 0 ? (
                         <div style={{ padding: 12, color: '#aaa', fontSize: 12 }}>
-                            No products in this tab for $HELL. Switch to Stablecoin Market for
+                            No products in this tab for {PLAYER_TOKEN_DISPLAY}. Switch to Stablecoin Market for
                             shoes / boots / capes / seals.
                         </div>
                     ) : (
@@ -277,13 +280,13 @@ export function CashShopDialog({
                             const hellOk = skuAcceptsHell(sku);
                             const price =
                                 market === 'hell'
-                                    ? `${sku.priceHell * qty} $HELL`
+                                    ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
                                     : `${formatStablePrice(sku.priceStableUsdCents * qty)}`;
                             const alt =
                                 market === 'hell'
                                     ? `(vs ${formatStablePrice(sku.priceStableUsdCents * qty)} stable)`
                                     : hellOk
-                                      ? `(or ${sku.priceHell * qty} $HELL)`
+                                      ? `(or ${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY})`
                                       : '(stablecoin only)';
                             const icon = skuIconUrl(sku);
                             return (
@@ -358,7 +361,7 @@ export function CashShopDialog({
                 <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
                     Right-click closes. Fake mints rejected. Boosts soulbound. Seals &amp; single
                     boosts = USDC/USDT only; combos, stones &amp; utility (Zem, greens, balls) also
-                    $HELL.
+                    {PLAYER_TOKEN_DISPLAY}.
                 </p>
             </div>
         </OlympiaDialogShell>

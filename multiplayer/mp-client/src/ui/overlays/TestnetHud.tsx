@@ -18,6 +18,7 @@ import {
     TESTNET_X_HANDLE,
 } from '../../constants/TestnetCredits';
 import { getNetworkManager } from '../../utils/RegistryUtils';
+import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import '../rpg-ui.css';
 
@@ -267,16 +268,22 @@ export function TestnetHud({ phaserRef }: TestnetHudProps) {
                 className="testnet-hud-minimize"
                 onClick={() => setCreditsCollapsed((v) => !v)}
                 aria-expanded={!creditsCollapsed}
-                title={creditsCollapsed ? 'Show $HELL credits & checklist' : 'Hide $HELL credits & checklist'}
+                title={
+                    creditsCollapsed
+                        ? `Show ${PLAYER_TOKEN_DISPLAY} credits & checklist`
+                        : `Hide ${PLAYER_TOKEN_DISPLAY} credits & checklist`
+                }
             >
-                {creditsCollapsed ? '▸ $HELL / créditos' : '▾ $HELL / créditos'}
+                {creditsCollapsed
+                    ? `▸ ${PLAYER_TOKEN_DISPLAY} / créditos`
+                    : `▾ ${PLAYER_TOKEN_DISPLAY} / créditos`}
             </button>
 
             {!creditsCollapsed ? (
                 <>
                     <div className="testnet-hud-sep" />
 
-                    <div className="testnet-hud-section-title">Testnet · $HELL</div>
+                    <div className="testnet-hud-section-title">Testnet · {PLAYER_TOKEN_DISPLAY}</div>
                     <div className="testnet-hud-row" title="Pending + already claimed play-mine balance">
                         <span className="testnet-hud-k wide">Tokens totales acumulados</span>
                         <span className="testnet-hud-v mono gold">{totalTokens.toLocaleString()}</span>

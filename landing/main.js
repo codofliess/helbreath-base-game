@@ -638,6 +638,10 @@
       playAria: "Play now — Helbreath World",
       statPlayers4h: "Players ON in last 4hs",
       statEks4h: "EKs in last 4hs",
+      ticker: "$helbreath",
+      tickerSub: "$helbreath · Pons · Robinhood Chain",
+      tickerOnPons: "$helbreath on Pons",
+      tickerLaunches: "$helbreath launches on Pons",
     },
     es: {
       sealNote: "Dos naciones. Un reino. Tu sello en la cadena.",
@@ -648,6 +652,10 @@
       playAria: "Jugar ahora — Helbreath World",
       statPlayers4h: "Jugadores ON últimas 4h",
       statEks4h: "EKs últimas 4h",
+      ticker: "$helbreath",
+      tickerSub: "$helbreath · Pons · Robinhood Chain",
+      tickerOnPons: "$helbreath en Pons",
+      tickerLaunches: "$helbreath lanza en Pons",
     },
     pt: {
       sealNote: "Duas nações. Um reino. Seu selo na cadeia.",
@@ -658,6 +666,10 @@
       playAria: "Jogar agora — Helbreath World",
       statPlayers4h: "Jogadores ON nas últimas 4h",
       statEks4h: "EKs nas últimas 4h",
+      ticker: "$helbreath",
+      tickerSub: "$helbreath · Pons · Robinhood Chain",
+      tickerOnPons: "$helbreath no Pons",
+      tickerLaunches: "$helbreath lança no Pons",
     },
   };
 

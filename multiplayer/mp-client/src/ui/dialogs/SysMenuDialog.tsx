@@ -28,6 +28,7 @@ import {
     setPreferredChatLanguageId,
     setShowSpeakerLanguageTag,
 } from '../store/ChatTranslation.store';
+import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 import { CHAT_LANGUAGE_OPTIONS } from '../../constants/ChatLanguages';
 import { setMinimapDialogOpen } from '../store/MinimapDialog.store';
 import { setTrainingDialogOpen } from '../store/TrainingDialog.store';
@@ -314,7 +315,7 @@ export function SysMenuDialog({
 
                 <div className="sys-menu-hell-mining" title={hellMining.note || undefined}>
                     <div className="sys-menu-row">
-                        <span className="sys-menu-label">$HELL pending</span>
+                        <span className="sys-menu-label">{PLAYER_TOKEN_DISPLAY} pending</span>
                         <span className="sys-menu-hell-value">{hellMining.pendingHell.toLocaleString()}</span>
                     </div>
                     <div className="sys-menu-row">

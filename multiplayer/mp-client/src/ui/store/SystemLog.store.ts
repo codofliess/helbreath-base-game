@@ -18,6 +18,7 @@ import { getOlympiaItemDisplay } from '../../constants/OlympiaItemName';
 import { evaluateOlympiaNftTier } from '../../utils/olympiaDropRules';
 import { TemporaryEffectType } from '../../Types';
 import type { PartyState } from '../../proto/generated/network';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
 import type { InitialGameWorldStateEventData, TemporaryEffectPlayerEventData } from '../../Types';
 
 const MAX_LINES = 48;
@@ -65,7 +66,7 @@ export function pruneExpiredSystemLogLines(nowMs: number = Date.now()): void {
 
 /** Push a colored line into the Olympia-style system/combat log (auto-clears after 5s). */
 export function appendSystemLog(message: string, kind: SystemLogLineKind = 'event'): void {
-    const trimmed = message.trim();
+    const trimmed = playerTokenCopy(message.trim());
     if (!trimmed) {
         return;
     }

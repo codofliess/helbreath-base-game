@@ -37,6 +37,7 @@ import { CornerMinimapHud } from './ui/overlays/CornerMinimapHud';
 import { HudTutorialOverlay } from './ui/overlays/HudTutorialOverlay';
 import { TestnetHud } from './ui/overlays/TestnetHud';
 import { tryStartHudTutorial } from './ui/store/HudTutorial.store';
+import { playerTokenCopy } from './constants/PlayerTokenTicker';
 import { progressionStore } from './ui/store/Progression.store';
 import {
     discordPresenceClear,
@@ -423,7 +424,7 @@ function App()
             autoClose,
             trackForLogoutDismiss,
         }: ToastRequestedEvent) => {
-            const text = (message ?? '').trim();
+            const text = playerTokenCopy((message ?? '').trim());
             if (!text) {
                 return;
             }

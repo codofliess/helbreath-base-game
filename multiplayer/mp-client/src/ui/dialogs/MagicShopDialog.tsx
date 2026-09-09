@@ -10,6 +10,7 @@ import {
     setMagicShopOpen,
     setMagicShopStatusMessage,
 } from '../store/MagicShopDialog.store';
+import { countBagGold } from '../../utils/magicBookClient';
 import { getMagicShopPrice, getMagicShopSpells, MAGIC_SHOP_SPELL_IDS } from '../../constants/SpellAcquisition';
 import { getSpellCircles, SPELLS } from '../../constants/Spells';
 import { getNetworkManager } from '../../utils/RegistryUtils';
@@ -46,10 +47,7 @@ export function MagicShopDialog({
     const npcName = useStore(magicShopDialogStore, (s) => s.npcName);
     const statusMessage = useStore(magicShopDialogStore, (s) => s.statusMessage);
     const bagItems = useStore(inventoryDialogStore, (s) => s.baggedItems);
-    const bagGold = bagItems.reduce(
-        (sum, item) => (item.itemId === 90 ? sum + Math.max(0, item.quantity ?? 1) : sum),
-        0,
-    );
+    const bagGold = countBagGold(bagItems);
     const gold = Math.max(storeGold, bagGold);
 
     useEffect(() => {
@@ -95,11 +93,8 @@ export function MagicShopDialog({
             return;
         }
         const { cost } = getMagicShopPrice(spellId);
-        const have = Math.max(storeGold, countBagGoldFromInventory());
-        if (have < cost) {
-            setMagicShopStatusMessage(`Need ${cost} gold (you have ${have}).`);
-            return;
-        }
+        // Do not client-block on gold. Persist Gold is null; spend is bag item 90 on the server.
+        // A stale / typed-wrong bag snapshot used to abort Learn before Gandalf saw the request.
         if (!npcId) {
             setMagicShopStatusMessage('ERROR: no NPC id — close and click Gandalf again.');
             return;

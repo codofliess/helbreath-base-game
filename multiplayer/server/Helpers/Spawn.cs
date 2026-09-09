@@ -192,6 +192,12 @@ public static class Spawn {
                 player.MaxSp,
                 player.SafeAttackMode,
                 player.CitizenshipSide));
+        // F7 Circle filters Olympia Magic.cfg ids. InitialState spells are Spells.json ids
+        // (Energy Bolt=0 ≠ Missile). Live client used to replace the book from that catalog
+        // and empty Circle One. ACK learned= immediately after every spell directory push.
+        if (includeSpells) {
+            MagicTower.SendJoinBookSnapshot(player);
+        }
     }
 
     /// <summary>Map snapshot on load: position, teleports, music, death flag, weather.</summary>

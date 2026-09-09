@@ -3,12 +3,17 @@ import { SPELLS, SPELL_ENERGY_BOLT_ID, SPELL_PROTECTION_FROM_ARROW_ID } from '..
 import { MAGIC_SHOP_SPELL_IDS } from '../../constants/SpellAcquisition';
 import { getOlympiaServerSpellId, getOlympiaSpellIdFromServer } from '../../constants/OlympiaServerSpellMap';
 import { isTravelerPlayerMode } from '../../utils/playerMode';
+import {
+    GOLD_ITEM_ID,
+    countBagGold,
+    mergeOlympiaBookFromServerCatalog,
+} from '../../utils/magicBookClient';
 import { EventBus } from '../../game/EventBus';
 import { SERVER_CITY_NPC_SERVICE_RESULT } from '../../constants/EventNames';
 import { inventoryDialogStore } from './InventoryDialog.store';
 
-/** Gold bag item id (Items.json). */
-export const GOLD_ITEM_ID = 90;
+/** Gold bag item id (Items.json). Re-export for shop / bag UI. */
+export { GOLD_ITEM_ID };
 
 interface MagicShopState {
     isOpen: boolean;
@@ -32,13 +37,7 @@ function createInitialLearnedSpellIds(): number[] {
 
 /** Sum gold from the inventory dialog bag (authoritative client mirror of bag stacks). */
 export function countBagGoldFromInventory(): number {
-    let total = 0;
-    for (const item of inventoryDialogStore.state.baggedItems) {
-        if (item.itemId === GOLD_ITEM_ID) {
-            total += Math.max(0, item.quantity ?? 1);
-        }
-    }
-    return total;
+    return countBagGold(inventoryDialogStore.state.baggedItems);
 }
 
 const initialState: MagicShopState = {
@@ -82,7 +81,7 @@ export const isSpellLearned = (spellId: number): boolean => {
     return magicShopDialogStore.state.learnedSpellIds.includes(spellId);
 };
 
-/** Spells visible in the cast book — only learned spells. */
+/** F7 Circle rows — Olympia Magic.cfg ids in `learnedSpellIds`, not SkillLevels / catalog ids. */
 export function getCastableSpells() {
     const { learnedSpellIds } = magicShopDialogStore.state;
     return SPELLS.filter((s) => learnedSpellIds.includes(s.id));
@@ -125,37 +124,25 @@ export function setTimedChallengeProtocolSpellsUnlocked(unlocked: boolean): void
 }
 
 /**
- * Align client magic book with server InitialState spell directory (traveler).
- * Server list is authoritative for combat unlocks; client-only utilities (no server map) are kept.
+ * Align combat unlocks from InitialState (Spells.json ids) into the F7 Olympia book.
+ * Union only — an Energy-Bolt-only snapshot must not wipe Missile/Heal/Create Food
+ * after a magic-shop `learned=` ACK (Circle One uses Olympia ids 0/1/2, not catalog 0/29/31).
  */
 export function applyServerSpellUnlocks(serverSpellIds: number[]) {
     if (!isTravelerPlayerMode()) {
         return;
     }
 
-    const fromServer: number[] = [SPELL_ENERGY_BOLT_ID];
-    for (const sid of serverSpellIds) {
-        const olympia = getOlympiaSpellIdFromServer(sid);
-        if (olympia !== undefined) {
-            fromServer.push(olympia);
-        }
-    }
-
-    magicShopDialogStore.setState((s) => {
-        // Keep Olympia ids with no Spells.json mapping (client-side utilities like Recall).
-        const clientOnly = s.learnedSpellIds.filter(
-            (id) => id !== SPELL_ENERGY_BOLT_ID && getOlympiaServerSpellId(id) === undefined,
-        );
-        const next = [...new Set([
-            ...fromServer,
-            ...clientOnly,
-            ...(timedChallengeProtocolActive ? [...PROTOCOL_SPELL_IDS] : []),
-        ])];
-        return {
-            ...s,
-            learnedSpellIds: next,
-        };
-    });
+    magicShopDialogStore.setState((s) => ({
+        ...s,
+        learnedSpellIds: mergeOlympiaBookFromServerCatalog(
+            s.learnedSpellIds,
+            serverSpellIds,
+            getOlympiaSpellIdFromServer,
+            SPELL_ENERGY_BOLT_ID,
+            timedChallengeProtocolActive ? [...PROTOCOL_SPELL_IDS] : [],
+        ),
+    }));
 }
 
 function parseMagicTowerSummary(summary: string): { gold: number; learned: number[] } {

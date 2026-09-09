@@ -1,15 +1,16 @@
 # Magias / F7 Circle — exact persist fields
 
-F7 Circle One does **not** read Magic skill or a `Gold` scalar. The live traveler HUD (`index-51e24d64.js` and this branch) fills the book from client `learnedSpellIds` (Olympia **Magic.cfg** ids).
+F7 Circle One does **not** read Magic skill (`SkillLevels[4]`) or a persist `Gold` scalar. The traveler HUD fills the book from client `learnedSpellIds` (Olympia **Magic.cfg** ids 0/1/2 = Missile/Heal/Create Food).
 
 Those ids arrive from:
 
 1. Join / reconnect / Gandalf ACK: `CityNpcServiceResult` role `magic-shop` with `cityServicesSummary=gold=<bag90>;learned=<olympiaCsv>`
 2. Persist `LearnedOlympiaSpellIds` (server memory → that ACK)
+3. InitialState **adds** mapped combat ids (Heal 29 → Olympia 1). It must **not replace** the book — catalog id 0 is Energy Bolt, not Missile.
 
 `SkillLevels[4] = 100` only changes **Success Ratio** / cast speed. It does **not** unlock Missile/Heal.
 
-Gandalf spends **bag item 90 Quantity**, not `Gold`.
+Gandalf spends **bag item 90 Quantity**, not `Gold`. The Learn button does not client-abort when the bag snapshot looks empty; the server counts item 90.
 
 ## Grant (offline — player must relog)
 
@@ -47,6 +48,8 @@ If the character is **online**, editing disk/Postgres is overwritten by the next
 
 ## After this server is live
 
-Join sends `learned=` even without clicking Gandalf. F7 Circle One should list Missile / Heal / Create Food when persist has `[0,1,2]`. Heal is server-authoritative (Spells.json 29). Missile has no server catalog id on the live client — Heal is the PVE cast path.
+Join sends `learned=` even without clicking Gandalf (Elon can be in `huntzone1`). F7 Circle One should list Missile / Heal / Create Food when persist has `[0,1,2]`. A later Energy-Bolt-only InitialState no longer wipes those Olympia ids.
 
-Do **not** deploy Chile from the agent. Paio applies `play-server-<sha>-magiascircle`.
+Heal is server-authoritative (Spells.json 29). Missile has no server catalog id — Heal is the PVE cast path.
+
+Do **not** deploy Chile from the agent. Paio applies the `play-server-*-magiascircle` tarball and a client build that includes the F7 book merge (this branch). Live `index-51e24d64.js` still **replaces** the book from the catalog — deploy the new client with the server, or Circle One can empty again after a map transfer.

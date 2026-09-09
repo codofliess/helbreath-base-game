@@ -29,6 +29,8 @@ import {
     loadPlayerItemAppearanceOnDemand,
 } from './ItemAssets';
 import { getHumanSpriteName as getHumanSpriteNameLook, resolveGearFromEquippedItems as resolveGearFromEquippedItemsLook } from './playerAppearanceLook';
+import { canFetchAppearanceSheetOnStateEnter } from './castPresentation';
+import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
 
 export enum PlayerState {
     IdlePeaceMode = 0,
@@ -1092,7 +1094,7 @@ export class PlayerAppearanceManager {
             const { animationKey, animationDirection, animationType } = this.getAnimationConfigForAsset(spriteName, newState, direction, i);
             if (
                 this.isLazyPlayerItemAppearanceSlot(slot)
-                && this.scheduleMissingAnimationSheetIfNeeded(spriteName, asset, animationKey)
+                && this.scheduleMissingAnimationSheetIfNeeded(spriteName, asset, animationKey, newState)
             ) {
                 continue;
             }
@@ -1200,11 +1202,14 @@ export class PlayerAppearanceManager {
     /**
      * Settle covers stand (weapon 0–15 / clothes 0–3). Walk/run sheets stay
      * one-off — do not hide a bound idle pose while that extra sheet fetches.
+     * Cast must not fetch CAST clothes (armour base 8): that decode on Missile
+     * prepare can lose the Canvas 2D context and black the world.
      */
     private scheduleMissingAnimationSheetIfNeeded(
         sprite: string,
         asset: GameAsset,
         animationKey: string,
+        state: PlayerState,
     ): boolean {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
             return false;
@@ -1213,6 +1218,9 @@ export class PlayerAppearanceManager {
             return false;
         }
         if (this.scene.textures.exists(animationKey) && this.scene.anims.exists(animationKey)) {
+            return !isSafeDrawableTexture(this.scene, animationKey);
+        }
+        if (!canFetchAppearanceSheetOnStateEnter(state === PlayerState.Cast)) {
             return false;
         }
         const match = /^sprite-(.+)-(\d+)$/.exec(animationKey);

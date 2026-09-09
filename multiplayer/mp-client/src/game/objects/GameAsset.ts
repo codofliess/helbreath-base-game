@@ -16,7 +16,7 @@ import {
     isPlayerItemAppearanceLoadInFlight,
 } from '../../utils/ItemAssets';
 import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
-import { isSafeDrawableTexture, isWorldCanvasTextureKey, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
 import { getPivotData, isDebugModeEnabled } from '../../utils/RegistryUtils';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { IN_DEBUG_MODE_CHANGE, OUT_UI_HOVER_SPRITE_FRAME_DEBUG } from '../../constants/EventNames';
@@ -156,21 +156,16 @@ export class GameAsset {
         }
 
         // Missing sheet must not throw — that aborts GameWorld / remounts the hub (landing).
-        // A generateTexture / addCanvas alias of the live world canvas is the same class as
-        // F5 settle: binding it as a missile / cast-circle sprite blacks the map.
-        if (!usePendingItemPlaceholder && !config.mapObject && isWorldCanvasTextureKey(scene, textureKey)) {
-            removeWorldCanvasAliasedTexture(scene, textureKey);
-        }
-        if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
-            if (!config.mapObject) {
-                ensurePendingPlayerItemAppearanceTexture(scene);
-                usePendingItemPlaceholder = true;
-                textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
-                animationKey = textureKey;
-                this.pendingLazyPlayerItemAppearance = true;
-            } else {
-                throw new Error(`Texture "${textureKey}" does not exist`);
-            }
+        // A world-canvas alias must not be bound or textures.remove'd
+        // (CanvasPool.remove zeros game.canvas).
+        if (!usePendingItemPlaceholder && !config.mapObject && !isSafeDrawableTexture(scene, textureKey)) {
+            ensurePendingPlayerItemAppearanceTexture(scene);
+            usePendingItemPlaceholder = true;
+            textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
+            animationKey = textureKey;
+            this.pendingLazyPlayerItemAppearance = true;
+        } else if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
+            throw new Error(`Texture "${textureKey}" does not exist`);
         }
 
         // Check if frame index exists in texture (if frameIndex is specified)
@@ -945,6 +940,9 @@ export class GameAsset {
                     return;
                 }
                 console.warn(`Animation key "${animationKey}" does not exist`);
+                return;
+            }
+            if (!isSafeDrawableTexture(this.scene, animationKey)) {
                 return;
             }
 

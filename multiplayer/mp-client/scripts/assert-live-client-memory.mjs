@@ -65,9 +65,41 @@ assert(
 assert(
     /currentState === PlayerState\.Cast/.test(playerTs)
         && /shouldAdvanceCastToReady/.test(playerTs)
-        && /removeWorldCanvasAliasedTexture/.test(playerTs)
+        && /canPresentCastingCircle/.test(playerTs)
+        && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
-    'Missile prepare must not generateTexture the world canvas; skip F5 blit in Cast; wait castSpeed if CAST anim never plays',
+    'Missile prepare must not generateTexture or lazy-load effect5-7; skip F5 blit in Cast; wait castSpeed if CAST anim never plays',
+);
+const createCircle = playerTs.slice(
+    playerTs.indexOf('private createCastingCircleEffect'),
+    playerTs.indexOf('private spawnCastingCircleEffect'),
+);
+assert(
+    /canPresentCastingCircle/.test(createCircle)
+        && !/loadEffectAssetsOnDemand/.test(createCircle)
+        && !/removeWorldCanvasAliasedTexture/.test(createCircle),
+    'createCastingCircleEffect must not load or textures.remove on Missile prepare',
+);
+const appearanceMgr = read('src/utils/PlayerAppearanceManager.ts');
+const scheduleMissing = appearanceMgr.slice(
+    appearanceMgr.indexOf('private scheduleMissingAnimationSheetIfNeeded'),
+    appearanceMgr.indexOf('private flushPendingLazyItemPromotionForSprite'),
+);
+assert(
+    /canFetchAppearanceSheetOnStateEnter/.test(scheduleMissing)
+        && /PlayerState\.Cast/.test(scheduleMissing),
+    'Cast enter must not fetch clothes CAST sheet 8 / angelic CAST sheets',
+);
+const safetyTs = read('src/utils/worldCanvasTextureSafety.ts');
+const removeAliasFn = safetyTs.slice(safetyTs.indexOf('export function removeWorldCanvasAliasedTexture'));
+assert(
+    !/scene\.textures\.remove/.test(removeAliasFn) && !/anims\.remove/.test(removeAliasFn),
+    'removeWorldCanvasAliasedTexture must not textures.remove a world-canvas alias (CanvasPool 1×1)',
+);
+const magicBook = read('src/utils/magicBookClient.ts');
+assert(
+    /CIRCLE_ONE_OLYMPIA_IDS = \[0, 1, 2\]/.test(magicBook),
+    'F7 Circle Olympia ids must stay [0, 1, 2]',
 );
 const energyBolt = read('src/game/spells/EnergyBolt.ts');
 const effectTs = read('src/game/effects/Effect.ts');
@@ -88,8 +120,16 @@ assert(
     'GameAsset.promote must not clear pending when the real sheet is missing; missing player textures must not throw',
 );
 assert(
-    /isWorldCanvasTextureKey/.test(gameAsset) && /removeWorldCanvasAliasedTexture/.test(gameAsset),
+    /isSafeDrawableTexture/.test(gameAsset) && /removeWorldCanvasAliasedTexture/.test(gameAsset),
     'GameAsset must not bind a generateTexture alias of the live world canvas (Missile / Heal prepare)',
+);
+const playAnim = gameAsset.slice(
+    gameAsset.indexOf('public playAnimationWithDirection'),
+    gameAsset.indexOf('private setStaticFrameFromAnimation'),
+);
+assert(
+    /isSafeDrawableTexture/.test(playAnim),
+    'playAnimationWithDirection must refuse a world-canvas texture alias (CAST clothes bind)',
 );
 
 const bootTs = read('src/game/scenes/Boot.ts');

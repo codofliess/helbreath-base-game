@@ -5,6 +5,7 @@ import {
     GENUINE_STABLECOIN_MINTS,
     type CashShopCategory,
 } from '../../constants/CashShopCatalog';
+import { PLAYER_TOKEN_DISPLAY, playerTokenCopy } from '../../constants/PlayerTokenTicker';
 
 export type CashMarketTab = 'stablecoin' | 'hell';
 
@@ -37,7 +38,7 @@ export function openCashShopDialog(npcId: string, npcName: string): void {
         isOpen: true,
         npcId,
         npcName: npcName || 'Cash Shop',
-        statusMessage: 'Prices in USDT. $HELL market when listed.',
+        statusMessage: `Prices in USDT. ${PLAYER_TOKEN_DISPLAY} market when listed.`,
         market: 'stablecoin',
         category: 'gear',
     }));
@@ -69,7 +70,7 @@ export function setCashShopStablecoinMint(mint: string): void {
 }
 
 export function setCashShopStatusMessage(message: string): void {
-    cashShopDialogStore.setState((s) => ({ ...s, statusMessage: message }));
+    cashShopDialogStore.setState((s) => ({ ...s, statusMessage: playerTokenCopy(message) }));
 }
 
 export function cashCurrencyFromMarket(market: CashMarketTab): number {

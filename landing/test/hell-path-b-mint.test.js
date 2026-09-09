@@ -28,7 +28,7 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.match(hell, new RegExp(PONS_CA));
     assert.match(hell, new RegExp(CURVE));
     assert.match(hell, /Hell is what you leave still/);
-    assert.match(hell, /HELBREATH · Pons · Robinhood Chain/);
+    assert.match(hell, /\$helbreath · Pons · Robinhood Chain/);
     assert.match(hell, new RegExp(PONS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(hell, new RegExp(EXPLORER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(hell, /branding\/abaddon-icon\/discord-server-icon\.png/);
@@ -49,7 +49,7 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.equal(news.includes(SOLANA_MINT), false);
     assert.equal(news.includes('solscan.io'), false);
     assert.equal(news.includes('dexscreener.com/solana'), false);
-    assert.match(news, /HELBREATH · Pons/);
+    assert.match(news, /\$helbreath · Pons/);
     assert.match(news, /0xb603D6b2e5472beb338CE079a63FEb8663171529/);
     assert.match(news, /0xd3335A347ccB25F377247A8a4bc9855f7E12d91f/);
     assert.match(
@@ -86,6 +86,14 @@ describe('Path B $HELL mint on landing + listing pack', () => {
     assert.match(listing, /Mint \| `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`/);
     assert.match(listing, /Do not list.*A8fNV2/);
     assert.equal(listing.includes('leftover (off-curve at create → `A782…`)'), false);
+  });
+
+  it('player-facing landing copy uses $helbreath, not $HELL', () => {
+    assert.match(html, /\$helbreath/);
+    assert.equal(html.includes('$HELL'), false);
+    assert.equal(html.includes('$hell'), false);
+    const hero = html.slice(html.indexOf('id="hell"'), html.indexOf('id="cl-tv"'));
+    assert.match(hero, /class="hell-live-title"[^>]*>\$helbreath</);
   });
 
   it('checklist and claim path do not say leftover already landed at A782', () => {

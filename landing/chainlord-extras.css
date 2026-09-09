@@ -885,8 +885,8 @@ body {
   font-family: var(--cl-font-ui);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-transform: none;
   color: #c9a060;
 }
 

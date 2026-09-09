@@ -12,6 +12,7 @@ import {
 import { createDialogStore } from './utils';
 import { chatTranslationStore } from './ChatTranslation.store';
 import { sysMenuDialogStore } from './SysMenuDialog.store';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
 
 export interface ChatMessageEntry {
     /** Client-local id for async display updates. */
@@ -126,9 +127,14 @@ function isOwnChatMessage(senderCharacterName: string): boolean {
 }
 
 export const addChatMessage = (message: ChatMessageEntry) => {
+    const rewritten: ChatMessageEntry = {
+        ...message,
+        message: playerTokenCopy(message.message),
+        displayMessage: playerTokenCopy(message.displayMessage),
+    };
     chatDialogStore.setState((state) => ({
         ...state,
-        messages: [...state.messages, message].slice(-MAX_CHAT_MESSAGES),
+        messages: [...state.messages, rewritten].slice(-MAX_CHAT_MESSAGES),
     }));
 };
 

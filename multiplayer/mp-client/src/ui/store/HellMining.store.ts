@@ -1,4 +1,5 @@
 import { Store } from '@tanstack/react-store';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
 
 /** Client mirror of server HellMiningStatus (play-mine pending $HELL). */
 export interface HellMiningUiState {
@@ -58,7 +59,7 @@ export function applyHellMiningStatus(payload: {
         todayDirectTokens: Number(payload.todayDirectTokens ?? 0),
         todaySettled: Boolean(payload.todaySettled),
         claimAvailable: Boolean(payload.claimAvailable),
-        note: payload.note ?? s.note,
+        note: playerTokenCopy(payload.note ?? s.note),
     }));
 }
 
@@ -71,7 +72,9 @@ export function applyHellMiningClaimResult(payload: {
     hellMiningStore.setState((s) => ({
         ...s,
         pendingHell: payload.pendingHell !== undefined ? Number(payload.pendingHell) : s.pendingHell,
-        lastClaimMessage: payload.message ?? (payload.ok ? 'Claim reserved.' : 'Claim failed.'),
+        lastClaimMessage: playerTokenCopy(
+            payload.message ?? (payload.ok ? 'Claim reserved.' : 'Claim failed.'),
+        ),
     }));
 }
 

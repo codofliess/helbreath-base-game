@@ -18,6 +18,7 @@ import { getNetworkManager } from '../../utils/RegistryUtils';
 import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { EventBus } from '../../game/EventBus';
 import { SERVER_CITY_NPC_SERVICE_RESULT } from '../../constants/EventNames';
+import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 interface NpcTalkDialogProps {
     position: { x: number; y: number };
@@ -142,7 +143,7 @@ export function NpcTalkDialog({
                     <>
                         <p className="shop-dialog-intro">
                             Olympia Garden quests: Unicorns (50) or Trolls (500). Reward: +50 contribution + 1000
-                            pending $HELL.
+                            pending {PLAYER_TOKEN_DISPLAY}.
                         </p>
                         {cityServicesSummary ? (
                             <p className="shop-dialog-hint">{cityServicesSummary}</p>

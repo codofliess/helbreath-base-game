@@ -28,6 +28,7 @@ import { EventBus } from '../../game/EventBus';
 import { IN_UI_SET_SUPER_ATTACK_ARMED, TOAST_REQUESTED } from '../../constants/EventNames';
 import type { IRefPhaserGame } from '../../game/phaserHubTypes';
 import { setQuickPotionGame, useQuickPotion } from '../../utils/potionHotkeys';
+import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 /** Map / Required Exp cartridge flip interval. */
 const LOCATION_CARTRIDGE_INTERVAL_MS = 4_000;
@@ -531,7 +532,7 @@ export function HotkeyBar({ phaserRef }: { phaserRef?: RefObject<IRefPhaserGame 
                         type="button"
                         data-tutorial-id="cash-shop"
                         className="cl-dock-btn cl-dock-btn--cash"
-                        title="Cash Shop (USDT / $HELL)"
+                        title={`Cash Shop (USDT / ${PLAYER_TOKEN_DISPLAY})`}
                         aria-label="Cash Shop"
                         onClick={openCashShopRemote}
                     >

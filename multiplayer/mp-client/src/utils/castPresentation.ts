@@ -82,19 +82,45 @@ export function canMutateWorldCanvasTexturesOnCastConfirm(): boolean {
 }
 
 /**
- * Fail-closed Cast, CastReady, and the Idle rebind after a skipped Cast.
- * #70 skipped Cast only; #71 skipped CastReady; confirm vs mob still applied Idle.
+ * WASD / click-to-move / camera-follow restream during prepare must not
+ * generateTexture / addCanvas(game.canvas) / rebuild the map tileset /
+ * fetch walk clothes. #72 locked FOV size-write; select therefore stayed
+ * painted. Move still rebuilt tiles (`createCanvas` + `getContext`) and
+ * could apply Walk appearance — that is the remaining wipe.
+ */
+export function canMutateWorldCanvasOnMoveDuringPrepare(): boolean {
+    return false;
+}
+
+/** Map tileset `createCanvas` / `textures.remove` / evict during Magias prepare. */
+export function canRebuildMapTilesetOnMagiasPrepare(): boolean {
+    return canMutateWorldCanvasOnMoveDuringPrepare();
+}
+
+/** Walk / Run `applyStateAppearance` while the Magias ritual is still armed. */
+export function canApplyWalkAppearanceOnMagiasPrepare(): boolean {
+    return canMutateWorldCanvasOnMoveDuringPrepare();
+}
+
+/**
+ * Fail-closed Cast, CastReady, the Idle rebind after a skipped Cast, and
+ * Walk/Run mid-prepare. #70 skipped Cast only; #71 skipped CastReady;
+ * #72 skipped IdleFromCast; move-during-prepare still rebound Walk.
  */
 export function shouldSkipCastCanvasWorkOnState(
-    state: 'Cast' | 'CastReady' | 'Idle' | 'IdleFromCast',
+    state: 'Cast' | 'CastReady' | 'Idle' | 'IdleFromCast' | 'MoveDuringPrepare',
 ): boolean {
-    if (state === 'IdleFromCast') {
-        return !canMutateWorldCanvasTexturesOnCastConfirm();
+    switch (state) {
+        case 'IdleFromCast':
+            return !canMutateWorldCanvasTexturesOnCastConfirm();
+        case 'MoveDuringPrepare':
+            return !canMutateWorldCanvasOnMoveDuringPrepare();
+        case 'Cast':
+        case 'CastReady':
+            return !canMutateWorldCanvasTexturesOnCastEnter();
+        case 'Idle':
+            return false;
     }
-    if (canMutateWorldCanvasTexturesOnCastEnter()) {
-        return false;
-    }
-    return state === 'Cast' || state === 'CastReady';
 }
 
 /** CanvasPool.create on a pooled `game.canvas` is the black-map steal. */
@@ -163,6 +189,7 @@ export type MagiasSelectSceneProbe = {
         addCanvas?: (...args: unknown[]) => unknown;
         remove?: (...args: unknown[]) => unknown;
         generateTexture?: (...args: unknown[]) => unknown;
+        createCanvas?: (...args: unknown[]) => unknown;
     };
 };
 
@@ -252,6 +279,78 @@ export function applyMagiasSoftCastConfirmVisuals(
         scene.textures.remove?.('magias-confirm');
     }
     return plan;
+}
+
+export type MagiasMoveDuringPreparePlan = {
+    spellId: number;
+    createPhaserText: boolean;
+    createFloatingText: boolean;
+    mayTouchCanvasPoolForGameCanvas: boolean;
+    mayMutateWorldCanvasTextures: boolean;
+    fetchAppearanceSheets: boolean;
+    presentCircle: boolean;
+    applyWalkAppearanceOnMove: boolean;
+    rebuildMapTileset: boolean;
+    mayResizeWorldCanvas: boolean;
+};
+
+/**
+ * Missile selected, Cast animation on, before mob click: WASD / camera
+ * follow / FOV refresh. Must not allocate Phaser Text, rebuild the map
+ * tileset, or rebind Walk sheets — that is the #72 hole (select PASS,
+ * move mid-prepare FAIL).
+ */
+export function planMagiasMoveDuringPrepare(spellId: number): MagiasMoveDuringPreparePlan {
+    return {
+        spellId,
+        createPhaserText: canCreateMagiasUiPhaserText(),
+        createFloatingText: canCreateMagiasUiPhaserText(),
+        mayTouchCanvasPoolForGameCanvas: canTouchCanvasPoolOnMagiasSelect(),
+        mayMutateWorldCanvasTextures: canMutateWorldCanvasOnMoveDuringPrepare(),
+        fetchAppearanceSheets: canFetchAppearanceSheetOnStateEnter(true),
+        presentCircle: canSpawnCastingCircleOnPrepare(),
+        applyWalkAppearanceOnMove: canApplyWalkAppearanceOnMagiasPrepare(),
+        rebuildMapTileset: canRebuildMapTilesetOnMagiasPrepare(),
+        mayResizeWorldCanvas: canMutateWorldCanvasOnMoveDuringPrepare(),
+    };
+}
+
+/**
+ * Applies the mid-prepare move visual plan. Fail-closed: never Text /
+ * addCanvas / generateTexture / tileset createCanvas. Keeps the ritual
+ * armed so a later soft-cast confirm is still gated.
+ */
+export function applyMagiasMoveDuringPrepareVisuals(
+    spellId: number,
+    scene: MagiasSelectSceneProbe,
+): MagiasMoveDuringPreparePlan {
+    beginMagiasRitual();
+    const plan = planMagiasMoveDuringPrepare(spellId);
+    if (
+        plan.createPhaserText
+        || plan.createFloatingText
+        || plan.mayTouchCanvasPoolForGameCanvas
+        || plan.mayMutateWorldCanvasTextures
+        || plan.fetchAppearanceSheets
+        || plan.presentCircle
+        || plan.applyWalkAppearanceOnMove
+        || plan.rebuildMapTileset
+        || plan.mayResizeWorldCanvas
+    ) {
+        scene.add.text(0, 0, 'magias-move');
+        scene.textures.addCanvas?.('magias-move', scene.game.canvas as HTMLCanvasElement);
+        scene.textures.generateTexture?.('magias-move');
+        scene.textures.createCanvas?.('magias-move-tileset', 32, 32);
+        scene.textures.remove?.('magias-move');
+        scene.game.canvas.width = 1;
+        scene.game.canvas.height = 1;
+    }
+    return plan;
+}
+
+/** WASD / arrows during prepare: re-arm the ritual so later confirm stays gated. */
+export function noteMagiasMoveDuringPrepareHotkey(): void {
+    beginMagiasRitual();
 }
 
 let magiasRitualActive = false;

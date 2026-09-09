@@ -299,7 +299,8 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
-import { endMagiasRitual } from '../../utils/castPresentation';
+import { endMagiasRitual, isMagiasRitualActive } from '../../utils/castPresentation';
+import { reassertWorldCanvasPresentationGuard } from '../../utils/worldCanvasPoolGuard';
 import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 import {
     confuseApplyToastMessage,
@@ -2804,6 +2805,9 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
+                if (isMagiasRitualActive()) {
+                    reassertWorldCanvasPresentationGuard(this.game);
+                }
                 if (this.mapStreamWalkEnabled) {
                     void this.mapManager?.syncStreamedView({
                         standingHold: this.isStandingNearEnterFocus(),

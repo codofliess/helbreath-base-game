@@ -29,10 +29,11 @@ import {
     canPresentCastingCircle,
     canSpawnCastingCircleOnPrepare,
     endMagiasRitual,
+    isMagiasRitualActive,
     shouldAdvanceCastToReady,
     shouldSkipCastCanvasWorkOnState,
 } from '../../utils/castPresentation';
-import { withWorldCanvasBoxGuard } from '../../utils/worldCanvasPoolGuard';
+import { reassertWorldCanvasPresentationGuard, withWorldCanvasBoxGuard } from '../../utils/worldCanvasPoolGuard';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -893,6 +894,11 @@ export class Player extends GameObject {
         const idleFromSkippedCast =
             this.castAppearanceSkipped
             && (newState === PlayerState.IdlePeaceMode || newState === PlayerState.IdleCombatMode);
+        const walkFromPrepare =
+            isMagiasRitualActive()
+            && (newState === PlayerState.Run
+                || newState === PlayerState.WalkPeaceMode
+                || newState === PlayerState.WalkCombatMode);
         const skipCastCanvasWork = shouldSkipCastCanvasWorkOnState(
             newState === PlayerState.Cast
                 ? 'Cast'
@@ -900,7 +906,9 @@ export class Player extends GameObject {
                     ? 'CastReady'
                     : idleFromSkippedCast
                         ? 'IdleFromCast'
-                        : 'Idle',
+                        : walkFromPrepare
+                            ? 'MoveDuringPrepare'
+                            : 'Idle',
         );
         if (!skipCastCanvasWork) {
             try {
@@ -3029,6 +3037,11 @@ export class Player extends GameObject {
         cursorPixelX?: number,
         cursorPixelY?: number
     ): void {
+        if (isMagiasRitualActive()) {
+            withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
+                reassertWorldCanvasPresentationGuard(this.scene.game);
+            });
+        }
         if (this.isParalyzed() ||
             this.dead ||
             this.isCasting() ||

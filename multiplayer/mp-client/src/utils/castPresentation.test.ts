@@ -3,20 +3,25 @@ import { describe, it } from 'node:test';
 import { SPELL_MAGIC_MISSILE_ID } from '../constants/Spells';
 import { getOlympiaServerSpellId } from '../constants/OlympiaServerSpellMap';
 import {
+    applyMagiasMoveDuringPrepareVisuals,
     applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
     beginMagiasRitual,
     canCreateCastAnnounceText,
     canCreateMagiasUiPhaserText,
     canFetchAppearanceSheetOnStateEnter,
+    canApplyWalkAppearanceOnMagiasPrepare,
+    canMutateWorldCanvasOnMoveDuringPrepare,
     canMutateWorldCanvasTexturesOnCastConfirm,
     canMutateWorldCanvasTexturesOnCastEnter,
+    canRebuildMapTilesetOnMagiasPrepare,
     canPresentCastingCircle,
     canSpawnCastingCircleOnPrepare,
     canTouchCanvasPoolOnMagiasSelect,
     endMagiasRitual,
     isMagiasRitualActive,
     planCastEnterVisuals,
+    planMagiasMoveDuringPrepare,
     planMagiasSoftCastConfirm,
     planMagiasSpellSelect,
     shouldAdvanceCastToReady,
@@ -62,6 +67,13 @@ describe('Missile prepare must not fetch CAST / circle sheets', () => {
     it('skips Idle rebind after skipped Cast (soft-cast / target confirm)', () => {
         assert.equal(canMutateWorldCanvasTexturesOnCastConfirm(), false);
         assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
+    });
+
+    it('skips Walk appearance and tileset rebuild on move mid-prepare', () => {
+        assert.equal(canMutateWorldCanvasOnMoveDuringPrepare(), false);
+        assert.equal(canApplyWalkAppearanceOnMagiasPrepare(), false);
+        assert.equal(canRebuildMapTilesetOnMagiasPrepare(), false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('MoveDuringPrepare'), true);
     });
 });
 
@@ -246,5 +258,74 @@ describe('soft-cast / target-mob confirm must not touch game.canvas', () => {
         assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
         assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
+    });
+});
+
+describe('move mid-prepare must not touch game.canvas', () => {
+    it('plans WASD / camera follow without Walk rebind or tileset rebuild', () => {
+        const plan = planMagiasMoveDuringPrepare(SPELL_MAGIC_MISSILE_ID);
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.createPhaserText, false);
+        assert.equal(plan.createFloatingText, false);
+        assert.equal(plan.mayTouchCanvasPoolForGameCanvas, false);
+        assert.equal(plan.mayMutateWorldCanvasTextures, false);
+        assert.equal(plan.fetchAppearanceSheets, false);
+        assert.equal(plan.presentCircle, false);
+        assert.equal(plan.applyWalkAppearanceOnMove, false);
+        assert.equal(plan.rebuildMapTileset, false);
+        assert.equal(plan.mayResizeWorldCanvas, false);
+        assert.equal(canMutateWorldCanvasOnMoveDuringPrepare(), false);
+        assert.equal(canRebuildMapTilesetOnMagiasPrepare(), false);
+    });
+
+    it('select Missile then move mid-prepare does not add.text or resize game.canvas', () => {
+        const world = { width: 1024, height: 576 };
+        let textCalls = 0;
+        let canvasPoolTouches = 0;
+        const scene = {
+            game: { canvas: world },
+            add: {
+                text: () => {
+                    textCalls += 1;
+                    world.width = 1;
+                    world.height = 1;
+                    throw new Error('Missile move mid-prepare must not create Phaser Text');
+                },
+            },
+            textures: {
+                addCanvas: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile move mid-prepare must not addCanvas');
+                },
+                remove: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile move mid-prepare must not textures.remove');
+                },
+                generateTexture: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile move mid-prepare must not generateTexture');
+                },
+                createCanvas: () => {
+                    canvasPoolTouches += 1;
+                    world.width = 1;
+                    world.height = 1;
+                    throw new Error('Missile move mid-prepare must not createCanvas tileset');
+                },
+            },
+        };
+
+        endMagiasRitual();
+        applyMagiasSpellSelectVisuals(SPELL_MAGIC_MISSILE_ID, scene, getOlympiaServerSpellId);
+        const plan = applyMagiasMoveDuringPrepareVisuals(SPELL_MAGIC_MISSILE_ID, scene);
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.applyWalkAppearanceOnMove, false);
+        assert.equal(plan.rebuildMapTileset, false);
+        assert.equal(isMagiasRitualActive(), true);
+        assert.equal(textCalls, 0);
+        assert.equal(canvasPoolTouches, 0);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        endMagiasRitual();
+        assert.equal(isMagiasRitualActive(), false);
     });
 });

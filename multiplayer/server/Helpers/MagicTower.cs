@@ -281,7 +281,6 @@ public static class MagicTower {
         }
 
         Spawn.SendInitialState(wr, player, includeSpells: true);
-        // InitialState carries Spells.json ids; F7 Circle reads Olympia ids from this ACK.
         SendBookSnapshot(player, ok: true, "Magic book synced.");
     }
 

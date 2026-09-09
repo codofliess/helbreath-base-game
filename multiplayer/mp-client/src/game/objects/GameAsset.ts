@@ -155,8 +155,9 @@ export class GameAsset {
             animationKey = textureKey;
         }
 
-        // Missing / world-canvas-aliased sheet must not throw or bind. Do not
-        // textures.remove a world-backed key (CanvasPool.remove zeros game.canvas).
+        // Missing sheet must not throw — that aborts GameWorld / remounts the hub (landing).
+        // A world-canvas alias must not be bound or textures.remove'd
+        // (CanvasPool.remove zeros game.canvas).
         if (!usePendingItemPlaceholder && !config.mapObject && !isSafeDrawableTexture(scene, textureKey)) {
             ensurePendingPlayerItemAppearanceTexture(scene);
             usePendingItemPlaceholder = true;

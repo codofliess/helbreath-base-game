@@ -142,11 +142,10 @@ assert(
         && /Display\.Canvas\.CanvasPool/.test(worldCanvasPoolGuardInstall),
     'installWorldCanvasPoolGuard must wrap Phaser.Display.Canvas.CanvasPool',
 );
-const mainTs = read('src/game/main.ts');
-const bootTs = read('src/game/scenes/Boot.ts');
+const startGameTs = read('src/game/main.ts');
 assert(
-    /installWorldCanvasPoolGuard/.test(mainTs)
-        && /installWorldCanvasPoolGuard/.test(bootTs)
+    /installWorldCanvasPoolGuard/.test(startGameTs)
+        && /installWorldCanvasPoolGuard/.test(read('src/game/scenes/Boot.ts'))
         && /installWorldCanvasPoolGuard/.test(gameWorld),
     'StartGame / Boot / GameWorld must install the world-canvas CanvasPool guard',
 );

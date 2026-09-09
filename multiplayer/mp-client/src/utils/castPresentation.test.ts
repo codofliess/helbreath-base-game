@@ -3,11 +3,13 @@ import { describe, it } from 'node:test';
 import { SPELL_MAGIC_MISSILE_ID } from '../constants/Spells';
 import { getOlympiaServerSpellId } from '../constants/OlympiaServerSpellMap';
 import {
+    applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
     beginMagiasRitual,
     canCreateCastAnnounceText,
     canCreateMagiasUiPhaserText,
     canFetchAppearanceSheetOnStateEnter,
+    canMutateWorldCanvasTexturesOnCastConfirm,
     canMutateWorldCanvasTexturesOnCastEnter,
     canPresentCastingCircle,
     canSpawnCastingCircleOnPrepare,
@@ -15,6 +17,7 @@ import {
     endMagiasRitual,
     isMagiasRitualActive,
     planCastEnterVisuals,
+    planMagiasSoftCastConfirm,
     planMagiasSpellSelect,
     shouldAdvanceCastToReady,
     shouldSkipCastCanvasWorkOnState,
@@ -54,6 +57,11 @@ describe('Missile prepare must not fetch CAST / circle sheets', () => {
         assert.equal(shouldSkipCastCanvasWorkOnState('Cast'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
+    });
+
+    it('skips Idle rebind after skipped Cast (soft-cast / target confirm)', () => {
+        assert.equal(canMutateWorldCanvasTexturesOnCastConfirm(), false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
     });
 });
 
@@ -171,5 +179,72 @@ describe('F7 select Olympia Missile id 0 must not create Text or touch CanvasPoo
         beginMagiasRitual();
         assert.equal(isMagiasRitualActive(), true);
         endMagiasRitual();
+    });
+});
+
+describe('soft-cast / target-mob confirm must not touch game.canvas', () => {
+    it('plans Missile confirm without Text / Idle rebind / local projectile', () => {
+        const plan = planMagiasSoftCastConfirm(SPELL_MAGIC_MISSILE_ID);
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.createPhaserText, false);
+        assert.equal(plan.createFloatingText, false);
+        assert.equal(plan.mayTouchCanvasPoolForGameCanvas, false);
+        assert.equal(plan.mayMutateWorldCanvasTextures, false);
+        assert.equal(plan.fetchAppearanceSheets, false);
+        assert.equal(plan.presentCircle, false);
+        assert.equal(plan.spawnProjectileGameAsset, false);
+        assert.equal(plan.applyIdleAppearanceOnConfirm, false);
+        assert.equal(canMutateWorldCanvasTexturesOnCastConfirm(), false);
+    });
+
+    it('confirming Missile on a mob does not add.text or resize game.canvas', () => {
+        const world = { width: 1024, height: 576 };
+        let textCalls = 0;
+        let canvasPoolTouches = 0;
+        const scene = {
+            game: { canvas: world },
+            add: {
+                text: () => {
+                    textCalls += 1;
+                    world.width = 1;
+                    world.height = 1;
+                    throw new Error('Missile confirm must not create Phaser Text');
+                },
+            },
+            textures: {
+                addCanvas: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile confirm must not addCanvas');
+                },
+                remove: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile confirm must not textures.remove');
+                },
+                generateTexture: () => {
+                    canvasPoolTouches += 1;
+                    throw new Error('Missile confirm must not generateTexture');
+                },
+            },
+        };
+
+        endMagiasRitual();
+        const plan = applyMagiasSoftCastConfirmVisuals(SPELL_MAGIC_MISSILE_ID, scene);
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.applyIdleAppearanceOnConfirm, false);
+        assert.equal(plan.spawnProjectileGameAsset, false);
+        assert.equal(isMagiasRitualActive(), true);
+        assert.equal(textCalls, 0);
+        assert.equal(canvasPoolTouches, 0);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        endMagiasRitual();
+        assert.equal(isMagiasRitualActive(), false);
+    });
+
+    it('select skips Cast only; confirm is the IdleFromCast hole #71 left open', () => {
+        assert.equal(shouldSkipCastCanvasWorkOnState('Cast'), true);
+        assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
+        assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('IdleFromCast'), true);
     });
 });

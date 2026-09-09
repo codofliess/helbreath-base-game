@@ -5,8 +5,8 @@ import {
 } from './worldCanvasPoolGuard';
 
 /**
- * Bind Phaser's singleton CanvasPool so Magias select / prepare cannot
- * 1×1 or reuse `game.canvas` (full-black map, CSS cursor still visible).
+ * Bind Phaser's singleton CanvasPool so Magias select / prepare / soft-cast
+ * confirm cannot 1×1 or reuse `game.canvas` (full-black map, CSS cursor still visible).
  */
 export function installWorldCanvasPoolGuard(game: Game): void {
     attachWorldCanvasPoolGuard(

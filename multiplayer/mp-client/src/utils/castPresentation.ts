@@ -73,12 +73,24 @@ export function canMutateWorldCanvasTexturesOnCastEnter(): boolean {
 }
 
 /**
- * Fail-closed Cast and CastReady must not applyStateAppearance / updateShadow.
- * #70 skipped Cast only; CastReady still bound idle-combat / human sheets.
+ * Soft-cast confirm (CastReady → click mob / click-through) must not
+ * generateTexture / addCanvas(game.canvas) / bind a world-canvas alias.
+ * #71 guarded the pool on *select*; confirm still ran switchToIdle appearance.
+ */
+export function canMutateWorldCanvasTexturesOnCastConfirm(): boolean {
+    return false;
+}
+
+/**
+ * Fail-closed Cast, CastReady, and the Idle rebind after a skipped Cast.
+ * #70 skipped Cast only; #71 skipped CastReady; confirm vs mob still applied Idle.
  */
 export function shouldSkipCastCanvasWorkOnState(
-    state: 'Cast' | 'CastReady' | 'Idle',
+    state: 'Cast' | 'CastReady' | 'Idle' | 'IdleFromCast',
 ): boolean {
+    if (state === 'IdleFromCast') {
+        return !canMutateWorldCanvasTexturesOnCastConfirm();
+    }
     if (canMutateWorldCanvasTexturesOnCastEnter()) {
         return false;
     }
@@ -178,6 +190,66 @@ export function applyMagiasSpellSelectVisuals(
         scene.textures.addCanvas?.('magias-select', scene.game.canvas as HTMLCanvasElement);
         scene.textures.generateTexture?.('magias-select');
         scene.textures.remove?.('magias-select');
+    }
+    return plan;
+}
+
+export type MagiasSoftCastConfirmPlan = {
+    spellId: number;
+    createPhaserText: boolean;
+    createFloatingText: boolean;
+    mayTouchCanvasPoolForGameCanvas: boolean;
+    mayMutateWorldCanvasTextures: boolean;
+    fetchAppearanceSheets: boolean;
+    presentCircle: boolean;
+    spawnProjectileGameAsset: boolean;
+    applyIdleAppearanceOnConfirm: boolean;
+};
+
+/**
+ * CastReady → target mob (or F7 click-through onto a mob). Must not allocate
+ * Phaser Text / touch CanvasPool for `game.canvas` / rebind idle sheets —
+ * that is the #71 hole (select PASS, confirm FAIL).
+ */
+export function planMagiasSoftCastConfirm(spellId: number): MagiasSoftCastConfirmPlan {
+    return {
+        spellId,
+        createPhaserText: canCreateMagiasUiPhaserText(),
+        createFloatingText: canCreateMagiasUiPhaserText(),
+        mayTouchCanvasPoolForGameCanvas: canTouchCanvasPoolOnMagiasSelect(),
+        mayMutateWorldCanvasTextures: canMutateWorldCanvasTexturesOnCastConfirm(),
+        fetchAppearanceSheets: canFetchAppearanceSheetOnStateEnter(true),
+        presentCircle: canSpawnCastingCircleOnPrepare(),
+        spawnProjectileGameAsset: false,
+        applyIdleAppearanceOnConfirm: !shouldSkipCastCanvasWorkOnState('IdleFromCast'),
+    };
+}
+
+/**
+ * Applies the soft-cast confirm visual plan. Fail-closed: never Text /
+ * addCanvas / generateTexture / textures.remove. Keeps the ritual armed so
+ * FloatingText constructed during confirm is a no-op.
+ */
+export function applyMagiasSoftCastConfirmVisuals(
+    spellId: number,
+    scene: MagiasSelectSceneProbe,
+): MagiasSoftCastConfirmPlan {
+    beginMagiasRitual();
+    const plan = planMagiasSoftCastConfirm(spellId);
+    if (
+        plan.createPhaserText
+        || plan.createFloatingText
+        || plan.mayTouchCanvasPoolForGameCanvas
+        || plan.mayMutateWorldCanvasTextures
+        || plan.fetchAppearanceSheets
+        || plan.presentCircle
+        || plan.spawnProjectileGameAsset
+        || plan.applyIdleAppearanceOnConfirm
+    ) {
+        scene.add.text(0, 0, 'magias-confirm');
+        scene.textures.addCanvas?.('magias-confirm', scene.game.canvas as HTMLCanvasElement);
+        scene.textures.generateTexture?.('magias-confirm');
+        scene.textures.remove?.('magias-confirm');
     }
     return plan;
 }

@@ -27,6 +27,7 @@ import {
     canCreateMagiasUiPhaserText,
     canMutateWorldCanvasTexturesOnCastEnter,
     canPresentCastingCircle,
+    canSpawnCastingCircleOnPrepare,
     endMagiasRitual,
     shouldAdvanceCastToReady,
 } from '../../utils/castPresentation';
@@ -838,10 +839,12 @@ export class Player extends GameObject {
         if (newState === PlayerState.Cast && previousState !== PlayerState.Cast) {
             this.castStartedAtMs = performance.now();
             this.castAppearanceSkipped = !canMutateWorldCanvasTexturesOnCastEnter();
-            try {
-                this.createCastingCircleEffect();
-            } catch (error) {
-                console.warn('[Player] Casting circle skipped (fail-closed)', error);
+            if (canSpawnCastingCircleOnPrepare() && canMutateWorldCanvasTexturesOnCastEnter()) {
+                try {
+                    this.createCastingCircleEffect();
+                } catch (error) {
+                    console.warn('[Player] Casting circle skipped (fail-closed)', error);
+                }
             }
             try {
                 this.createSpellNameFloatingText();
@@ -3484,6 +3487,9 @@ export class Player extends GameObject {
             return;
         }
 
+        if (!canSpawnCastingCircleOnPrepare()) {
+            return;
+        }
         const textureKey = getTextureKeyFromEffectConfig(effectConfig);
         if (!canPresentCastingCircle(isSafeDrawableTexture(this.scene, textureKey))) {
             return;

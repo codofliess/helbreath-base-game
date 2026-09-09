@@ -66,6 +66,7 @@ assert(
     /currentState === PlayerState\.Cast/.test(playerTs)
         && /shouldAdvanceCastToReady/.test(playerTs)
         && /canPresentCastingCircle/.test(playerTs)
+        && /canSpawnCastingCircleOnPrepare/.test(playerTs)
         && /canCreateMagiasUiPhaserText/.test(playerTs)
         && /endMagiasRitual/.test(playerTs)
         && /castAppearanceSkipped/.test(playerTs)
@@ -79,10 +80,11 @@ const createCircle = playerTs.slice(
     playerTs.indexOf('private spawnCastingCircleEffect'),
 );
 assert(
-    /canPresentCastingCircle/.test(createCircle)
+    /canSpawnCastingCircleOnPrepare/.test(createCircle)
+        && /canPresentCastingCircle/.test(createCircle)
         && !/loadEffectAssetsOnDemand/.test(createCircle)
         && !/removeWorldCanvasAliasedTexture/.test(createCircle),
-    'createCastingCircleEffect must not load or textures.remove on Missile prepare',
+    'createCastingCircleEffect must refuse fogata on Missile prepare even when effect5-7 looks safe',
 );
 const appearanceMgr = read('src/utils/PlayerAppearanceManager.ts');
 const scheduleMissing = appearanceMgr.slice(
@@ -112,9 +114,11 @@ assert(
         && /applyMagiasSpellSelectVisuals/.test(castPresentation)
         && /beginMagiasRitual/.test(castPresentation)
         && /canTouchCanvasPoolOnMagiasSelect/.test(castPresentation)
+        && /canSpawnCastingCircleOnPrepare/.test(castPresentation)
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
-        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect'))),
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect')))
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canSpawnCastingCircleOnPrepare'))),
     'Magias select/Cast path must refuse Phaser Text, CanvasPool(game.canvas), generateTexture, addCanvas, textures.remove',
 );
 const castDialogStore = read('src/ui/store/CastDialog.store.ts');

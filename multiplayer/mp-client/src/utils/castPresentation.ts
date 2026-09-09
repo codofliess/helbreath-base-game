@@ -19,12 +19,20 @@ export function shouldAdvanceCastToReady(
 }
 
 /**
- * Casting circle (`effect5` sheet 7) is presented only when that key is
- * already a safe isolated sheet. Missile prepare must not HTTP+decode it —
- * that path still ran after PR #67 and can lose the Canvas 2D context.
+ * Isolated-sheet check only. Magias prepare must not use this alone —
+ * {@link canSpawnCastingCircleOnPrepare} is the fail-closed gate.
  */
 export function canPresentCastingCircle(textureAlreadySafe: boolean): boolean {
     return textureAlreadySafe;
+}
+
+/**
+ * Cast animation ON still entered Cast and spawned fogata (`drawEffect` →
+ * GameAsset) when effect5-7 *looked* safe. That bind can steal `game.canvas`.
+ * Missile select/prepare never paints the circle.
+ */
+export function canSpawnCastingCircleOnPrepare(): boolean {
+    return false;
 }
 
 /**
@@ -78,7 +86,8 @@ export type CastEnterVisualPlan = {
 /** Fail-closed Missile / Heal prepare: skip unsafe FX, still reach CastReady. */
 export function planCastEnterVisuals(circleTextureAlreadySafe: boolean): CastEnterVisualPlan {
     return {
-        presentCircle: canPresentCastingCircle(circleTextureAlreadySafe),
+        presentCircle:
+            canSpawnCastingCircleOnPrepare() && canPresentCastingCircle(circleTextureAlreadySafe),
         fetchAppearanceSheets: canFetchAppearanceSheetOnStateEnter(true),
         createPhaserText: canCreateMagiasUiPhaserText(),
         mayMutateWorldCanvasTextures: canMutateWorldCanvasTexturesOnCastEnter(),
@@ -88,6 +97,7 @@ export function planCastEnterVisuals(circleTextureAlreadySafe: boolean): CastEnt
 export type MagiasSpellSelectPlan = {
     spellId: number;
     serverCatalogSpellId: number | undefined;
+    useCastAnimationOn: boolean;
     createPhaserText: boolean;
     createFloatingText: boolean;
     mayTouchCanvasPoolForGameCanvas: boolean;
@@ -104,11 +114,13 @@ export function planMagiasSpellSelect(
     spellId: number,
     mapToServerCatalog: (olympiaSpellId: number) => number | undefined,
     circleTextureAlreadySafe = false,
+    useCastAnimationOn = true,
 ): MagiasSpellSelectPlan {
     const enter = planCastEnterVisuals(circleTextureAlreadySafe);
     return {
         spellId,
         serverCatalogSpellId: mapToServerCatalog(spellId),
+        useCastAnimationOn,
         createPhaserText: canCreateMagiasUiPhaserText(),
         createFloatingText: canCreateMagiasUiPhaserText(),
         mayTouchCanvasPoolForGameCanvas: canTouchCanvasPoolOnMagiasSelect(),
@@ -146,6 +158,7 @@ export function applyMagiasSpellSelectVisuals(
         || plan.mayTouchCanvasPoolForGameCanvas
         || plan.mayMutateWorldCanvasTextures
         || plan.fetchAppearanceSheets
+        || plan.presentCircle
     ) {
         scene.add.text(0, 0, 'magias-select');
         scene.textures.addCanvas?.('magias-select', scene.game.canvas as HTMLCanvasElement);

@@ -29,7 +29,7 @@ import {
     waitForBrowserFrames,
     waitMs,
 } from './mapViewportStream';
-import { canRebuildMapTilesetOnMagiasPrepare, isMagiasRitualActive } from './castPresentation';
+import { canRebuildMapTilesetOnMagiasPrepare, isMagiasMoveDuringPrepareActive } from './castPresentation';
 
 export interface MapManagerConfig {
     scene: Scene;
@@ -210,10 +210,10 @@ export class MapManager {
         if (!camera) {
             return;
         }
-        // WASD / camera-follow during Magias prepare: do not destroy+rebuild the
-        // ground tileset (`createCanvas` / getContext / evict). Select never
-        // restreams; that rebuild is the move-only black-canvas path.
-        if (isMagiasRitualActive() && !canRebuildMapTilesetOnMagiasPrepare()) {
+        // WASD / camera-follow during a painted Magias move-freeze: do not
+        // destroy+rebuild the ground tileset. Idle / leftover-ritual walk
+        // must still restream or the FOV goes black past the enter window.
+        if (isMagiasMoveDuringPrepareActive() && !canRebuildMapTilesetOnMagiasPrepare()) {
             return;
         }
         let map: HBMap;

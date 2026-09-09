@@ -78,6 +78,7 @@ assert(
         && /MoveDuringPrepare/.test(playerTs)
         && /isMagiasRitualActive/.test(playerTs)
         && /beginMagiasMoveDuringPrepare/.test(playerTs)
+        && /prepareLive/.test(playerTs)
         && /onLeftClickAt/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
@@ -147,6 +148,7 @@ assert(
         && /MoveDuringPrepare/.test(castPresentation)
         && /beginMagiasMoveDuringPrepare/.test(castPresentation)
         && /isMagiasMoveDuringPrepareActive/.test(castPresentation)
+        && /syncMagiasMoveDuringPrepareCamera/.test(castPresentation)
         && /setWorldCanvasClearRefused/.test(castPresentation)
         && /snapshotWorldCanvasPixels/.test(castPresentation)
         && /restoreWorldCanvasPixels/.test(castPresentation)
@@ -177,8 +179,10 @@ assert(
         && !/beginMagiasMoveDuringPrepare/.test(applySelectFn)
         && /setWorldCanvasClearRefused/.test(beginMoveFn)
         && /snapshotWorldCanvasPixelsIfPainted/.test(beginMoveFn)
-        && /hasPaintedWorldCanvasSnapshot/.test(beginMoveFn),
-    'Bare Missile SELECT must not arm fillRect refuse / FOV snapshot restore; only WASD mid-prepare may',
+        && /hasPaintedWorldCanvasSnapshot/.test(beginMoveFn)
+        && /if \(!magiasRitualActive\)/.test(beginMoveFn)
+        && !/magiasRitualActive = true/.test(beginMoveFn),
+    'Bare Missile SELECT must not arm fillRect refuse / FOV snapshot restore; only WASD mid-prepare after a live ritual may',
 );
 const worldCanvasPoolGuard = read('src/utils/worldCanvasPoolGuard.ts');
 assert(
@@ -198,6 +202,7 @@ assert(
         && /setWorldCanvasClearRefused/.test(worldCanvasPoolGuard)
         && /refuseFullCanvasClear/.test(worldCanvasPoolGuard)
         && /lockWorldCanvasRendererClear/.test(worldCanvasPoolGuard)
+        && /bindWorldCanvasRenderer/.test(worldCanvasPoolGuard)
         && /clearBeforeRender/.test(worldCanvasPoolGuard)
         && /postrender/.test(worldCanvasPoolGuard)
         && /snapshotWorldCanvasPixels/.test(worldCanvasPoolGuard)
@@ -229,23 +234,33 @@ assert(
     'Game-world FOV presentation must lock game.canvas size/getContext and skip Scale.refresh only on WASD mid-prepare',
 );
 assert(
-    /isMagiasRitualActive/.test(mapManager)
-        && /canRebuildMapTilesetOnMagiasPrepare/.test(mapManager),
-    'Walk restream must not rebuild the map tileset during Magias prepare',
+    /isMagiasMoveDuringPrepareActive/.test(mapManager)
+        && /canRebuildMapTilesetOnMagiasPrepare/.test(mapManager)
+        && !/isMagiasRitualActive/.test(mapManager),
+    'Walk restream must skip tileset rebuild only while the painted move-freeze is armed',
 );
 assert(
     /isMagiasMoveDuringPrepareActive/.test(gameWorld)
         && /reassertWorldCanvasPresentationGuard/.test(gameWorld)
-        && /transparent = isMagiasMoveDuringPrepareActive\(\)/.test(gameWorld),
+        && /syncMagiasMoveDuringPrepareCamera/.test(gameWorld)
+        && !/transparent = isMagiasMoveDuringPrepareActive\(\)/.test(gameWorld),
     'GameWorld must re-lock the world canvas and skip camera #000 fill only on WASD mid-prepare',
 );
 const mainTsx = read('src/main.tsx');
+const wasdMoveFn = mainTsx.slice(
+    mainTsx.indexOf('if (isMagiasMoveDuringPrepareKey(e) && isMagiasMoveDuringPrepareActive())'),
+    mainTsx.indexOf('// Escape: close chat compose'),
+);
 assert(
     /isMagiasMoveDuringPrepareKey/.test(mainTsx)
-        && /noteMagiasMoveDuringPrepareHotkey/.test(mainTsx)
-        && /reassertWorldCanvasPresentationGuard/.test(mainTsx)
-        && /stopImmediatePropagation/.test(mainTsx),
-    'WASD / arrows mid-prepare must reassert the world-canvas guard and not confirm the spell',
+        && /isMagiasMoveDuringPrepareActive/.test(wasdMoveFn)
+        && /reassertWorldCanvasPresentationGuard/.test(wasdMoveFn)
+        && !/noteMagiasMoveDuringPrepareHotkey/.test(mainTsx)
+        && !/stopImmediatePropagation/.test(wasdMoveFn)
+        && !/preventDefault/.test(wasdMoveFn)
+        && !/beginMagiasMoveDuringPrepare/.test(wasdMoveFn)
+        && !/noteMagiasMoveDuringPrepareHotkey/.test(wasdMoveFn),
+    'WASD / arrows must not swallow keys or arm the move freeze from idle keydown',
 );
 const pkgJson = read('package.json');
 assert(

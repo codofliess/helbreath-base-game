@@ -19,28 +19,34 @@ import {
     type WorldCanvasPoolApi,
 } from './worldCanvasPoolGuard';
 
-/** Phaser 3.90 CanvasPool: reuse `parent === null`, remove 1×1s matching canvas or parent. */
+/**
+ * Phaser 3.90 CanvasPool: `first()` reuses falsy parent; `create2D` closes over
+ * the inner `create` (replacing `pool.create` alone does not protect it);
+ * `remove` 1×1s a matching canvas or parent.
+ */
 function createPhaserStylePool(): WorldCanvasPoolApi {
     const pool: CanvasPoolContainer[] = [];
-    const api: WorldCanvasPoolApi = {
-        pool,
-        create(parent?: unknown, width = 1, height = 1) {
-            let container = pool.find((row) => row.parent === null);
-            if (!container) {
-                container = { parent: parent ?? null, canvas: { width: 1, height: 1 } };
-                pool.push(container);
-            }
+    const create = (parent?: unknown, width = 1, height = 1): WorldCanvasLike => {
+        let container = pool.find((row) => !row.parent);
+        if (!container) {
+            container = { parent: parent ?? null, canvas: { width: 1, height: 1 } };
+            pool.push(container);
+        } else {
             container.parent = parent ?? null;
-            if (container.canvas) {
-                container.canvas.width = Number(width) || 1;
-                container.canvas.height = Number(height) || 1;
-            }
-            return container.canvas as WorldCanvasLike;
-        },
-        create2D(parent?: unknown, width = 1, height = 1) {
-            const canvas = api.create(parent, width, height);
-            return { canvas };
-        },
+        }
+        if (container.canvas) {
+            container.canvas.width = Number(width) || 1;
+            container.canvas.height = Number(height) || 1;
+        }
+        return container.canvas as WorldCanvasLike;
+    };
+    const create2D = (parent?: unknown, width = 1, height = 1): WorldCanvasLike => {
+        return create(parent, width, height);
+    };
+    return {
+        pool,
+        create,
+        create2D,
         remove(parent: unknown) {
             for (const container of pool) {
                 if (container.canvas === parent || container.parent === parent) {
@@ -53,7 +59,6 @@ function createPhaserStylePool(): WorldCanvasPoolApi {
             }
         },
     };
-    return api;
 }
 
 describe('Phaser CanvasPool 1×1s game.canvas (the black-map steal)', () => {
@@ -87,6 +92,18 @@ describe('Phaser CanvasPool 1×1s game.canvas (the black-map steal)', () => {
         assert.equal(world.width, 32);
         assert.equal(world.height, 16);
     });
+
+    it('create2D closes over inner create so wrapping pool.create alone is not enough', () => {
+        const game = { id: 'phaser-game' };
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const pool = createPhaserStylePool();
+        pool.pool.push({ parent: game, canvas: world });
+        pool.remove(world);
+        const stolen = pool.create2D?.({ id: 'texture-manager' }, 1, 1);
+        assert.equal(stolen, world);
+        assert.equal(world.width, 1);
+        assert.equal(world.height, 1);
+    });
 });
 
 describe('protectWorldCanvasInPool', () => {
@@ -111,8 +128,10 @@ describe('protectWorldCanvasInPool', () => {
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
 
-        const ctx = pool.create2D?.({ id: 'text-style' }, 8, 8) as { canvas: WorldCanvasLike };
-        assert.notEqual(ctx.canvas, world);
+        const fromCreate2D = pool.create2D?.({ id: 'text-style' }, 8, 8) as WorldCanvasLike;
+        assert.notEqual(fromCreate2D, world);
+        assert.equal(fromCreate2D.width, 8);
+        assert.equal(fromCreate2D.height, 8);
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
     });

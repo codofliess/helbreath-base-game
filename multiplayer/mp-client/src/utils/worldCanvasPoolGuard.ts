@@ -78,7 +78,8 @@ export function occupyWorldCanvasPoolSlot(pool: WorldCanvasPoolApi): void {
         return;
     }
     for (const container of pool.pool) {
-        if (container.canvas === world && container.parent == null) {
+        // Phaser `first()` treats any falsy parent as free.
+        if (container.canvas === world && !container.parent) {
             container.parent = guardState.worldParent ?? WORLD_SLOT_SENTINEL;
         }
     }
@@ -146,32 +147,37 @@ function wrapCreate(pool: WorldCanvasPoolApi, original: WorldCanvasPoolApi['crea
 }
 
 function wrapCreate2D(pool: WorldCanvasPoolApi): void {
-    const original = pool.create2D;
-    if (!original || isGuarded(pool.create2D)) {
+    if (!pool.create2D || isGuarded(pool.create2D)) {
         return;
     }
-    const wrapped = function (this: WorldCanvasPoolApi, ...args: unknown[]): unknown {
-        occupyWorldCanvasPoolSlot(pool);
-        const box = snapshotWorldCanvasBox(guardState.worldCanvas);
-        const ctx = original.apply(this, args);
-        restoreWorldCanvasBoxIfStolen(guardState.worldCanvas, box);
-        const ctxCanvas = ctx && typeof ctx === 'object' && 'canvas' in ctx
-            ? (ctx as { canvas?: WorldCanvasLike }).canvas
-            : undefined;
-        if (ctxCanvas === guardState.worldCanvas) {
-            occupyWorldCanvasPoolSlot(pool);
-            const width = typeof args[1] === 'number' ? args[1] : 1;
-            const height = typeof args[2] === 'number' ? args[2] : 1;
-            const fallback = createDetachedCanvas(width, height);
-            if (typeof fallback.getContext === 'function') {
-                return fallback.getContext('2d') ?? { canvas: fallback };
-            }
-            return { canvas: fallback };
-        }
-        return ctx;
+    // Phaser 3.90 create2D closes over the *inner* create — replacing
+    // pool.create does not protect TextStyle / createCanvas / DynamicTexture.
+    const wrapped = function (
+        this: WorldCanvasPoolApi,
+        parent?: unknown,
+        width?: number,
+        height?: number,
+    ): WorldCanvasLike {
+        return pool.create(parent, width ?? 1, height ?? 1);
     };
     markGuarded(wrapped);
     pool.create2D = wrapped;
+}
+
+function wrapCreateWebGL(pool: WorldCanvasPoolApi): void {
+    if (!pool.createWebGL || isGuarded(pool.createWebGL)) {
+        return;
+    }
+    const wrapped = function (
+        this: WorldCanvasPoolApi,
+        parent?: unknown,
+        width?: number,
+        height?: number,
+    ): WorldCanvasLike {
+        return pool.create(parent, width ?? 1, height ?? 1);
+    };
+    markGuarded(wrapped);
+    pool.createWebGL = wrapped;
 }
 
 function wrapRemove(pool: WorldCanvasPoolApi, original: WorldCanvasPoolApi['remove']): void {
@@ -214,6 +220,7 @@ export function protectWorldCanvasInPool(
     occupyWorldCanvasPoolSlot(pool);
     wrapCreate(pool, pool.create.bind(pool));
     wrapCreate2D(pool);
+    wrapCreateWebGL(pool);
     wrapRemove(pool, pool.remove.bind(pool));
 }
 

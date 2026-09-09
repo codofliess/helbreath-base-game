@@ -133,7 +133,8 @@ assert(
         && /occupyWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
         && /refuseWorldCanvasTextureBind/.test(worldCanvasPoolGuard)
         && /restoreWorldCanvasBoxIfStolen/.test(worldCanvasPoolGuard)
-        && /attachWorldCanvasPoolGuard/.test(worldCanvasPoolGuard),
+        && /attachWorldCanvasPoolGuard/.test(worldCanvasPoolGuard)
+        && /create2D closes over the \*inner\* create/.test(worldCanvasPoolGuard),
     'World canvas pool guard must wrap CanvasPool remove/create and refuse addCanvas(game.canvas)',
 );
 const worldCanvasPoolGuardInstall = read('src/utils/worldCanvasPoolGuardInstall.ts');

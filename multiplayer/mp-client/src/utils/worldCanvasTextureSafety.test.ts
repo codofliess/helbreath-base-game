@@ -52,15 +52,32 @@ describe('worldCanvasTextureSafety', () => {
         assert.equal(isSafeDrawableTexture(scene, 'sprite-missing'), false);
     });
 
-    it('removes a world-canvas alias so Missile / Heal FX cannot blit the map', () => {
-        const world = { id: 'world' };
+    it('must not textures.remove a world-canvas alias (CanvasPool.remove zeros game.canvas)', () => {
+        const world = { id: 'world', width: 800, height: 600 };
         const textures = new Map<string, { getSourceImage: () => unknown }>([
             ['sprite-effect-0', { getSourceImage: () => world }],
         ]);
         const { scene, removed } = sceneWithTextures(world, textures);
         assert.equal(removeWorldCanvasAliasedTexture(scene, 'sprite-effect-0'), true);
-        assert.deepEqual(removed, ['sprite-effect-0']);
+        assert.deepEqual(removed, []);
+        assert.equal(textures.has('sprite-effect-0'), true);
         assert.equal(isSafeDrawableTexture(scene, 'sprite-effect-0'), false);
-        assert.equal(removeWorldCanvasAliasedTexture(scene, 'sprite-effect-0'), false);
+        assert.equal((world as { width: number }).width, 800);
+        assert.equal((world as { height: number }).height, 600);
+    });
+
+    it('treats textures.get throw as unsafe (fail closed)', () => {
+        const world = { id: 'world' };
+        const scene = {
+            game: { canvas: world },
+            textures: {
+                exists: () => true,
+                get: () => {
+                    throw new Error('get failed');
+                },
+            },
+        };
+        assert.equal(isWorldCanvasTextureKey(scene, 'sprite-effect5-7'), true);
+        assert.equal(isSafeDrawableTexture(scene, 'sprite-effect5-7'), false);
     });
 });

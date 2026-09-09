@@ -22,9 +22,8 @@ import { CriticalStrikeProjectile } from '../effects/CriticalStrikeProjectile';
 import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
-import { loadEffectAssetsOnDemand } from '../../utils/EffectAssets';
-import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
-import { shouldAdvanceCastToReady } from '../../utils/castPresentation';
+import { isSafeDrawableTexture } from '../../utils/worldCanvasTextureSafety';
+import { canPresentCastingCircle, shouldAdvanceCastToReady } from '../../utils/castPresentation';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -3423,8 +3422,9 @@ export class Player extends GameObject {
     /**
      * Creates the casting circle effect at the player's location.
      * Effect duration matches castSpeed and does not loop.
-     * Does not call `textures.get` on a missing key (that is `__MISSING`, not "absent")
-     * and never binds a world-canvas alias as the circle sheet.
+     * Does not call `textures.get` on a missing key (that is `__MISSING`, not "absent"),
+     * never binds a world-canvas alias, and never lazy-loads effect5-7 on prepare
+     * (decode / `textures.remove` of a world-backed key blacks the map).
      */
     private createCastingCircleEffect(): void {
         const effectConfig = getEffectByKey(EFFECT_CASTING_CIRCLE);
@@ -3433,22 +3433,7 @@ export class Player extends GameObject {
         }
 
         const textureKey = getTextureKeyFromEffectConfig(effectConfig);
-        removeWorldCanvasAliasedTexture(this.scene, textureKey);
-        if (!isSafeDrawableTexture(this.scene, textureKey)) {
-            void loadEffectAssetsOnDemand(this.scene, effectConfig)
-                .then(() => {
-                    if (this.currentState !== PlayerState.Cast || this.castingCircleEffect) {
-                        return;
-                    }
-                    removeWorldCanvasAliasedTexture(this.scene, textureKey);
-                    if (!isSafeDrawableTexture(this.scene, textureKey)) {
-                        return;
-                    }
-                    this.spawnCastingCircleEffect(effectConfig);
-                })
-                .catch((error) => {
-                    console.warn('[Player] Failed to lazy-load casting-circle effect5 sheet 7', error);
-                });
+        if (!canPresentCastingCircle(isSafeDrawableTexture(this.scene, textureKey))) {
             return;
         }
 

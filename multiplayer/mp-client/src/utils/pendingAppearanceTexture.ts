@@ -34,8 +34,40 @@ export function createIndependentPendingAppearanceCanvas(): HTMLCanvasElement {
 }
 
 /**
+ * Point a Phaser canvas texture off `game.canvas` before destroy.
+ * `textures.remove` of a world-backed key → CanvasPool.remove → 1×1 world.
+ */
+function retargetTextureOffWorldCanvas(texture: unknown, worldCanvas: unknown): boolean {
+    if (texture == null || typeof texture !== 'object' || worldCanvas == null) {
+        return false;
+    }
+    const dummy = createIndependentPendingAppearanceCanvas();
+    const rec = texture as {
+        canvas?: unknown;
+        source?: Array<{ image?: unknown; source?: unknown }>;
+    };
+    let detached = false;
+    if (rec.canvas === worldCanvas) {
+        rec.canvas = dummy;
+        detached = true;
+    }
+    const src0 = rec.source?.[0];
+    if (src0) {
+        if (src0.image === worldCanvas) {
+            src0.image = dummy;
+            detached = true;
+        }
+        if (src0.source === worldCanvas) {
+            src0.source = dummy;
+            detached = true;
+        }
+    }
+    return detached;
+}
+
+/**
  * Registers the pending appearance key as an isolated canvas.
- * Replaces a leftover `generateTexture` alias of the world canvas.
+ * Only replaces a leftover world-canvas alias after detaching `game.canvas`.
  */
 export function ensurePendingPlayerItemAppearanceTexture(scene: PendingTextureScene): void {
     const textures = scene.textures;
@@ -43,8 +75,12 @@ export function ensurePendingPlayerItemAppearanceTexture(scene: PendingTextureSc
     const worldCanvas = scene.game?.canvas;
     if (textures.exists(key)) {
         try {
-            const source = textures.get(key).getSourceImage?.();
+            const texture = textures.get(key);
+            const source = texture.getSourceImage?.();
             if (!isWorldCanvasImageSource(source, worldCanvas)) {
+                return;
+            }
+            if (!retargetTextureOffWorldCanvas(texture, worldCanvas)) {
                 return;
             }
             textures.remove?.(key);

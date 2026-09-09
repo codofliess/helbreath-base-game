@@ -26,7 +26,9 @@ export function isWorldCanvasTextureKey(scene: TextureScene, key: string): boole
         const source = scene.textures.get(key).getSourceImage?.();
         return isWorldCanvasImageSource(source, scene.game?.canvas);
     } catch {
-        return false;
+        // exists() + get() throw: fail closed. Treating this as safe was how
+        // callers could still bind a broken / world-backed key.
+        return true;
     }
 }
 
@@ -36,24 +38,11 @@ export function isSafeDrawableTexture(scene: TextureScene, key: string): boolean
 }
 
 /**
- * Drops a leftover world-canvas alias so later sprites cannot blit the map.
- * Returns true when a key was removed.
+ * True when `key` is a live-world-canvas alias. Does **not** `textures.remove`
+ * it. Phaser `CanvasTexture.destroy` → `CanvasPool.remove` sets that canvas
+ * to 1×1; if the source is `game.canvas`, Missile prepare blacks the map.
+ * Callers must refuse to bind (`isSafeDrawableTexture`).
  */
 export function removeWorldCanvasAliasedTexture(scene: TextureScene, key: string): boolean {
-    if (!isWorldCanvasTextureKey(scene, key)) {
-        return false;
-    }
-    try {
-        scene.textures.remove?.(key);
-    } catch {
-        return false;
-    }
-    try {
-        if (scene.anims?.exists(key)) {
-            scene.anims.remove?.(key);
-        }
-    } catch {
-        // Animation key may not exist or may already be gone.
-    }
-    return true;
+    return isWorldCanvasTextureKey(scene, key);
 }

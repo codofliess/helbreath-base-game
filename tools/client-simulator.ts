@@ -41,6 +41,11 @@ import {
     type ResetPosition,
 } from '../multiplayer/mp-client/src/proto/generated/network.ts';
 import { applyItemDirectory } from '../multiplayer/mp-client/src/constants/Items';
+import {
+    nextPingSequenceUint32,
+    pingResponseMatchesPending,
+    shouldSendClientPing,
+} from '../multiplayer/mp-client/src/utils/pingInFlight';
 
 const MIN_ALLOWED_INTERVAL_MS = 220;
 const DEFAULT_MOVEMENT_SPEED_MS = 220;
@@ -488,11 +493,14 @@ class SimulatedGameClient {
     }
 
     private handlePingResponse(data: PingResponse): void {
-        if (this.pingSentAt === undefined || this.pendingPingSequence !== data.sequence) {
+        const sentAt = this.pingSentAt;
+        if (!pingResponseMatchesPending(sentAt, this.pendingPingSequence, data.sequence) || sentAt === undefined) {
+            this.pendingPingSequence = undefined;
+            this.pingSentAt = undefined;
             return;
         }
 
-        this.latestPing = Math.round(performance.now() - this.pingSentAt);
+        this.latestPing = Math.round(performance.now() - sentAt);
         this.pendingPingSequence = undefined;
         this.pingSentAt = undefined;
     }
@@ -661,11 +669,16 @@ class SimulatedGameClient {
     }
 
     private sendPing(): void {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN || this.pingSentAt !== undefined) {
+        const socketOpen = !!this.socket && this.socket.readyState === WebSocket.OPEN;
+        const now = performance.now();
+        if (!shouldSendClientPing(socketOpen, this.pingSentAt, now, 1000)) {
             return;
         }
+        this.pendingPingSequence = undefined;
+        this.pingSentAt = undefined;
 
-        const sequence = this.pingSequence++;
+        const { sequence, next } = nextPingSequenceUint32(this.pingSequence);
+        this.pingSequence = next;
         const command = ClientMessage.encode({
             payload: {
                 $case: 'pingRequest',
@@ -676,9 +689,9 @@ class SimulatedGameClient {
         }).finish();
 
         this.pendingPingSequence = sequence;
-        this.pingSentAt = performance.now();
+        this.pingSentAt = now;
         this.stats.pingRequests += 1;
-        this.socket.send(command);
+        this.socket?.send(command);
     }
 
     private onClosed(): void {

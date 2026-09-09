@@ -428,6 +428,8 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     public int BaseCastSpeedMs => castSpeedMs;
     public double PingVariance => playerPingTracker.PingVariance;
     public long LastPingTimeMs => playerPingTracker.LastPingTimeMs;
+    /// <summary>Most recent ping-interval delta magnitude in ms (0 before the second ping).</summary>
+    public long LastIntervalDeltaMs => playerPingTracker.LastIntervalDeltaMs;
     /// <summary>Ms since epoch of last gameplay activity for AFK tooling.</summary>
     public long LastGameplayActivityMs => lastGameplayActivityMs;
     /// <summary>Ms since epoch of last soft-offline XP drip; writable by anti-bot soft offline drip.</summary>

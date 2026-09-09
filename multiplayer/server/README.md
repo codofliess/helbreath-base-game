@@ -67,7 +67,7 @@ The server never trusts the client for gameplay-affecting state. Client packets 
 - **Anti-teleport** — the reported `cur` cell must be within `maxCellsJumpDistance` of the server cell, and the destination must be exactly one Chebyshev step from the **server** cell (not from a stale client `cur`). Stale / duplicate packets are dropped.
 - **Spell cast timing** — `SpellCastRequest` is rejected if it arrives too early vs `castSpeedMs` + observed ping variance (`SpellCastFailed` is sent back).
 - **Combat range** — attack packets are validated against server positions and server-held attack range; out-of-range hits are dropped silently.
-- **Ping liveness** — missed ping intervals or excessive RTT variance (`ping.allowedVariance` over `ping.varianceSampleSize` samples) disconnect the player.
+- **Ping liveness** — clients that stop sending `pingRequest` for `ping.timeout` ms are disconnected. Interval jitter for kicks uses the **latest** ping gap (never tighter than timeout) so a single hitch cannot poison the 20-sample max used for movement/cast slack. `timings.disconnectTime` is a **post-socket** grace (seconds the avatar stays in-world after WS close), not the ping kick timer.
 
 See [`CLIENT_SERVER_SYNC.md`](../docs/CLIENT_SERVER_SYNC.md) for the full guard table and how to intentionally desync a client via **Sync with server** to exercise every guard path.
 

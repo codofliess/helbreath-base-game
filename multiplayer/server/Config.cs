@@ -676,8 +676,14 @@ public static class Config {
         if (ping.AllowedVariance < 0) {
             throw new ArgumentOutOfRangeException(nameof(ping.AllowedVariance), "Ping allowed variance must be zero or greater.");
         }
+        if (ping.Interval <= 0) {
+            throw new ArgumentOutOfRangeException(nameof(ping.Interval), "Ping interval must be greater than zero.");
+        }
         if (ping.Timeout <= 0) {
             throw new ArgumentOutOfRangeException(nameof(ping.Timeout), "Ping timeout must be greater than zero.");
+        }
+        if (ping.Timeout < ping.Interval) {
+            throw new ArgumentOutOfRangeException(nameof(ping.Timeout), "Ping timeout must be greater than or equal to ping interval.");
         }
         ArgumentNullException.ThrowIfNull(settings.Timings);
         var tm = settings.Timings;

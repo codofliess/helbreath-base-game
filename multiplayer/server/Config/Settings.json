@@ -32,9 +32,9 @@
     "antiHackTimingLagFactor": 0.05
   },
   "ping": {
-    "timeout": 20000,
+    "timeout": 120000,
     "interval": 1000,
-    "allowedVariance": 5000,
+    "allowedVariance": 60000,
     "varianceSampleSize": 20
   },
 

@@ -300,6 +300,7 @@ import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
 import { endMagiasRitual } from '../../utils/castPresentation';
+import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 import {
     confuseApplyToastMessage,
     confuseExpireToastMessage,
@@ -570,6 +571,7 @@ export class GameWorld extends Scene {
     public create() {
         runSafeSync('GameWorld:create', () => {
             this.clearResidualLoginDeskChrome();
+            installWorldCanvasPoolGuard(this.game);
             document.body.classList.add('game-world-active');
             applyGameWorldCanvasPresentation(this);
             this.cameras.main.setBackgroundColor('#000');

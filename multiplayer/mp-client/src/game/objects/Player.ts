@@ -30,7 +30,12 @@ import {
     canSpawnCastingCircleOnPrepare,
     endMagiasRitual,
     shouldAdvanceCastToReady,
+    shouldSkipCastCanvasWorkOnState,
 } from '../../utils/castPresentation';
+import {
+    restoreWorldCanvasBoxIfStolen,
+    snapshotWorldCanvasBox,
+} from '../../utils/worldCanvasPoolGuard';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -856,6 +861,15 @@ export class Player extends GameObject {
         // Destroy casting circle effect when leaving Cast state
         if (previousState === PlayerState.Cast && newState !== PlayerState.Cast) {
             this.destroyCastingCircleEffect();
+            if (newState !== PlayerState.CastReady) {
+                this.castAppearanceSkipped = false;
+            }
+        }
+        if (
+            previousState === PlayerState.CastReady
+            && newState !== PlayerState.Cast
+            && newState !== PlayerState.CastReady
+        ) {
             this.castAppearanceSkipped = false;
         }
 
@@ -886,13 +900,18 @@ export class Player extends GameObject {
                 appearanceAnimConfig.bowStanceAnimationDurationMs = this.remoteBowStanceAnimationDurationMs;
             }
         }
-        const skipCastCanvasWork =
-            newState === PlayerState.Cast && !canMutateWorldCanvasTexturesOnCastEnter();
+        const skipCastCanvasWork = shouldSkipCastCanvasWorkOnState(
+            newState === PlayerState.Cast
+                ? 'Cast'
+                : newState === PlayerState.CastReady
+                    ? 'CastReady'
+                    : 'Idle',
+        );
         if (!skipCastCanvasWork) {
             try {
                 this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
             } catch (error) {
-                if (newState === PlayerState.Cast) {
+                if (newState === PlayerState.Cast || newState === PlayerState.CastReady) {
                     console.warn('[Player] Cast appearance skipped (fail-closed)', error);
                 } else {
                     throw error;
@@ -909,7 +928,7 @@ export class Player extends GameObject {
             try {
                 this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
             } catch (error) {
-                if (newState === PlayerState.Cast) {
+                if (newState === PlayerState.Cast || newState === PlayerState.CastReady) {
                     console.warn('[Player] Cast shadow skipped (fail-closed)', error);
                 } else {
                     throw error;
@@ -1496,33 +1515,41 @@ export class Player extends GameObject {
      * Always stops movement immediately and starts cast (no finish-the-walk).
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
-        if (this.dead || this.hasPendingSpell()) {
-            endMagiasRitual();
-            return;
-        }
-        if (this.hasTemporaryEffect(TemporaryEffectType.Inhibition)) {
-            endMagiasRitual();
-            return;
-        }
-        const spellConfig = getSpellById(spellId);
-        if (!spellConfig) {
-            endMagiasRitual();
-            return;
-        }
-        this.activeSpellName = spellConfig.name;
-        // Drop any queued walk-to-cast; cast now.
-        this.queuedCastSpellId = undefined;
-        this.hardStopForCast();
-        this.pendingSpellId = spellId;
-        this.pendingUseCastAnimation = useCastAnimation;
-        if (useCastAnimation) {
-            this.switchPlayerState(PlayerState.Cast, true);
-            this.emitCastStarted(spellId);
-        } else {
-            EventBus.emit(OUT_UI_CAST_READY);
-            if (spellConfig.targetType === 'self') {
-                this.tryAutoConfirmSelfSpell();
+        const worldCanvas = this.scene.game?.canvas;
+        const worldBox = snapshotWorldCanvasBox(worldCanvas);
+        try {
+            if (this.dead || this.hasPendingSpell()) {
+                endMagiasRitual();
+                return;
             }
+            if (this.hasTemporaryEffect(TemporaryEffectType.Inhibition)) {
+                endMagiasRitual();
+                return;
+            }
+            const spellConfig = getSpellById(spellId);
+            if (!spellConfig) {
+                endMagiasRitual();
+                return;
+            }
+            this.activeSpellName = spellConfig.name;
+            // Drop any queued walk-to-cast; cast now.
+            this.queuedCastSpellId = undefined;
+            this.hardStopForCast();
+            this.pendingSpellId = spellId;
+            this.pendingUseCastAnimation = useCastAnimation;
+            if (useCastAnimation) {
+                this.switchPlayerState(PlayerState.Cast, true);
+                this.emitCastStarted(spellId);
+            } else {
+                EventBus.emit(OUT_UI_CAST_READY);
+                if (spellConfig.targetType === 'self') {
+                    this.tryAutoConfirmSelfSpell();
+                }
+            }
+        } finally {
+            // Pool steal / addCanvas(game.canvas) can 1×1 the presentation
+            // buffer on Missile select. Restore FOV size so the next frame paints.
+            restoreWorldCanvasBoxIfStolen(worldCanvas, worldBox);
         }
     }
 

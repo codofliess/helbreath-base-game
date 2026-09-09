@@ -71,9 +71,12 @@ assert(
         && /endMagiasRitual/.test(playerTs)
         && /castAppearanceSkipped/.test(playerTs)
         && /fail-closed/.test(playerTs)
+        && /shouldSkipCastCanvasWorkOnState/.test(playerTs)
+        && /restoreWorldCanvasBoxIfStolen/.test(playerTs)
+        && /snapshotWorldCanvasBox/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
-    'Missile select/prepare must not generateTexture or lazy-load effect5-7; skip F5 blit, Phaser Text, and Cast appearance; wait castSpeed if CAST anim never plays',
+    'Missile select/prepare must not generateTexture or lazy-load effect5-7; skip F5 blit, Phaser Text, and Cast/CastReady appearance; snapshot-restore world canvas; wait castSpeed if CAST anim never plays',
 );
 const createCircle = playerTs.slice(
     playerTs.indexOf('private createCastingCircleEffect'),
@@ -93,8 +96,9 @@ const scheduleMissing = appearanceMgr.slice(
 );
 assert(
     /canFetchAppearanceSheetOnStateEnter/.test(scheduleMissing)
-        && /PlayerState\.Cast/.test(scheduleMissing),
-    'Cast enter must not fetch clothes CAST sheet 8 / angelic CAST sheets',
+        && /PlayerState\.Cast/.test(scheduleMissing)
+        && /PlayerState\.CastReady/.test(scheduleMissing),
+    'Cast / CastReady must not fetch clothes CAST sheet 8 / angelic CAST sheets',
 );
 const scheduleLazy = appearanceMgr.slice(
     appearanceMgr.indexOf('private scheduleLazyItemAppearanceIfNeeded'),
@@ -102,8 +106,9 @@ const scheduleLazy = appearanceMgr.slice(
 );
 assert(
     /canFetchAppearanceSheetOnStateEnter/.test(scheduleLazy)
-        && /PlayerState\.Cast/.test(scheduleLazy),
-    'Cast enter must not HTTP the clothes idle pack (scheduleLazyItemAppearanceIfNeeded)',
+        && /PlayerState\.Cast/.test(scheduleLazy)
+        && /PlayerState\.CastReady/.test(scheduleLazy),
+    'Cast / CastReady must not HTTP the clothes idle pack (scheduleLazyItemAppearanceIfNeeded)',
 );
 const castPresentation = read('src/utils/castPresentation.ts');
 assert(
@@ -115,11 +120,40 @@ assert(
         && /beginMagiasRitual/.test(castPresentation)
         && /canTouchCanvasPoolOnMagiasSelect/.test(castPresentation)
         && /canSpawnCastingCircleOnPrepare/.test(castPresentation)
+        && /shouldSkipCastCanvasWorkOnState/.test(castPresentation)
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canSpawnCastingCircleOnPrepare'))),
     'Magias select/Cast path must refuse Phaser Text, CanvasPool(game.canvas), generateTexture, addCanvas, textures.remove',
+);
+const worldCanvasPoolGuard = read('src/utils/worldCanvasPoolGuard.ts');
+assert(
+    /protectWorldCanvasInPool/.test(worldCanvasPoolGuard)
+        && /occupyWorldCanvasPoolSlot/.test(worldCanvasPoolGuard)
+        && /refuseWorldCanvasTextureBind/.test(worldCanvasPoolGuard)
+        && /restoreWorldCanvasBoxIfStolen/.test(worldCanvasPoolGuard)
+        && /attachWorldCanvasPoolGuard/.test(worldCanvasPoolGuard),
+    'World canvas pool guard must wrap CanvasPool remove/create and refuse addCanvas(game.canvas)',
+);
+const worldCanvasPoolGuardInstall = read('src/utils/worldCanvasPoolGuardInstall.ts');
+assert(
+    /installWorldCanvasPoolGuard/.test(worldCanvasPoolGuardInstall)
+        && /Display\.Canvas\.CanvasPool/.test(worldCanvasPoolGuardInstall),
+    'installWorldCanvasPoolGuard must wrap Phaser.Display.Canvas.CanvasPool',
+);
+const mainTs = read('src/game/main.ts');
+const bootTs = read('src/game/scenes/Boot.ts');
+assert(
+    /installWorldCanvasPoolGuard/.test(mainTs)
+        && /installWorldCanvasPoolGuard/.test(bootTs)
+        && /installWorldCanvasPoolGuard/.test(gameWorld),
+    'StartGame / Boot / GameWorld must install the world-canvas CanvasPool guard',
+);
+const pkgJson = read('package.json');
+assert(
+    /worldCanvasPoolGuard\.test\.ts/.test(pkgJson),
+    'test:map-stream must lock Missile-select world-canvas pool guard regressions',
 );
 const castDialogStore = read('src/ui/store/CastDialog.store.ts');
 assert(

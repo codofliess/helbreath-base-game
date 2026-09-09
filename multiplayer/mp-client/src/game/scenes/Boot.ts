@@ -3,6 +3,7 @@ import { LOADING_BG_KEY, LOGIN_SCREEN_BG_KEY } from '../../constants/RegistryKey
 import { GROUND_ITEM_DISPLAY_STORAGE_KEY, loadGroundItemDisplaySizeFromStorage } from '../../constants/GroundItemDisplay';
 import { setDebugModeEnabled, setGroundItemDisplaySize } from '../../utils/RegistryUtils';
 import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
+import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 
 /**
  * Initial Phaser scene. Loads loading/login backgrounds, sets registry flags (debug, displayLargeItems),
@@ -20,6 +21,7 @@ export class Boot extends Scene {
     }
 
     public create() {
+        installWorldCanvasPoolGuard(this.game);
         setDebugModeEnabled(this, false);
         setGroundItemDisplaySize(this, loadGroundItemDisplaySizeFromStorage(GROUND_ITEM_DISPLAY_STORAGE_KEY));
 

@@ -1157,13 +1157,18 @@ export class PlayerAppearanceManager {
     /**
      * When lazy item appearance is enabled and the `.spr` is missing, starts fetch and keeps the layer hidden
      * until load completes. Returns true if load was deferred (caller must not force visible yet).
-     * Cast enter must not start this pack fetch or retarget-to-pending (ensurePending / setTexture).
+     * Cast / CastReady must not start this pack fetch or retarget-to-pending (ensurePending / setTexture).
      */
     private scheduleLazyItemAppearanceIfNeeded(sprite: string, asset: GameAsset, state?: PlayerState): boolean {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
             return false;
         }
-        if (state !== undefined && !canFetchAppearanceSheetOnStateEnter(state === PlayerState.Cast)) {
+        if (
+            state !== undefined
+            && !canFetchAppearanceSheetOnStateEnter(
+                state === PlayerState.Cast || state === PlayerState.CastReady,
+            )
+        ) {
             return false;
         }
         if (!isPlayerItemAppearanceDecodeAllowed()) {
@@ -1206,8 +1211,8 @@ export class PlayerAppearanceManager {
     /**
      * Settle covers stand (weapon 0–15 / clothes 0–3). Walk/run sheets stay
      * one-off — do not hide a bound idle pose while that extra sheet fetches.
-     * Cast must not fetch CAST clothes (armour base 8): that decode on Missile
-     * prepare can lose the Canvas 2D context and black the world.
+     * Cast / CastReady must not fetch CAST clothes (armour base 8): that decode
+     * on Missile prepare can lose the Canvas 2D context and black the world.
      */
     private scheduleMissingAnimationSheetIfNeeded(
         sprite: string,
@@ -1224,7 +1229,11 @@ export class PlayerAppearanceManager {
         if (this.scene.textures.exists(animationKey) && this.scene.anims.exists(animationKey)) {
             return !isSafeDrawableTexture(this.scene, animationKey);
         }
-        if (!canFetchAppearanceSheetOnStateEnter(state === PlayerState.Cast)) {
+        if (
+            !canFetchAppearanceSheetOnStateEnter(
+                state === PlayerState.Cast || state === PlayerState.CastReady,
+            )
+        ) {
             return false;
         }
         const match = /^sprite-(.+)-(\d+)$/.exec(animationKey);

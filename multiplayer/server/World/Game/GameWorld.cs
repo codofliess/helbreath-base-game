@@ -793,6 +793,7 @@ public sealed class GameWorld : IWorkerWorld {
         ForceTravelerToHub(reconnectedPlayer, reason: "reconnect");
         Spawn.SendInitialState(gameWorldRef, reconnectedPlayer, includeSpells: true);
         Spawn.SendInitialGameWorldState(gameWorldRef, reconnectedPlayer);
+        MagicTower.SendJoinBookSnapshot(reconnectedPlayer);
         ArenaPact.OnPlayerJoined(reconnectedPlayer);
 
         Movement.FillNearbyPlayersById(

@@ -426,6 +426,23 @@ public sealed class InventoryManager {
         return best;
     }
 
+    /// <summary>
+    /// If bag gold (item 90) is empty and <paramref name="amount"/> is positive, create that stack.
+    /// Used when ops granted a persist <c>Gold</c> scalar instead of bag Quantity.
+    /// </summary>
+    public bool EnsureGoldAtLeast(int amount) {
+        if (amount <= 0) {
+            return false;
+        }
+
+        var have = CountGold();
+        if (have >= amount) {
+            return false;
+        }
+
+        return TryCreateItemStack(90, amount - have, out _);
+    }
+
     /// <summary>Total bag gold (item id 90), after optional consolidate.</summary>
     public int CountGold() {
         const int goldItemId = 90;

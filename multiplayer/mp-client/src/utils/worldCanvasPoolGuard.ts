@@ -16,6 +16,11 @@
  * the renderer buffer. Lock size + getContext on *every* select/prepare path.
  * Move mid-prepare still restreams the map tileset (`createCanvas`) and can
  * setAttribute('width') — those bypass the IDL size setter. Lock both.
+ *
+ * #73 armed fillRect refuse / clearBeforeRender=false / FOV snapshot restore
+ * on *select*. Bare Missile SELECT then restored an empty FOV (or skipped the
+ * first Phaser paint) and Elon Chile went black. Those move rituals engage
+ * only after a painted snapshot, on an actual WASD / click-to-move event.
  */
 
 export type WorldCanvasLike = {
@@ -114,7 +119,7 @@ const guardState: {
     clearBeforeRenderSaved: undefined,
 };
 
-/** Armed with the Magias ritual so Phaser preRender black fill cannot wipe prepare. */
+/** Armed only after a painted move-during-prepare snapshot — not on bare select. */
 export function setWorldCanvasClearRefused(refuse: boolean): void {
     guardState.refuseFullCanvasClear = refuse;
     syncRendererClearBeforeRender();
@@ -643,7 +648,59 @@ export function reassertWorldCanvasPresentationGuard(
     restoreWorldCanvasPixels(canvas);
 }
 
-/** Copy the painted FOV so WASD / fillRect mid-prepare can put it back. */
+function readPixelBytes(data: unknown): ArrayLike<number> | undefined {
+    if (typeof ImageData !== 'undefined' && data instanceof ImageData) {
+        return data.data;
+    }
+    if (typeof data !== 'object' || data === null || !('data' in data)) {
+        return undefined;
+    }
+    const bytes = (data as { data: unknown }).data;
+    if (!bytes || typeof (bytes as ArrayLike<number>).length !== 'number') {
+        return undefined;
+    }
+    const len = (bytes as ArrayLike<number>).length;
+    if (len < 4 || typeof (bytes as ArrayLike<number>)[0] !== 'number') {
+        return undefined;
+    }
+    return bytes as ArrayLike<number>;
+}
+
+function rgbaHasNonBlackRgb(pixels: ArrayLike<number>): boolean {
+    const len = pixels.length;
+    const step = Math.max(4, Math.floor(len / 4096) * 4);
+    for (let i = 0; i < len; i += step) {
+        if (pixels[i] !== 0 || pixels[i + 1] !== 0 || pixels[i + 2] !== 0) {
+            return true;
+        }
+    }
+    const last = len - 4;
+    return pixels[last] !== 0 || pixels[last + 1] !== 0 || pixels[last + 2] !== 0;
+}
+
+function pixelBackupLooksPainted(data: unknown): boolean {
+    if (data == null) {
+        return false;
+    }
+    const pixels = readPixelBytes(data);
+    if (!pixels) {
+        // Unit-test stub objects (e.g. `{ id: 'painted-fov' }`) count as painted.
+        return true;
+    }
+    return rgbaHasNonBlackRgb(pixels);
+}
+
+/** True when the last snapshot has non-black RGB (empty FOV must not be frozen). */
+export function hasPaintedWorldCanvasSnapshot(): boolean {
+    const backup = guardState.pixelBackup;
+    return Boolean(backup && pixelBackupLooksPainted(backup.data));
+}
+
+export function clearWorldCanvasPixelBackup(): void {
+    guardState.pixelBackup = undefined;
+}
+
+/** Copy the FOV buffer. Callers that freeze clear must use the painted variant. */
 export function snapshotWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
     const target = canvas ?? guardState.worldCanvas;
     if (!target?.getContext) {
@@ -665,11 +722,28 @@ export function snapshotWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
     }
 }
 
-/** Blit the last painted FOV after a move-during-prepare wipe. */
+/**
+ * Snapshot only a painted FOV. Keeps a previous painted backup if the current
+ * read is empty/black — that empty restore is the #73 SELECT black canvas.
+ */
+export function snapshotWorldCanvasPixelsIfPainted(canvas?: WorldCanvasLike): boolean {
+    const previous = guardState.pixelBackup;
+    const previousPainted = previous && pixelBackupLooksPainted(previous.data) ? previous : undefined;
+    if (!snapshotWorldCanvasPixels(canvas) || !hasPaintedWorldCanvasSnapshot()) {
+        guardState.pixelBackup = previousPainted;
+        return previousPainted !== undefined;
+    }
+    return true;
+}
+
+/** Blit the last painted FOV after a move-during-prepare wipe. Never blit black. */
 export function restoreWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
     const target = canvas ?? guardState.worldCanvas;
     const backup = guardState.pixelBackup;
     if (!target || !backup || backup.width !== target.width || backup.height !== target.height) {
+        return false;
+    }
+    if (!pixelBackupLooksPainted(backup.data)) {
         return false;
     }
     const ctx = target.getContext?.('2d') as WorldCanvas2DContext | undefined;

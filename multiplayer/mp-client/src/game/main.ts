@@ -6,6 +6,7 @@ import { LoginScreen } from './scenes/LoginScreen';
 import { FXAAPostFX } from './pipelines/FXAAPostFX';
 import { startGameWithRendererFallback } from './startGameWithRendererFallback';
 import { shouldConstructPhaserAfterSeal } from '../ui/store/ConnectDialog.store';
+import { installWorldCanvasPoolGuard } from '../utils/worldCanvasPoolGuardInstall';
 
 function buildGameConfig(
     parent: string,
@@ -57,10 +58,14 @@ const StartGame = (parent: string): Game | null => {
         console.error('[StartGame] Refusing Phaser/WebGL construct before entering-world');
         return null;
     }
-    return startGameWithRendererFallback(
+    const game = startGameWithRendererFallback(
         () => new Game(buildGameConfig(parent, CANVAS, false)),
         () => new Game(buildGameConfig(parent, AUTO, false)),
     );
+    if (game) {
+        installWorldCanvasPoolGuard(game);
+    }
+    return game;
 };
 
 export default StartGame;

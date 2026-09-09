@@ -36,9 +36,10 @@ export function canSpawnCastingCircleOnPrepare(): boolean {
 }
 
 /**
- * Cast enter must not fetch clothes / angelic CAST sheets (armour base 8)
+ * Cast / CastReady must not fetch clothes / angelic CAST sheets (armour base 8)
  * and must not start the idle-pack helper (`scheduleLazyItemAppearanceIfNeeded`).
  * World enter only settled idle 0–3; first Missile prepare was the decode.
+ * Pass true for CastReady as well — that state still binds appearance textures.
  */
 export function canFetchAppearanceSheetOnStateEnter(isCastState: boolean): boolean {
     return !isCastState;
@@ -69,6 +70,19 @@ export function canCreateCastAnnounceText(): boolean {
  */
 export function canMutateWorldCanvasTexturesOnCastEnter(): boolean {
     return false;
+}
+
+/**
+ * Fail-closed Cast and CastReady must not applyStateAppearance / updateShadow.
+ * #70 skipped Cast only; CastReady still bound idle-combat / human sheets.
+ */
+export function shouldSkipCastCanvasWorkOnState(
+    state: 'Cast' | 'CastReady' | 'Idle',
+): boolean {
+    if (canMutateWorldCanvasTexturesOnCastEnter()) {
+        return false;
+    }
+    return state === 'Cast' || state === 'CastReady';
 }
 
 /** CanvasPool.create on a pooled `game.canvas` is the black-map steal. */

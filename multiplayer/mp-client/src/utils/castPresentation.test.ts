@@ -17,6 +17,7 @@ import {
     planCastEnterVisuals,
     planMagiasSpellSelect,
     shouldAdvanceCastToReady,
+    shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
 import { PHASER_DEFAULT_TEXTURE_KEY, safeBindableTextureKey } from './worldCanvasTextureSafety';
 
@@ -47,6 +48,12 @@ describe('Missile prepare must not fetch CAST / circle sheets', () => {
     it('does not fetch clothes CAST sheet 8 or the idle pack on Cast enter', () => {
         assert.equal(canFetchAppearanceSheetOnStateEnter(true), false);
         assert.equal(canFetchAppearanceSheetOnStateEnter(false), true);
+    });
+
+    it('skips appearance / shadow canvas work on Cast and CastReady', () => {
+        assert.equal(shouldSkipCastCanvasWorkOnState('Cast'), true);
+        assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
+        assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
     });
 });
 

@@ -3,6 +3,7 @@ import { getPivotData } from './RegistryUtils';
 import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../Config';
 import { convertPixelPosToWorldPos } from './CoordinateUtils';
 import { getItemPackSpriteSheets, getItemPackEmittedTintKeys } from './RegistryUtils';
+import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
 
 const LIGHT_RADIUS_OVERLAY_TEXTURE_KEY = 'sprite-effect-0';
 const LIGHT_RADIUS_OVERLAY_FRAME_INDEX = 1;
@@ -16,7 +17,7 @@ export function createLightRadiusOverlay(
     pixelX: number,
     pixelY: number
 ): Phaser.GameObjects.Sprite | undefined {
-    if (!scene.textures.exists(LIGHT_RADIUS_OVERLAY_TEXTURE_KEY)) {
+    if (!isSafeDrawableTexture(scene, LIGHT_RADIUS_OVERLAY_TEXTURE_KEY)) {
         return undefined;
     }
     const overlay = scene.add.sprite(

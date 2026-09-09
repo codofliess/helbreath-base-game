@@ -7,6 +7,8 @@ import {
     isGoldBagItemId,
     mergeOlympiaBookFromServerCatalog,
 } from './magicBookClient';
+import { getOlympiaServerSpellId, getOlympiaSpellIdFromServer, isServerAuthoritativeOlympiaSpell } from '../constants/OlympiaServerSpellMap';
+import { SPELL_ENERGY_BOLT_ID, SPELL_MAGIC_MISSILE_ID } from '../constants/Spells';
 
 /** Mirrors OlympiaServerSpellMap for Energy Bolt / Heal / Create Food. */
 const SERVER_TO_OLYMPIA: Record<number, number> = {
@@ -59,5 +61,15 @@ describe('mergeOlympiaBookFromServerCatalog', () => {
     it('does not invent Circle One from SkillLevels / empty persist book', () => {
         const next = mergeOlympiaBookFromServerCatalog([10], [0], mapServer, 10);
         assert.deepEqual(next, [10]);
+    });
+});
+
+describe('Magic Missile confirm/spend mapping', () => {
+    it('maps Olympia Missile (0) to Energy Bolt catalog so Cast start/confirm reach the server', () => {
+        assert.deepEqual([...CIRCLE_ONE_OLYMPIA_IDS], [0, 1, 2]);
+        assert.equal(isServerAuthoritativeOlympiaSpell(SPELL_MAGIC_MISSILE_ID), true);
+        assert.equal(getOlympiaServerSpellId(SPELL_MAGIC_MISSILE_ID), 0);
+        assert.equal(getOlympiaServerSpellId(SPELL_ENERGY_BOLT_ID), 0);
+        assert.equal(getOlympiaSpellIdFromServer(0), SPELL_ENERGY_BOLT_ID);
     });
 });

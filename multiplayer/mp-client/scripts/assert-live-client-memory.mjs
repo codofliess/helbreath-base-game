@@ -66,9 +66,11 @@ assert(
     /currentState === PlayerState\.Cast/.test(playerTs)
         && /shouldAdvanceCastToReady/.test(playerTs)
         && /canPresentCastingCircle/.test(playerTs)
+        && /canCreateCastAnnounceText/.test(playerTs)
+        && /fail-closed/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
-    'Missile prepare must not generateTexture or lazy-load effect5-7; skip F5 blit in Cast; wait castSpeed if CAST anim never plays',
+    'Missile prepare must not generateTexture or lazy-load effect5-7; skip F5 blit and Phaser Text in Cast; wait castSpeed if CAST anim never plays',
 );
 const createCircle = playerTs.slice(
     playerTs.indexOf('private createCastingCircleEffect'),
@@ -89,6 +91,42 @@ assert(
     /canFetchAppearanceSheetOnStateEnter/.test(scheduleMissing)
         && /PlayerState\.Cast/.test(scheduleMissing),
     'Cast enter must not fetch clothes CAST sheet 8 / angelic CAST sheets',
+);
+const scheduleLazy = appearanceMgr.slice(
+    appearanceMgr.indexOf('private scheduleLazyItemAppearanceIfNeeded'),
+    appearanceMgr.indexOf('private scheduleMissingAnimationSheetIfNeeded'),
+);
+assert(
+    /canFetchAppearanceSheetOnStateEnter/.test(scheduleLazy)
+        && /PlayerState\.Cast/.test(scheduleLazy),
+    'Cast enter must not HTTP the clothes idle pack (scheduleLazyItemAppearanceIfNeeded)',
+);
+const castPresentation = read('src/utils/castPresentation.ts');
+assert(
+    /canMutateWorldCanvasTexturesOnCastEnter/.test(castPresentation)
+        && /canCreateCastAnnounceText/.test(castPresentation)
+        && /planCastEnterVisuals/.test(castPresentation)
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter'))),
+    'Cast-enter path must refuse generateTexture / addCanvas(game.canvas) / textures.remove of world keys',
+);
+const spellMap = read('src/constants/OlympiaServerSpellMap.ts');
+assert(
+    /SPELL_MAGIC_MISSILE_ID/.test(spellMap) && /ENERGY_BOLT/.test(spellMap),
+    'Magic Missile must map to the Energy Bolt catalog so confirm/spend reach the server',
+);
+const spriteUtils = read('src/utils/SpriteUtils.ts');
+const lightOverlay = spriteUtils.slice(
+    spriteUtils.indexOf('export function createLightRadiusOverlay'),
+    spriteUtils.indexOf('export function getSpriteFrameHeight'),
+);
+assert(
+    /isSafeDrawableTexture/.test(lightOverlay),
+    'createLightRadiusOverlay must refuse a world-canvas alias of sprite-effect-0',
+);
+const shadowMgr = read('src/utils/ShadowManager.ts');
+assert(
+    /isSafeDrawableTexture/.test(shadowMgr),
+    'ShadowManager must not bind human CAST sheet 64+dir when it is a world-canvas alias',
 );
 const safetyTs = read('src/utils/worldCanvasTextureSafety.ts');
 const removeAliasFn = safetyTs.slice(safetyTs.indexOf('export function removeWorldCanvasAliasedTexture'));
@@ -130,6 +168,10 @@ const playAnim = gameAsset.slice(
 assert(
     /isSafeDrawableTexture/.test(playAnim),
     'playAnimationWithDirection must refuse a world-canvas texture alias (CAST clothes bind)',
+);
+assert(
+    /safeBindableTextureKey/.test(gameAsset),
+    'GameAsset must bind __DEFAULT when pending is still a world-canvas alias',
 );
 
 const bootTs = read('src/game/scenes/Boot.ts');

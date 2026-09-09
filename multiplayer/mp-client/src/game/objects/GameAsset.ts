@@ -16,7 +16,7 @@ import {
     isPlayerItemAppearanceLoadInFlight,
 } from '../../utils/ItemAssets';
 import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingAppearanceTexture';
-import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
+import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture, safeBindableTextureKey } from '../../utils/worldCanvasTextureSafety';
 import { getPivotData, isDebugModeEnabled } from '../../utils/RegistryUtils';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { IN_DEBUG_MODE_CHANGE, OUT_UI_HOVER_SPRITE_FRAME_DEBUG } from '../../constants/EventNames';
@@ -147,7 +147,7 @@ export class GameAsset {
             animationKey = config.spriteName;
         } else if (usePendingItemPlaceholder) {
             ensurePendingPlayerItemAppearanceTexture(scene);
-            textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
+            textureKey = safeBindableTextureKey(scene, PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE);
             animationKey = textureKey;
             this.pendingLazyPlayerItemAppearance = true;
         } else {
@@ -157,11 +157,12 @@ export class GameAsset {
 
         // Missing sheet must not throw — that aborts GameWorld / remounts the hub (landing).
         // A world-canvas alias must not be bound or textures.remove'd
-        // (CanvasPool.remove zeros game.canvas).
+        // (CanvasPool.remove zeros game.canvas). Pending may still be that alias
+        // after ensurePending fails to detach — bind __DEFAULT instead.
         if (!usePendingItemPlaceholder && !config.mapObject && !isSafeDrawableTexture(scene, textureKey)) {
             ensurePendingPlayerItemAppearanceTexture(scene);
             usePendingItemPlaceholder = true;
-            textureKey = PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE;
+            textureKey = safeBindableTextureKey(scene, PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE);
             animationKey = textureKey;
             this.pendingLazyPlayerItemAppearance = true;
         } else if (!usePendingItemPlaceholder && !scene.textures.exists(textureKey)) {
@@ -1059,8 +1060,12 @@ export class GameAsset {
         if (!frame?.frame) {
             return;
         }
+        const bindKey = frame.frame.texture.key;
+        if (!isSafeDrawableTexture(this.scene, bindKey)) {
+            return;
+        }
 
-        this.sprite.setTexture(frame.frame.texture.key, frame.frame.name);
+        this.sprite.setTexture(bindKey, frame.frame.name);
         this.applyFramePivotOffset(frame);
         this.updateDebug(frame);
     }
@@ -1464,7 +1469,7 @@ export class GameAsset {
             this.sprite.anims.stop();
         }
         ensurePendingPlayerItemAppearanceTexture(scene);
-        this.sprite.setTexture(PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE, 0);
+        this.sprite.setTexture(safeBindableTextureKey(scene, PLAYER_ITEM_APPEARANCE_PENDING_TEXTURE));
         this.spriteSheetPivots = undefined;
         this.sprite.setVisible(false);
     }

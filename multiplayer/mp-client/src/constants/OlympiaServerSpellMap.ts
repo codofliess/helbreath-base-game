@@ -35,6 +35,7 @@ import {
     SPELL_INVISIBILITY_ID,
     SPELL_LIGHTNING_BOLT_ID,
     SPELL_LIGHTNING_STRIKE_ID,
+    SPELL_MAGIC_MISSILE_ID,
     SPELL_MASS_BLIZZARD_ID,
     SPELL_MASS_CHILL_WIND_ID,
     SPELL_MASS_CONFUSION_ID,
@@ -117,7 +118,6 @@ const SERVER = {
 
 const OLYMPIA_TO_SERVER: Readonly<Record<number, number>> = {
     [SPELL_ENERGY_BOLT_ID]: SERVER.ENERGY_BOLT,
-    [SPELL_FIRE_BALL_ID]: SERVER.FIRE_BALL,
     [SPELL_FIRE_STRIKE_ID]: SERVER.FIRE_STRIKE,
     [SPELL_CHILL_WIND_ID]: SERVER.CHILL_WIND,
     [SPELL_POISON_CLOUD_ID]: SERVER.POISON_CLOUD,
@@ -173,6 +173,11 @@ const OLYMPIA_TO_SERVER: Readonly<Record<number, number>> = {
 };
 
 export function getOlympiaServerSpellId(olympiaSpellId: number): number | undefined {
+    // Missile has no catalog row. Do not put 0→0 in OLYMPIA_TO_SERVER —
+    // integer key order would make reverse map server 0 → Missile and wipe Energy Bolt.
+    if (olympiaSpellId === SPELL_MAGIC_MISSILE_ID) {
+        return SERVER.ENERGY_BOLT;
+    }
     return OLYMPIA_TO_SERVER[olympiaSpellId];
 }
 
@@ -193,5 +198,5 @@ export function getOlympiaSpellIdFromServer(serverSpellId: number): number | und
 }
 
 export function isServerAuthoritativeOlympiaSpell(olympiaSpellId: number): boolean {
-    return OLYMPIA_TO_SERVER[olympiaSpellId] !== undefined;
+    return getOlympiaServerSpellId(olympiaSpellId) !== undefined;
 }

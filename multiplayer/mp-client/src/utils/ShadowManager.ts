@@ -2,6 +2,7 @@ import type { Scene, GameObjects } from 'phaser';
 import type { PivotFrame } from '../Types';
 import { worldCellCenterPixelX, worldCellCenterPixelY } from './CoordinateUtils';
 import { getPivotData } from './RegistryUtils';
+import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
 
 /**
  * Configuration for creating a shadow sprite.
@@ -118,8 +119,8 @@ export class ShadowManager {
             shadowAnimationKey = shadowTextureKey;
         }
 
-        if (!this.scene.textures.exists(shadowTextureKey)) {
-            console.warn(`[ShadowManager] Missing texture ${shadowTextureKey}; skipping shadow`);
+        if (!isSafeDrawableTexture(this.scene, shadowTextureKey)) {
+            console.warn(`[ShadowManager] Missing or unsafe texture ${shadowTextureKey}; skipping shadow`);
             return;
         }
 
@@ -211,6 +212,9 @@ export class ShadowManager {
             } else {
                 shadowTextureKey = `sprite-${this.shadowSpriteName}-${shadowSpriteSheetIndex}`;
                 shadowAnimationKey = shadowTextureKey;
+            }
+            if (!this.mapObject && !isSafeDrawableTexture(this.scene, shadowTextureKey)) {
+                return;
             }
             // Update pivot data for new spritesheet
             const pivotData = getPivotData(this.scene, shadowTextureKey, this.shadowSpriteName, this.mapObject);

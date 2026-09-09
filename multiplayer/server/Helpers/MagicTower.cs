@@ -93,6 +93,7 @@ public static class MagicTower {
     /// but never unlock cast (e.g. Energy Strike 60 → 11 was absent → 5000 gold + uncastable + book wipe on resync).
     /// </summary>
     public static readonly IReadOnlyDictionary<int, int> OlympiaToServerSpellId = new Dictionary<int, int> {
+        [0] = 0,   // Magic Missile — no catalog row; Energy Bolt spend/VFX pipe
         [10] = 0,  // Energy Bolt
         [20] = 1,  // Fire Ball
         [30] = 2,  // Fire Strike

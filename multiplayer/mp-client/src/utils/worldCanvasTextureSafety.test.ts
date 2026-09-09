@@ -3,7 +3,9 @@ import { describe, it } from 'node:test';
 import {
     isSafeDrawableTexture,
     isWorldCanvasTextureKey,
+    PHASER_DEFAULT_TEXTURE_KEY,
     removeWorldCanvasAliasedTexture,
+    safeBindableTextureKey,
 } from './worldCanvasTextureSafety';
 
 function sceneWithTextures(
@@ -79,5 +81,17 @@ describe('worldCanvasTextureSafety', () => {
         };
         assert.equal(isWorldCanvasTextureKey(scene, 'sprite-effect5-7'), true);
         assert.equal(isSafeDrawableTexture(scene, 'sprite-effect5-7'), false);
+    });
+
+    it('falls back to __DEFAULT instead of binding a world-canvas alias', () => {
+        const world = { id: 'world' };
+        const textures = new Map<string, { getSourceImage: () => unknown }>([
+            ['player-item-appearance-pending', { getSourceImage: () => world }],
+            ['sprite-isolated-1', { getSourceImage: () => ({ id: 'ok' }) }],
+        ]);
+        const { scene, removed } = sceneWithTextures(world, textures);
+        assert.equal(safeBindableTextureKey(scene, 'player-item-appearance-pending'), PHASER_DEFAULT_TEXTURE_KEY);
+        assert.equal(safeBindableTextureKey(scene, 'sprite-isolated-1'), 'sprite-isolated-1');
+        assert.deepEqual(removed, []);
     });
 });

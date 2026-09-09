@@ -18,6 +18,7 @@ import {
     waitMs,
     type MapTileRect,
 } from './mapViewportStream';
+import { isWorldCanvasTextureKey } from './worldCanvasTextureSafety';
 
 const tilePackLoadPromisesByScene = new WeakMap<Scene, Map<string, Promise<void>>>();
 const tilePackShutdownHookRegistered = new WeakSet<Scene>();
@@ -234,6 +235,9 @@ export function evictUnusedMapTileTextures(scene: Scene, keepGlobalIndices: Read
     let removed = 0;
     for (const key of evict) {
         try {
+            if (isWorldCanvasTextureKey(scene, key)) {
+                continue;
+            }
             if (scene.textures.exists(key)) {
                 scene.textures.remove(key);
             }

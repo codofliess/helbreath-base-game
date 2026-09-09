@@ -75,6 +75,9 @@ assert(
         && /withWorldCanvasBoxGuard/.test(playerTs)
         && /finishSkippedCastAppearance/.test(playerTs)
         && /IdleFromCast/.test(playerTs)
+        && /MoveDuringPrepare/.test(playerTs)
+        && /isMagiasRitualActive/.test(playerTs)
+        && /snapshotWorldCanvasPixels/.test(playerTs)
         && /onLeftClickAt/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
@@ -101,8 +104,10 @@ assert(
         && /PlayerState\.Cast/.test(refuseMagiasFetch)
         && /PlayerState\.CastReady/.test(refuseMagiasFetch)
         && /IdleFromCast/.test(refuseMagiasFetch)
+        && /MoveDuringPrepare/.test(refuseMagiasFetch)
+        && /WalkPeaceMode/.test(refuseMagiasFetch)
         && /isMagiasRitualActive/.test(refuseMagiasFetch),
-    'Cast / CastReady / IdleFromCast must not fetch clothes CAST sheet 8 / idle pack / pending addCanvas',
+    'Cast / CastReady / IdleFromCast / Walk mid-prepare must not fetch clothes CAST sheet 8 / idle pack / pending addCanvas',
 );
 const scheduleMissing = appearanceMgr.slice(
     appearanceMgr.indexOf('private scheduleMissingAnimationSheetIfNeeded'),
@@ -135,6 +140,15 @@ assert(
         && /canTouchCanvasPoolOnMagiasSelect/.test(castPresentation)
         && /canSpawnCastingCircleOnPrepare/.test(castPresentation)
         && /shouldSkipCastCanvasWorkOnState/.test(castPresentation)
+        && /planMagiasMoveDuringPrepare/.test(castPresentation)
+        && /applyMagiasMoveDuringPrepareVisuals/.test(castPresentation)
+        && /canMutateWorldCanvasOnMoveDuringPrepare/.test(castPresentation)
+        && /canRebuildMapTilesetOnMagiasPrepare/.test(castPresentation)
+        && /MoveDuringPrepare/.test(castPresentation)
+        && /setWorldCanvasClearRefused/.test(castPresentation)
+        && /snapshotWorldCanvasPixels/.test(castPresentation)
+        && /restoreWorldCanvasPixels/.test(castPresentation)
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasOnMoveDuringPrepare')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect')))
@@ -154,6 +168,16 @@ assert(
         && /withWorldCanvasBoxGuard/.test(worldCanvasPoolGuard)
         && /restoreWorldCanvasBoxIfStolen/.test(worldCanvasPoolGuard)
         && /attachWorldCanvasPoolGuard/.test(worldCanvasPoolGuard)
+        && /reassertWorldCanvasPresentationGuard/.test(worldCanvasPoolGuard)
+        && /refuseWorldCanvasCreateCanvas/.test(worldCanvasPoolGuard)
+        && /__hbWorldCanvasAttrLock/.test(worldCanvasPoolGuard)
+        && /setWorldCanvasClearRefused/.test(worldCanvasPoolGuard)
+        && /refuseFullCanvasClear/.test(worldCanvasPoolGuard)
+        && /lockWorldCanvasRendererClear/.test(worldCanvasPoolGuard)
+        && /clearBeforeRender/.test(worldCanvasPoolGuard)
+        && /postrender/.test(worldCanvasPoolGuard)
+        && /snapshotWorldCanvasPixels/.test(worldCanvasPoolGuard)
+        && /restoreWorldCanvasPixels/.test(worldCanvasPoolGuard)
         && /create2D closes over the \*inner\* create/.test(worldCanvasPoolGuard),
     'World canvas pool guard must wrap CanvasPool remove/create, seal the world slot, lock FOV size, and refuse addCanvas(game.canvas) / generateTexture',
 );
@@ -173,8 +197,29 @@ assert(
 const gameWorldCanvasPresentation = read('src/game/ui/gameWorldCanvasPresentation.ts');
 assert(
     /lockWorldCanvasPresentationSize/.test(gameWorldCanvasPresentation)
-        && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation),
-    'Game-world FOV presentation must lock game.canvas size/getContext (F7 close / Scale.refresh wipe)',
+        && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation)
+        && /isMagiasRitualActive/.test(gameWorldCanvasPresentation)
+        && /canMutateWorldCanvasOnMoveDuringPrepare/.test(gameWorldCanvasPresentation),
+    'Game-world FOV presentation must lock game.canvas size/getContext and skip Scale.refresh during Magias prepare',
+);
+assert(
+    /isMagiasRitualActive/.test(mapManager)
+        && /canRebuildMapTilesetOnMagiasPrepare/.test(mapManager),
+    'Walk restream must not rebuild the map tileset during Magias prepare',
+);
+assert(
+    /isMagiasRitualActive/.test(gameWorld)
+        && /reassertWorldCanvasPresentationGuard/.test(gameWorld)
+        && /transparent = isMagiasRitualActive\(\)/.test(gameWorld),
+    'GameWorld must re-lock the world canvas and skip camera #000 fill during Magias prepare',
+);
+const mainTsx = read('src/main.tsx');
+assert(
+    /isMagiasMoveDuringPrepareKey/.test(mainTsx)
+        && /noteMagiasMoveDuringPrepareHotkey/.test(mainTsx)
+        && /reassertWorldCanvasPresentationGuard/.test(mainTsx)
+        && /stopImmediatePropagation/.test(mainTsx),
+    'WASD / arrows mid-prepare must reassert the world-canvas guard and not confirm the spell',
 );
 const pkgJson = read('package.json');
 assert(

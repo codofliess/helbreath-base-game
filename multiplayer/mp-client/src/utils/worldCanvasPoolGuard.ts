@@ -14,6 +14,8 @@
  * unwrapped functions; Scale.refresh / F7 book close assign `canvas.width`
  * (even a non-1×1 size clears pixels); `getContext('2d', attrs)` can reset
  * the renderer buffer. Lock size + getContext on *every* select/prepare path.
+ * Move mid-prepare still restreams the map tileset (`createCanvas`) and can
+ * setAttribute('width') — those bypass the IDL size setter. Lock both.
  */
 
 export type WorldCanvasLike = {
@@ -43,6 +45,7 @@ export type WorldCanvasPoolApi = {
 export type TextureBindApi = {
     addCanvas?: (key: string, source: unknown, ...rest: unknown[]) => unknown;
     generateTexture?: (...args: unknown[]) => unknown;
+    createCanvas?: (key: string, width?: number, height?: number, ...rest: unknown[]) => unknown;
 };
 
 type GuardedFn = { __hbWorldCanvasGuard?: boolean };
@@ -52,17 +55,172 @@ type SealedPoolContainer = CanvasPoolContainer & { __hbWorldSlotSealed?: boolean
 type SizeLockedCanvas = WorldCanvasLike & {
     __hbWorldCanvasSizeLock?: boolean;
     __hbWorldCanvasGetContextLock?: boolean;
+    __hbWorldCanvasAttrLock?: boolean;
+    setAttribute?: (name: string, value: string) => void;
+};
+
+type WorldCanvas2DContext = {
+    fillRect?: (x: number, y: number, w: number, h: number) => void;
+    clearRect?: (x: number, y: number, w: number, h: number) => void;
+    reset?: () => void;
+    getImageData?: (x: number, y: number, w: number, h: number) => unknown;
+    putImageData?: (data: unknown, x: number, y: number) => void;
+    __hbWorldCanvasClearLock?: boolean;
+};
+
+type PixelBackup = {
+    width: number;
+    height: number;
+    data: unknown;
 };
 
 const WORLD_SLOT_SENTINEL = { hbWorldCanvasSlot: true };
 
+type RendererLike = {
+    gameContext?: WorldCanvas2DContext;
+    context?: WorldCanvas2DContext;
+    config?: { clearBeforeRender?: boolean };
+};
+
+type GameEventsLike = {
+    on?: (event: string, fn: (...args: unknown[]) => void) => void;
+    __hbWorldCanvasPostRenderRestore?: boolean;
+};
+
+type GameWithRenderer = {
+    canvas?: WorldCanvasLike;
+    textures?: TextureBindApi;
+    renderer?: RendererLike;
+    events?: GameEventsLike;
+};
+
 const guardState: {
     worldCanvas: WorldCanvasLike | undefined;
     worldParent: unknown;
+    pool: WorldCanvasPoolApi | undefined;
+    textures: TextureBindApi | undefined;
+    renderer: RendererLike | undefined;
+    pixelBackup: PixelBackup | undefined;
+    refuseFullCanvasClear: boolean;
+    clearBeforeRenderSaved: boolean | undefined;
 } = {
     worldCanvas: undefined,
     worldParent: undefined,
+    pool: undefined,
+    textures: undefined,
+    renderer: undefined,
+    pixelBackup: undefined,
+    refuseFullCanvasClear: false,
+    clearBeforeRenderSaved: undefined,
 };
+
+/** Armed with the Magias ritual so Phaser preRender black fill cannot wipe prepare. */
+export function setWorldCanvasClearRefused(refuse: boolean): void {
+    guardState.refuseFullCanvasClear = refuse;
+    syncRendererClearBeforeRender();
+}
+
+function syncRendererClearBeforeRender(): void {
+    const config = guardState.renderer?.config;
+    if (!config) {
+        return;
+    }
+    if (guardState.refuseFullCanvasClear) {
+        if (guardState.clearBeforeRenderSaved === undefined) {
+            guardState.clearBeforeRenderSaved = config.clearBeforeRender !== false;
+        }
+        config.clearBeforeRender = false;
+        return;
+    }
+    if (guardState.clearBeforeRenderSaved !== undefined) {
+        config.clearBeforeRender = guardState.clearBeforeRenderSaved;
+        guardState.clearBeforeRenderSaved = undefined;
+    }
+}
+
+/**
+ * Phaser `CanvasRenderer.preRender` / camera `fillRect(#000)` hold
+ * `renderer.gameContext` from boot. Wrap that object (not only a later
+ * `canvas.getContext`) and disable `clearBeforeRender` while prepare is armed.
+ * POST_RENDER blit is the safety net if a wipe still lands after update.
+ */
+export function lockWorldCanvasRendererClear(game?: GameWithRenderer): void {
+    const canvas = game?.canvas ?? guardState.worldCanvas;
+    if (canvas) {
+        guardState.worldCanvas = canvas;
+    }
+    const renderer = game?.renderer ?? guardState.renderer;
+    if (renderer) {
+        guardState.renderer = renderer;
+        if (canvas) {
+            lockWorldCanvasContextClear(renderer.gameContext, canvas);
+            lockWorldCanvasContextClear(renderer.context, canvas);
+        }
+        syncRendererClearBeforeRender();
+    }
+    const events = game?.events;
+    if (events?.on && !events.__hbWorldCanvasPostRenderRestore) {
+        events.on('postrender', () => {
+            if (guardState.refuseFullCanvasClear) {
+                restoreWorldCanvasPixels(guardState.worldCanvas);
+            }
+        });
+        events.__hbWorldCanvasPostRenderRestore = true;
+    }
+}
+
+function isFullCanvasWipe(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    canvas: WorldCanvasLike,
+): boolean {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    if (!(cw > 0 && ch > 0) || !(w > 0 && h > 0)) {
+        return false;
+    }
+    // Phaser camera fill can be 1px inset from the IDL box and still black the FOV.
+    return x <= 1 && y <= 1 && x + w >= cw - 1 && y + h >= ch - 1;
+}
+
+function lockWorldCanvasContextClear(
+    ctx: WorldCanvas2DContext | undefined,
+    canvas: WorldCanvasLike,
+): void {
+    if (!ctx || ctx.__hbWorldCanvasClearLock) {
+        return;
+    }
+    if (typeof ctx.fillRect === 'function') {
+        const nativeFill = ctx.fillRect.bind(ctx);
+        ctx.fillRect = function (x: number, y: number, w: number, h: number): void {
+            if (guardState.refuseFullCanvasClear && isFullCanvasWipe(x, y, w, h, canvas)) {
+                return;
+            }
+            nativeFill(x, y, w, h);
+        };
+    }
+    if (typeof ctx.clearRect === 'function') {
+        const nativeClear = ctx.clearRect.bind(ctx);
+        ctx.clearRect = function (x: number, y: number, w: number, h: number): void {
+            if (guardState.refuseFullCanvasClear && isFullCanvasWipe(x, y, w, h, canvas)) {
+                return;
+            }
+            nativeClear(x, y, w, h);
+        };
+    }
+    if (typeof ctx.reset === 'function') {
+        const nativeReset = ctx.reset.bind(ctx);
+        ctx.reset = function (): void {
+            if (guardState.refuseFullCanvasClear) {
+                return;
+            }
+            nativeReset();
+        };
+    }
+    ctx.__hbWorldCanvasClearLock = true;
+}
 
 function isGuarded<T extends object>(fn: T): boolean {
     return Boolean((fn as T & GuardedFn).__hbWorldCanvasGuard);
@@ -154,12 +312,27 @@ export function occupyWorldCanvasPoolSlot(pool: WorldCanvasPoolApi): void {
  *
  * `getContext('2d', attrs)` can also reset the renderer buffer when attrs
  * differ from the first context (CanvasPool.create → Smoothing.disable).
+ *
+ * `setAttribute('width'|'height')` bypasses the IDL setter and still
+ * clears pixels — Scale / restream can take that path without assigning
+ * `.width`. Refuse those attribute writes after lock.
  */
 export function lockWorldCanvasPresentationSize(canvas: WorldCanvasLike | undefined): void {
     if (!canvas) {
         return;
     }
     const locked = canvas as SizeLockedCanvas;
+    if (!locked.__hbWorldCanvasAttrLock && typeof locked.setAttribute === 'function') {
+        const nativeSetAttribute = locked.setAttribute.bind(locked);
+        locked.setAttribute = function (name: string, value: string): void {
+            const attr = String(name).toLowerCase();
+            if (attr === 'width' || attr === 'height') {
+                return;
+            }
+            nativeSetAttribute(name, value);
+        };
+        locked.__hbWorldCanvasAttrLock = true;
+    }
     if (!locked.__hbWorldCanvasGetContextLock && typeof canvas.getContext === 'function') {
         const nativeGetContext = canvas.getContext.bind(canvas);
         canvas.getContext = function (type: string, _attrs?: unknown): unknown {
@@ -167,8 +340,14 @@ export function lockWorldCanvasPresentationSize(canvas: WorldCanvasLike | undefi
             if (kind.startsWith('webgl') || kind === 'experimental-webgl') {
                 return null;
             }
-            return nativeGetContext(kind === '2d' ? '2d' : type);
+            const ctx = nativeGetContext(kind === '2d' ? '2d' : type);
+            lockWorldCanvasContextClear(ctx as WorldCanvas2DContext | undefined, canvas);
+            return ctx;
         };
+        lockWorldCanvasContextClear(
+            nativeGetContext('2d') as WorldCanvas2DContext | undefined,
+            canvas,
+        );
         locked.__hbWorldCanvasGetContextLock = true;
     }
     if (locked.__hbWorldCanvasSizeLock) {
@@ -340,6 +519,7 @@ export function protectWorldCanvasInPool(
 ): void {
     guardState.worldCanvas = worldCanvas;
     guardState.worldParent = worldParent;
+    guardState.pool = pool;
     lockWorldCanvasPresentationSize(worldCanvas);
     occupyWorldCanvasPoolSlot(pool);
     wrapCreate(pool, pool.create.bind(pool));
@@ -390,22 +570,118 @@ export function refuseWorldCanvasGenerateTexture(textures: TextureBindApi | unde
 }
 
 /**
+ * `textures.createCanvas` → CanvasPool.create2D. Walk restream rebuilds the
+ * map tileset this way. If the inner create still hits `game.canvas`, the
+ * world buffer is wiped without assigning `.width` on the guarded setter.
+ */
+export function refuseWorldCanvasCreateCanvas(textures: TextureBindApi | undefined): void {
+    if (!textures?.createCanvas || isGuarded(textures.createCanvas)) {
+        return;
+    }
+    const original = textures.createCanvas.bind(textures);
+    const wrapped = function (key: string, width?: number, height?: number, ...rest: unknown[]): unknown {
+        if (guardState.pool) {
+            occupyWorldCanvasPoolSlot(guardState.pool);
+        }
+        const box = snapshotWorldCanvasBox(guardState.worldCanvas);
+        const created = original(key, width, height, ...rest);
+        restoreWorldCanvasBoxIfStolen(guardState.worldCanvas, box);
+        return created;
+    };
+    markGuarded(wrapped);
+    textures.createCanvas = wrapped;
+}
+
+/**
  * Point the global pool + TextureManager at this game's presentation canvas.
  * `pool` is required the first time (Phaser.Display.Canvas.CanvasPool).
  */
 export function attachWorldCanvasPoolGuard(
-    game: { canvas?: WorldCanvasLike; textures?: TextureBindApi },
+    game: GameWithRenderer,
     pool?: WorldCanvasPoolApi,
 ): void {
     if (!game.canvas) {
         return;
     }
     lockWorldCanvasPresentationSize(game.canvas);
+    lockWorldCanvasRendererClear(game);
     if (pool) {
         protectWorldCanvasInPool(pool, game.canvas, game);
     }
+    guardState.textures = game.textures;
     refuseWorldCanvasTextureBind(game.textures, game.canvas);
     refuseWorldCanvasGenerateTexture(game.textures);
+    refuseWorldCanvasCreateCanvas(game.textures);
+    restoreWorldCanvasPixels(game.canvas);
+}
+
+/**
+ * Re-lock FOV size / getContext / setAttribute and reseal the pool slot.
+ * Move mid-prepare can swap `game.canvas` or restream without going through
+ * the select/confirm wrappers — rebind if the presentation surface changed.
+ */
+export function reassertWorldCanvasPresentationGuard(
+    game?: GameWithRenderer,
+): void {
+    const canvas = game?.canvas ?? guardState.worldCanvas;
+    if (!canvas) {
+        return;
+    }
+    if (game?.canvas && game.canvas !== guardState.worldCanvas) {
+        attachWorldCanvasPoolGuard(game, guardState.pool);
+        return;
+    }
+    lockWorldCanvasPresentationSize(canvas);
+    lockWorldCanvasRendererClear(game);
+    if (guardState.pool) {
+        occupyWorldCanvasPoolSlot(guardState.pool);
+    }
+    const textures = game?.textures ?? guardState.textures;
+    refuseWorldCanvasTextureBind(textures, canvas);
+    refuseWorldCanvasGenerateTexture(textures);
+    refuseWorldCanvasCreateCanvas(textures);
+    restoreWorldCanvasPixels(canvas);
+}
+
+/** Copy the painted FOV so WASD / fillRect mid-prepare can put it back. */
+export function snapshotWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
+    const target = canvas ?? guardState.worldCanvas;
+    if (!target?.getContext) {
+        return false;
+    }
+    const ctx = target.getContext('2d') as WorldCanvas2DContext | undefined;
+    if (typeof ctx?.getImageData !== 'function') {
+        return false;
+    }
+    try {
+        guardState.pixelBackup = {
+            width: target.width,
+            height: target.height,
+            data: ctx.getImageData(0, 0, target.width, target.height),
+        };
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** Blit the last painted FOV after a move-during-prepare wipe. */
+export function restoreWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
+    const target = canvas ?? guardState.worldCanvas;
+    const backup = guardState.pixelBackup;
+    if (!target || !backup || backup.width !== target.width || backup.height !== target.height) {
+        return false;
+    }
+    const ctx = target.getContext?.('2d') as WorldCanvas2DContext | undefined;
+    if (typeof ctx?.putImageData !== 'function') {
+        return false;
+    }
+    try {
+        ctx.putImageData(backup.data, 0, 0);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 /** Snapshot → run → restore if Magias confirm/select stole the FOV buffer. */

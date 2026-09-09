@@ -3,21 +3,29 @@ import { describe, it } from 'node:test';
 import { SPELL_MAGIC_MISSILE_ID } from '../constants/Spells';
 import { getOlympiaServerSpellId } from '../constants/OlympiaServerSpellMap';
 import {
+    applyMagiasMoveDuringPrepareVisuals,
     applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
+    beginMagiasRitual,
     endMagiasRitual,
     shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
 import {
     attachWorldCanvasPoolGuard,
     lockWorldCanvasPresentationSize,
+    lockWorldCanvasRendererClear,
     occupyWorldCanvasPoolSlot,
     protectWorldCanvasInPool,
+    reassertWorldCanvasPresentationGuard,
+    refuseWorldCanvasCreateCanvas,
     refuseWorldCanvasGenerateTexture,
     refuseWorldCanvasTextureBind,
     restoreWorldCanvasBoxIfStolen,
+    restoreWorldCanvasPixels,
     sealWorldCanvasPoolSlot,
+    setWorldCanvasClearRefused,
     snapshotWorldCanvasBox,
+    snapshotWorldCanvasPixels,
     withWorldCanvasBoxGuard,
     type CanvasPoolContainer,
     type WorldCanvasLike,
@@ -173,6 +181,26 @@ describe('lockWorldCanvasPresentationSize', () => {
         assert.equal(world.height, 576);
     });
 
+    it('refuses setAttribute width/height that bypass the IDL setter', () => {
+        const world = {
+            width: 1024,
+            height: 576,
+            setAttribute(name: string, value: string) {
+                if (name === 'width') {
+                    this.width = Number(value) || 1;
+                }
+                if (name === 'height') {
+                    this.height = Number(value) || 1;
+                }
+            },
+        };
+        lockWorldCanvasPresentationSize(world);
+        world.setAttribute('width', '1');
+        world.setAttribute('height', '1');
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+
     it('ignores getContext attribute objects that would reset the 2d buffer', () => {
         let attrsSeen = 0;
         const world: WorldCanvasLike = {
@@ -186,10 +214,104 @@ describe('lockWorldCanvasPresentationSize', () => {
             },
         };
         lockWorldCanvasPresentationSize(world);
-        const ctx = world.getContext?.('2d', { willReadFrequently: false });
-        assert.deepEqual(ctx, { type: '2d' });
+        const ctx = world.getContext?.('2d', { willReadFrequently: false }) as { type?: string };
+        assert.equal(ctx?.type, '2d');
         assert.equal(attrsSeen, 0);
         assert.equal(world.getContext?.('webgl'), null);
+    });
+
+    it('refuses full-canvas fillRect/clearRect while Magias prepare is armed', () => {
+        let fillCalls = 0;
+        let clearCalls = 0;
+        const ctx = {
+            fillRect() {
+                fillCalls += 1;
+            },
+            clearRect() {
+                clearCalls += 1;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        beginMagiasRitual();
+        lockWorldCanvasPresentationSize(world);
+        world.getContext?.('2d');
+        ctx.fillRect(0, 0, 1024, 576);
+        ctx.clearRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 0);
+        assert.equal(clearCalls, 0);
+        endMagiasRitual();
+        ctx.fillRect(0, 0, 1024, 576);
+        ctx.clearRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 1);
+        assert.equal(clearCalls, 1);
+    });
+
+    it('restores painted FOV pixels after a move-during-prepare wipe', () => {
+        const pixels = { id: 'painted-fov' };
+        let restored: unknown;
+        const ctx = {
+            getImageData: () => pixels,
+            putImageData(data: unknown) {
+                restored = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        assert.equal(snapshotWorldCanvasPixels(world), true);
+        restored = undefined;
+        assert.equal(restoreWorldCanvasPixels(world), true);
+        assert.equal(restored, pixels);
+        setWorldCanvasClearRefused(false);
+    });
+
+    it('disables Phaser clearBeforeRender and restores after postrender wipe', () => {
+        const pixels = { id: 'painted-fov' };
+        let restored: unknown;
+        let postrender: (() => void) | undefined;
+        const ctx = {
+            fillRect() {
+                restored = undefined;
+            },
+            getImageData: () => pixels,
+            putImageData(data: unknown) {
+                restored = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        const renderer = {
+            gameContext: ctx,
+            config: { clearBeforeRender: true },
+        };
+        const game = {
+            canvas: world,
+            renderer,
+            events: {
+                on(_event: string, fn: () => void) {
+                    postrender = fn;
+                },
+            },
+        };
+        assert.equal(snapshotWorldCanvasPixels(world), true);
+        beginMagiasRitual();
+        lockWorldCanvasRendererClear(game);
+        assert.equal(renderer.config.clearBeforeRender, false);
+        ctx.fillRect();
+        assert.equal(restored, undefined);
+        postrender?.();
+        assert.equal(restored, pixels);
+        endMagiasRitual();
+        assert.equal(renderer.config.clearBeforeRender, true);
     });
 });
 
@@ -318,6 +440,97 @@ describe('withWorldCanvasBoxGuard', () => {
             return 'ok';
         });
         assert.equal(result, 'ok');
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+    });
+});
+
+describe('select Missile then move mid-prepare must not clear the world canvas', () => {
+    it('select + WASD/restream steal paths leave 1024×576 intact', () => {
+        const game = { id: 'phaser-game' };
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const pool = createPhaserStylePool();
+        pool.pool.push({ parent: game, canvas: world });
+        let createCanvasSource: unknown;
+        const textures = {
+            addCanvas: (_key: string, source: unknown) => source,
+            remove: () => undefined,
+            generateTexture: () => {
+                throw new Error('move mid-prepare must not generateTexture');
+            },
+            createCanvas: (_key: string, width = 32, height = 32) => {
+                const stolen = pool.create({ id: 'map-tileset' }, width, height);
+                createCanvasSource = stolen;
+                return stolen;
+            },
+        };
+        attachWorldCanvasPoolGuard({ canvas: world, textures }, pool);
+
+        endMagiasRitual();
+        applyMagiasSpellSelectVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: {
+                    text: () => {
+                        throw new Error('Missile select must not create Phaser Text');
+                    },
+                },
+                textures,
+            },
+            getOlympiaServerSpellId,
+        );
+        const plan = applyMagiasMoveDuringPrepareVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: {
+                    text: () => {
+                        throw new Error('Missile move mid-prepare must not create Phaser Text');
+                    },
+                },
+                textures,
+            },
+        );
+        // Camera/FOV/Scale + walk restream after #72 size-write refuse.
+        pool.remove(world);
+        pool.remove(game);
+        pool.create({ id: 'walk-text' }, 1, 1);
+        pool.create2D?.({ id: 'tileset-style' }, 8, 8);
+        textures.addCanvas('magias-move', world);
+        textures.createCanvas('elvine-tileset', 256, 256);
+        reassertWorldCanvasPresentationGuard({ canvas: world, textures });
+        world.width = 800;
+        world.height = 450;
+
+        assert.equal(plan.spellId, 0);
+        assert.equal(plan.applyWalkAppearanceOnMove, false);
+        assert.equal(plan.rebuildMapTileset, false);
+        assert.equal(shouldSkipCastCanvasWorkOnState('MoveDuringPrepare'), true);
+        assert.equal(textures.generateTexture('magias-move'), false);
+        assert.notEqual(createCanvasSource, world);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        assert.equal(pool.pool[0].canvas, world);
+        endMagiasRitual();
+    });
+});
+
+describe('refuseWorldCanvasCreateCanvas', () => {
+    it('walk restream createCanvas must not shrink the world canvas', () => {
+        const game = { id: 'phaser-game' };
+        const world: WorldCanvasLike = { width: 1024, height: 576 };
+        const pool = createPhaserStylePool();
+        pool.pool.push({ parent: game, canvas: world });
+        const textures = {
+            createCanvas: (_key: string, width = 1, height = 1) => {
+                return pool.create({ id: 'tileset' }, width, height);
+            },
+        };
+        attachWorldCanvasPoolGuard({ canvas: world, textures }, pool);
+        refuseWorldCanvasCreateCanvas(textures);
+        const tileset = textures.createCanvas('map-tileset', 256, 128);
+        assert.notEqual(tileset, world);
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
     });

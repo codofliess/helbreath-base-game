@@ -299,7 +299,8 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
-import { endMagiasRitual } from '../../utils/castPresentation';
+import { endMagiasRitual, isMagiasRitualActive } from '../../utils/castPresentation';
+import { reassertWorldCanvasPresentationGuard } from '../../utils/worldCanvasPoolGuard';
 import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 import {
     confuseApplyToastMessage,
@@ -2804,6 +2805,14 @@ export class GameWorld extends Scene {
                 this.handleLeftMouseButton();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
+                // Camera fillRect(#000) is the WASD-mid-prepare wipe after #72:
+                // size-write never fires; Phaser still blacks the FOV then fails to redraw.
+                if (this.cameras?.main) {
+                    this.cameras.main.transparent = isMagiasRitualActive();
+                }
+                if (isMagiasRitualActive()) {
+                    reassertWorldCanvasPresentationGuard(this.game);
+                }
                 if (this.mapStreamWalkEnabled) {
                     void this.mapManager?.syncStreamedView({
                         standingHold: this.isStandingNearEnterFocus(),

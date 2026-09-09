@@ -1159,12 +1159,21 @@ export class PlayerAppearanceManager {
     }
 
     /**
-     * Cast / CastReady / Idle-from-Magias-confirm must not HTTP clothes sheets
-     * or retarget-to-pending (`ensurePending` / `setTexture` / addCanvas).
+     * Cast / CastReady / Idle-from-Magias-confirm / Walk mid-prepare must not
+     * HTTP clothes sheets or retarget-to-pending (`ensurePending` / `setTexture` / addCanvas).
      */
     private shouldRefuseMagiasAppearanceFetch(state: PlayerState): boolean {
         if (state === PlayerState.Cast || state === PlayerState.CastReady) {
             return !canFetchAppearanceSheetOnStateEnter(true);
+        }
+        if (
+            isMagiasRitualActive()
+            && shouldSkipCastCanvasWorkOnState('MoveDuringPrepare')
+            && (state === PlayerState.Run
+                || state === PlayerState.WalkPeaceMode
+                || state === PlayerState.WalkCombatMode)
+        ) {
+            return true;
         }
         if (
             (state === PlayerState.IdlePeaceMode || state === PlayerState.IdleCombatMode)

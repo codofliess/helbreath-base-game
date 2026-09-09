@@ -2,6 +2,7 @@ import { Scale, type Game, type Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { IN_UI_GAME_VIEWPORT_RESIZED } from '../../constants/EventNames';
 import { lockWorldCanvasPresentationSize } from '../../utils/worldCanvasPoolGuard';
+import { canMutateWorldCanvasOnMoveDuringPrepare, isMagiasRitualActive } from '../../utils/castPresentation';
 
 /**
  * Classic-safe camera FOV (world pixels). TILE_SIZE = 32 → ~32×18 tiles @ 1024×576.
@@ -116,6 +117,15 @@ function applyClassicFovPresentation(game: Game): void {
     }
     // F7 book close / Scale.refresh can assign canvas.width and wipe the FOV.
     lockWorldCanvasPresentationSize(canvas);
+    // WASD mid-prepare can layout-shift and re-enter here. Skip resize/refresh
+    // so Scale cannot fillRect the painted buffer (#72 size-write is not enough).
+    if (isMagiasRitualActive() && !canMutateWorldCanvasOnMoveDuringPrepare()) {
+        publishCanvasLayoutVarsFromDom(canvas);
+        presentationActive = true;
+        activeGame = game;
+        ensureWindowResizeListener();
+        return;
+    }
 
     document.body.classList.remove('login-charui-active', 'login-selectchar-active', 'game-world-expanded-vision');
     document.body.classList.add('game-world-active');

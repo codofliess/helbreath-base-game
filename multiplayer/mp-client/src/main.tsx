@@ -50,6 +50,8 @@ import { IN_UI_FORCE_CANCEL_CAST, IN_UI_TAKE_SCREENSHOT, TOAST_REQUESTED } from 
 import { getQuickPotionGame, useQuickPotion } from './utils/potionHotkeys';
 import { bootstrapWalletDeepLinkAtBoot } from './utils/walletAuth';
 import { getNetworkManager } from './utils/RegistryUtils';
+import { isMagiasRitualActive, noteMagiasMoveDuringPrepareHotkey } from './utils/castPresentation';
+import { reassertWorldCanvasPresentationGuard } from './utils/worldCanvasPoolGuard';
 
 import './ui/store/ItemDrops.store';
 import './ui/store/BeginnerPath.store';
@@ -105,6 +107,23 @@ function toastOption(message: string): void {
 
 function isLetterCode(e: KeyboardEvent, code: string, letter: string): boolean {
     return e.code === code || e.key === letter || e.key === letter.toLowerCase() || e.key === letter.toUpperCase();
+}
+
+function isMagiasMoveDuringPrepareKey(e: KeyboardEvent): boolean {
+    return (
+        isLetterCode(e, 'KeyW', 'w')
+        || isLetterCode(e, 'KeyA', 'a')
+        || isLetterCode(e, 'KeyS', 's')
+        || isLetterCode(e, 'KeyD', 'd')
+        || e.key === 'ArrowUp'
+        || e.key === 'ArrowDown'
+        || e.key === 'ArrowLeft'
+        || e.key === 'ArrowRight'
+        || e.code === 'ArrowUp'
+        || e.code === 'ArrowDown'
+        || e.code === 'ArrowLeft'
+        || e.code === 'ArrowRight'
+    );
 }
 
 /**
@@ -270,6 +289,17 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
             }
         }
         if (isGameActive() && !isTypingTarget(document.activeElement) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            // WASD / arrows mid-prepare: do not let a layout/Scale/restream path
+            // wipe the world canvas. Select already stayed painted; this is the
+            // move-only hole. Does not confirm the spell (MP unchanged).
+            if (isMagiasRitualActive() && isMagiasMoveDuringPrepareKey(e)) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                noteMagiasMoveDuringPrepareHotkey();
+                reassertWorldCanvasPresentationGuard();
+                return;
+            }
             // Escape: close chat compose, else cancel mid-cast (Olympia-style).
             if (e.key === 'Escape' || e.code === 'Escape') {
                 if (chatDialogStore.state.composeOpen) {

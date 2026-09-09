@@ -29,6 +29,7 @@ import {
     waitForBrowserFrames,
     waitMs,
 } from './mapViewportStream';
+import { canRebuildMapTilesetOnMagiasPrepare, isMagiasRitualActive } from './castPresentation';
 
 export interface MapManagerConfig {
     scene: Scene;
@@ -207,6 +208,12 @@ export class MapManager {
         }
         const camera = this.scene.cameras?.main;
         if (!camera) {
+            return;
+        }
+        // WASD / camera-follow during Magias prepare: do not destroy+rebuild the
+        // ground tileset (`createCanvas` / getContext / evict). Select never
+        // restreams; that rebuild is the move-only black-canvas path.
+        if (isMagiasRitualActive() && !canRebuildMapTilesetOnMagiasPrepare()) {
             return;
         }
         let map: HBMap;

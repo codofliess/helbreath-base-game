@@ -299,7 +299,7 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
-import { endMagiasRitual, isMagiasMoveDuringPrepareActive } from '../../utils/castPresentation';
+import { endMagiasRitual, isMagiasMoveDuringPrepareActive, syncMagiasMoveDuringPrepareCamera } from '../../utils/castPresentation';
 import { reassertWorldCanvasPresentationGuard } from '../../utils/worldCanvasPoolGuard';
 import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 import {
@@ -2806,11 +2806,9 @@ export class GameWorld extends Scene {
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
                 // Camera fillRect(#000) is the WASD-mid-prepare wipe after #72.
-                // Do not arm this on bare SELECT — transparent + refuse-fill +
-                // snapshot restore left Elon Chile black on Missile pick (#73).
-                if (this.cameras?.main) {
-                    this.cameras.main.transparent = isMagiasMoveDuringPrepareActive();
-                }
+                // Write transparent only while the painted freeze is armed —
+                // #74 assigned it every idle tick and bare WASD went black.
+                syncMagiasMoveDuringPrepareCamera(this.cameras?.main);
                 if (isMagiasMoveDuringPrepareActive()) {
                     reassertWorldCanvasPresentationGuard(this.game);
                 }

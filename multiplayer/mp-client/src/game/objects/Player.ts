@@ -3042,10 +3042,17 @@ export class Player extends GameObject {
         cursorPixelY?: number
     ): void {
         if (isMagiasRitualActive()) {
-            withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
-                beginMagiasMoveDuringPrepare(this.scene.game?.canvas);
-                reassertWorldCanvasPresentationGuard(this.scene.game);
-            });
+            const prepareLive = this.hasPendingSpell() || this.isCasting() || this.isCastReady();
+            if (!prepareLive) {
+                // Leftover ritual from a prior select must not freeze idle WASD.
+                endMagiasRitual();
+            } else {
+                withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
+                    if (beginMagiasMoveDuringPrepare(this.scene.game?.canvas)) {
+                        reassertWorldCanvasPresentationGuard(this.scene.game);
+                    }
+                });
+            }
         }
         if (this.isParalyzed() ||
             this.dead ||

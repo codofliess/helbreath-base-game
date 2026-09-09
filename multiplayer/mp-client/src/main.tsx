@@ -50,7 +50,7 @@ import { IN_UI_FORCE_CANCEL_CAST, IN_UI_TAKE_SCREENSHOT, TOAST_REQUESTED } from 
 import { getQuickPotionGame, useQuickPotion } from './utils/potionHotkeys';
 import { bootstrapWalletDeepLinkAtBoot } from './utils/walletAuth';
 import { getNetworkManager } from './utils/RegistryUtils';
-import { isMagiasRitualActive, noteMagiasMoveDuringPrepareHotkey } from './utils/castPresentation';
+import { isMagiasMoveDuringPrepareActive } from './utils/castPresentation';
 import { reassertWorldCanvasPresentationGuard } from './utils/worldCanvasPoolGuard';
 
 import './ui/store/ItemDrops.store';
@@ -289,16 +289,13 @@ const handleGlobalKeyDown = (e: KeyboardEvent) => {
             }
         }
         if (isGameActive() && !isTypingTarget(document.activeElement) && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            // WASD / arrows mid-prepare: do not let a layout/Scale/restream path
-            // wipe the world canvas. Select already stayed painted; this is the
-            // move-only hole. Does not confirm the spell (MP unchanged).
-            if (isMagiasRitualActive() && isMagiasMoveDuringPrepareKey(e)) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                noteMagiasMoveDuringPrepareHotkey();
+            // WASD / arrows: never swallow the key and never arm the move
+            // freeze from keydown. #74 did both on a leftover ritual and
+            // bare WASD blacked the FOV (`DQVdzggt`). Real move is
+            // click-to-move → Player.setDestination. If freeze is already
+            // armed, reassert only.
+            if (isMagiasMoveDuringPrepareKey(e) && isMagiasMoveDuringPrepareActive()) {
                 reassertWorldCanvasPresentationGuard();
-                return;
             }
             // Escape: close chat compose, else cancel mid-cast (Olympia-style).
             if (e.key === 'Escape' || e.code === 'Escape') {

@@ -19,8 +19,10 @@
  *
  * #73 armed fillRect refuse / clearBeforeRender=false / FOV snapshot restore
  * on *select*. Bare Missile SELECT then restored an empty FOV (or skipped the
- * first Phaser paint) and Elon Chile went black. Those move rituals engage
- * only after a painted snapshot, on an actual WASD / click-to-move event.
+ * first Phaser paint) and Elon Chile went black. #74 moved those to WASD,
+ * but still wrapped fillRect / assigned camera.transparent on idle move
+ * (`DQVdzggt` full-black canvas). Those move rituals engage only after a
+ * painted snapshot, on an actual WASD / click-to-move *during Magias prepare*.
  */
 
 export type WorldCanvasLike = {
@@ -105,6 +107,7 @@ const guardState: {
     pool: WorldCanvasPoolApi | undefined;
     textures: TextureBindApi | undefined;
     renderer: RendererLike | undefined;
+    events: GameEventsLike | undefined;
     pixelBackup: PixelBackup | undefined;
     refuseFullCanvasClear: boolean;
     clearBeforeRenderSaved: boolean | undefined;
@@ -114,6 +117,7 @@ const guardState: {
     pool: undefined,
     textures: undefined,
     renderer: undefined,
+    events: undefined,
     pixelBackup: undefined,
     refuseFullCanvasClear: false,
     clearBeforeRenderSaved: undefined,
@@ -122,7 +126,49 @@ const guardState: {
 /** Armed only after a painted move-during-prepare snapshot — not on bare select. */
 export function setWorldCanvasClearRefused(refuse: boolean): void {
     guardState.refuseFullCanvasClear = refuse;
+    if (refuse) {
+        armWorldCanvasMoveDuringPrepareClear();
+    }
     syncRendererClearBeforeRender();
+}
+
+export function isWorldCanvasClearRefused(): boolean {
+    return guardState.refuseFullCanvasClear;
+}
+
+/**
+ * Bind Phaser renderer refs for a later move-freeze. Does **not** wrap
+ * fillRect / disable clearBeforeRender — that is idle-move #74 black.
+ */
+export function bindWorldCanvasRenderer(game?: GameWithRenderer): void {
+    const canvas = game?.canvas ?? guardState.worldCanvas;
+    if (canvas) {
+        guardState.worldCanvas = canvas;
+    }
+    const renderer = game?.renderer ?? guardState.renderer;
+    if (renderer) {
+        guardState.renderer = renderer;
+    }
+    if (game?.events) {
+        guardState.events = game.events;
+    }
+}
+
+function armWorldCanvasMoveDuringPrepareClear(canvas?: WorldCanvasLike): void {
+    const target = canvas ?? guardState.worldCanvas;
+    if (target) {
+        guardState.worldCanvas = target;
+        lockWorldCanvasContextClear(
+            target.getContext?.('2d') as WorldCanvas2DContext | undefined,
+            target,
+        );
+    }
+    const renderer = guardState.renderer;
+    if (renderer && target) {
+        lockWorldCanvasContextClear(renderer.gameContext, target);
+        lockWorldCanvasContextClear(renderer.context, target);
+    }
+    ensureWorldCanvasPostRenderRestore();
 }
 
 function syncRendererClearBeforeRender(): void {
@@ -148,30 +194,32 @@ function syncRendererClearBeforeRender(): void {
  * `renderer.gameContext` from boot. Wrap that object (not only a later
  * `canvas.getContext`) and disable `clearBeforeRender` while prepare is armed.
  * POST_RENDER blit is the safety net if a wipe still lands after update.
+ * Call only after {@link setWorldCanvasClearRefused}(true) — not at attach.
  */
 export function lockWorldCanvasRendererClear(game?: GameWithRenderer): void {
-    const canvas = game?.canvas ?? guardState.worldCanvas;
-    if (canvas) {
-        guardState.worldCanvas = canvas;
+    bindWorldCanvasRenderer(game);
+    if (guardState.refuseFullCanvasClear) {
+        armWorldCanvasMoveDuringPrepareClear(game?.canvas ?? guardState.worldCanvas);
     }
-    const renderer = game?.renderer ?? guardState.renderer;
-    if (renderer) {
-        guardState.renderer = renderer;
-        if (canvas) {
-            lockWorldCanvasContextClear(renderer.gameContext, canvas);
-            lockWorldCanvasContextClear(renderer.context, canvas);
-        }
-        syncRendererClearBeforeRender();
-    }
+    syncRendererClearBeforeRender();
     const events = game?.events;
-    if (events?.on && !events.__hbWorldCanvasPostRenderRestore) {
-        events.on('postrender', () => {
-            if (guardState.refuseFullCanvasClear) {
-                restoreWorldCanvasPixels(guardState.worldCanvas);
-            }
-        });
-        events.__hbWorldCanvasPostRenderRestore = true;
+    if (events) {
+        ensureWorldCanvasPostRenderRestore(events);
     }
+}
+
+function ensureWorldCanvasPostRenderRestore(events?: GameEventsLike): void {
+    const target = events ?? guardState.events;
+    if (!target?.on || target.__hbWorldCanvasPostRenderRestore) {
+        return;
+    }
+    target.on('postrender', () => {
+        if (guardState.refuseFullCanvasClear) {
+            restoreWorldCanvasPixels(guardState.worldCanvas);
+        }
+    });
+    target.__hbWorldCanvasPostRenderRestore = true;
+    guardState.events = target;
 }
 
 function isFullCanvasWipe(
@@ -346,13 +394,13 @@ export function lockWorldCanvasPresentationSize(canvas: WorldCanvasLike | undefi
                 return null;
             }
             const ctx = nativeGetContext(kind === '2d' ? '2d' : type);
-            lockWorldCanvasContextClear(ctx as WorldCanvas2DContext | undefined, canvas);
+            // Wrap fillRect only while the painted move-freeze is armed.
+            // #73/#74 wrapped on every getContext and idle WASD went black.
+            if (guardState.refuseFullCanvasClear) {
+                lockWorldCanvasContextClear(ctx as WorldCanvas2DContext | undefined, canvas);
+            }
             return ctx;
         };
-        lockWorldCanvasContextClear(
-            nativeGetContext('2d') as WorldCanvas2DContext | undefined,
-            canvas,
-        );
         locked.__hbWorldCanvasGetContextLock = true;
     }
     if (locked.__hbWorldCanvasSizeLock) {
@@ -609,7 +657,7 @@ export function attachWorldCanvasPoolGuard(
         return;
     }
     lockWorldCanvasPresentationSize(game.canvas);
-    lockWorldCanvasRendererClear(game);
+    bindWorldCanvasRenderer(game);
     if (pool) {
         protectWorldCanvasInPool(pool, game.canvas, game);
     }
@@ -617,7 +665,6 @@ export function attachWorldCanvasPoolGuard(
     refuseWorldCanvasTextureBind(game.textures, game.canvas);
     refuseWorldCanvasGenerateTexture(game.textures);
     refuseWorldCanvasCreateCanvas(game.textures);
-    restoreWorldCanvasPixels(game.canvas);
 }
 
 /**
@@ -637,7 +684,11 @@ export function reassertWorldCanvasPresentationGuard(
         return;
     }
     lockWorldCanvasPresentationSize(canvas);
-    lockWorldCanvasRendererClear(game);
+    bindWorldCanvasRenderer(game);
+    if (guardState.refuseFullCanvasClear) {
+        lockWorldCanvasRendererClear(game);
+        restoreWorldCanvasPixels(canvas);
+    }
     if (guardState.pool) {
         occupyWorldCanvasPoolSlot(guardState.pool);
     }
@@ -645,7 +696,6 @@ export function reassertWorldCanvasPresentationGuard(
     refuseWorldCanvasTextureBind(textures, canvas);
     refuseWorldCanvasGenerateTexture(textures);
     refuseWorldCanvasCreateCanvas(textures);
-    restoreWorldCanvasPixels(canvas);
 }
 
 function readPixelBytes(data: unknown): ArrayLike<number> | undefined {
@@ -703,6 +753,9 @@ export function clearWorldCanvasPixelBackup(): void {
 /** Copy the FOV buffer. Callers that freeze clear must use the painted variant. */
 export function snapshotWorldCanvasPixels(canvas?: WorldCanvasLike): boolean {
     const target = canvas ?? guardState.worldCanvas;
+    if (target) {
+        guardState.worldCanvas = target;
+    }
     if (!target?.getContext) {
         return false;
     }

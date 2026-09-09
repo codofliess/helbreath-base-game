@@ -15,7 +15,9 @@ import {
 } from './castPresentation';
 import {
     attachWorldCanvasPoolGuard,
+    bindWorldCanvasRenderer,
     hasPaintedWorldCanvasSnapshot,
+    isWorldCanvasClearRefused,
     lockWorldCanvasPresentationSize,
     lockWorldCanvasRendererClear,
     occupyWorldCanvasPoolSlot,
@@ -314,6 +316,7 @@ describe('lockWorldCanvasPresentationSize', () => {
             },
         };
         assert.equal(snapshotWorldCanvasPixels(world), true);
+        beginMagiasRitual();
         assert.equal(beginMagiasMoveDuringPrepare(world), true);
         lockWorldCanvasRendererClear(game);
         assert.equal(renderer.config.clearBeforeRender, false);
@@ -526,6 +529,58 @@ describe('select Missile then move mid-prepare must not clear the world canvas',
         assert.equal(world.height, 576);
         assert.equal(pool.pool[0].canvas, world);
         assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        endMagiasRitual();
+    });
+});
+
+describe('bare WASD / idle move must stay painted like pre-#73', () => {
+    it('does not arm fillRect refuse, ritual, or clearBeforeRender on idle move', () => {
+        let fillCalls = 0;
+        const ctx = {
+            fillRect() {
+                fillCalls += 1;
+            },
+            getImageData: () => ({ id: 'painted-fov' }),
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        const renderer = {
+            gameContext: ctx,
+            config: { clearBeforeRender: true },
+        };
+        const textures = {
+            addCanvas: (_key: string, source: unknown) => source,
+            remove: () => undefined,
+            generateTexture: () => undefined,
+            createCanvas: () => ({ width: 32, height: 32 }),
+        };
+        const game = {
+            canvas: world,
+            textures,
+            renderer,
+            events: { on() { /* idle attach must not need postrender */ } },
+        };
+        endMagiasRitual();
+        attachWorldCanvasPoolGuard(game, createPhaserStylePool());
+        bindWorldCanvasRenderer(game);
+        assert.equal(isMagiasRitualActive(), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(isWorldCanvasClearRefused(), false);
+        assert.equal(renderer.config.clearBeforeRender, true);
+        assert.equal(hasPaintedWorldCanvasSnapshot(), false);
+        assert.equal(beginMagiasMoveDuringPrepare(world), false);
+        assert.equal(isMagiasRitualActive(), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(isWorldCanvasClearRefused(), false);
+        ctx.fillRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 1);
+        reassertWorldCanvasPresentationGuard({ canvas: world, textures, renderer });
+        assert.equal(renderer.config.clearBeforeRender, true);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
         endMagiasRitual();
     });
 });

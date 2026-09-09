@@ -22,6 +22,7 @@ import {
     endMagiasRitual,
     isMagiasMoveDuringPrepareActive,
     isMagiasRitualActive,
+    syncMagiasMoveDuringPrepareCamera,
     planCastEnterVisuals,
     planMagiasMoveDuringPrepare,
     planMagiasSoftCastConfirm,
@@ -335,6 +336,22 @@ describe('move mid-prepare must not touch game.canvas', () => {
         assert.equal(isMagiasMoveDuringPrepareActive(), false);
     });
 
+    it('bare WASD without a Magias ritual does not arm the move freeze or start a ritual', () => {
+        const painted = { id: 'painted-fov' };
+        const world = {
+            width: 1024,
+            height: 576,
+            getContext: () => ({
+                getImageData: () => painted,
+            }),
+        };
+        endMagiasRitual();
+        assert.equal(beginMagiasMoveDuringPrepare(world), false);
+        assert.equal(isMagiasRitualActive(), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        endMagiasRitual();
+    });
+
     it('WASD mid-prepare arms the freeze only after a painted FOV snapshot', () => {
         const painted = { id: 'painted-fov' };
         const black = { data: new Uint8ClampedArray(16) };
@@ -367,5 +384,26 @@ describe('move mid-prepare must not touch game.canvas', () => {
         assert.equal(beginMagiasMoveDuringPrepare(world), true);
         assert.equal(isMagiasMoveDuringPrepareActive(), true);
         endMagiasRitual();
+    });
+
+    it('does not write camera.transparent on idle move; only while freeze is armed', () => {
+        const camera = { transparent: false };
+        endMagiasRitual();
+        syncMagiasMoveDuringPrepareCamera(camera);
+        assert.equal(camera.transparent, false);
+        beginMagiasRitual();
+        syncMagiasMoveDuringPrepareCamera(camera);
+        assert.equal(camera.transparent, false);
+        const world = {
+            width: 1024,
+            height: 576,
+            getContext: () => ({ getImageData: () => ({ id: 'painted-fov' }) }),
+        };
+        assert.equal(beginMagiasMoveDuringPrepare(world), true);
+        syncMagiasMoveDuringPrepareCamera(camera);
+        assert.equal(camera.transparent, true);
+        endMagiasRitual();
+        syncMagiasMoveDuringPrepareCamera(camera);
+        assert.equal(camera.transparent, false);
     });
 });

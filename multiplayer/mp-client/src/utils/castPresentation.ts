@@ -359,13 +359,17 @@ export function applyMagiasMoveDuringPrepareVisuals(
     return plan;
 }
 
-/** WASD / arrows during prepare: arm the move freeze only (select stays #72). */
-export function noteMagiasMoveDuringPrepareHotkey(): void {
-    beginMagiasMoveDuringPrepare();
+/**
+ * WASD / arrows during an already-armed Magias prepare. Does not start a
+ * ritual — idle / leftover-session keys must not freeze the FOV.
+ */
+export function noteMagiasMoveDuringPrepareHotkey(): boolean {
+    return beginMagiasMoveDuringPrepare();
 }
 
 let magiasRitualActive = false;
 let magiasMoveDuringPrepareActive = false;
+let magiasMoveCameraWasFrozen = false;
 
 /**
  * Armed at F7 spell *select* (before PlayerState.Cast). FloatingText / add.text
@@ -383,9 +387,14 @@ export function beginMagiasRitual(): void {
  * WASD / click-to-move after a painted prepare frame. Snapshots the FOV and
  * only then refuses Phaser's full-canvas black fill. An empty snapshot must
  * not arm — that restore-black path is the #73 select regression.
+ *
+ * Requires an already-active Magias ritual. Must not set the ritual from an
+ * idle move — that leaked #73/#74 hooks onto bare WASD (`DQVdzggt`).
  */
 export function beginMagiasMoveDuringPrepare(canvas?: WorldCanvasLike): boolean {
-    magiasRitualActive = true;
+    if (!magiasRitualActive) {
+        return false;
+    }
     snapshotWorldCanvasPixelsIfPainted(canvas);
     if (!hasPaintedWorldCanvasSnapshot()) {
         return false;
@@ -408,4 +417,24 @@ export function isMagiasRitualActive(): boolean {
 
 export function isMagiasMoveDuringPrepareActive(): boolean {
     return magiasMoveDuringPrepareActive;
+}
+
+/**
+ * Skip camera #000 fill only while the painted move-freeze is armed.
+ * Idle frames must not write `camera.transparent` — that #73/#74 hook
+ * forced an opaque black fill on every bare WASD / camera-follow tick.
+ */
+export function syncMagiasMoveDuringPrepareCamera(camera?: { transparent: boolean }): void {
+    if (!camera) {
+        return;
+    }
+    if (magiasMoveDuringPrepareActive) {
+        camera.transparent = true;
+        magiasMoveCameraWasFrozen = true;
+        return;
+    }
+    if (magiasMoveCameraWasFrozen) {
+        camera.transparent = false;
+        magiasMoveCameraWasFrozen = false;
+    }
 }

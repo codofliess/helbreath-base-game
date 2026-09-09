@@ -24,9 +24,45 @@ export function canPresentCastingCircle(textureAlreadySafe: boolean): boolean {
 }
 
 /**
- * Cast enter must not fetch clothes / angelic CAST sheets (armour base 8).
+ * Cast enter must not fetch clothes / angelic CAST sheets (armour base 8)
+ * and must not start the idle-pack helper (`scheduleLazyItemAppearanceIfNeeded`).
  * World enter only settled idle 0–3; first Missile prepare was the decode.
  */
 export function canFetchAppearanceSheetOnStateEnter(isCastState: boolean): boolean {
     return !isCastState;
+}
+
+/**
+ * Phaser `Text` → CanvasPool.create → textures.addCanvas. If `game.canvas`
+ * was previously pooled (generateTexture / textures.remove of a world alias),
+ * the announce steals and resizes the live world canvas. System log still
+ * carries the spell name.
+ */
+export function canCreateCastAnnounceText(): boolean {
+    return false;
+}
+
+/**
+ * Cast-enter must never generateTexture / addCanvas(game.canvas) /
+ * textures.remove a world-backed key / bind that key as a sprite.
+ */
+export function canMutateWorldCanvasTexturesOnCastEnter(): boolean {
+    return false;
+}
+
+export type CastEnterVisualPlan = {
+    presentCircle: boolean;
+    fetchAppearanceSheets: boolean;
+    createPhaserText: boolean;
+    mayMutateWorldCanvasTextures: boolean;
+};
+
+/** Fail-closed Missile / Heal prepare: skip unsafe FX, still reach CastReady. */
+export function planCastEnterVisuals(circleTextureAlreadySafe: boolean): CastEnterVisualPlan {
+    return {
+        presentCircle: canPresentCastingCircle(circleTextureAlreadySafe),
+        fetchAppearanceSheets: canFetchAppearanceSheetOnStateEnter(true),
+        createPhaserText: canCreateCastAnnounceText(),
+        mayMutateWorldCanvasTextures: canMutateWorldCanvasTexturesOnCastEnter(),
+    };
 }

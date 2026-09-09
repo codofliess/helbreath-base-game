@@ -1079,7 +1079,7 @@ export class PlayerAppearanceManager {
                 continue;
             }
 
-            if (this.isLazyPlayerItemAppearanceSlot(slot) && this.scheduleLazyItemAppearanceIfNeeded(spriteName, asset)) {
+            if (this.isLazyPlayerItemAppearanceSlot(slot) && this.scheduleLazyItemAppearanceIfNeeded(spriteName, asset, newState)) {
                 asset.setVisible(false);
                 continue;
             }
@@ -1157,9 +1157,13 @@ export class PlayerAppearanceManager {
     /**
      * When lazy item appearance is enabled and the `.spr` is missing, starts fetch and keeps the layer hidden
      * until load completes. Returns true if load was deferred (caller must not force visible yet).
+     * Cast enter must not start this pack fetch or retarget-to-pending (ensurePending / setTexture).
      */
-    private scheduleLazyItemAppearanceIfNeeded(sprite: string, asset: GameAsset): boolean {
+    private scheduleLazyItemAppearanceIfNeeded(sprite: string, asset: GameAsset, state?: PlayerState): boolean {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+            return false;
+        }
+        if (state !== undefined && !canFetchAppearanceSheetOnStateEnter(state === PlayerState.Cast)) {
             return false;
         }
         if (!isPlayerItemAppearanceDecodeAllowed()) {

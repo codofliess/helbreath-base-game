@@ -23,7 +23,7 @@ import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
 import { isSafeDrawableTexture } from '../../utils/worldCanvasTextureSafety';
-import { canPresentCastingCircle, shouldAdvanceCastToReady } from '../../utils/castPresentation';
+import { canCreateCastAnnounceText, canPresentCastingCircle, shouldAdvanceCastToReady } from '../../utils/castPresentation';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -825,9 +825,16 @@ export class Player extends GameObject {
         // Create casting circle effect when entering Cast state
         if (newState === PlayerState.Cast && previousState !== PlayerState.Cast) {
             this.castStartedAtMs = performance.now();
-            this.createCastingCircleEffect();
-            // Create floating text with spell name in green color
-            this.createSpellNameFloatingText();
+            try {
+                this.createCastingCircleEffect();
+            } catch (error) {
+                console.warn('[Player] Casting circle skipped (fail-closed)', error);
+            }
+            try {
+                this.createSpellNameFloatingText();
+            } catch (error) {
+                console.warn('[Player] Cast announce skipped (fail-closed)', error);
+            }
         }
 
         // Destroy casting circle effect when leaving Cast state
@@ -862,14 +869,30 @@ export class Player extends GameObject {
                 appearanceAnimConfig.bowStanceAnimationDurationMs = this.remoteBowStanceAnimationDurationMs;
             }
         }
-        this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
+        try {
+            this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
+        } catch (error) {
+            if (newState === PlayerState.Cast) {
+                console.warn('[Player] Cast appearance skipped (fail-closed)', error);
+            } else {
+                throw error;
+            }
+        }
 
         if (newState === PlayerState.Run || previousState === PlayerState.Run ||
             newState === PlayerState.MeleeAttack || previousState === PlayerState.MeleeAttack ||
             newState === PlayerState.BowAttack || previousState === PlayerState.BowAttack) {
             this.updateDepth();
         }
-        this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
+        try {
+            this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
+        } catch (error) {
+            if (newState === PlayerState.Cast) {
+                console.warn('[Player] Cast shadow skipped (fail-closed)', error);
+            } else {
+                throw error;
+            }
+        }
     }
 
     /**
@@ -3485,20 +3508,24 @@ export class Player extends GameObject {
         }
 
         const announce = formatOlympiaSpellAnnounce(this.activeSpellName);
-        const color = this.resolveSpellAnnounceColor(this.activeSpellName, this.pendingSpellId);
 
-        new FloatingText(this.scene, {
-            text: announce,
-            x: this.getAnimatedPixelX(),
-            y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
-            fontSize: 16,
-            color,
-            bold: true,
-            horizontalOffset: -2,
-            upwardTravelPxPerSec: 26,
-            totalDurationMs: 2200,
-            fadeDurationMs: 1000,
-        });
+        // Phaser Text → CanvasPool / addCanvas. Skip on Cast enter so a pooled
+        // game.canvas cannot be resized to the announce bitmap (black map).
+        if (canCreateCastAnnounceText()) {
+            const color = this.resolveSpellAnnounceColor(this.activeSpellName, this.pendingSpellId);
+            new FloatingText(this.scene, {
+                text: announce,
+                x: this.getAnimatedPixelX(),
+                y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
+                fontSize: 16,
+                color,
+                bold: true,
+                horizontalOffset: -2,
+                upwardTravelPxPerSec: 26,
+                totalDurationMs: 2200,
+                fadeDurationMs: 1000,
+            });
+        }
 
         if (this.isLocalPlayer) {
             EventBus.emit(SYSTEM_LOG_APPEND, { message: announce, kind: 'event' });

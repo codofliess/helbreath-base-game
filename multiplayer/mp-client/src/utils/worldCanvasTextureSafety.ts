@@ -37,6 +37,20 @@ export function isSafeDrawableTexture(scene: TextureScene, key: string): boolean
     return scene.textures.exists(key) && !isWorldCanvasTextureKey(scene, key);
 }
 
+/** Phaser built-in 32×32 — never `game.canvas`. Used when pending is still a world alias. */
+export const PHASER_DEFAULT_TEXTURE_KEY = '__DEFAULT';
+
+/**
+ * Bind `preferred` only when it is an isolated sheet. Otherwise `__DEFAULT`
+ * (never addCanvas / textures.remove of `game.canvas`).
+ */
+export function safeBindableTextureKey(scene: TextureScene, preferred: string): string {
+    if (isSafeDrawableTexture(scene, preferred)) {
+        return preferred;
+    }
+    return PHASER_DEFAULT_TEXTURE_KEY;
+}
+
 /**
  * True when `key` is a live-world-canvas alias. Does **not** `textures.remove`
  * it. Phaser `CanvasTexture.destroy` → `CanvasPool.remove` sets that canvas

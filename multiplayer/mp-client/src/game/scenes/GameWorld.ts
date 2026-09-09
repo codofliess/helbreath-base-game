@@ -299,6 +299,7 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
+import { endMagiasRitual } from '../../utils/castPresentation';
 import {
     confuseApplyToastMessage,
     confuseExpireToastMessage,
@@ -1136,7 +1137,11 @@ export class GameWorld extends Scene {
 
     private setupSpellRequestListener(): void {
         subscribeSafe('GameWorld', IN_UI_CAST_SPELL, (data: CastSpellEvent) => {
-            this.player?.requestCast(data.spellId, data.useCastAnimation ?? true);
+            if (!this.player) {
+                endMagiasRitual();
+                return;
+            }
+            this.player.requestCast(data.spellId, data.useCastAnimation ?? true);
         });
         subscribeSafe('GameWorld', PLAYER_CAST_ANIMATION_STARTED, (data: { spellId: number }) => {
             if (!isServerAuthoritativeOlympiaSpell(data.spellId)) {

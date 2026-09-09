@@ -4,6 +4,7 @@ import {
     OLYMPIA_FLOATING_TEXT_COLORS,
     olympiaPhaserOutlinedTextStyle,
 } from '../../constants/OlympiaTypography';
+import { isMagiasRitualActive } from '../../utils/castPresentation';
 
 /**
  * Configuration for creating a FloatingText instance.
@@ -105,7 +106,7 @@ function colorForDamageKind(kind: 'dealt' | 'taken' | 'heal'): string {
  */
 export class FloatingText {
     private scene: Scene;
-    private textObject: Phaser.GameObjects.Text;
+    private textObject: Phaser.GameObjects.Text | undefined;
     private originY: number;
     private upwardTravelPxPerSec: number;
     private totalDurationMs: number;
@@ -113,7 +114,7 @@ export class FloatingText {
     private elapsedMs: number = 0;
     private destroyed = false;
     private readonly onDestroy?: () => void;
-    private updateCallback: (time: number, delta: number) => void;
+    private updateCallback: ((time: number, delta: number) => void) | undefined;
 
     constructor(scene: Scene, config: FloatingTextConfig) {
         this.scene = scene;
@@ -122,6 +123,14 @@ export class FloatingText {
         this.totalDurationMs = config.totalDurationMs;
         this.fadeDurationMs = config.fadeDurationMs ?? 0;
         this.onDestroy = config.onDestroy;
+
+        // F7 select / prepare / Cast: Phaser Text → CanvasPool.create can steal
+        // a pooled game.canvas and resize it (black map). React HUD / system log
+        // carry the announce instead.
+        if (isMagiasRitualActive()) {
+            this.destroyed = true;
+            return;
+        }
 
         const x = config.x + (config.horizontalOffset ?? 0);
         this.textObject = scene.add.text(
@@ -142,7 +151,7 @@ export class FloatingText {
 
     /** Replaces visible string (used when chaining multi-hit damage). */
     public setText(text: string): void {
-        if (this.destroyed) {
+        if (this.destroyed || !this.textObject) {
             return;
         }
         this.textObject.setText(text);
@@ -150,7 +159,7 @@ export class FloatingText {
 
     /** Updates fill color without recreating the Phaser text object. */
     public setColor(color: string): void {
-        if (this.destroyed) {
+        if (this.destroyed || !this.textObject) {
             return;
         }
         this.textObject.setColor(color);
@@ -158,7 +167,7 @@ export class FloatingText {
 
     /** Moves the float origin (keeps current travel progress relative to a new base Y). */
     public setOriginPosition(x: number, y: number): void {
-        if (this.destroyed) {
+        if (this.destroyed || !this.textObject) {
             return;
         }
         this.originY = y;
@@ -178,7 +187,7 @@ export class FloatingText {
             this.fadeDurationMs = fadeDurationMs;
         }
         this.elapsedMs = 0;
-        this.textObject.setAlpha(1);
+        this.textObject?.setAlpha(1);
     }
 
     public isDestroyed(): boolean {
@@ -186,6 +195,9 @@ export class FloatingText {
     }
 
     private update(delta: number): void {
+        if (!this.textObject) {
+            return;
+        }
         this.elapsedMs += delta;
 
         const travelOffset = (this.elapsedMs / 1000) * this.upwardTravelPxPerSec;
@@ -213,8 +225,11 @@ export class FloatingText {
             return;
         }
         this.destroyed = true;
-        this.scene.events.off('update', this.updateCallback);
-        this.textObject.destroy();
+        if (this.updateCallback) {
+            this.scene.events.off('update', this.updateCallback);
+        }
+        this.textObject?.destroy();
+        this.textObject = undefined;
         this.onDestroy?.();
     }
 }

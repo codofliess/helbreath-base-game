@@ -66,11 +66,13 @@ assert(
     /currentState === PlayerState\.Cast/.test(playerTs)
         && /shouldAdvanceCastToReady/.test(playerTs)
         && /canPresentCastingCircle/.test(playerTs)
-        && /canCreateCastAnnounceText/.test(playerTs)
+        && /canCreateMagiasUiPhaserText/.test(playerTs)
+        && /endMagiasRitual/.test(playerTs)
+        && /castAppearanceSkipped/.test(playerTs)
         && /fail-closed/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
-    'Missile prepare must not generateTexture or lazy-load effect5-7; skip F5 blit and Phaser Text in Cast; wait castSpeed if CAST anim never plays',
+    'Missile select/prepare must not generateTexture or lazy-load effect5-7; skip F5 blit, Phaser Text, and Cast appearance; wait castSpeed if CAST anim never plays',
 );
 const createCircle = playerTs.slice(
     playerTs.indexOf('private createCastingCircleEffect'),
@@ -104,10 +106,28 @@ assert(
 const castPresentation = read('src/utils/castPresentation.ts');
 assert(
     /canMutateWorldCanvasTexturesOnCastEnter/.test(castPresentation)
-        && /canCreateCastAnnounceText/.test(castPresentation)
+        && /canCreateMagiasUiPhaserText/.test(castPresentation)
         && /planCastEnterVisuals/.test(castPresentation)
-        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter'))),
-    'Cast-enter path must refuse generateTexture / addCanvas(game.canvas) / textures.remove of world keys',
+        && /planMagiasSpellSelect/.test(castPresentation)
+        && /applyMagiasSpellSelectVisuals/.test(castPresentation)
+        && /beginMagiasRitual/.test(castPresentation)
+        && /canTouchCanvasPoolOnMagiasSelect/.test(castPresentation)
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastEnter')))
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canCreateMagiasUiPhaserText')))
+        && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canTouchCanvasPoolOnMagiasSelect'))),
+    'Magias select/Cast path must refuse Phaser Text, CanvasPool(game.canvas), generateTexture, addCanvas, textures.remove',
+);
+const castDialogStore = read('src/ui/store/CastDialog.store.ts');
+assert(
+    /beginMagiasRitual/.test(castDialogStore)
+        && /castSpellById/.test(castDialogStore),
+    'F7 spell select (castSpellById) must arm the magias ritual before IN_UI_CAST_SPELL / PlayerState.Cast',
+);
+const floatingText = read('src/game/effects/FloatingText.ts');
+assert(
+    /isMagiasRitualActive/.test(floatingText)
+        && /destroyed = true/.test(floatingText),
+    'FloatingText must not scene.add.text during the magias ritual (CanvasPool steal)',
 );
 const spellMap = read('src/constants/OlympiaServerSpellMap.ts');
 assert(

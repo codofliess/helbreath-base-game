@@ -5,6 +5,7 @@ import type { CastSpellEvent } from '../../Types';
 import { createDialogStore } from './utils';
 import { isSpellLearned } from './MagicShopDialog.store';
 import { isTravelerPlayerMode } from '../../utils/playerMode';
+import { beginMagiasRitual } from '../../utils/castPresentation';
 
 interface CastDialogState {
     isOpen: boolean;
@@ -63,6 +64,9 @@ export const castSpellById = (spellId: number) => {
         return;
     }
     setSelectedSpellId(spellId);
+    // Select runs *before* PlayerState.Cast. Arm the ritual so FloatingText /
+    // add.text / CanvasPool cannot steal game.canvas on highlight or prepare.
+    beginMagiasRitual();
     const state = castDialogStore.state;
     EventBus.emit(IN_UI_CAST_SPELL, {
         spellId,

@@ -23,7 +23,13 @@ import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
 import { isSafeDrawableTexture } from '../../utils/worldCanvasTextureSafety';
-import { canCreateCastAnnounceText, canPresentCastingCircle, shouldAdvanceCastToReady } from '../../utils/castPresentation';
+import {
+    canCreateMagiasUiPhaserText,
+    canMutateWorldCanvasTexturesOnCastEnter,
+    canPresentCastingCircle,
+    endMagiasRitual,
+    shouldAdvanceCastToReady,
+} from '../../utils/castPresentation';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -171,6 +177,12 @@ export class Player extends GameObject {
 
     /** `performance.now()` when this body entered Cast — used when CAST sheets never play. */
     private castStartedAtMs = 0;
+
+    /**
+     * True when Cast skipped applyStateAppearance / shadow (fail-closed).
+     * Idle may still be looping — CastReady must then use elapsed time only.
+     */
+    private castAppearanceSkipped = false;
 
     /** SoundManager instance for playing sound effects */
     private readonly soundManager: SoundManager;
@@ -825,6 +837,7 @@ export class Player extends GameObject {
         // Create casting circle effect when entering Cast state
         if (newState === PlayerState.Cast && previousState !== PlayerState.Cast) {
             this.castStartedAtMs = performance.now();
+            this.castAppearanceSkipped = !canMutateWorldCanvasTexturesOnCastEnter();
             try {
                 this.createCastingCircleEffect();
             } catch (error) {
@@ -840,6 +853,7 @@ export class Player extends GameObject {
         // Destroy casting circle effect when leaving Cast state
         if (previousState === PlayerState.Cast && newState !== PlayerState.Cast) {
             this.destroyCastingCircleEffect();
+            this.castAppearanceSkipped = false;
         }
 
         const stepMsForAnim = this.moving ? this.activeStepDurationMs : this.movementSpeedMs;
@@ -869,13 +883,17 @@ export class Player extends GameObject {
                 appearanceAnimConfig.bowStanceAnimationDurationMs = this.remoteBowStanceAnimationDurationMs;
             }
         }
-        try {
-            this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
-        } catch (error) {
-            if (newState === PlayerState.Cast) {
-                console.warn('[Player] Cast appearance skipped (fail-closed)', error);
-            } else {
-                throw error;
+        const skipCastCanvasWork =
+            newState === PlayerState.Cast && !canMutateWorldCanvasTexturesOnCastEnter();
+        if (!skipCastCanvasWork) {
+            try {
+                this.appearanceManager.applyStateAppearance(newState, this.direction, appearanceAnimConfig);
+            } catch (error) {
+                if (newState === PlayerState.Cast) {
+                    console.warn('[Player] Cast appearance skipped (fail-closed)', error);
+                } else {
+                    throw error;
+                }
             }
         }
 
@@ -884,13 +902,15 @@ export class Player extends GameObject {
             newState === PlayerState.BowAttack || previousState === PlayerState.BowAttack) {
             this.updateDepth();
         }
-        try {
-            this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
-        } catch (error) {
-            if (newState === PlayerState.Cast) {
-                console.warn('[Player] Cast shadow skipped (fail-closed)', error);
-            } else {
-                throw error;
+        if (!skipCastCanvasWork) {
+            try {
+                this.appearanceManager.updateShadow(this.shadowManager, this.currentState, this.direction, appearanceAnimConfig);
+            } catch (error) {
+                if (newState === PlayerState.Cast) {
+                    console.warn('[Player] Cast shadow skipped (fail-closed)', error);
+                } else {
+                    throw error;
+                }
             }
         }
     }
@@ -1474,13 +1494,16 @@ export class Player extends GameObject {
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
         if (this.dead || this.hasPendingSpell()) {
+            endMagiasRitual();
             return;
         }
         if (this.hasTemporaryEffect(TemporaryEffectType.Inhibition)) {
+            endMagiasRitual();
             return;
         }
         const spellConfig = getSpellById(spellId);
         if (!spellConfig) {
+            endMagiasRitual();
             return;
         }
         this.activeSpellName = spellConfig.name;
@@ -1516,6 +1539,7 @@ export class Player extends GameObject {
             this.switchToIdle();
         }
         this.activeSpellName = undefined;
+        endMagiasRitual();
         const originPixelX = this.getAnimatedPixelX();
         const originPixelY = this.getAnimatedPixelY();
         EventBus.emit(PLAYER_CONFIRM_SPELL_TARGET, {
@@ -1548,6 +1572,7 @@ export class Player extends GameObject {
             this.switchToIdle();
         }
         this.activeSpellName = undefined;
+        endMagiasRitual();
         
         // Turn player towards the spell target direction (same logic as right-click in idle mode)
         const originPixelX = this.getAnimatedPixelX();
@@ -1586,21 +1611,24 @@ export class Player extends GameObject {
             return;
         }
 
-        new FloatingText(this.scene, {
-            text: 'Cast failed!',
-            x: this.getAnimatedPixelX(),
-            y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
-            fontSize: 16,
-            color: OLYMPIA_FLOATING_TEXT_COLORS.castFailed,
-            bold: true,
-            horizontalOffset: -2,
-            upwardTravelPxPerSec: 30,
-            totalDurationMs: 2000,
-            fadeDurationMs: 1000,
-        });
+        if (canCreateMagiasUiPhaserText()) {
+            new FloatingText(this.scene, {
+                text: 'Cast failed!',
+                x: this.getAnimatedPixelX(),
+                y: this.getAnimatedPixelY() - 3 * TILE_SIZE + 20,
+                fontSize: 16,
+                color: OLYMPIA_FLOATING_TEXT_COLORS.castFailed,
+                bold: true,
+                horizontalOffset: -2,
+                upwardTravelPxPerSec: 30,
+                totalDurationMs: 2000,
+                fadeDurationMs: 1000,
+            });
+        }
         this.soundTracker.playOnceUntracked(SPELL_CAST_FAILED);
 
         if (!this.hasPendingSpell()) {
+            endMagiasRitual();
             return;
         }
         this.clearSpellState();
@@ -3028,6 +3056,7 @@ export class Player extends GameObject {
                 this.isPrimaryAssetAnimationPlaying(),
                 performance.now() - this.castStartedAtMs,
                 this.castSpeed,
+                !this.castAppearanceSkipped,
             )
         ) {
             this.switchPlayerState(PlayerState.CastReady);
@@ -3509,9 +3538,9 @@ export class Player extends GameObject {
 
         const announce = formatOlympiaSpellAnnounce(this.activeSpellName);
 
-        // Phaser Text → CanvasPool / addCanvas. Skip on Cast enter so a pooled
-        // game.canvas cannot be resized to the announce bitmap (black map).
-        if (canCreateCastAnnounceText()) {
+        // Phaser Text → CanvasPool / addCanvas. Skip for the whole magias
+        // select→Cast ritual so a pooled game.canvas cannot be resized (black map).
+        if (canCreateMagiasUiPhaserText()) {
             const color = this.resolveSpellAnnounceColor(this.activeSpellName, this.pendingSpellId);
             new FloatingText(this.scene, {
                 text: announce,
@@ -3573,6 +3602,7 @@ export class Player extends GameObject {
         this.pendingUseCastAnimation = true;
         this.queuedCastUseAnimation = true;
         this.activeSpellName = undefined;
+        endMagiasRitual();
     }
 
     /**

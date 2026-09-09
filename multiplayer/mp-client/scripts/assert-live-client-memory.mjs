@@ -77,7 +77,7 @@ assert(
         && /IdleFromCast/.test(playerTs)
         && /MoveDuringPrepare/.test(playerTs)
         && /isMagiasRitualActive/.test(playerTs)
-        && /snapshotWorldCanvasPixels/.test(playerTs)
+        && /beginMagiasMoveDuringPrepare/.test(playerTs)
         && /onLeftClickAt/.test(playerTs)
         && !/loadEffectAssetsOnDemand/.test(playerTs)
         && !/\.generateTexture\(/.test(playerTs),
@@ -145,6 +145,8 @@ assert(
         && /canMutateWorldCanvasOnMoveDuringPrepare/.test(castPresentation)
         && /canRebuildMapTilesetOnMagiasPrepare/.test(castPresentation)
         && /MoveDuringPrepare/.test(castPresentation)
+        && /beginMagiasMoveDuringPrepare/.test(castPresentation)
+        && /isMagiasMoveDuringPrepareActive/.test(castPresentation)
         && /setWorldCanvasClearRefused/.test(castPresentation)
         && /snapshotWorldCanvasPixels/.test(castPresentation)
         && /restoreWorldCanvasPixels/.test(castPresentation)
@@ -155,6 +157,28 @@ assert(
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canSpawnCastingCircleOnPrepare')))
         && /return false/.test(castPresentation.slice(castPresentation.indexOf('export function canMutateWorldCanvasTexturesOnCastConfirm'))),
     'Magias select/Cast path must refuse Phaser Text, CanvasPool(game.canvas), generateTexture, addCanvas, textures.remove',
+);
+const beginRitualFn = castPresentation.slice(
+    castPresentation.indexOf('export function beginMagiasRitual'),
+    castPresentation.indexOf('export function beginMagiasMoveDuringPrepare'),
+);
+const beginMoveFn = castPresentation.slice(
+    castPresentation.indexOf('export function beginMagiasMoveDuringPrepare'),
+    castPresentation.indexOf('export function endMagiasRitual'),
+);
+const applySelectFn = castPresentation.slice(
+    castPresentation.indexOf('export function applyMagiasSpellSelectVisuals'),
+    castPresentation.indexOf('export type MagiasSoftCastConfirmPlan'),
+);
+assert(
+    !/setWorldCanvasClearRefused/.test(beginRitualFn)
+        && !/snapshotWorldCanvasPixels/.test(beginRitualFn)
+        && !/snapshotWorldCanvasPixels/.test(applySelectFn)
+        && !/beginMagiasMoveDuringPrepare/.test(applySelectFn)
+        && /setWorldCanvasClearRefused/.test(beginMoveFn)
+        && /snapshotWorldCanvasPixelsIfPainted/.test(beginMoveFn)
+        && /hasPaintedWorldCanvasSnapshot/.test(beginMoveFn),
+    'Bare Missile SELECT must not arm fillRect refuse / FOV snapshot restore; only WASD mid-prepare may',
 );
 const worldCanvasPoolGuard = read('src/utils/worldCanvasPoolGuard.ts');
 assert(
@@ -177,6 +201,8 @@ assert(
         && /clearBeforeRender/.test(worldCanvasPoolGuard)
         && /postrender/.test(worldCanvasPoolGuard)
         && /snapshotWorldCanvasPixels/.test(worldCanvasPoolGuard)
+        && /snapshotWorldCanvasPixelsIfPainted/.test(worldCanvasPoolGuard)
+        && /hasPaintedWorldCanvasSnapshot/.test(worldCanvasPoolGuard)
         && /restoreWorldCanvasPixels/.test(worldCanvasPoolGuard)
         && /create2D closes over the \*inner\* create/.test(worldCanvasPoolGuard),
     'World canvas pool guard must wrap CanvasPool remove/create, seal the world slot, lock FOV size, and refuse addCanvas(game.canvas) / generateTexture',
@@ -198,9 +224,9 @@ const gameWorldCanvasPresentation = read('src/game/ui/gameWorldCanvasPresentatio
 assert(
     /lockWorldCanvasPresentationSize/.test(gameWorldCanvasPresentation)
         && /applyClassicFovPresentation/.test(gameWorldCanvasPresentation)
-        && /isMagiasRitualActive/.test(gameWorldCanvasPresentation)
+        && /isMagiasMoveDuringPrepareActive/.test(gameWorldCanvasPresentation)
         && /canMutateWorldCanvasOnMoveDuringPrepare/.test(gameWorldCanvasPresentation),
-    'Game-world FOV presentation must lock game.canvas size/getContext and skip Scale.refresh during Magias prepare',
+    'Game-world FOV presentation must lock game.canvas size/getContext and skip Scale.refresh only on WASD mid-prepare',
 );
 assert(
     /isMagiasRitualActive/.test(mapManager)
@@ -208,10 +234,10 @@ assert(
     'Walk restream must not rebuild the map tileset during Magias prepare',
 );
 assert(
-    /isMagiasRitualActive/.test(gameWorld)
+    /isMagiasMoveDuringPrepareActive/.test(gameWorld)
         && /reassertWorldCanvasPresentationGuard/.test(gameWorld)
-        && /transparent = isMagiasRitualActive\(\)/.test(gameWorld),
-    'GameWorld must re-lock the world canvas and skip camera #000 fill during Magias prepare',
+        && /transparent = isMagiasMoveDuringPrepareActive\(\)/.test(gameWorld),
+    'GameWorld must re-lock the world canvas and skip camera #000 fill only on WASD mid-prepare',
 );
 const mainTsx = read('src/main.tsx');
 assert(

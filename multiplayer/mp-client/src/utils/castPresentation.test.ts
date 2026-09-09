@@ -6,6 +6,7 @@ import {
     applyMagiasMoveDuringPrepareVisuals,
     applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
+    beginMagiasMoveDuringPrepare,
     beginMagiasRitual,
     canCreateCastAnnounceText,
     canCreateMagiasUiPhaserText,
@@ -19,6 +20,7 @@ import {
     canSpawnCastingCircleOnPrepare,
     canTouchCanvasPoolOnMagiasSelect,
     endMagiasRitual,
+    isMagiasMoveDuringPrepareActive,
     isMagiasRitualActive,
     planCastEnterVisuals,
     planMagiasMoveDuringPrepare,
@@ -178,6 +180,7 @@ describe('F7 select Olympia Missile id 0 must not create Text or touch CanvasPoo
         assert.equal(plan.spellId, 0);
         assert.equal(plan.serverCatalogSpellId, 0);
         assert.equal(isMagiasRitualActive(), true);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
         assert.equal(textCalls, 0);
         assert.equal(canvasPoolTouches, 0);
         assert.equal(world.width, 800);
@@ -186,10 +189,11 @@ describe('F7 select Olympia Missile id 0 must not create Text or touch CanvasPoo
         assert.equal(isMagiasRitualActive(), false);
     });
 
-    it('beginMagiasRitual is armed at select before Cast', () => {
+    it('beginMagiasRitual is armed at select before Cast without the move freeze', () => {
         endMagiasRitual();
         beginMagiasRitual();
         assert.equal(isMagiasRitualActive(), true);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
         endMagiasRitual();
     });
 });
@@ -316,6 +320,7 @@ describe('move mid-prepare must not touch game.canvas', () => {
 
         endMagiasRitual();
         applyMagiasSpellSelectVisuals(SPELL_MAGIC_MISSILE_ID, scene, getOlympiaServerSpellId);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
         const plan = applyMagiasMoveDuringPrepareVisuals(SPELL_MAGIC_MISSILE_ID, scene);
         assert.equal(plan.spellId, 0);
         assert.equal(plan.applyWalkAppearanceOnMove, false);
@@ -327,5 +332,40 @@ describe('move mid-prepare must not touch game.canvas', () => {
         assert.equal(world.height, 576);
         endMagiasRitual();
         assert.equal(isMagiasRitualActive(), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+    });
+
+    it('WASD mid-prepare arms the freeze only after a painted FOV snapshot', () => {
+        const painted = { id: 'painted-fov' };
+        const black = { data: new Uint8ClampedArray(16) };
+        let reads = 0;
+        const world = {
+            width: 1024,
+            height: 576,
+            getContext: () => ({
+                getImageData: () => {
+                    reads += 1;
+                    return reads === 1 ? black : painted;
+                },
+            }),
+        };
+        endMagiasRitual();
+        applyMagiasSpellSelectVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: { text: () => {
+                    throw new Error('select must not create Phaser Text');
+                } },
+                textures: {},
+            },
+            getOlympiaServerSpellId,
+        );
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(beginMagiasMoveDuringPrepare(world), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(beginMagiasMoveDuringPrepare(world), true);
+        assert.equal(isMagiasMoveDuringPrepareActive(), true);
+        endMagiasRitual();
     });
 });

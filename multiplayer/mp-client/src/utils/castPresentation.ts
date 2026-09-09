@@ -1,7 +1,10 @@
 import {
+    clearWorldCanvasPixelBackup,
+    hasPaintedWorldCanvasSnapshot,
     restoreWorldCanvasPixels,
     setWorldCanvasClearRefused,
-    snapshotWorldCanvasPixels,
+    snapshotWorldCanvasPixelsIfPainted,
+    type WorldCanvasLike,
 } from './worldCanvasPoolGuard';
 
 /**
@@ -203,6 +206,7 @@ export type MagiasSelectSceneProbe = {
  * Applies the F7 Missile-select visual plan to a scene probe.
  * Fail-closed: never calls `add.text` / addCanvas / generateTexture / textures.remove.
  * Begins the magias ritual so FloatingText constructed during select is a no-op.
+ * Must not snapshot / refuse fillRect — that is the #73 SELECT black regression.
  */
 export function applyMagiasSpellSelectVisuals(
     spellId: number,
@@ -210,7 +214,6 @@ export function applyMagiasSpellSelectVisuals(
     mapToServerCatalog: (olympiaSpellId: number) => number | undefined,
 ): MagiasSpellSelectPlan {
     beginMagiasRitual();
-    snapshotWorldCanvasPixels(scene.game.canvas);
     const plan = planMagiasSpellSelect(spellId, mapToServerCatalog, false);
     if (
         plan.createPhaserText
@@ -331,7 +334,7 @@ export function applyMagiasMoveDuringPrepareVisuals(
     spellId: number,
     scene: MagiasSelectSceneProbe,
 ): MagiasMoveDuringPreparePlan {
-    beginMagiasRitual();
+    beginMagiasMoveDuringPrepare(scene.game.canvas);
     restoreWorldCanvasPixels(scene.game.canvas);
     const plan = planMagiasMoveDuringPrepare(spellId);
     if (
@@ -356,29 +359,53 @@ export function applyMagiasMoveDuringPrepareVisuals(
     return plan;
 }
 
-/** WASD / arrows during prepare: re-arm the ritual so later confirm stays gated. */
+/** WASD / arrows during prepare: arm the move freeze only (select stays #72). */
 export function noteMagiasMoveDuringPrepareHotkey(): void {
-    beginMagiasRitual();
+    beginMagiasMoveDuringPrepare();
 }
 
 let magiasRitualActive = false;
+let magiasMoveDuringPrepareActive = false;
 
 /**
  * Armed at F7 spell *select* (before PlayerState.Cast). FloatingText / add.text
  * during the ritual steal a pooled `game.canvas`.
+ *
+ * Does **not** refuse fillRect / disable clearBeforeRender / snapshot-restore.
+ * #73 armed those on select and Elon Chile went black on bare Missile SELECT
+ * (`wYmK8kVN`). Move freeze is {@link beginMagiasMoveDuringPrepare}.
  */
 export function beginMagiasRitual(): void {
     magiasRitualActive = true;
-    // Phaser CanvasRenderer.preRender fillRect(#000) wipes without assigning
-    // .width — that is why #72 select PASS / WASD mid-prepare FAIL.
+}
+
+/**
+ * WASD / click-to-move after a painted prepare frame. Snapshots the FOV and
+ * only then refuses Phaser's full-canvas black fill. An empty snapshot must
+ * not arm — that restore-black path is the #73 select regression.
+ */
+export function beginMagiasMoveDuringPrepare(canvas?: WorldCanvasLike): boolean {
+    magiasRitualActive = true;
+    snapshotWorldCanvasPixelsIfPainted(canvas);
+    if (!hasPaintedWorldCanvasSnapshot()) {
+        return false;
+    }
+    magiasMoveDuringPrepareActive = true;
     setWorldCanvasClearRefused(true);
+    return true;
 }
 
 export function endMagiasRitual(): void {
     magiasRitualActive = false;
+    magiasMoveDuringPrepareActive = false;
     setWorldCanvasClearRefused(false);
+    clearWorldCanvasPixelBackup();
 }
 
 export function isMagiasRitualActive(): boolean {
     return magiasRitualActive;
+}
+
+export function isMagiasMoveDuringPrepareActive(): boolean {
+    return magiasMoveDuringPrepareActive;
 }

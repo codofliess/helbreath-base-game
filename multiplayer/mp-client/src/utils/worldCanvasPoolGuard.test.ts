@@ -6,12 +6,16 @@ import {
     applyMagiasMoveDuringPrepareVisuals,
     applyMagiasSoftCastConfirmVisuals,
     applyMagiasSpellSelectVisuals,
+    beginMagiasMoveDuringPrepare,
     beginMagiasRitual,
     endMagiasRitual,
+    isMagiasMoveDuringPrepareActive,
+    isMagiasRitualActive,
     shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
 import {
     attachWorldCanvasPoolGuard,
+    hasPaintedWorldCanvasSnapshot,
     lockWorldCanvasPresentationSize,
     lockWorldCanvasRendererClear,
     occupyWorldCanvasPoolSlot,
@@ -26,6 +30,7 @@ import {
     setWorldCanvasClearRefused,
     snapshotWorldCanvasBox,
     snapshotWorldCanvasPixels,
+    snapshotWorldCanvasPixelsIfPainted,
     withWorldCanvasBoxGuard,
     type CanvasPoolContainer,
     type WorldCanvasLike,
@@ -220,7 +225,7 @@ describe('lockWorldCanvasPresentationSize', () => {
         assert.equal(world.getContext?.('webgl'), null);
     });
 
-    it('refuses full-canvas fillRect/clearRect while Magias prepare is armed', () => {
+    it('refuses full-canvas fillRect/clearRect only after WASD mid-prepare is armed', () => {
         let fillCalls = 0;
         let clearCalls = 0;
         const ctx = {
@@ -230,6 +235,7 @@ describe('lockWorldCanvasPresentationSize', () => {
             clearRect() {
                 clearCalls += 1;
             },
+            getImageData: () => ({ id: 'painted-fov' }),
         };
         const world: WorldCanvasLike = {
             width: 1024,
@@ -241,13 +247,18 @@ describe('lockWorldCanvasPresentationSize', () => {
         world.getContext?.('2d');
         ctx.fillRect(0, 0, 1024, 576);
         ctx.clearRect(0, 0, 1024, 576);
-        assert.equal(fillCalls, 0);
-        assert.equal(clearCalls, 0);
-        endMagiasRitual();
+        assert.equal(fillCalls, 1);
+        assert.equal(clearCalls, 1);
+        assert.equal(beginMagiasMoveDuringPrepare(world), true);
         ctx.fillRect(0, 0, 1024, 576);
         ctx.clearRect(0, 0, 1024, 576);
         assert.equal(fillCalls, 1);
         assert.equal(clearCalls, 1);
+        endMagiasRitual();
+        ctx.fillRect(0, 0, 1024, 576);
+        ctx.clearRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 2);
+        assert.equal(clearCalls, 2);
     });
 
     it('restores painted FOV pixels after a move-during-prepare wipe', () => {
@@ -303,7 +314,7 @@ describe('lockWorldCanvasPresentationSize', () => {
             },
         };
         assert.equal(snapshotWorldCanvasPixels(world), true);
-        beginMagiasRitual();
+        assert.equal(beginMagiasMoveDuringPrepare(world), true);
         lockWorldCanvasRendererClear(game);
         assert.equal(renderer.config.clearBeforeRender, false);
         ctx.fillRect();
@@ -408,6 +419,8 @@ describe('F7 select Missile must not clear the world canvas', () => {
 
         assert.equal(plan.spellId, 0);
         assert.equal(plan.presentCircle, false);
+        assert.equal(isMagiasRitualActive(), true);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
         assert.equal(shouldSkipCastCanvasWorkOnState('Cast'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('CastReady'), true);
         assert.equal(shouldSkipCastCanvasWorkOnState('Idle'), false);
@@ -512,6 +525,185 @@ describe('select Missile then move mid-prepare must not clear the world canvas',
         assert.equal(world.width, 1024);
         assert.equal(world.height, 576);
         assert.equal(pool.pool[0].canvas, world);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        endMagiasRitual();
+    });
+});
+
+describe('SELECT Missile stays painted; WASD mid-prepare stays painted', () => {
+    it('bare SELECT does not disable clearBeforeRender or blit an empty FOV', () => {
+        const painted = { id: 'painted-fov' };
+        const black = { data: new Uint8ClampedArray(1024 * 576 * 4) };
+        let current: unknown = painted;
+        let fillCalls = 0;
+        let postrender: (() => void) | undefined;
+        const ctx = {
+            fillRect() {
+                fillCalls += 1;
+                current = black;
+            },
+            getImageData: () => black,
+            putImageData(data: unknown) {
+                current = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        const renderer = {
+            gameContext: ctx,
+            config: { clearBeforeRender: true },
+        };
+        const textures = {
+            addCanvas: (_key: string, source: unknown) => source,
+            remove: () => undefined,
+            generateTexture: () => undefined,
+        };
+        const game = {
+            canvas: world,
+            textures,
+            renderer,
+            events: {
+                on(_event: string, fn: () => void) {
+                    postrender = fn;
+                },
+            },
+        };
+        endMagiasRitual();
+        attachWorldCanvasPoolGuard(game, createPhaserStylePool());
+        applyMagiasSpellSelectVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: {
+                    text: () => {
+                        throw new Error('Missile select must not create Phaser Text');
+                    },
+                },
+                textures,
+            },
+            getOlympiaServerSpellId,
+        );
+        lockWorldCanvasRendererClear(game);
+        assert.equal(isMagiasRitualActive(), true);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(renderer.config.clearBeforeRender, true);
+        assert.equal(hasPaintedWorldCanvasSnapshot(), false);
+        ctx.fillRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 1);
+        current = painted;
+        restoreWorldCanvasPixels(world);
+        postrender?.();
+        assert.equal(current, painted);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        endMagiasRitual();
+    });
+
+    it('WASD mid-prepare after painted SELECT refuses the wipe and restores FOV', () => {
+        const painted = { id: 'painted-fov' };
+        let current: unknown = painted;
+        let fillCalls = 0;
+        let postrender: (() => void) | undefined;
+        const ctx = {
+            fillRect() {
+                fillCalls += 1;
+                current = { id: 'wiped' };
+            },
+            getImageData: () => painted,
+            putImageData(data: unknown) {
+                current = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 1024,
+            height: 576,
+            getContext: () => ctx,
+        };
+        const renderer = {
+            gameContext: ctx,
+            config: { clearBeforeRender: true },
+        };
+        const textures = {
+            addCanvas: (_key: string, source: unknown) => source,
+            remove: () => undefined,
+            generateTexture: () => false,
+            createCanvas: () => ({ width: 32, height: 32 }),
+        };
+        const game = {
+            canvas: world,
+            textures,
+            renderer,
+            events: {
+                on(_event: string, fn: () => void) {
+                    postrender = fn;
+                },
+            },
+        };
+        endMagiasRitual();
+        attachWorldCanvasPoolGuard(game, createPhaserStylePool());
+        applyMagiasSpellSelectVisuals(
+            SPELL_MAGIC_MISSILE_ID,
+            {
+                game: { canvas: world },
+                add: {
+                    text: () => {
+                        throw new Error('Missile select must not create Phaser Text');
+                    },
+                },
+                textures,
+            },
+            getOlympiaServerSpellId,
+        );
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        applyMagiasMoveDuringPrepareVisuals(SPELL_MAGIC_MISSILE_ID, {
+            game: { canvas: world },
+            add: {
+                text: () => {
+                    throw new Error('Missile move mid-prepare must not create Phaser Text');
+                },
+            },
+            textures,
+        });
+        lockWorldCanvasRendererClear(game);
+        assert.equal(isMagiasMoveDuringPrepareActive(), true);
+        assert.equal(renderer.config.clearBeforeRender, false);
+        assert.equal(hasPaintedWorldCanvasSnapshot(), true);
+        ctx.fillRect(0, 0, 1024, 576);
+        assert.equal(fillCalls, 0);
+        current = { id: 'wiped' };
+        postrender?.();
+        assert.equal(current, painted);
+        assert.equal(world.width, 1024);
+        assert.equal(world.height, 576);
+        endMagiasRitual();
+        assert.equal(renderer.config.clearBeforeRender, true);
+    });
+
+    it('does not freeze or restore an all-black FOV snapshot', () => {
+        const black = { data: new Uint8ClampedArray(64) };
+        let restored: unknown;
+        const ctx = {
+            getImageData: () => black,
+            putImageData(data: unknown) {
+                restored = data;
+            },
+        };
+        const world: WorldCanvasLike = {
+            width: 8,
+            height: 2,
+            getContext: () => ctx,
+        };
+        endMagiasRitual();
+        assert.equal(snapshotWorldCanvasPixels(world), true);
+        assert.equal(hasPaintedWorldCanvasSnapshot(), false);
+        assert.equal(snapshotWorldCanvasPixelsIfPainted(world), false);
+        assert.equal(beginMagiasMoveDuringPrepare(world), false);
+        assert.equal(isMagiasMoveDuringPrepareActive(), false);
+        assert.equal(restoreWorldCanvasPixels(world), false);
+        assert.equal(restored, undefined);
         endMagiasRitual();
     });
 });

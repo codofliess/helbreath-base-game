@@ -24,6 +24,7 @@ import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
 import { isSafeDrawableTexture } from '../../utils/worldCanvasTextureSafety';
 import {
+    beginMagiasMoveDuringPrepare,
     canCreateMagiasUiPhaserText,
     canMutateWorldCanvasTexturesOnCastEnter,
     canPresentCastingCircle,
@@ -35,7 +36,6 @@ import {
 } from '../../utils/castPresentation';
 import {
     reassertWorldCanvasPresentationGuard,
-    snapshotWorldCanvasPixels,
     withWorldCanvasBoxGuard,
 } from '../../utils/worldCanvasPoolGuard';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
@@ -1546,7 +1546,6 @@ export class Player extends GameObject {
      */
     public requestCast(spellId: number, useCastAnimation = true): void {
         withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
-            snapshotWorldCanvasPixels(this.scene.game?.canvas);
             if (this.dead || this.hasPendingSpell()) {
                 endMagiasRitual();
                 return;
@@ -3044,6 +3043,7 @@ export class Player extends GameObject {
     ): void {
         if (isMagiasRitualActive()) {
             withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
+                beginMagiasMoveDuringPrepare(this.scene.game?.canvas);
                 reassertWorldCanvasPresentationGuard(this.scene.game);
             });
         }

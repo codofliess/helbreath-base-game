@@ -3,6 +3,7 @@ import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { AnimationType, GameAsset } from '../objects/GameAsset';
 import { convertPixelPosToWorldPos, convertWorldPosToPixelPos, getDirectionFromScreenSector, Direction } from '../../utils/CoordinateUtils';
 import { TILE_SIZE } from '../assets/HBMap';
+import { isPhaserSceneActive } from '../../utils/effectLiveCap';
 
 export type DirectionalProjectileConfig = {
     /** Projectile speed in pixels per second */
@@ -96,6 +97,10 @@ export abstract class DirectionalProjectile {
     }
 
     private update(delta: number): void {
+        if (!isPhaserSceneActive(this.scene)) {
+            this.destroy();
+            return;
+        }
         const speedPxPerMs = this.config.projectileSpeed / 1000;
         const moveDistance = speedPxPerMs * delta;
         this.traveledDistance += moveDistance;
@@ -123,6 +128,6 @@ export abstract class DirectionalProjectile {
 
     public destroy(): void {
         this.scene.events.off('update', this.updateCallback);
-        this.asset.destroy();
+        this.asset?.destroy();
     }
 }

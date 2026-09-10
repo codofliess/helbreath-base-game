@@ -830,21 +830,35 @@ assert(
     'GameWorld must defer equipped appearance prefetch and HUD sheets until after map setup',
 );
 
+const mapEnterSettle = read('src/utils/mapEnterSettle.ts');
+assert(
+    /MAP_ENTER_MONSTER_SYNC_MS = 400/.test(mapEnterSettle) &&
+        /MAP_ENTER_TREE_PASS_MS = 10_000/.test(mapEnterSettle) &&
+        /MAP_ENTER_ENTITY_CATCHUP_MS = 12_000/.test(mapEnterSettle) &&
+        /shouldDeferHeavyEnterDecode/.test(mapEnterSettle),
+    'mapEnterSettle must sync monsters before the 10s tree/gear cascade and defer gear while casting',
+);
 assert(
     /worldReadyForEntities/.test(gameWorld) &&
         /tickMapSetupWatchdog/.test(gameWorld) &&
         /noteMapSetupProgress/.test(gameWorld) &&
         /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
-        /delayedCall\(10000/.test(gameWorld) &&
-        /delayedCall\(12000/.test(gameWorld) &&
-        /delayedCall\(14000/.test(gameWorld) &&
-        /delayedCall\(16000/.test(gameWorld) &&
-        /delayedCall\(18000/.test(gameWorld) &&
-        /delayedCall\(20000/.test(gameWorld) &&
+        /mapLoadGeneration/.test(gameWorld) &&
+        /invalidateMapLoadGeneration/.test(gameWorld) &&
+        /enableEntitiesAfterFirstPaint/.test(gameWorld) &&
+        /tryHeavyEnterDecode/.test(gameWorld) &&
+        /shouldDeferHeavyEnterDecode/.test(gameWorld) &&
+        /MAP_ENTER_MONSTER_SYNC_MS/.test(gameWorld) &&
+        /MAP_ENTER_TREE_PASS_MS/.test(gameWorld) &&
+        /MAP_ENTER_ENTITY_CATCHUP_MS/.test(gameWorld) &&
+        /MAP_ENTER_NPC_SYNC_MS/.test(gameWorld) &&
+        /MAP_ENTER_HEAVY_DECODE_MS/.test(gameWorld) &&
+        /MAP_ENTER_ZOOM_RESTORE_MS/.test(gameWorld) &&
+        /MAP_ENTER_HUD_SPRITES_MS/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(false\)/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(true\)/.test(gameWorld) &&
         /displayedMap \|\| this\.pendingLoadedMap \|\| this\.mapPrepareInFlight/.test(gameWorld),
-    'GameWorld must fail-soft map timeout without retrying a painted map, delay NPC decode, and delay HUD packs',
+    'GameWorld must fail-soft map timeout, abort stale city↔tower expand, enable slimes after first paint, and idle-gate gear/zoom/HUD',
 );
 
 assert(
@@ -853,6 +867,17 @@ assert(
         /evictNpcSpriteSheets/.test(gameWorld) &&
         /loadingMap \|\| !this\.worldReadyForEntities/.test(gameWorld),
     'GameWorld must not spawn/decode monsters or NPCs during map setup, and must evict sheets that leave view',
+);
+
+const effectTs = read('src/game/effects/Effect.ts');
+const fireStrikeTs = read('src/game/spells/FireStrike.ts');
+const effectLiveCap = read('src/utils/effectLiveCap.ts');
+assert(
+    /MAX_LIVE_ONESHOT_EFFECTS = 24/.test(effectLiveCap) &&
+        /tryAcquireOneShotEffectSlot/.test(effectTs) &&
+        /releaseOneShotEffectSlot/.test(effectTs) &&
+        /isPhaserSceneActive/.test(fireStrikeTs),
+    'Fire Strike farm VFX must cap live one-shots and skip delayed explosions after scene.restart',
 );
 
 assert(

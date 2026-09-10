@@ -7,6 +7,7 @@ import type { SoundManager } from './SoundManager';
 import { TILE_SIZE } from '../game/assets/HBMap';
 import { areEffectSpriteLoaded, loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from './EffectAssets';
 import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from './worldCanvasTextureSafety';
+import { isPhaserSceneActive } from './effectLiveCap';
 
 /**
  * Builds the texture key for an effect config.
@@ -118,6 +119,9 @@ export function drawEffectAtPixelCoords(
     effectKey: string,
     options?: DrawEffectOptions
 ): Effect | undefined {
+    if (!isPhaserSceneActive(scene)) {
+        return undefined;
+    }
     const config = getEffectByKey(effectKey);
     if (!config) {
         console.warn(`[EffectUtils] Effect config not found: ${effectKey}`);
@@ -146,6 +150,9 @@ export function drawEffectAtPixelCoords(
     ) {
         void loadEffectAssetsOnDemand(scene, config)
             .then(() => {
+                if (!isPhaserSceneActive(scene)) {
+                    return;
+                }
                 removeWorldCanvasAliasedTexture(scene, textureKey);
                 if (!isSafeDrawableTexture(scene, textureKey)) {
                     return;

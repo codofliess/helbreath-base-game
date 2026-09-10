@@ -25,8 +25,18 @@ import {
 } from './mapViewportStream';
 
 const LIVE_ORIGIN = 'https://play.chainlords.net';
-const ELVINE_SPAWN_X = 149;
-const ELVINE_SPAWN_Y = 131;
+/** Legacy traveler / plaza-hunt pad — farm FOV, not login spawn after PR #79. */
+const ELVINE_SLIME_PLAZA_X = 149;
+const ELVINE_SLIME_PLAZA_Y = 131;
+/** Olympia city streets (login / Restart! / City Hall). */
+const ELVINE_CITY_STREETS_X = 158;
+const ELVINE_CITY_STREETS_Y = 57;
+/** Wizard Tower door exit after Gandalf. */
+const ELVINE_TOWER_DOOR_X = 181;
+const ELVINE_TOWER_DOOR_Y = 78;
+/** First-paint HTTP budget remains the open plaza (historical OOM fixture). */
+const ELVINE_SPAWN_X = ELVINE_SLIME_PLAZA_X;
+const ELVINE_SPAWN_Y = ELVINE_SLIME_PLAZA_Y;
 
 function isTreeSpriteIndex(spriteIndex: number): boolean {
     return spriteIndex >= 100 && spriteIndex <= 145;
@@ -224,5 +234,34 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(all.length > idle.length, `full slime sheets ${all.length} vs idle 8`);
         assert.ok(idleRgba < allRgba, `idle RGBA ${idleRgba} must be < full ${allRgba}`);
         assert.ok(idleRgba * 2 < allRgba || all.length >= 24, 'combat/death sheets must dominate VRAM if decoded eagerly');
+    });
+
+    it('city streets and Wizard Tower door stay inside the stream cap (PR #79 farm path)', async () => {
+        const buffer = await fetchGameAssetArrayBuffer('maps', catalogAmdFileName('elvine'), LIVE_ORIGIN);
+        const map = parseAmdMapCells(buffer);
+        const foci = [
+            { name: 'city streets', x: ELVINE_CITY_STREETS_X, y: ELVINE_CITY_STREETS_Y },
+            { name: 'tower door', x: ELVINE_TOWER_DOOR_X, y: ELVINE_TOWER_DOOR_Y },
+            { name: 'slime plaza', x: ELVINE_SLIME_PLAZA_X, y: ELVINE_SLIME_PLAZA_Y },
+        ];
+        for (const focus of foci) {
+            const firstPaint = firstPaintStreamRect(focus.x, focus.y, map.sizeX, map.sizeY);
+            const enter = initialFocusStreamRect(focus.x, focus.y, map.sizeX, map.sizeY);
+            const objectsEnter = countObjectInstances(map.tiles, enter, false);
+            const objectsTrees = countObjectInstances(map.tiles, enter, true);
+            assert.ok(
+                mapTileRectArea(enter) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES,
+                `${focus.name} enter window exceeds stream cap`,
+            );
+            assert.ok(
+                objectsEnter < 280,
+                `${focus.name} enter objects ${objectsEnter} must stay bounded (city is denser than plaza)`,
+            );
+            assert.ok(objectsEnter <= objectsTrees, `${focus.name} tree pass must not drop props`);
+            assert.ok(
+                mapTileRectArea(firstPaint) < mapTileRectArea(enter),
+                `${focus.name} first paint must stay smaller than enter FOV`,
+            );
+        }
     });
 });

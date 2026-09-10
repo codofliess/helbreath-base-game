@@ -24,8 +24,8 @@ export const MAP_TELEPORT_ZONES = [
             [82, 76]
         ],
         "targetMap": "aresden",
-        "targetX": 149,
-        "targetY": 127
+        "targetX": 140,
+        "targetY": 49
     },
     {
         "mapId": "default",
@@ -38,8 +38,8 @@ export const MAP_TELEPORT_ZONES = [
             [129, 79]
         ],
         "targetMap": "elvine",
-        "targetX": 149,
-        "targetY": 131
+        "targetX": 158,
+        "targetY": 57
     },
     {
         "mapId": "2ndmiddle",
@@ -1780,6 +1780,49 @@ export const MAP_TELEPORT_ZONES = [
         "targetY": 23
     },
     {
+        "mapId": "elvuni",
+        "locs": [
+            [176, 20],
+            [176, 21],
+            [176, 22],
+            [176, 23],
+            [176, 24],
+            [176, 25],
+            [176, 26],
+            [176, 27],
+            [176, 28]
+        ],
+        "targetMap": "huntzone1",
+        "targetX": 23,
+        "targetY": 52
+    },
+    {
+        "mapId": "areuni",
+        "locs": [
+            [78, 20],
+            [79, 20],
+            [80, 20],
+            [81, 20],
+            [82, 20],
+            [83, 20],
+            [84, 20],
+            [85, 20],
+            [86, 20],
+            [87, 20],
+            [88, 20],
+            [89, 20],
+            [90, 20],
+            [91, 20],
+            [92, 20],
+            [93, 20],
+            [94, 20],
+            [95, 20]
+        ],
+        "targetMap": "huntzone2",
+        "targetX": 115,
+        "targetY": 176
+    },
+    {
         "mapId": "icebound",
         "locs": [
             [
@@ -2382,13 +2425,13 @@ export const INTERIOR_EXIT_ZONES = [
         "exitsByTown": {
             "aresden": [
                 "aresden",
-                149,
-                127
+                140,
+                49
             ],
             "elvine": [
                 "elvine",
-                149,
-                131
+                158,
+                57
             ]
         }
     },

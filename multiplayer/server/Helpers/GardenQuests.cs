@@ -61,8 +61,15 @@ public static class GardenQuests {
                 player.ClearGardenQuest();
                 Reply(player, "Garden quest abandoned.");
                 return true;
+            case "return_city":
+                if (!CityNpcServices.TryTeleportCitizenHome(wr, player, out var homeMsg)) {
+                    Reply(player, homeMsg);
+                    return true;
+                }
+                Reply(player, homeMsg);
+                return true;
             default:
-                Reply(player, "Use the buttons: Unicorns, Trolls, or Abandon.");
+                Reply(player, "Use the buttons: Unicorns, Trolls, Return to city, or Abandon.");
                 return true;
         }
     }
@@ -119,7 +126,8 @@ public static class GardenQuests {
     static string StatusText(GameWorldPlayer player) {
         var q = player.GardenQuestId;
         if (string.IsNullOrEmpty(q)) {
-            return "Hunt Unicorns (50) or Trolls (500) for the city (Olympia Garden quests). " +
+            return "This is the Garden (hostile), not city streets. " +
+                   "Hunt Unicorns (50) or Trolls (500), or use Return to city for Elvine/Aresden plaza (Gandalf). " +
                    $"Each completion: {ContributionReward} contribution + {HellRewardPerQuest} pending $HELL.";
         }
         var need = KillsRequiredFor(q);

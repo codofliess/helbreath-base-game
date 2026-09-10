@@ -35,10 +35,13 @@ export function DeathDialog({ zIndex = 10013, onBringToFront }: DeathDialogProps
                     Killed by <strong>{killerName}</strong>
                 </p>
             ) : null}
+            <p className="death-restart-hint">
+                Restart! returns you to your city plaza (Gandalf / streets) — not this wild.
+            </p>
             <button
                 type="button"
                 className="death-restart-btn"
-                title="Restart!"
+                title="Restart! — return to city plaza"
                 onClick={handleRestart}
             >
                 Restart!

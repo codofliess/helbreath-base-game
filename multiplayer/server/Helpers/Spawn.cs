@@ -18,16 +18,11 @@ public static class Spawn {
     public const int TravelerDefaultSpawnY = 80;
 
     /// <summary>
-    /// Classic Helbreath town-plaza tiles (city-hall door exits in <c>GameWorlds.json</c>).
-    /// Used when a transfer has no teleport destination so <c>SpawnInMiddle</c> cannot drop citizens into water/wilds.
-    /// Aresden (149,127) and Elvine (149,131) are dry plaza on their city maps — but the same numbers are
-    /// coastal water on traveler map <c>default</c>, so the client must load the city .amd before applying them.
-    /// Traveler Zone pads land on those plaza tiles. Wild dwell pits sit outside Settings view (18×11);
-    /// plaza hunt slimes in <c>GameWorlds.json</c> (<c>_plazaHunt</c>) keep first-kill mobs in view at join.
-    /// </summary>
-    /// <summary>
     /// Default city spawn = Olympia mapdata initial-point #1 (primary gray pad), not intermap gates.
     /// Aresden (140,49) · Elvine (158,57) · farms use their single village pad.
+    /// Legacy traveler / City Hall landings (Aresden 149,127 · Elvine 149,131) sit in
+    /// <c>_plazaHunt</c> slime dwells — city-enter remaps those to the pads above.
+    /// Those legacy numbers are coastal water on traveler map <c>default</c>.
     /// </summary>
     public static bool TryGetTownDefaultSpawn(string worldId, out int x, out int y) {
         if (string.Equals(worldId, "aresden", StringComparison.Ordinal)) {
@@ -245,6 +240,7 @@ public static class Spawn {
         Enchanting.SendMaterialsState(player);
         BeginnerPath.SendState(player);
         BeginnerPath.OnWorldEntered(player, wr.WorldId);
+        CityEscape.NotifyOnJoin(wr, player);
         MarketSideDoor.TryDeliverDeskClaims(wr, player);
 
         var periodSeconds = wr.Settings.Timings.SpawnProtectionTime;

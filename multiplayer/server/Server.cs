@@ -1236,7 +1236,8 @@ static bool IsTravelerPlayerMode(string? playerMode) {
 
 /// <summary>
 /// Traveler-client login: pure travelers always enter the soft zone hub; Aresden/Elvine citizens
-/// restore their last valid city/world (or city plaza if last world was traveler/invalid).
+/// restore city interiors / non-plaza streets, otherwise snap to the Olympia city pad
+/// (never garden, hunt-zone, or the slime traveler plaza).
 /// </summary>
 static (string WorldId, PlayerPersistenceState State) ResolveTravelerModeLoginJoin(
     PlayerPersistenceState loadedState,
@@ -1264,8 +1265,30 @@ static (string WorldId, PlayerPersistenceState State) ResolveTravelerModeLoginJo
         return ResolveLoadedPlayerJoin(loadedState, worldRegistry, gameWorldsById, defaultWorldId);
     }
 
-    // Citizen: prefer last saved world when it still exists and is not pure traveler hub.
+    // Citizen: garden / hunt-zone / farm / slime traveler pad are not the city.
+    // Snap login onto Olympia plaza so Magias testers see streets + Wizard Tower path.
     var savedWorld = loadedState.GameWorldId?.Trim() ?? string.Empty;
+    if (CityEscape.TryResolveCitizenSafeEnter(
+            side,
+            savedWorld,
+            loadedState.X,
+            loadedState.Y,
+            out var safeWorld,
+            out var safeX,
+            out var safeY)
+        && gameWorldsById.ContainsKey(safeWorld)
+        && worldRegistry.TryGetGameWorld(safeWorld, out var safeGw)
+        && safeGw is not null) {
+        Console.WriteLine(
+            $"[Server] Citizen safe-enter '{side}' {savedWorld}({loadedState.X},{loadedState.Y}) → {safeWorld}({safeX},{safeY}).");
+        return (safeWorld, loadedState with {
+            GameWorldId = safeWorld,
+            X = safeX,
+            Y = safeY,
+            CitizenshipSide = side,
+        });
+    }
+
     var savedIsTraveler = string.Equals(savedWorld, "traveler", StringComparison.OrdinalIgnoreCase);
     if (!savedIsTraveler &&
         gameWorldsById.ContainsKey(savedWorld) &&
@@ -1308,6 +1331,29 @@ static (string WorldId, PlayerPersistenceState State) ResolveLoadedPlayerJoin(
     string defaultWorldId) {
     ArgumentNullException.ThrowIfNull(loadedState);
     const string requestedFallbackWorldId = "aresden";
+
+    var side = GamePersistence.NormalizeCitizenshipSide(loadedState.CitizenshipSide);
+    if (side is "aresden" or "elvine"
+        && CityEscape.TryResolveCitizenSafeEnter(
+            side,
+            loadedState.GameWorldId,
+            loadedState.X,
+            loadedState.Y,
+            out var safeWorld,
+            out var safeX,
+            out var safeY)
+        && gameWorldsById.ContainsKey(safeWorld)
+        && worldRegistry.TryGetGameWorld(safeWorld, out var safeGw)
+        && safeGw is not null) {
+        Console.WriteLine(
+            $"[Server] Citizen safe-enter '{side}' {loadedState.GameWorldId}({loadedState.X},{loadedState.Y}) → {safeWorld}({safeX},{safeY}).");
+        return (safeWorld, loadedState with {
+            GameWorldId = safeWorld,
+            X = safeX,
+            Y = safeY,
+            CitizenshipSide = side,
+        });
+    }
 
     if (gameWorldsById.ContainsKey(loadedState.GameWorldId) &&
         worldRegistry.TryGetGameWorld(loadedState.GameWorldId, out var loadedWorld) &&

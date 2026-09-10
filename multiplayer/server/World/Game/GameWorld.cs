@@ -770,6 +770,7 @@ public sealed class GameWorld : IWorkerWorld {
         if (string.IsNullOrWhiteSpace(player.CitizenshipSide)) {
             player.SetCitizenshipSide(CityNpcServices.ResolveCitizenshipSidePublic(id));
         }
+        ForceCitizenOffHostilePlaza(player, reason: "connect");
         OnlinePlayerDirectory.Register(player);
         Console.WriteLine($"[GameWorld:{id}] Player connected. Players on world: {playersBySessionId.Count}");
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: true);
@@ -791,6 +792,7 @@ public sealed class GameWorld : IWorkerWorld {
         OnlinePlayerDirectory.Register(reconnectedPlayer);
         // Traveler: always re-anchor to inland dry hub on reconnect (never resume coastal/wet saves).
         ForceTravelerToHub(reconnectedPlayer, reason: "reconnect");
+        ForceCitizenOffHostilePlaza(reconnectedPlayer, reason: "reconnect");
         Spawn.SendInitialState(gameWorldRef, reconnectedPlayer, includeSpells: true);
         Spawn.SendInitialGameWorldState(gameWorldRef, reconnectedPlayer);
         MagicTower.SendJoinBookSnapshot(reconnectedPlayer);
@@ -947,6 +949,7 @@ public sealed class GameWorld : IWorkerWorld {
             player.RestoreTravelerCombatPools();
         }
         ApplyTournamentEntry(player, transferPlayerInMessage.Player.State);
+        ForceCitizenOffHostilePlaza(player, reason: "transfer-in");
         OnlinePlayerDirectory.Register(player);
         Console.WriteLine($"[GameWorld:{id}] Player transferred in. Players on world: {playersBySessionId.Count}");
         // Arena must resync full spell directory (empty InitialState wipes client VFX table → Blizzard invisible).
@@ -1498,8 +1501,9 @@ public sealed class GameWorld : IWorkerWorld {
     }
 
     /// <summary>
-    /// Restart! / revive. Testing default: revive on (or next to) the death cell so farm/PvP testing is fast.
-    /// Set env <c>REVIVE_TO_TOWN=1</c> to restore Olympia-style city-pad / traveler-hub revive.
+    /// Restart! / revive. Chile / Olympia default: city pad (or traveler hub).
+    /// Garden and hunt-zone deaths always return to town. Set <c>REVIVE_TO_TOWN=0</c>
+    /// only for corpse-side farm/PvP testing — that flag does not apply in gardens/HZ.
     /// </summary>
     private void HandlePlayerResurrectRequest(GameWorldPlayer player) {
         if (!player.IsDead) {
@@ -1515,8 +1519,7 @@ public sealed class GameWorld : IWorkerWorld {
             return;
         }
 
-        // Testing: always revive near corpse (ground fields still blocked briefly by spawn protection).
-        if (!IsReviveToTownEnabled()) {
+        if (!Helpers.RevivePolicy.ShouldReviveToTown(id)) {
             CompleteLocalResurrection(player, player.PosX, player.PosY);
             return;
         }
@@ -1556,13 +1559,6 @@ public sealed class GameWorld : IWorkerWorld {
         CompleteLocalResurrection(player, loc.Value.X, loc.Value.Y);
     }
 
-    /// <summary>When true, Restart! sends citizens to town pads (Olympia). Default false for testing week.</summary>
-    private static bool IsReviveToTownEnabled() {
-        var flag = Environment.GetEnvironmentVariable("REVIVE_TO_TOWN");
-        return string.Equals(flag, "1", StringComparison.Ordinal)
-            || string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>City pad for citizens, traveler hub for travelers; false only when no known hub.</summary>
     private bool TryResolveResurrectDestination(GameWorldPlayer player, out string destWorldId, out int x, out int y) {
         destWorldId = string.Empty;
@@ -1570,6 +1566,10 @@ public sealed class GameWorld : IWorkerWorld {
         y = 0;
 
         var side = (player.CitizenshipSide ?? string.Empty).Trim().ToLowerInvariant();
+        if (side is not ("aresden" or "elvine")) {
+            // elvuni / elvfarm / elvwzdtwr → elvine so Garden deaths still reach Gandalf's city.
+            side = Helpers.CityNpcServices.ResolveCitizenshipSidePublic(id);
+        }
         if (side is "aresden" or "elvine") {
             destWorldId = side;
             if (Recall.TryPickRandomCityPad(side, out x, out y)) {
@@ -1994,6 +1994,13 @@ public sealed class GameWorld : IWorkerWorld {
                 destX = cityX;
                 destY = cityY;
             }
+
+            // Traveler / City Hall still targeting the slime plaza in an old GameWorlds.json.
+            if (destX.HasValue && destY.HasValue
+                && Helpers.CityEscape.TrySnapHostilePlazaToTown(destWorldId, destX.Value, destY.Value, out var plazaX, out var plazaY)) {
+                destX = plazaX;
+                destY = plazaY;
+            }
         }
 
         // Chain Lords map brackets (PL ≤110, PL Dungeons ≤120).
@@ -2068,6 +2075,14 @@ public sealed class GameWorld : IWorkerWorld {
         Action interruptLogoutDueToCombat,
         int? preferredSpawnX = null,
         int? preferredSpawnY = null) {
+        if (preferredSpawnX.HasValue && preferredSpawnY.HasValue
+            && CityEscape.TrySnapHostilePlazaToTown(id, preferredSpawnX.Value, preferredSpawnY.Value, out var plazaX, out var plazaY)) {
+            Console.WriteLine(
+                $"[GameWorld:{id}] Snapped hostile plaza spawn ({preferredSpawnX},{preferredSpawnY}) → town pad ({plazaX},{plazaY}).");
+            preferredSpawnX = plazaX;
+            preferredSpawnY = plazaY;
+        }
+
         // Traveler: ignore transfer/save preferred coords — GetSpawnLocation re-anchors to inland hub.
         var useDefaultSpawn =
             Spawn.TryGetTravelerDefaultSpawn(id, out _, out _)
@@ -2096,6 +2111,28 @@ public sealed class GameWorld : IWorkerWorld {
                 $"[GameWorld:{id}] Traveler spawn at ({spawnLocation.X},{spawnLocation.Y}) (hub {Spawn.TravelerDefaultSpawnX},{Spawn.TravelerDefaultSpawnY}).");
         }
         return player;
+    }
+
+    /// <summary>
+    /// Same-world safety net: slime traveler pad (149,131 / 149,127) → Olympia city streets.
+    /// </summary>
+    private void ForceCitizenOffHostilePlaza(GameWorldPlayer player, string reason) {
+        if (!CityEscape.TrySnapHostilePlazaToTown(id, player.PosX, player.PosY, out var hubX, out var hubY)) {
+            return;
+        }
+
+        var prevX = player.PosX;
+        var prevY = player.PosY;
+        var loc = Spawn.GetSpawnLocation(gameWorldRef, hubX, hubY);
+        if (prevX == loc.X && prevY == loc.Y) {
+            return;
+        }
+
+        occupancyTracker.SetFree(prevX, prevY);
+        occupancyTracker.SetOccupied(loc.X, loc.Y);
+        Movement.SetPlayerPosition(gameWorldRef, player, loc.X, loc.Y);
+        Console.WriteLine(
+            $"[GameWorld:{id}] Forced citizen '{player.PlayerId}' off slime plaza ({prevX},{prevY}) → ({loc.X},{loc.Y}) [{reason}].");
     }
 
     /// <summary>
@@ -2136,6 +2173,10 @@ public sealed class GameWorld : IWorkerWorld {
     public (int X, int Y) GetCenterSpawnHint() {
         if (Spawn.TryGetTravelerDefaultSpawn(id, out var hubX, out var hubY)) {
             return (hubX, hubY);
+        }
+
+        if (Spawn.TryGetTownDefaultSpawn(id, out var townX, out var townY)) {
+            return (townX, townY);
         }
 
         return (occupancyTracker.SizeX / 2, occupancyTracker.SizeY / 2);

@@ -23,6 +23,7 @@ import {
     paintStreamTileRect,
     postPaintStreamRect,
 } from './mapViewportStream';
+import { isCompactInteriorMap, shouldSkipEnterHeavyCascade } from './mapEnterSettle';
 
 const LIVE_ORIGIN = 'https://play.chainlords.net';
 /** Legacy traveler / plaza-hunt pad — farm FOV, not login spawn after PR #79. */
@@ -263,5 +264,32 @@ describe('live Elvine enter path (HTTP + stream)', () => {
                 `${focus.name} first paint must stay smaller than enter FOV`,
             );
         }
+    });
+
+    it('Wizard Tower pad (43,34) is a compact interior — skip the city gear/zoom dump', () => {
+        const mapsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../sp-client/public/assets/maps');
+        const buffer = fs.readFileSync(path.join(mapsDir, 'wzdtwr_1.amd'));
+        const map = parseAmdMapCells(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+        assert.equal(map.sizeX, 100);
+        assert.equal(map.sizeY, 100);
+        assert.equal(isCompactInteriorMap(map.sizeX, map.sizeY), true);
+        assert.equal(
+            shouldSkipEnterHeavyCascade({
+                sizeX: map.sizeX,
+                sizeY: map.sizeY,
+                worldId: 'elvwzdtwr',
+                mapName: 'map-wzdtwr_1',
+            }),
+            true,
+        );
+        const gandalfPad = { x: 43, y: 34 };
+        const firstPaint = firstPaintStreamRect(gandalfPad.x, gandalfPad.y, map.sizeX, map.sizeY);
+        const enter = initialFocusStreamRect(gandalfPad.x, gandalfPad.y, map.sizeX, map.sizeY);
+        const objectsEnter = countObjectInstances(map.tiles, enter, false);
+        assert.ok(mapTileRectArea(firstPaint) <= mapTileRectArea(enter));
+        assert.ok(
+            objectsEnter < 80,
+            `tower pad enter objects ${objectsEnter} must stay tiny (Chile sit-discard is gear/zoom, not props)`,
+        );
     });
 });

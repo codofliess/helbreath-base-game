@@ -96,6 +96,11 @@ assert(
     'createCastingCircleEffect must refuse fogata on Missile prepare even when effect5-7 looks safe',
 );
 const appearanceMgr = read('src/utils/PlayerAppearanceManager.ts');
+assert(
+    /lazyItemAppearanceLoadsStarted\.size > 0/.test(appearanceMgr)
+        && /kickOffAllPendingItemAppearanceLoads\(\)/.test(appearanceMgr),
+    'Equipped appearance kick-off must load one pack at a time (Elvine F5 OOM path)',
+);
 const refuseMagiasFetch = appearanceMgr.slice(
     appearanceMgr.indexOf('private shouldRefuseMagiasAppearanceFetch'),
     appearanceMgr.indexOf('private scheduleLazyItemAppearanceIfNeeded'),
@@ -472,6 +477,7 @@ assert(
         /sheetIndices: new Set\(job\.sheets\)/.test(paperDollCapture) &&
         /arePlayerItemAppearanceSheetsLoaded/.test(paperDollCapture) &&
         /queuePaperDollPendingGearLoads/.test(paperDollCapture) &&
+        /isPlayerItemAppearanceDecodeAllowed/.test(paperDollCapture) &&
         /PENDING_APPEARANCE_TEXTURE_KEY/.test(paperDollCapture) &&
         /isWorldCanvasImageSource/.test(paperDollCapture) &&
         !/pending\.map\(\(name\) =>/.test(paperDollCapture),
@@ -835,8 +841,12 @@ assert(
     /MAP_ENTER_MONSTER_SYNC_MS = 400/.test(mapEnterSettle) &&
         /MAP_ENTER_TREE_PASS_MS = 10_000/.test(mapEnterSettle) &&
         /MAP_ENTER_ENTITY_CATCHUP_MS = 12_000/.test(mapEnterSettle) &&
-        /shouldDeferHeavyEnterDecode/.test(mapEnterSettle),
-    'mapEnterSettle must sync monsters before the 10s tree/gear cascade and defer gear while casting',
+        /shouldDeferHeavyEnterDecode/.test(mapEnterSettle) &&
+        /standingAtEnterFocus/.test(mapEnterSettle) &&
+        /shouldSkipEnterHeavyCascade/.test(mapEnterSettle) &&
+        /isCompactInteriorMap/.test(mapEnterSettle) &&
+        /COMPACT_INTERIOR_MAX_SIZE_TILES = 100/.test(mapEnterSettle),
+    'mapEnterSettle must sync monsters before the 10s tree/gear cascade and hold gear on the enter pad / Tower',
 );
 assert(
     /worldReadyForEntities/.test(gameWorld) &&
@@ -848,6 +858,9 @@ assert(
         /enableEntitiesAfterFirstPaint/.test(gameWorld) &&
         /tryHeavyEnterDecode/.test(gameWorld) &&
         /shouldDeferHeavyEnterDecode/.test(gameWorld) &&
+        /shouldSkipEnterHeavyCascade/.test(gameWorld) &&
+        /enterCompactInterior/.test(gameWorld) &&
+        /standingAtEnterFocus/.test(gameWorld) &&
         /MAP_ENTER_MONSTER_SYNC_MS/.test(gameWorld) &&
         /MAP_ENTER_TREE_PASS_MS/.test(gameWorld) &&
         /MAP_ENTER_ENTITY_CATCHUP_MS/.test(gameWorld) &&

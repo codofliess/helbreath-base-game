@@ -82,6 +82,7 @@ import {
     MAP_ENTER_ZOOM_RESTORE_MS,
     nextMapLoadGeneration,
     shouldDeferHeavyEnterDecode,
+    shouldSkipEnterHeavyCascade,
 } from '../../utils/mapEnterSettle';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import {
@@ -438,6 +439,8 @@ export class GameWorld extends Scene {
     private pendingEnterCameraZoom = 1;
     private heavyEnterDecodeStarted = false;
     private hudSpritesLoadStarted = false;
+    /** Wizard Tower / small interiors skip the city tree+gear+zoom+HUD dump. */
+    private enterCompactInterior = false;
     /** Entity `.spr` decode stays closed until tiles/player exist and a short GC gap elapsed. */
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
@@ -567,6 +570,7 @@ export class GameWorld extends Scene {
             this.worldReadyForEntities = false;
             this.heavyEnterDecodeStarted = false;
             this.hudSpritesLoadStarted = false;
+            this.enterCompactInterior = false;
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;
@@ -2398,6 +2402,7 @@ export class GameWorld extends Scene {
                 && (player.isCasting() || player.isCastReady() || player.hasPendingSpell() || isMagiasRitualActive())
             ),
             moving: !!player?.isMoving(),
+            standingAtEnterFocus: this.isStandingNearEnterFocus(),
         });
     }
 
@@ -2590,7 +2595,9 @@ export class GameWorld extends Scene {
         this.displayedMap = map;
         // Now initialize game objects (player, NPCs, etc.)
         this.initializeGameObjects();
-        EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+        // Do not recapture paper-doll here — runDeferredMapLoad already emitted one,
+        // and Player construction queues another. A third toDataURL on Tower sit
+        // stacks with the T+16 gear dump (Chile discard at elvwzdtwr 43,34).
 
         // Apply camera zoom AFTER minimap snapshot has been taken
         // This ensures the zoom is applied to the main camera, not the minimap snapshot camera
@@ -2629,13 +2636,16 @@ export class GameWorld extends Scene {
         this.pendingEnterCameraZoom = cameraZoom;
         this.heavyEnterDecodeStarted = false;
         this.hudSpritesLoadStarted = false;
+        this.enterCompactInterior = shouldSkipEnterHeavyCascade({
+            sizeX: map.sizeX,
+            sizeY: map.sizeY,
+            worldId: this.gameWorldId,
+            mapName: map.fileName,
+        });
         this.mapExpandAfterFirstPaint = this.expandMapAfterFirstPaint();
         // Saved zoom-out enlarges the camera frustum; keep zoom 1 until idle settle.
         this.scheduleEnterSettle(MAP_ENTER_MONSTER_SYNC_MS, () => {
             this.enableEntitiesAfterFirstPaint();
-        });
-        this.scheduleEnterSettle(MAP_ENTER_TREE_PASS_MS, () => {
-            void this.enableTreesAfterFirstPaint();
         });
         this.scheduleEnterSettle(MAP_ENTER_ENTITY_CATCHUP_MS, () => {
             this.catchupEntitiesAfterFirstPaint();
@@ -2643,15 +2653,21 @@ export class GameWorld extends Scene {
         this.scheduleEnterSettle(MAP_ENTER_NPC_SYNC_MS, () => {
             this.syncNpcsFromNetworkState();
         });
-        this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_MS, () => {
-            this.tryHeavyEnterDecode();
-        });
-        this.scheduleEnterSettle(MAP_ENTER_ZOOM_RESTORE_MS, () => {
-            this.tryRestoreEnterZoom();
-        });
-        this.scheduleEnterSettle(MAP_ENTER_HUD_SPRITES_MS, () => {
-            this.tryLoadDeferredHudSprites();
-        });
+        // Wizard Tower sit at (43,34) is idle — do not dump trees/gear/zoom/HUD.
+        if (!this.enterCompactInterior) {
+            this.scheduleEnterSettle(MAP_ENTER_TREE_PASS_MS, () => {
+                void this.enableTreesAfterFirstPaint();
+            });
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_MS, () => {
+                this.tryHeavyEnterDecode();
+            });
+            this.scheduleEnterSettle(MAP_ENTER_ZOOM_RESTORE_MS, () => {
+                this.tryRestoreEnterZoom();
+            });
+            this.scheduleEnterSettle(MAP_ENTER_HUD_SPRITES_MS, () => {
+                this.tryLoadDeferredHudSprites();
+            });
+        }
         // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
         // froze the browser (felt like "everything broke"). Pit markers still show as
         // letter labels; thumbs only when a live monster of that type enters view.
@@ -3219,6 +3235,10 @@ export class GameWorld extends Scene {
             /* expand already logged */
         }
         if (!this.isLiveMapLoad(generation)) {
+            return;
+        }
+        if (this.enterCompactInterior) {
+            this.mapStreamWalkEnabled = true;
             return;
         }
         if (this.isHeavyEnterDecodeBusy()) {
@@ -5508,6 +5528,7 @@ export class GameWorld extends Scene {
             this.worldReadyForEntities = false;
             this.heavyEnterDecodeStarted = false;
             this.hudSpritesLoadStarted = false;
+            this.enterCompactInterior = false;
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;

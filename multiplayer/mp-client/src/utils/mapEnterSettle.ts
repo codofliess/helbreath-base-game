@@ -1,12 +1,16 @@
 /**
  * Post-paint settle after a GameWorld map load (login or city↔tower transfer).
  *
- * PR #79 lands Magias testers on Elvine streets (158,57) and Wizard Tower door
- * (181,78). The 10–20s pad-standstill cascade was budgeted for the open slime
- * plaza (149,131). After Gandalf the client restarts onto dense city tiles and
- * immediately farms — the old schedule dropped slime enters for 12s (0 kills)
- * then dumped monsters + trees + equipped decode + zoom restream together
- * (Chrome discard / Aw Snap 9).
+ * Chile journal (64.176.23.40): Elon never reached slime. Repeated sessions stuck
+ * in Wizard Tower `elvwzdtwr` at ~(43,34) (Gandalf pad), flat exp, then
+ * `[GameWorld:elvwzdtwr] Player disconnected` ~1–2 min later. Server RSS ~262MB,
+ * no dmesg OOM. Login idle 2 min does not discard — pressure is world / Tower /
+ * city-walk texture load.
+ *
+ * Sitting at Gandalf is idle. Gating heavy decode on "moving or casting" still
+ * dumps equipped-gear (Elvine F5 OOM path) + zoom-out + HUD at T+16–20s on that
+ * pad. Compact interiors skip that cascade; every map also holds it while the
+ * player has not walked off the enter cell.
  */
 
 /** First monster/player sync after tiles+player exist. Must stay << tree/gear delays. */
@@ -30,21 +34,54 @@ export const MAP_ENTER_ZOOM_RESTORE_MS = 18_000;
 /** Cursor + HUD icon sheets. */
 export const MAP_ENTER_HUD_SPRITES_MS = 20_000;
 
-/** Retry heavy/zoom/HUD work while the player is still fighting. */
+/** Retry heavy/zoom/HUD work while the player is still on the enter pad or fighting. */
 export const MAP_ENTER_HEAVY_DECODE_RETRY_MS = 2_000;
+
+/** wzdtwr_1 is 100×100. Elvine / Aresden plazas are 300×300. */
+export const COMPACT_INTERIOR_MAX_SIZE_TILES = 100;
 
 export type HeavyEnterDecodeInput = {
     loadingMap: boolean;
     castingOrPreparing: boolean;
     moving: boolean;
+    /** Chile: sit at Gandalf (43,34) is idle — must not dump F5 gear/zoom/HUD. */
+    standingAtEnterFocus: boolean;
+};
+
+export type CompactInteriorInput = {
+    sizeX: number;
+    sizeY: number;
+    worldId?: string;
+    mapName?: string;
 };
 
 /**
- * Gear / HUD / zoom-out must not run mid-Fire-Strike or mid-walk on city tiles.
- * Placeholders stay until the player stands still between pulls.
+ * Gear / HUD / zoom-out / trees must not run mid-Fire-Strike, mid-walk, or while
+ * still standing on the enter cell (Tower pad or city spawn).
  */
 export function shouldDeferHeavyEnterDecode(input: HeavyEnterDecodeInput): boolean {
-    return input.loadingMap || input.castingOrPreparing || input.moving;
+    return input.loadingMap || input.castingOrPreparing || input.moving || input.standingAtEnterFocus;
+}
+
+export function isCompactInteriorMap(sizeX: number, sizeY: number): boolean {
+    return (
+        Number.isFinite(sizeX) &&
+        Number.isFinite(sizeY) &&
+        sizeX > 0 &&
+        sizeY > 0 &&
+        sizeX <= COMPACT_INTERIOR_MAX_SIZE_TILES &&
+        sizeY <= COMPACT_INTERIOR_MAX_SIZE_TILES
+    );
+}
+
+export function isWizardTowerMap(worldId?: string, mapName?: string): boolean {
+    const blob = `${worldId ?? ''}\n${mapName ?? ''}`.toLowerCase();
+    return blob.includes('wzdtwr');
+}
+
+/** Skip tree / gear / zoom-out / HUD cascade on Wizard Tower and other small interiors. */
+export function shouldSkipEnterHeavyCascade(input: CompactInteriorInput): boolean {
+    return isWizardTowerMap(input.worldId, input.mapName) || isCompactInteriorMap(input.sizeX, input.sizeY);
 }
 
 /** True when an async expand/tree/prefetch closure belongs to a previous scene.restart. */

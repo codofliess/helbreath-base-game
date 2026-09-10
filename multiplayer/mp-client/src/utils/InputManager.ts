@@ -94,6 +94,12 @@ export class InputManager {
     }
 
     public isLeftMouseDown(): boolean {
+        if (this.leftMouseDown) {
+            const pointer = this.scene.input.activePointer;
+            if (pointer && !pointer.leftButtonDown()) {
+                this.leftMouseDown = false;
+            }
+        }
         return this.leftMouseDown;
     }
 
@@ -124,6 +130,11 @@ export class InputManager {
     /** Returns true if enough time has passed since the last movement command (throttle). */
     public canAcceptMovementCommand(): boolean {
         const currentTime = this.scene.time.now;
+        // Discard/reconnect or loop.wake can rewind Phaser time; a stale stamp
+        // would block both WASD and click-kite until the clock catches up.
+        if (currentTime < this.lastMovementCommandTime) {
+            this.lastMovementCommandTime = 0;
+        }
         return currentTime - this.lastMovementCommandTime >= MOVEMENT_COMMAND_THROTTLE_MS;
     }
 

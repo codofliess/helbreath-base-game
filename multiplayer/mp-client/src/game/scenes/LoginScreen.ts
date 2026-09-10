@@ -59,7 +59,7 @@ export class LoginScreen extends Scene {
         this.isConnecting = false;
 
         this.cameras.main.setBackgroundColor(0x000000);
-        document.body.classList.remove('game-world-active');
+        document.body.classList.remove('game-world-active', 'helbreath-game-active');
 
         const width = this.scale.width;
         const height = this.scale.height;

@@ -220,7 +220,7 @@ export function clearGameWorldCanvasPresentation(scene: Scene): void {
         canvas.style.removeProperty('height');
         canvas.style.removeProperty('margin');
     }
-    document.body.classList.remove('game-world-active', 'game-world-expanded-vision');
+    document.body.classList.remove('game-world-active', 'helbreath-game-active', 'game-world-expanded-vision');
     clearCanvasLayoutVars();
     game.scale.scaleMode = Scale.FIT;
     game.scale.autoCenter = Scale.CENTER_BOTH;

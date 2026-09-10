@@ -100,7 +100,7 @@ function applyDeskPresentation(scene: Scene): void {
         return;
     }
 
-    document.body.classList.remove('game-world-active');
+    document.body.classList.remove('game-world-active', 'helbreath-game-active');
     document.body.classList.remove('login-selectchar-active');
     document.body.classList.add('login-charui-active');
 

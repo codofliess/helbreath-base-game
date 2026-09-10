@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-store';
 import { EventBus } from './game/EventBus';
 import type { IRefPhaserGame, PhaserGameLike, PhaserSceneLike } from './game/phaserHubTypes';
 import { isPhaserParkedForWalletUi, setLivePhaserGame } from './game/phaserWalletPark';
+import { rearmKeyboardWalkAfterResume } from './utils/keyboardMovement';
 import { CURRENT_SCENE_READY, IN_UI_SUPPRESS_POINTER_INPUT } from './constants/EventNames';
 import { connectDialogStore, shouldConstructPhaserAfterSeal } from './ui/store/ConnectDialog.store';
 import { setWindowFocused } from './utils/RegistryUtils';
@@ -218,6 +219,9 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
 
         const handleWindowFocus = () => {
             setWindowFocused(true);
+            if (!isPhaserParkedForWalletUi()) {
+                rearmKeyboardWalkAfterResume();
+            }
             if (!game.current || isPhaserParkedForWalletUi()) {
                 return;
             }
@@ -308,10 +312,12 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
             }
             
         };
+        // Re-assert after React re-subscribe: GameWorld.create will not emit again,
+        // and cleanup must not strip the class (that race killed WASD after discard).
+        rearmKeyboardWalkAfterResume();
         EventBus.on(CURRENT_SCENE_READY, onCurrentSceneReady);
         return () =>
         {
-            document.body.classList.remove('helbreath-game-active');
             EventBus.off(CURRENT_SCENE_READY, onCurrentSceneReady);
         }
     }, [currentActiveScene, ref]);

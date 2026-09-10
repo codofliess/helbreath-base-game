@@ -52,7 +52,11 @@ import { bootstrapWalletDeepLinkAtBoot } from './utils/walletAuth';
 import { getNetworkManager } from './utils/RegistryUtils';
 import { isMagiasMoveDuringPrepareActive } from './utils/castPresentation';
 import { reassertWorldCanvasPresentationGuard } from './utils/worldCanvasPoolGuard';
-import { installKeyboardWalkTracker } from './utils/keyboardMovement';
+import {
+    installKeyboardWalkTracker,
+    isGameWorldKeyboardActive,
+    isLiveTypingSurface,
+} from './utils/keyboardMovement';
 
 import './ui/store/ItemDrops.store';
 import './ui/store/BeginnerPath.store';
@@ -80,16 +84,11 @@ function isFunctionKeyEvent(e: KeyboardEvent): boolean {
 }
 
 function isGameActive(): boolean {
-    return document.body.classList.contains('helbreath-game-active');
+    return isGameWorldKeyboardActive();
 }
 
 function isTypingTarget(active: Element | null): boolean {
-    return (
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLSelectElement ||
-        (active instanceof HTMLElement && active.isContentEditable)
-    );
+    return isLiveTypingSurface(active);
 }
 
 function blockFunctionKey(e: KeyboardEvent): void {

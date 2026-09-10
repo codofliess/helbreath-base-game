@@ -27,8 +27,13 @@ import {
 } from '../../Config';
 import { InputManager } from '../../utils/InputManager';
 import {
-    isTypingTarget,
+    blurStrayKeyboardTargets,
+    GAME_WORLD_ACTIVE_CLASS,
+    HELBREATH_GAME_ACTIVE_CLASS,
+    isGameWorldKeyboardActive,
+    isLiveTypingSurface,
     planKeyboardWalk,
+    rearmKeyboardWalkAfterResume,
     shouldAcceptKeyboardWalk,
 } from '../../utils/keyboardMovement';
 import { CameraManager } from '../../utils/CameraManager';
@@ -581,8 +586,9 @@ export class GameWorld extends Scene {
         runSafeSync('GameWorld:create', () => {
             this.clearResidualLoginDeskChrome();
             installWorldCanvasPoolGuard(this.game);
-            document.body.classList.add('game-world-active');
+            document.body.classList.add(GAME_WORLD_ACTIVE_CLASS, HELBREATH_GAME_ACTIVE_CLASS);
             applyGameWorldCanvasPresentation(this);
+            rearmKeyboardWalkAfterResume();
             this.cameras.main.setBackgroundColor('#000');
             EventBus.emit(CURRENT_SCENE_READY, this);
         });
@@ -3283,17 +3289,19 @@ export class GameWorld extends Scene {
 
     /**
      * Tab-focused WASD / arrows → the same `setDestination` path as click-kite.
-     * Does not require Phaser canvas focus (that race left bare WASD dead after
-     * enter-world). LMB hold keeps click-kite. Magias select/confirm is click-only.
+     * Primary FAIL path is Chrome discard → reconnect: scene-owned
+     * `game-world-active` is enough; hidden wallet leftovers are not typing.
+     * LMB hold keeps click-kite. Magias select/confirm is click-only.
      */
     private handleKeyboardMovement(): void {
         const inputManager = this.inputManager;
         if (!inputManager || !this.player || this.loadingMap) {
             return;
         }
+        blurStrayKeyboardTargets();
         const accept = shouldAcceptKeyboardWalk({
-            gameActive: document.body.classList.contains('helbreath-game-active'),
-            typing: isTypingTarget(document.activeElement),
+            gameActive: isGameWorldKeyboardActive(),
+            typing: isLiveTypingSurface(document.activeElement),
             composeOpen: chatDialogStore.state.composeOpen,
             leftMouseDown: inputManager.isLeftMouseDown(),
         });
@@ -5229,7 +5237,7 @@ export class GameWorld extends Scene {
     public shutdown() {
         runSafeSync('GameWorld:shutdown', () => {
             clearGameWorldCanvasPresentation(this);
-            document.body.classList.remove('game-world-active');
+            document.body.classList.remove(GAME_WORLD_ACTIVE_CLASS, HELBREATH_GAME_ACTIVE_CLASS);
             EventBus.emit(OUT_UI_HOVER_GROUND_ITEM, false);
             EventBus.emit(OUT_UI_HOVER_GROUND_ITEM_INFO, undefined);
             EventBus.emit(OUT_UI_HOVER_MONSTER, undefined);

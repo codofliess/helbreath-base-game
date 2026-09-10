@@ -5,12 +5,19 @@ import {
     applyMovementKeyHold,
     createEmptyMovementKeys,
     directionFromMovementKeys,
+    GAME_WORLD_ACTIVE_CLASS,
     getHeldWalkDirection,
     hasKeyboardWalkModifier,
+    HELBREATH_GAME_ACTIVE_CLASS,
     installKeyboardWalkTracker,
     isArrowMovementKey,
+    isGameWorldKeyboardActive,
     isKeyboardMovementKey,
+    isLiveTypingSurface,
+    isStrayKeyboardTarget,
     isTypingTarget,
+    rearmKeyboardWalkAfterResume,
+    syncHelbreathGameActiveClass,
     KEYBOARD_WALK_CURSOR_PIXELS,
     KEYBOARD_WALK_LOOKAHEAD_CELLS,
     planKeyboardWalk,
@@ -91,6 +98,68 @@ describe('keyboardMovement', () => {
             composeOpen: false,
             leftMouseDown: true,
         }), false);
+    });
+
+    it('keeps walk armed when only scene-owned game-world-active remains', () => {
+        const worldOnly = { contains: (token: string) => token === GAME_WORLD_ACTIVE_CLASS };
+        const reactOnly = { contains: (token: string) => token === HELBREATH_GAME_ACTIVE_CLASS };
+        const neither = { contains: () => false };
+        assert.equal(isGameWorldKeyboardActive(worldOnly), true);
+        assert.equal(isGameWorldKeyboardActive(reactOnly), true);
+        assert.equal(isGameWorldKeyboardActive(neither), false);
+        assert.equal(shouldAcceptKeyboardWalk({
+            gameActive: isGameWorldKeyboardActive(worldOnly),
+            typing: false,
+            composeOpen: false,
+            leftMouseDown: false,
+        }), true);
+    });
+
+    it('ignores hidden / 0x0 / detached leftovers so post-discard WASD is not typing', () => {
+        assert.equal(isLiveTypingSurface({ tagName: 'INPUT' }), true);
+        assert.equal(isLiveTypingSurface({ tagName: 'INPUT', hidden: true }), false);
+        assert.equal(isLiveTypingSurface({ tagName: 'INPUT', type: 'hidden' }), false);
+        assert.equal(isLiveTypingSurface({ tagName: 'INPUT', isConnected: false }), false);
+        assert.equal(isLiveTypingSurface({
+            tagName: 'INPUT',
+            getAttribute: (name: string) => (name === 'aria-hidden' ? 'true' : null),
+        }), false);
+        assert.equal(isLiveTypingSurface({
+            tagName: 'INPUT',
+            getBoundingClientRect: () => ({ width: 0, height: 0 }),
+        }), false);
+        assert.equal(isStrayKeyboardTarget({ tagName: 'INPUT', hidden: true }), true);
+        assert.equal(isStrayKeyboardTarget({
+            tagName: 'IFRAME',
+            getBoundingClientRect: () => ({ width: 0, height: 0 }),
+        }), true);
+        assert.equal(isStrayKeyboardTarget({ tagName: 'INPUT' }), false);
+        assert.equal(isStrayKeyboardTarget({ tagName: 'DIV' }), false);
+        assert.equal(shouldAcceptKeyboardWalk({
+            gameActive: true,
+            typing: isLiveTypingSurface({ tagName: 'INPUT', type: 'hidden' }),
+            composeOpen: false,
+            leftMouseDown: false,
+        }), true);
+    });
+
+    it('re-syncs helbreath-game-active after discard/reconnect when only game-world-active remains', () => {
+        const tokens = new Set([GAME_WORLD_ACTIVE_CLASS]);
+        const classList = {
+            contains: (token: string) => tokens.has(token),
+            add: (token: string) => { tokens.add(token); },
+        };
+        assert.equal(syncHelbreathGameActiveClass(classList), true);
+        assert.equal(tokens.has(HELBREATH_GAME_ACTIVE_CLASS), true);
+        assert.equal(syncHelbreathGameActiveClass(classList), false);
+        assert.equal(shouldAcceptKeyboardWalk({
+            gameActive: isGameWorldKeyboardActive(classList),
+            typing: isLiveTypingSurface({ tagName: 'INPUT', type: 'hidden' }),
+            composeOpen: false,
+            leftMouseDown: false,
+        }), true);
+        rearmKeyboardWalkAfterResume();
+        assert.equal(getHeldWalkDirection(), Direction.None);
     });
 
     it('boot tracker is idempotent and starts with no held chord', () => {

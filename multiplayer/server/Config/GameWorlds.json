@@ -362,7 +362,7 @@
     "map": "aresden",
     "music": "aresden.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Traveler pad (149,127). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile), not npcs[]. ViewRadius 18x11.",
+    "_defaultSpawnNote": "City enter / login / death / City Hall exit: Olympia ip1 (140,49) streets. Do not land on slime traveler pad (149,127). Plaza hunts remain dwellAreas; ViewRadius 18x11.",
     "dwellAreas": [
       {
         "monsterId": 1,
@@ -1090,7 +1090,7 @@
     "map": "elvine",
     "music": "elvine.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Traveler pad (149,131). Plaza hunts are dwellAreas monsterId 1 Slime (Hostile allegiance 0), not GameWorlds npcs[] (elvine npcs is empty). Client 'Elvine Civilian' is a player affiliation label. ViewRadius 18x11.",
+    "_defaultSpawnNote": "City enter / login / death / City Hall exit: Olympia ip1 (158,57) streets — not slime traveler pad (149,131). Plaza hunts remain dwellAreas (monsterId 1). Client 'Elvine Civilian' is a player affiliation label. ViewRadius 18x11.",
     "dwellAreas": [
       {
         "monsterId": 1,
@@ -6356,7 +6356,7 @@
     "map": "default",
     "music": "default.mp3",
     "workerThread": 0,
-    "_defaultSpawnNote": "Traveler login/death/reconnect: hub (90,80) inland dry grass. Shore 18 + water 19 blocked. West blue pads (80-82,75-76)→Aresden plaza; east (127-129,78-79)→Elvine plaza. No SpawnInMiddle.",
+    "_defaultSpawnNote": "Traveler login/death/reconnect: hub (90,80) inland dry grass. Shore 18 + water 19 blocked. West blue pads (80-82,75-76)→Aresden streets (140,49); east (127-129,78-79)→Elvine streets (158,57). Not slime pads 149,127 / 149,131. No SpawnInMiddle.",
     "teleportLocs": [
       {
         "locs": [
@@ -6388,8 +6388,8 @@
         "target": {
           "worldId": "aresden",
           "loc": {
-            "x": 149,
-            "y": 127
+            "x": 140,
+            "y": 49
           }
         }
       },
@@ -6423,8 +6423,8 @@
         "target": {
           "worldId": "elvine",
           "loc": {
-            "x": 149,
-            "y": 131
+            "x": 158,
+            "y": 57
           }
         }
       }
@@ -6790,8 +6790,8 @@
         "target": {
           "worldId": "aresden",
           "loc": {
-            "x": 149,
-            "y": 127
+            "x": 140,
+            "y": 49
           }
         }
       }
@@ -7208,8 +7208,8 @@
         "target": {
           "worldId": "elvine",
           "loc": {
-            "x": 149,
-            "y": 131
+            "x": 158,
+            "y": 57
           }
         }
       }

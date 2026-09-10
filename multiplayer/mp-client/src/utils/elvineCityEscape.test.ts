@@ -13,6 +13,9 @@ const mapTeleportPath = path.join(repoRoot, 'sp-client/src/constants/MapTeleport
 const revivePolicyPath = path.join(repoRoot, 'multiplayer/server/Helpers/RevivePolicy.cs');
 const cityNpcPath = path.join(repoRoot, 'multiplayer/server/Helpers/CityNpcServices.cs');
 const gardenQuestsPath = path.join(repoRoot, 'multiplayer/server/Helpers/GardenQuests.cs');
+const cityEscapePath = path.join(repoRoot, 'multiplayer/server/Helpers/CityEscape.cs');
+const serverCsPath = path.join(repoRoot, 'multiplayer/server/Server.cs');
+const gameWorldCsPath = path.join(repoRoot, 'multiplayer/server/World/Game/GameWorld.cs');
 
 type World = {
     id: string;
@@ -117,6 +120,9 @@ describe('Elvine Magias city escape (garden → Hunt Zone → city / Gandalf)', 
         assert.match(locs, /"mapId": "elvuni"/);
         assert.match(locs, /"targetMap": "huntzone1"/);
         assert.match(locs, /"mapId": "areuni"/);
+        assert.match(locs, /\[127, 78\][\s\S]*?"targetMap": "elvine"[\s\S]*?"targetX": 158[\s\S]*?"targetY": 57/);
+        assert.match(locs, /\[80, 75\][\s\S]*?"targetMap": "aresden"[\s\S]*?"targetX": 140[\s\S]*?"targetY": 49/);
+        assert.match(locs, /"elvine": \[\s*"elvine",\s*158,\s*57\s*\]/);
 
         const revive = fs.readFileSync(revivePolicyPath, 'utf8');
         assert.match(revive, /IsForcedTownReviveWorld/);
@@ -131,6 +137,45 @@ describe('Elvine Magias city escape (garden → Hunt Zone → city / Gandalf)', 
         const garden = fs.readFileSync(gardenQuestsPath, 'utf8');
         assert.match(garden, /return_city/);
         assert.match(garden, /TryTeleportCitizenHome/);
+    });
+
+    it('login / traveler / City Hall land on Elvine streets (158,57), never garden or slime pad', () => {
+        const traveler = byId.get('traveler');
+        const toElvine = traveler?.teleportLocs?.find((t) => t.target.worldId === 'elvine');
+        assert.ok(toElvine, 'traveler east pad must enter Elvine');
+        assert.equal(toElvine.target.loc.x, 158);
+        assert.equal(toElvine.target.loc.y, 57);
+        const toAresden = traveler?.teleportLocs?.find((t) => t.target.worldId === 'aresden');
+        assert.ok(toAresden);
+        assert.equal(toAresden.target.loc.x, 140);
+        assert.equal(toAresden.target.loc.y, 49);
+
+        const hall = byId.get('elvcityhall');
+        const hallExit = hall?.teleportLocs?.[0];
+        assert.ok(hallExit);
+        assert.equal(hallExit.target.worldId, 'elvine');
+        assert.equal(hallExit.target.loc.x, 158);
+        assert.equal(hallExit.target.loc.y, 57);
+
+        const areHall = byId.get('arecityhall');
+        assert.equal(areHall?.teleportLocs?.[0]?.target.loc.x, 140);
+        assert.equal(areHall?.teleportLocs?.[0]?.target.loc.y, 49);
+
+        const escape = fs.readFileSync(cityEscapePath, 'utf8');
+        assert.match(escape, /TryResolveCitizenSafeEnter/);
+        assert.match(escape, /IsHostileCityHuntPlaza/);
+        assert.match(escape, /ShouldForceCitySafeEnter/);
+        assert.match(escape, /IsEscapeFieldWorld/);
+        assert.match(escape, /TrySnapHostilePlazaToTown/);
+        assert.match(escape, /ElvineHostilePlazaX = 149/);
+        assert.match(escape, /ElvineHostilePlazaY = 131/);
+
+        const server = fs.readFileSync(serverCsPath, 'utf8');
+        assert.match(server, /TryResolveCitizenSafeEnter/);
+
+        const gw = fs.readFileSync(gameWorldCsPath, 'utf8');
+        assert.match(gw, /ForceCitizenOffHostilePlaza/);
+        assert.match(gw, /TrySnapHostilePlazaToTown/);
     });
 
     it('smoke path: Restart! or garden east wall → HZ1 → Elvine plaza → Wizard Tower → Gandalf Fire Strike', () => {

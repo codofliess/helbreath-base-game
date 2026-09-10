@@ -24,8 +24,8 @@ export const MAP_TELEPORT_ZONES = [
             [82, 76]
         ],
         "targetMap": "aresden",
-        "targetX": 149,
-        "targetY": 127
+        "targetX": 140,
+        "targetY": 49
     },
     {
         "mapId": "default",
@@ -38,8 +38,8 @@ export const MAP_TELEPORT_ZONES = [
             [129, 79]
         ],
         "targetMap": "elvine",
-        "targetX": 149,
-        "targetY": 131
+        "targetX": 158,
+        "targetY": 57
     },
     {
         "mapId": "2ndmiddle",
@@ -2425,13 +2425,13 @@ export const INTERIOR_EXIT_ZONES = [
         "exitsByTown": {
             "aresden": [
                 "aresden",
-                149,
-                127
+                140,
+                49
             ],
             "elvine": [
                 "elvine",
-                149,
-                131
+                158,
+                57
             ]
         }
     },

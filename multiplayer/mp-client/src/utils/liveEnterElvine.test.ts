@@ -266,6 +266,24 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         }
     });
 
+    it('city walk from Wizard Tower door toward north gates stays inside the stream cap', () => {
+        const mapsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../sp-client/public/assets/maps');
+        const buffer = fs.readFileSync(path.join(mapsDir, 'elvine.amd'));
+        const map = parseAmdMapCells(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+        const door = initialFocusStreamRect(ELVINE_TOWER_DOOR_X, ELVINE_TOWER_DOOR_Y, map.sizeX, map.sizeY);
+        const gates = initialFocusStreamRect(225, 20, map.sizeX, map.sizeY);
+        const doorObjects = countObjectInstances(map.tiles, door, false);
+        const gateObjects = countObjectInstances(map.tiles, gates, false);
+        assert.ok(doorObjects < 280, `tower-door enter objects ${doorObjects}`);
+        assert.ok(gateObjects < 280, `north-gate enter objects ${gateObjects}`);
+        const grown = growMapTileRectToward(door, gates);
+        assert.ok(
+            mapTileRectArea(grown) < mapTileRectArea(door) + mapTileRectArea(gates),
+            'walk grow must not union door+gates (that was the city-walk discard)',
+        );
+        assert.ok(mapTileRectArea(grown) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
+    });
+
     it('Wizard Tower pad (43,34) is a compact interior — skip the city gear/zoom dump', () => {
         const mapsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../sp-client/public/assets/maps');
         const buffer = fs.readFileSync(path.join(mapsDir, 'wzdtwr_1.amd'));

@@ -23,6 +23,7 @@ import {
     growMapTileRectToward,
     MAP_ENTER_RING_TILES,
     MAP_EXPAND_STEP_TILES,
+    MAP_OBJECT_INSTANTIATE_BATCH,
     MAP_STAND_REFRESH_SLACK_TILES,
     paintStreamTileRect,
     shouldRefreshMapStream,
@@ -236,7 +237,15 @@ export class MapManager {
         });
         const current = map.getStreamedRect();
         const slack = standingHold ? MAP_STAND_REFRESH_SLACK_TILES : undefined;
+        const includeTrees = options?.includeTreeShadows ?? map.isStreamTreesEnabled();
+        const includeObjects = options?.includeObjectSprites ?? map.isStreamObjectsEnabled();
+        if (includeObjects) {
+            map.setStreamObjectsEnabled(true);
+        }
         if (!shouldRefreshMapStream(current, needed, slack)) {
+            if (includeObjects && map.countUninstantiatedStreamObjects(includeTrees) > 0) {
+                map.renderMapObjects(this.scene, includeTrees, MAP_OBJECT_INSTANTIATE_BATCH);
+            }
             return;
         }
         const walkCap = paintStreamTileRect({
@@ -252,13 +261,13 @@ export class MapManager {
         const paint = current
             ? growMapTileRectToward(current, target, MAP_EXPAND_STEP_TILES)
             : growMapTileRectToward(needed, target, MAP_EXPAND_STEP_TILES);
-        const includeTrees = options?.includeTreeShadows ?? map.isStreamTreesEnabled();
-        const includeObjects = options?.includeObjectSprites ?? map.isStreamObjectsEnabled();
         this.streamInFlight = true;
         this.streamRefreshQueued = false;
         try {
             await loadTileSpritePacksForMapRect(this.scene, map, paint, undefined, includeTrees, includeObjects);
-            map.syncViewportStream(this.scene, paint);
+            map.syncViewportStream(this.scene, paint, {
+                maxNewObjects: includeObjects ? MAP_OBJECT_INSTANTIATE_BATCH : 0,
+            });
             evictUnusedMapTileTextures(this.scene, collectRequiredTileIndices(map, paint, includeTrees, includeObjects));
         } catch (error) {
             console.warn('[MapManager] Viewport stream update failed:', error);

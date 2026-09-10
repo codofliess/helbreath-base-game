@@ -694,6 +694,8 @@ assert(
         /ground-stream/.test(hbMap) &&
         /streamObjectsEnabled = false/.test(hbMap) &&
         /countUninstantiatedStreamObjects/.test(hbMap) &&
+        /setStreamObjectsEnabled/.test(hbMap) &&
+        /maxNewObjects/.test(hbMap) &&
         /maxNewInstances/.test(hbMap) &&
         !/ground-y-\$\{y\}/.test(hbMap),
     'HBMap must stream one ground layer, not one tilemap layer per world Y',
@@ -707,7 +709,10 @@ assert(
         /MAP_STAND_REFRESH_SLACK_TILES/.test(mapManager) &&
         /shouldRefreshMapStream/.test(mapManager) &&
         /evictUnusedMapTileTextures/.test(mapManager) &&
-        /streamRefreshQueued/.test(mapManager),
+        /streamRefreshQueued/.test(mapManager) &&
+        /maxNewObjects/.test(mapManager) &&
+        /MAP_OBJECT_INSTANTIATE_BATCH/.test(mapManager) &&
+        /countUninstantiatedStreamObjects/.test(mapManager),
     'MapManager must paint a tiny ground-only first window, restream later, and evict leftover sheets',
 );
 
@@ -844,6 +849,8 @@ assert(
         /shouldDeferHeavyEnterDecode/.test(mapEnterSettle) &&
         /standingAtEnterFocus/.test(mapEnterSettle) &&
         /shouldSkipEnterHeavyCascade/.test(mapEnterSettle) &&
+        /shouldAbortEnterExpandForWalk/.test(mapEnterSettle) &&
+        /markEnterFromCompactInterior/.test(mapEnterSettle) &&
         /isCompactInteriorMap/.test(mapEnterSettle) &&
         /COMPACT_INTERIOR_MAX_SIZE_TILES = 100/.test(mapEnterSettle),
     'mapEnterSettle must sync monsters before the 10s tree/gear cascade and hold gear on the enter pad / Tower',
@@ -859,6 +866,8 @@ assert(
         /tryHeavyEnterDecode/.test(gameWorld) &&
         /shouldDeferHeavyEnterDecode/.test(gameWorld) &&
         /shouldSkipEnterHeavyCascade/.test(gameWorld) &&
+        /shouldAbortEnterExpandForWalk/.test(gameWorld) &&
+        /enterFromCompactInterior/.test(gameWorld) &&
         /enterCompactInterior/.test(gameWorld) &&
         /standingAtEnterFocus/.test(gameWorld) &&
         /MAP_ENTER_MONSTER_SYNC_MS/.test(gameWorld) &&

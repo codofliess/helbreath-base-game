@@ -84,6 +84,30 @@ export function shouldSkipEnterHeavyCascade(input: CompactInteriorInput): boolea
     return isWizardTowerMap(input.worldId, input.mapName) || isCompactInteriorMap(input.sizeX, input.sizeY);
 }
 
+/**
+ * Elon path: Wizard Tower → city → gates. Once they leave the door cell, abort the
+ * enter-ring object dump and let walk restream create props a handful at a time.
+ */
+export function shouldAbortEnterExpandForWalk(standingAtEnterFocus: boolean): boolean {
+    return !standingAtEnterFocus;
+}
+
+/** Survives city↔tower `scene.restart` so the city door does not dump plaza props. */
+export const ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY = 'enterFromCompactInterior';
+
+export function markEnterFromCompactInterior(registry: { set: (key: string, value: boolean) => void }): void {
+    registry.set(ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY, true);
+}
+
+export function takeEnterFromCompactInterior(registry: {
+    get: (key: string) => unknown;
+    remove?: (key: string) => void;
+}): boolean {
+    const flagged = registry.get(ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY) === true;
+    registry.remove?.(ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY);
+    return flagged;
+}
+
 /** True when an async expand/tree/prefetch closure belongs to a previous scene.restart. */
 export function isStaleMapLoad(currentGeneration: number, expectedGeneration: number): boolean {
     return currentGeneration !== expectedGeneration;

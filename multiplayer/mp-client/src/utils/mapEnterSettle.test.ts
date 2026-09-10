@@ -17,12 +17,18 @@ import {
     MAP_ENTER_TREE_PASS_MS,
     MAP_ENTER_ZOOM_RESTORE_MS,
     nextMapLoadGeneration,
+    shouldAbortEnterExpandForWalk,
     shouldDeferHeavyEnterDecode,
     shouldSkipEnterHeavyCascade,
+    ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY,
+    markEnterFromCompactInterior,
+    takeEnterFromCompactInterior,
 } from './mapEnterSettle';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const gameWorldSrc = fs.readFileSync(path.join(here, '../game/scenes/GameWorld.ts'), 'utf8');
+const mapManagerSrc = fs.readFileSync(path.join(here, 'MapManager.ts'), 'utf8');
+const hbMapSrc = fs.readFileSync(path.join(here, '../game/assets/HBMap.ts'), 'utf8');
 
 const idle = {
     loadingMap: false,
@@ -71,6 +77,29 @@ describe('mapEnterSettle', () => {
         );
     });
 
+    it('aborts the enter-ring object dump once the player leaves the door cell', () => {
+        assert.equal(shouldAbortEnterExpandForWalk(true), false);
+        assert.equal(shouldAbortEnterExpandForWalk(false), true);
+    });
+
+    it('carries a compact-interior flag across scene.restart via registry', () => {
+        const store = new Map<string, unknown>();
+        const registry = {
+            set: (key: string, value: boolean) => {
+                store.set(key, value);
+            },
+            get: (key: string) => store.get(key),
+            remove: (key: string) => {
+                store.delete(key);
+            },
+        };
+        assert.equal(takeEnterFromCompactInterior(registry), false);
+        markEnterFromCompactInterior(registry);
+        assert.equal(store.get(ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY), true);
+        assert.equal(takeEnterFromCompactInterior(registry), true);
+        assert.equal(takeEnterFromCompactInterior(registry), false);
+    });
+
     it('invalidates expand/tree closures across scene.restart generations', () => {
         assert.equal(isStaleMapLoad(2, 1), true);
         assert.equal(isStaleMapLoad(3, 3), false);
@@ -86,7 +115,11 @@ describe('mapEnterSettle', () => {
         assert.match(gameWorldSrc, /tryHeavyEnterDecode/);
         assert.match(gameWorldSrc, /shouldDeferHeavyEnterDecode/);
         assert.match(gameWorldSrc, /shouldSkipEnterHeavyCascade/);
+        assert.match(gameWorldSrc, /shouldAbortEnterExpandForWalk/);
+        assert.match(gameWorldSrc, /markEnterFromCompactInterior/);
+        assert.match(gameWorldSrc, /takeEnterFromCompactInterior/);
         assert.match(gameWorldSrc, /enterCompactInterior/);
+        assert.match(gameWorldSrc, /enterFromCompactInterior/);
         assert.match(gameWorldSrc, /standingAtEnterFocus/);
         assert.match(gameWorldSrc, /MAP_ENTER_MONSTER_SYNC_MS/);
         assert.match(gameWorldSrc, /MAP_ENTER_TREE_PASS_MS/);
@@ -95,5 +128,10 @@ describe('mapEnterSettle', () => {
         assert.match(gameWorldSrc, /MAP_ENTER_HEAVY_DECODE_MS/);
         assert.match(gameWorldSrc, /MAP_ENTER_ZOOM_RESTORE_MS/);
         assert.match(gameWorldSrc, /MAP_ENTER_HUD_SPRITES_MS/);
+        assert.match(mapManagerSrc, /maxNewObjects/);
+        assert.match(mapManagerSrc, /MAP_OBJECT_INSTANTIATE_BATCH/);
+        assert.match(mapManagerSrc, /countUninstantiatedStreamObjects/);
+        assert.match(hbMapSrc, /setStreamObjectsEnabled/);
+        assert.match(hbMapSrc, /maxNewObjects/);
     });
 });

@@ -81,8 +81,12 @@ import {
     MAP_ENTER_TREE_PASS_MS,
     MAP_ENTER_ZOOM_RESTORE_MS,
     nextMapLoadGeneration,
+    isWizardTowerMap,
+    markEnterFromCompactInterior,
+    shouldAbortEnterExpandForWalk,
     shouldDeferHeavyEnterDecode,
     shouldSkipEnterHeavyCascade,
+    takeEnterFromCompactInterior,
 } from '../../utils/mapEnterSettle';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import {
@@ -441,6 +445,8 @@ export class GameWorld extends Scene {
     private hudSpritesLoadStarted = false;
     /** Wizard Tower / small interiors skip the city tree+gear+zoom+HUD dump. */
     private enterCompactInterior = false;
+    /** Tower → city restart: skip the door enter-ring prop dump (Elon city-walk discard). */
+    private enterFromCompactInterior = false;
     /** Entity `.spr` decode stays closed until tiles/player exist and a short GC gap elapsed. */
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
@@ -571,6 +577,7 @@ export class GameWorld extends Scene {
             this.heavyEnterDecodeStarted = false;
             this.hudSpritesLoadStarted = false;
             this.enterCompactInterior = false;
+            this.enterFromCompactInterior = takeEnterFromCompactInterior(this.game.registry);
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;
@@ -2785,6 +2792,9 @@ export class GameWorld extends Scene {
         console.log(
             `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Restarting onto '${initialGameWorldState.gameWorldId}' (${initialGameWorldState.mapName}) [${reason}]`,
         );
+        if (this.enterCompactInterior || isWizardTowerMap(this.gameWorldId, this.displayedMap?.fileName)) {
+            markEnterFromCompactInterior(this.game.registry);
+        }
         this.clearWorldTransferWatchdog();
         this.clearPendingRequestedWorldChangeListener();
         this.awaitingTransferredWorldState = false;
@@ -3111,14 +3121,28 @@ export class GameWorld extends Scene {
         const focusY = this.player?.getWorldY() ?? this.initialGameWorldState?.playerY ?? 0;
         const post = postPaintStreamRect(focusX, focusY, map.sizeX, map.sizeY);
         const enter = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        const releaseToWalkStream = () => {
+            this.mapStreamObjectsEnabled = true;
+            map.setStreamObjectsEnabled(true);
+        };
         try {
             await this.expandStreamGroundToward(map, post);
             if (!this.isLiveMapLoad(generation)) {
                 return;
             }
+            // Tower → city door, or they already walked toward the gates: do not
+            // decode the enter-ring building packs. Walk restream batches props.
+            if (this.enterFromCompactInterior || shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await waitForBrowserFrames(4);
             await waitMs(400);
             if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            if (shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
                 return;
             }
             await this.expandStreamGroundToward(map, enter);
@@ -3128,6 +3152,10 @@ export class GameWorld extends Scene {
             await waitForBrowserFrames(4);
             await waitMs(600);
             if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            if (shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
                 return;
             }
             await loadTileSpritePacksForMapRect(
@@ -3142,6 +3170,10 @@ export class GameWorld extends Scene {
             await this.instantiateStreamObjectsBatched(map, false);
             await waitForBrowserFrames(4);
             await waitMs(800);
+            if (!this.isLiveMapLoad(generation) || shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await loadTileSpritePacksForMapRect(
                 this,
                 map,
@@ -5529,6 +5561,7 @@ export class GameWorld extends Scene {
             this.heavyEnterDecodeStarted = false;
             this.hudSpritesLoadStarted = false;
             this.enterCompactInterior = false;
+            this.enterFromCompactInterior = false;
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;

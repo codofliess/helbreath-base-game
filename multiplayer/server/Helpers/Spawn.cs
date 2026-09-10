@@ -245,6 +245,7 @@ public static class Spawn {
         Enchanting.SendMaterialsState(player);
         BeginnerPath.SendState(player);
         BeginnerPath.OnWorldEntered(player, wr.WorldId);
+        CityEscape.NotifyOnJoin(wr, player);
         MarketSideDoor.TryDeliverDeskClaims(wr, player);
 
         var periodSeconds = wr.Settings.Timings.SpawnProtectionTime;

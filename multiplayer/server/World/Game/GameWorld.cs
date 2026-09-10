@@ -1498,8 +1498,9 @@ public sealed class GameWorld : IWorkerWorld {
     }
 
     /// <summary>
-    /// Restart! / revive. Testing default: revive on (or next to) the death cell so farm/PvP testing is fast.
-    /// Set env <c>REVIVE_TO_TOWN=1</c> to restore Olympia-style city-pad / traveler-hub revive.
+    /// Restart! / revive. Chile / Olympia default: city pad (or traveler hub).
+    /// Garden and hunt-zone deaths always return to town. Set <c>REVIVE_TO_TOWN=0</c>
+    /// only for corpse-side farm/PvP testing — that flag does not apply in gardens/HZ.
     /// </summary>
     private void HandlePlayerResurrectRequest(GameWorldPlayer player) {
         if (!player.IsDead) {
@@ -1515,8 +1516,7 @@ public sealed class GameWorld : IWorkerWorld {
             return;
         }
 
-        // Testing: always revive near corpse (ground fields still blocked briefly by spawn protection).
-        if (!IsReviveToTownEnabled()) {
+        if (!Helpers.RevivePolicy.ShouldReviveToTown(id)) {
             CompleteLocalResurrection(player, player.PosX, player.PosY);
             return;
         }
@@ -1556,13 +1556,6 @@ public sealed class GameWorld : IWorkerWorld {
         CompleteLocalResurrection(player, loc.Value.X, loc.Value.Y);
     }
 
-    /// <summary>When true, Restart! sends citizens to town pads (Olympia). Default false for testing week.</summary>
-    private static bool IsReviveToTownEnabled() {
-        var flag = Environment.GetEnvironmentVariable("REVIVE_TO_TOWN");
-        return string.Equals(flag, "1", StringComparison.Ordinal)
-            || string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>City pad for citizens, traveler hub for travelers; false only when no known hub.</summary>
     private bool TryResolveResurrectDestination(GameWorldPlayer player, out string destWorldId, out int x, out int y) {
         destWorldId = string.Empty;
@@ -1570,6 +1563,10 @@ public sealed class GameWorld : IWorkerWorld {
         y = 0;
 
         var side = (player.CitizenshipSide ?? string.Empty).Trim().ToLowerInvariant();
+        if (side is not ("aresden" or "elvine")) {
+            // elvuni / elvfarm / elvwzdtwr → elvine so Garden deaths still reach Gandalf's city.
+            side = Helpers.CityNpcServices.ResolveCitizenshipSidePublic(id);
+        }
         if (side is "aresden" or "elvine") {
             destWorldId = side;
             if (Recall.TryPickRandomCityPad(side, out x, out y)) {

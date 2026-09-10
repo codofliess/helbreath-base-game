@@ -142,8 +142,9 @@ export function NpcTalkDialog({
                 {role === 'garden-warden' ? (
                     <>
                         <p className="shop-dialog-intro">
-                            Olympia Garden quests: Unicorns (50) or Trolls (500). Reward: +50 contribution + 1000
-                            pending {PLAYER_TOKEN_DISPLAY}.
+                            This is the Garden (hostile wild) — not city streets. Return to city puts you on the
+                            plaza; Gandalf is in the Wizard Tower. Quests: Unicorns (50) or Trolls (500). Reward: +50
+                            contribution + 1000 pending {PLAYER_TOKEN_DISPLAY}.
                         </p>
                         {cityServicesSummary ? (
                             <p className="shop-dialog-hint">{cityServicesSummary}</p>
@@ -168,6 +169,17 @@ export function NpcTalkDialog({
                                     title="Accept troll quest"
                                     fallbackLabel="OK"
                                     onClick={() => sendAction('accept_troll')}
+                                    className="shop-dialog-buy-btn"
+                                />
+                            </div>
+                            <div className="shop-dialog-row">
+                                <span className="shop-dialog-item-name">Return to city (Gandalf / streets)</span>
+                                <OlympiaSpriteButton
+                                    normalKey={DIALOG_BTN_OK}
+                                    hoverKey={DIALOG_BTN_OK_HOVER}
+                                    title="Teleport to home city plaza"
+                                    fallbackLabel="OK"
+                                    onClick={() => sendAction('return_city')}
                                     className="shop-dialog-buy-btn"
                                 />
                             </div>
@@ -236,6 +248,7 @@ export function NpcTalkDialog({
                                     ['teleport:cathedral', 'Home · Cathedral'],
                                     ['teleport:guildhall', 'Home · Guild Hall'],
                                     ['teleport:commandhall', 'Home · Command Hall'],
+                                    ['teleport:wizard', 'Home · Wizard Tower (Gandalf)'],
                                     ['teleport:garden', 'Home · Garden'],
                                     ['teleport:barracks', 'Home · Barracks'],
                                     ['teleport:city_dungeon', 'Home · City Dungeon'],

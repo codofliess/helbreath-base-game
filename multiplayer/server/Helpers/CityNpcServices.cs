@@ -173,6 +173,7 @@ public static class CityNpcServices {
         ("cathedral", "Home · Cathedral", 0),
         ("guildhall", "Home · Guild Hall", 0),
         ("commandhall", "Home · Command Hall", 0),
+        ("wizard", "Home · Wizard Tower (Gandalf)", 0),
         ("garden", "Home · Garden (unicorn)", 0),
         ("barracks", "Home · Farm Barracks", 0),
         ("city_dungeon", "Home · City Dungeon 1", 0),
@@ -324,6 +325,40 @@ public static class CityNpcServices {
         player.RequestWorldChange(new WorldTransferDestination(worldId, x, y));
     }
 
+    /// <summary>
+    /// Garden Warden / stuck-player return: Elvine or Aresden plaza (same pads as Kennedy "city").
+    /// Infers side from papers, then from the current world (elvuni → elvine).
+    /// </summary>
+    public static bool TryTeleportCitizenHome(GameWorldRef wr, GameWorldPlayer player, out string message) {
+        ArgumentNullException.ThrowIfNull(player);
+        message = "";
+        if (player.IsDead) {
+            message = "You are dead. Click Restart! — it returns you to the city plaza.";
+            return false;
+        }
+
+        var side = (player.CitizenshipSide ?? "").Trim().ToLowerInvariant();
+        if (side is not ("aresden" or "elvine")) {
+            side = ResolveCitizenshipSide(wr.WorldId);
+        }
+
+        if (side is not ("aresden" or "elvine")) {
+            message = "No city papers. Restart! still returns travelers to the hub.";
+            return false;
+        }
+
+        if (!TryResolveCityHallTeleport(side, "city", out var worldId, out var x, out var y, out var err)) {
+            message = string.IsNullOrEmpty(err) ? "City plaza is not configured." : err;
+            return false;
+        }
+
+        player.RequestWorldChange(new WorldTransferDestination(worldId, x, y));
+        message = side == "elvine"
+            ? "Returning to Elvine plaza. Wizard Tower (Gandalf) door is at (180,77)."
+            : "Returning to Aresden plaza. Wizard Tower (Gandalf) is the Magic Tower door.";
+        return true;
+    }
+
     static bool TryResolveCityHallTeleport(
         string citizenshipSide,
         string key,
@@ -375,6 +410,10 @@ public static class CityNpcServices {
             case "commandhall":
                 worldId = HomeWorld("arecmdhall", "elvcmdhall");
                 return SetFallback(out x, out y, 40, 52);
+            case "wizard":
+                // Walkable tile in wzdtwr_1 next to Gandalf (48,33 is the counter).
+                worldId = HomeWorld("arewzdtwr", "elvwzdtwr");
+                return SetFallback(out x, out y, 46, 34);
             case "garden":
                 // Unicorn garden entrance pads from GameWorlds.
                 worldId = HomeWorld("areuni", "elvuni");

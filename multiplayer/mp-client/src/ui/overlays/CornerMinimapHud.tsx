@@ -10,6 +10,7 @@ import { appStore } from '../store/App.store';
 import { setGuideMapEnabled } from '../store/SysMenuDialog.store';
 import { convertWorldPosToPixelPos } from '../../utils/CoordinateUtils';
 import { getHuntPitsForMap } from '../../constants/HuntPits.generated';
+import { getCityLandmarksForMap } from '../../constants/CityLandmarks';
 import '../rpg-ui.css';
 
 /** Default display edge (322 = 280×1.15). Zoom scales around this. */
@@ -285,6 +286,16 @@ export function CornerMinimapHud() {
         });
     }, [canProject, mapName, minimapScale, minimapOriginalSize, spriteFrameMap, size]);
 
+    const cityLandmarks = useMemo(() => {
+        if (!canProject) {
+            return [];
+        }
+        return getCityLandmarksForMap(mapName).map((mark) => {
+            const pos = worldToMinimapPx(mark.x, mark.y, minimapScale, minimapOriginalSize, size);
+            return { ...mark, px: pos.x, py: pos.y };
+        });
+    }, [canProject, mapName, minimapScale, minimapOriginalSize, size]);
+
     if (!portalTarget || !isOpen || !minimapAvailable) {
         return null;
     }
@@ -370,6 +381,22 @@ export function CornerMinimapHud() {
                     style={{ width: size, height: size }}
                 >
                     <img className="corner-minimap-hud-img" src={minimapImage} alt="" draggable={false} />
+
+                    {cityLandmarks.map((mark) => (
+                        <div
+                            key={`landmark-${mark.id}`}
+                            className="corner-minimap-hud-landmark"
+                            title={`${mark.label} (${mark.x},${mark.y})`}
+                            style={{
+                                left: mark.px,
+                                top: mark.py,
+                                width: Math.max(14, Math.round(16 * sizeScale)),
+                                height: Math.max(14, Math.round(16 * sizeScale)),
+                            }}
+                        >
+                            {mark.glyph}
+                        </div>
+                    ))}
 
                     {huntPits.map((pit) => (
                         <div

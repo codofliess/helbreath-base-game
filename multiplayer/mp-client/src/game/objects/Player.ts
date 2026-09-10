@@ -1621,7 +1621,9 @@ export class Player extends GameObject {
         if (this.pendingSpellId === undefined) {
             return false;
         }
-        if (this.pendingUseCastAnimation && this.currentState !== PlayerState.CastReady) {
+        // Cast animation must finish. After WASD kite the state is Walk/Idle
+        // with the spell still pending — require CastReady would drop confirm.
+        if (this.pendingUseCastAnimation && this.currentState === PlayerState.Cast) {
             return false;
         }
         return withWorldCanvasBoxGuard(this.scene.game?.canvas, () => {
@@ -3054,10 +3056,12 @@ export class Player extends GameObject {
                 });
             }
         }
+        // Cast animation still freezes feet. CastReady must accept WASD kite;
+        // click confirm stays onLeftClickAt (GameWorld does not click-walk
+        // while a spell is pending).
         if (this.isParalyzed() ||
             this.dead ||
             this.isCasting() ||
-            this.isCastReady() ||
             this.currentState === PlayerState.PickUp ||
             this.currentState === PlayerState.TakeDamageOnMove ||
             this.currentState === PlayerState.TakeDamageWithKnockback ||

@@ -52,6 +52,7 @@ import { bootstrapWalletDeepLinkAtBoot } from './utils/walletAuth';
 import { getNetworkManager } from './utils/RegistryUtils';
 import { isMagiasMoveDuringPrepareActive } from './utils/castPresentation';
 import { reassertWorldCanvasPresentationGuard } from './utils/worldCanvasPoolGuard';
+import { installKeyboardWalkTracker } from './utils/keyboardMovement';
 
 import './ui/store/ItemDrops.store';
 import './ui/store/BeginnerPath.store';
@@ -478,6 +479,8 @@ const handleGlobalKeyUp = (e: KeyboardEvent) => {
 
 document.addEventListener('keydown', handleGlobalKeyDown, true);
 document.addEventListener('keyup', handleGlobalKeyUp, true);
+// WASD tracker before GameWorld boots — a hold through enter-world must survive.
+installKeyboardWalkTracker();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

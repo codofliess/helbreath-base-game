@@ -410,13 +410,25 @@ export class HBMap {
      * Tile `.spr` packs for `rect` must already be loaded (see MapAssets.loadTileSpritePacksForMapRect).
      * One ground layer for the whole rect (not one Canvas layer per world Y).
      */
-    public syncViewportStream(scene: Phaser.Scene, rect: MapTileRect): void {
+    public setStreamObjectsEnabled(enabled: boolean): void {
+        this.streamObjectsEnabled = enabled;
+        if (!enabled) {
+            this.destroyMapObjects();
+        }
+    }
+
+    public syncViewportStream(scene: Phaser.Scene, rect: MapTileRect, options?: { maxNewObjects?: number }): void {
         if (!this.loaded) {
             throw new Error('Map must be loaded before streaming tiles');
         }
 
+        const maxNew = options?.maxNewObjects ?? Number.POSITIVE_INFINITY;
         const sameRect = mapTileRectsEqual(this.streamedRect, rect);
         if (sameRect) {
+            // Walk restream batches props; the rect can stay put while cells still need GameAssets.
+            if (this.streamObjectsEnabled) {
+                this.syncStreamedMapObjects(scene, rect, maxNew);
+            }
             return;
         }
 
@@ -425,7 +437,7 @@ export class HBMap {
         }
 
         if (this.streamObjectsEnabled) {
-            this.syncStreamedMapObjects(scene, rect);
+            this.syncStreamedMapObjects(scene, rect, maxNew);
         } else {
             this.destroyMapObjects();
         }

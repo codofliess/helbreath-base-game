@@ -3,6 +3,7 @@ import { drawEffectAtPixelCoords } from '../../utils/EffectUtils';
 import { EFFECT_FIRE_BALL_EXPLOSION } from '../../constants/Effects';
 import type { SoundManager } from '../../utils/SoundManager';
 import type { CameraManager } from '../../utils/CameraManager';
+import { isPhaserSceneActive } from '../../utils/effectLiveCap';
 import { DirectionalProjectile, type DirectionalProjectileConfig } from '../effects/DirectionalProjectile';
 
 export type FireStrikeConfig = Omit<DirectionalProjectileConfig, 'spriteName' | 'spriteSheetIndex'> & {
@@ -49,6 +50,9 @@ export class FireStrike extends DirectionalProjectile {
     }
 
     protected onReachDestination(): void {
+        if (!isPhaserSceneActive(this.scene)) {
+            return;
+        }
         // DirectionalProjectile stores generic config; FireStrike uses FireStrikeConfig
         const config = this.config as FireStrikeConfig;
         const effectOptions = {
@@ -60,9 +64,16 @@ export class FireStrike extends DirectionalProjectile {
         for (const { dx, dy, delayMs } of EXPLOSION_OFFSETS) {
             const pixelX = this.destPixelX + dx;
             const pixelY = this.destPixelY + dy;
+            const shake = delayMs <= 0;
 
             const spawnExplosion = () => {
-                config.cameraManager?.setCameraShake(pixelX, pixelY);
+                if (!isPhaserSceneActive(this.scene)) {
+                    return;
+                }
+                // One shake per cast — 4 stacked shakes hitch the main thread on slime AoE farm.
+                if (shake) {
+                    config.cameraManager?.setCameraShake(pixelX, pixelY);
+                }
                 drawEffectAtPixelCoords(this.scene, pixelX, pixelY, EFFECT_FIRE_BALL_EXPLOSION, effectOptions);
             };
 

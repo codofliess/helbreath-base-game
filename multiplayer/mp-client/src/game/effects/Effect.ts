@@ -9,6 +9,7 @@ import { DEPTH_MULTIPLIER, MAGIC_VFX_DEPTH_BIAS } from '../../Config';
 import { createLightRadiusOverlay } from '../../utils/SpriteUtils';
 import { loadEffectAssetsOnDemand, shouldLoadEffectAssetsOnDemand } from '../../utils/EffectAssets';
 import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture } from '../../utils/worldCanvasTextureSafety';
+import { releaseOneShotEffectSlot, tryAcquireOneShotEffectSlot } from '../../utils/effectLiveCap';
 
 const DEFAULT_FRAME_RATE = 10;
 
@@ -53,6 +54,7 @@ export class Effect {
     private readonly offsetY: number;
     private destroyed = false;
     private safetyTimer?: Phaser.Time.TimerEvent;
+    private readonly occupiesOneShotSlot: boolean;
 
     constructor(scene: Scene, createConfig: EffectCreateConfig) {
         const { config, pixelX, pixelY, soundManager, playerWorldX, playerWorldY, infiniteLoop, onDestroy, frameRate: providedFrameRate, startAnimationFrame: providedStartFrame, depthOffset: providedDepthOffset, usePlayerDepthForDepth } = createConfig;
@@ -61,6 +63,11 @@ export class Effect {
         this.depthOffset = providedDepthOffset ?? config.depthOffset ?? MAGIC_VFX_DEPTH_BIAS;
         this.offsetX = config.offsetX ?? 0;
         this.offsetY = config.offsetY ?? 0;
+        this.occupiesOneShotSlot = !infiniteLoop && tryAcquireOneShotEffectSlot();
+        if (!infiniteLoop && !this.occupiesOneShotSlot) {
+            this.destroyed = true;
+            return;
+        }
 
         const drawX = pixelX + this.offsetX;
         const drawY = pixelY + this.offsetY;
@@ -78,6 +85,9 @@ export class Effect {
             void loadEffectAssetsOnDemand(scene, config).catch((error) => {
                 console.warn(`[Effect] Failed to lazy-load '${config.sprite}'`, error);
             });
+            if (this.occupiesOneShotSlot) {
+                releaseOneShotEffectSlot();
+            }
             this.destroyed = true;
             return;
         }
@@ -229,6 +239,9 @@ export class Effect {
             return;
         }
         this.destroyed = true;
+        if (this.occupiesOneShotSlot) {
+            releaseOneShotEffectSlot();
+        }
         if (this.safetyTimer) {
             this.safetyTimer.remove(false);
             this.safetyTimer = undefined;

@@ -70,6 +70,25 @@ import {
     waitMs,
     type MapTileRect,
 } from '../../utils/mapViewportStream';
+import {
+    isStaleMapLoad,
+    MAP_ENTER_ENTITY_CATCHUP_MS,
+    MAP_ENTER_HEAVY_DECODE_MS,
+    MAP_ENTER_HEAVY_DECODE_RETRY_MS,
+    MAP_ENTER_HUD_SPRITES_MS,
+    MAP_ENTER_MONSTER_SYNC_MS,
+    MAP_ENTER_NPC_SYNC_MS,
+    MAP_ENTER_TREE_PASS_MS,
+    MAP_ENTER_ZOOM_RESTORE_MS,
+    nextMapLoadGeneration,
+    isWizardTowerMap,
+    markEnterFromCompactInterior,
+    shouldAbortEnterExpandForWalk,
+    shouldDeferHeavyEnterDecode,
+    shouldSkipEnterHeavyCascade,
+    shouldSkipEnterPaperDollCapture,
+    takeEnterFromCompactInterior,
+} from '../../utils/mapEnterSettle';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
 import {
     loadPlayerItemAppearanceOnDemand,
@@ -310,7 +329,12 @@ import {
 import { ItemTypes, type Effect } from '../../constants/Items';
 import { CastManager } from '../../utils/CastManager';
 import { OlympiaLocalCastManager } from '../../utils/OlympiaLocalCastManager';
-import { endMagiasRitual, isMagiasMoveDuringPrepareActive, syncMagiasMoveDuringPrepareCamera } from '../../utils/castPresentation';
+import {
+    endMagiasRitual,
+    isMagiasMoveDuringPrepareActive,
+    isMagiasRitualActive,
+    syncMagiasMoveDuringPrepareCamera,
+} from '../../utils/castPresentation';
 import { reassertWorldCanvasPresentationGuard } from '../../utils/worldCanvasPoolGuard';
 import { installWorldCanvasPoolGuard } from '../../utils/worldCanvasPoolGuardInstall';
 import {
@@ -410,6 +434,20 @@ export class GameWorld extends Scene {
     private mapPrepareInFlight = false;
     /** Soft watchdog: overlay timeout must not abort decode or open entity spr burst. */
     private mapSetupWatchdog: Phaser.Time.TimerEvent | undefined = undefined;
+    /**
+     * Bumped on every GameWorld init/shutdown so city↔tower `scene.restart`
+     * cannot keep decoding the previous map's expand/tree/prefetch.
+     */
+    private mapLoadGeneration = 0;
+    /** Phaser delayedCalls for the post-paint settle cascade (cleared on restart). */
+    private enterSettleTimers: Phaser.Time.TimerEvent[] = [];
+    private pendingEnterCameraZoom = 1;
+    private heavyEnterDecodeStarted = false;
+    private hudSpritesLoadStarted = false;
+    /** Wizard Tower / small interiors skip the city tree+gear+zoom+HUD dump. */
+    private enterCompactInterior = false;
+    /** Tower → city restart: skip the door enter-ring prop dump (Elon city-walk discard). */
+    private enterFromCompactInterior = false;
     /** Entity `.spr` decode stays closed until tiles/player exist and a short GC gap elapsed. */
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
@@ -510,6 +548,7 @@ export class GameWorld extends Scene {
 
     public init(data?: GameWorldInitData) {
         runSafeSync('GameWorld:init', () => {
+            this.invalidateMapLoadGeneration();
             this.clearPendingRequestedWorldChangeListener();
             this.clearWorldTransferWatchdog();
             // Prefer registry over Phaser init data: `scene.restart({ initialGameWorldState })` can leave stale
@@ -536,6 +575,10 @@ export class GameWorld extends Scene {
             this.initializationStarted = false;
             this.loadingMap = true;
             this.worldReadyForEntities = false;
+            this.heavyEnterDecodeStarted = false;
+            this.hudSpritesLoadStarted = false;
+            this.enterCompactInterior = false;
+            this.enterFromCompactInterior = takeEnterFromCompactInterior(this.game.registry);
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;
@@ -796,6 +839,15 @@ export class GameWorld extends Scene {
         EventBus.on(IN_UI_CHANGE_HAIR_STYLE, this.syncPlayerAppearanceHandler);
 
         subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
+            if (
+                shouldSkipEnterPaperDollCapture({
+                    loadingMap: this.loadingMap,
+                    compactInterior: this.enterCompactInterior,
+                    enterFromCompactInterior: this.enterFromCompactInterior,
+                })
+            ) {
+                return;
+            }
             try {
                 const inv = getInventoryManager(this.game);
                 runPaperDollCapture(this as never, {
@@ -2330,13 +2382,128 @@ export class GameWorld extends Scene {
         void this.drainPlayerItemAppearancePrefetch();
     }
 
+    /** Drops in-flight expand/tree/settle work from the previous map (city↔tower restart). */
+    private invalidateMapLoadGeneration(): void {
+        this.mapLoadGeneration = nextMapLoadGeneration(this.mapLoadGeneration);
+        this.clearEnterSettleTimers();
+    }
+
+    private isLiveMapLoad(expectedGeneration: number): boolean {
+        return !isStaleMapLoad(this.mapLoadGeneration, expectedGeneration);
+    }
+
+    private clearEnterSettleTimers(): void {
+        for (const timer of this.enterSettleTimers) {
+            timer.remove(false);
+        }
+        this.enterSettleTimers = [];
+    }
+
+    private scheduleEnterSettle(delayMs: number, callback: () => void): void {
+        const generation = this.mapLoadGeneration;
+        const timer = this.time.delayedCall(delayMs, () => {
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            callback();
+        });
+        this.enterSettleTimers.push(timer);
+    }
+
+    private isHeavyEnterDecodeBusy(): boolean {
+        const player = this.player;
+        return shouldDeferHeavyEnterDecode({
+            loadingMap: this.loadingMap,
+            castingOrPreparing: !!(
+                player
+                && (player.isCasting() || player.isCastReady() || player.hasPendingSpell() || isMagiasRitualActive())
+            ),
+            moving: !!player?.isMoving(),
+            standingAtEnterFocus: this.isStandingNearEnterFocus(),
+        });
+    }
+
+    /**
+     * Open monster/remote/ground enter as soon as the city/tower map has a player.
+     * The old 12s gate dropped slime enters on the walk from Wizard Tower to the pit.
+     */
+    private enableEntitiesAfterFirstPaint(): void {
+        if (this.loadingMap || !this.player) {
+            this.scheduleEnterSettle(MAP_ENTER_MONSTER_SYNC_MS, () => {
+                this.enableEntitiesAfterFirstPaint();
+            });
+            return;
+        }
+        this.worldReadyForEntities = true;
+        this.syncMonstersFromNetworkState();
+        this.syncGroundStatesFromNetworkState();
+        this.syncOtherPlayersFromNetworkState();
+    }
+
+    private catchupEntitiesAfterFirstPaint(): void {
+        if (!this.worldReadyForEntities) {
+            this.enableEntitiesAfterFirstPaint();
+            return;
+        }
+        this.syncMonstersFromNetworkState();
+        this.syncGroundStatesFromNetworkState();
+        this.syncOtherPlayersFromNetworkState();
+    }
+
+    private tryHeavyEnterDecode(): void {
+        if (this.heavyEnterDecodeStarted) {
+            return;
+        }
+        if (this.isHeavyEnterDecodeBusy()) {
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_RETRY_MS, () => {
+                this.tryHeavyEnterDecode();
+            });
+            return;
+        }
+        this.heavyEnterDecodeStarted = true;
+        setPlayerItemAppearanceDecodeAllowed(true);
+        this.player?.startPendingEquippedAppearanceLoads();
+        this.startDeferredAppearancePrefetch();
+    }
+
+    private tryRestoreEnterZoom(): void {
+        if (this.isHeavyEnterDecodeBusy()) {
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_RETRY_MS, () => {
+                this.tryRestoreEnterZoom();
+            });
+            return;
+        }
+        this.cameraManager?.setZoom(this.pendingEnterCameraZoom);
+    }
+
+    private tryLoadDeferredHudSprites(): void {
+        if (this.hudSpritesLoadStarted) {
+            return;
+        }
+        if (this.isHeavyEnterDecodeBusy()) {
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_RETRY_MS, () => {
+                this.tryLoadDeferredHudSprites();
+            });
+            return;
+        }
+        this.hudSpritesLoadStarted = true;
+        void loadWorldDeferredSprites(this).catch((error) => {
+            console.warn('[GameWorld] Deferred HUD sprites failed', error);
+        });
+    }
+
     private async drainPlayerItemAppearancePrefetch(): Promise<void> {
         if (this.playerItemAppearancePrefetchRunning) {
             return;
         }
         this.playerItemAppearancePrefetchRunning = true;
+        const generation = this.mapLoadGeneration;
         try {
             while (this.playerItemAppearancePrefetchQueue.length > 0) {
+                if (!this.isLiveMapLoad(generation)) {
+                    this.playerItemAppearancePrefetchQueue = [];
+                    return;
+                }
                 const name = this.playerItemAppearancePrefetchQueue.shift();
                 if (!name) {
                     continue;
@@ -2443,9 +2610,16 @@ export class GameWorld extends Scene {
      */
     private setupMap(map: HBMap): void {
         this.displayedMap = map;
+        this.enterCompactInterior = shouldSkipEnterHeavyCascade({
+            sizeX: map.sizeX,
+            sizeY: map.sizeY,
+            worldId: this.gameWorldId,
+            mapName: map.fileName,
+        });
         // Now initialize game objects (player, NPCs, etc.)
         this.initializeGameObjects();
-        EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+        // No paper-doll emit here. Tower / post-Tower city skip toDataURL
+        // (login idle does not discard; world enter does).
 
         // Apply camera zoom AFTER minimap snapshot has been taken
         // This ensures the zoom is applied to the main camera, not the minimap snapshot camera
@@ -2481,33 +2655,35 @@ export class GameWorld extends Scene {
             this.mapStandFocusTileX = this.player.getWorldX();
             this.mapStandFocusTileY = this.player.getWorldY();
         }
+        this.pendingEnterCameraZoom = cameraZoom;
+        this.heavyEnterDecodeStarted = false;
+        this.hudSpritesLoadStarted = false;
         this.mapExpandAfterFirstPaint = this.expandMapAfterFirstPaint();
-        // Saved zoom-out enlarges the camera frustum; keep zoom 1 until post-stand settle.
-        this.time.delayedCall(18000, () => {
-            this.cameraManager?.setZoom(cameraZoom);
+        // Saved zoom-out enlarges the camera frustum; keep zoom 1 until idle settle.
+        this.scheduleEnterSettle(MAP_ENTER_MONSTER_SYNC_MS, () => {
+            this.enableEntitiesAfterFirstPaint();
         });
-        this.time.delayedCall(10000, () => {
-            void this.enableTreesAfterFirstPaint();
+        this.scheduleEnterSettle(MAP_ENTER_ENTITY_CATCHUP_MS, () => {
+            this.catchupEntitiesAfterFirstPaint();
         });
-        this.time.delayedCall(12000, () => {
-            this.worldReadyForEntities = true;
-            this.syncMonstersFromNetworkState();
-            this.syncGroundStatesFromNetworkState();
-            this.syncOtherPlayersFromNetworkState();
-        });
-        this.time.delayedCall(14000, () => {
+        this.scheduleEnterSettle(MAP_ENTER_NPC_SYNC_MS, () => {
             this.syncNpcsFromNetworkState();
         });
-        this.time.delayedCall(16000, () => {
-            setPlayerItemAppearanceDecodeAllowed(true);
-            this.player?.startPendingEquippedAppearanceLoads();
-            this.startDeferredAppearancePrefetch();
-        });
-        this.time.delayedCall(20000, () => {
-            void loadWorldDeferredSprites(this).catch((error) => {
-                console.warn('[GameWorld] Deferred HUD sprites failed', error);
+        // Wizard Tower sit at (43,34) is idle — do not dump trees/gear/zoom/HUD.
+        if (!this.enterCompactInterior) {
+            this.scheduleEnterSettle(MAP_ENTER_TREE_PASS_MS, () => {
+                void this.enableTreesAfterFirstPaint();
             });
-        });
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_MS, () => {
+                this.tryHeavyEnterDecode();
+            });
+            this.scheduleEnterSettle(MAP_ENTER_ZOOM_RESTORE_MS, () => {
+                this.tryRestoreEnterZoom();
+            });
+            this.scheduleEnterSettle(MAP_ENTER_HUD_SPRITES_MS, () => {
+                this.tryLoadDeferredHudSprites();
+            });
+        }
         // DISABLED: bulk hunt-pit .spr preload + canvas toDataURL thrashed React/GPU and
         // froze the browser (felt like "everything broke"). Pit markers still show as
         // letter labels; thumbs only when a live monster of that type enters view.
@@ -2625,6 +2801,9 @@ export class GameWorld extends Scene {
         console.log(
             `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Restarting onto '${initialGameWorldState.gameWorldId}' (${initialGameWorldState.mapName}) [${reason}]`,
         );
+        if (this.enterCompactInterior || isWizardTowerMap(this.gameWorldId, this.displayedMap?.fileName)) {
+            markEnterFromCompactInterior(this.game.registry);
+        }
         this.clearWorldTransferWatchdog();
         this.clearPendingRequestedWorldChangeListener();
         this.awaitingTransferredWorldState = false;
@@ -2936,23 +3115,58 @@ export class GameWorld extends Scene {
      * during prepareMap, and must not dump enter-ring + objects in one tick after stand.
      */
     private async expandMapAfterFirstPaint(): Promise<void> {
+        const generation = this.mapLoadGeneration;
         await waitForBrowserFrames(10);
         await waitMs(500);
+        if (!this.isLiveMapLoad(generation)) {
+            return;
+        }
         const map = this.displayedMap;
         if (!map || !this.mapManager) {
+            this.mapStreamWalkEnabled = true;
             return;
         }
         const focusX = this.player?.getWorldX() ?? this.initialGameWorldState?.playerX ?? 0;
         const focusY = this.player?.getWorldY() ?? this.initialGameWorldState?.playerY ?? 0;
         const post = postPaintStreamRect(focusX, focusY, map.sizeX, map.sizeY);
         const enter = initialFocusStreamRect(focusX, focusY, map.sizeX, map.sizeY);
+        const releaseToWalkStream = () => {
+            this.mapStreamObjectsEnabled = true;
+            map.setStreamObjectsEnabled(true);
+        };
         try {
             await this.expandStreamGroundToward(map, post);
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            // Tower → city door, or they already walked toward the gates: do not
+            // decode the enter-ring building packs. Walk restream batches props.
+            if (this.enterFromCompactInterior || shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await waitForBrowserFrames(4);
             await waitMs(400);
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            if (shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await this.expandStreamGroundToward(map, enter);
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
             await waitForBrowserFrames(4);
             await waitMs(600);
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
+            if (shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await loadTileSpritePacksForMapRect(
                 this,
                 map,
@@ -2965,6 +3179,10 @@ export class GameWorld extends Scene {
             await this.instantiateStreamObjectsBatched(map, false);
             await waitForBrowserFrames(4);
             await waitMs(800);
+            if (!this.isLiveMapLoad(generation) || shouldAbortEnterExpandForWalk(this.isStandingNearEnterFocus())) {
+                releaseToWalkStream();
+                return;
+            }
             await loadTileSpritePacksForMapRect(
                 this,
                 map,
@@ -2977,6 +3195,14 @@ export class GameWorld extends Scene {
             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
         } catch (error) {
             console.warn('[GameWorld] Enter-ring expand after first paint failed', error);
+        } finally {
+            if (this.isLiveMapLoad(generation)) {
+                // Walk restream (ground+objects) must not wait for the 10s tree pass —
+                // city streets → slime pit after Gandalf would keep the enter window.
+                this.mapStreamWalkEnabled = true;
+                // F5 paper-doll may run again after the post-Tower settle.
+                this.enterFromCompactInterior = false;
+            }
         }
     }
 
@@ -2992,9 +3218,13 @@ export class GameWorld extends Scene {
 
     /** Grow painted ground toward `target` in {@link MAP_EXPAND_STEP_TILES} steps, no object packs. */
     private async expandStreamGroundToward(map: HBMap, target: MapTileRect): Promise<void> {
+        const generation = this.mapLoadGeneration;
         let painted = map.getStreamedRect();
         let guard = 0;
         while (guard < 16) {
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
             guard += 1;
             if (painted && mapTileRectContains(painted, target)) {
                 return;
@@ -3022,8 +3252,12 @@ export class GameWorld extends Scene {
 
     /** Instantiate stream-rect map objects a handful per frame so plaza props cannot Aw Snap. */
     private async instantiateStreamObjectsBatched(map: HBMap, drawTree: boolean): Promise<void> {
+        const generation = this.mapLoadGeneration;
         let guard = 0;
         while (map.countUninstantiatedStreamObjects(drawTree) > 0 && guard < 80) {
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
             map.renderMapObjects(this, drawTree, MAP_OBJECT_INSTANTIATE_BATCH);
             this.noteMapSetupProgress();
             await waitForBrowserFrames(2);
@@ -3037,10 +3271,24 @@ export class GameWorld extends Scene {
      * Standing still uses enter-ring slack so focus cannot jump to the 56×40 walk cap.
      */
     private async enableTreesAfterFirstPaint(): Promise<void> {
+        const generation = this.mapLoadGeneration;
         try {
             await this.mapExpandAfterFirstPaint;
         } catch {
             /* expand already logged */
+        }
+        if (!this.isLiveMapLoad(generation)) {
+            return;
+        }
+        if (this.enterCompactInterior) {
+            this.mapStreamWalkEnabled = true;
+            return;
+        }
+        if (this.isHeavyEnterDecodeBusy()) {
+            this.scheduleEnterSettle(MAP_ENTER_HEAVY_DECODE_RETRY_MS, () => {
+                void this.enableTreesAfterFirstPaint();
+            });
+            return;
         }
         const map = this.displayedMap;
         if (!map || !this.mapManager) {
@@ -3052,13 +3300,21 @@ export class GameWorld extends Scene {
             if (rect) {
                 await loadTileSpritePacksForMapRect(this, map, rect, undefined, true, true, 64);
             }
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
             this.mapStreamTreesEnabled = true;
             await this.instantiateStreamObjectsBatched(map, true);
+            if (!this.isLiveMapLoad(generation)) {
+                return;
+            }
             map.applyDetailLevel(sysMenuDialogStore.state.detailLevel);
         } catch (error) {
             console.warn('[GameWorld] Tree pass after first paint failed', error);
         } finally {
-            this.mapStreamWalkEnabled = true;
+            if (this.isLiveMapLoad(generation)) {
+                this.mapStreamWalkEnabled = true;
+            }
         }
     }
 
@@ -3101,7 +3357,12 @@ export class GameWorld extends Scene {
                 underwearColorIndex: playerDialogStore.state.underwearColorIndex,
             });
             this.noteMapSetupProgress();
-            EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+            if (
+                !this.enterFromCompactInterior &&
+                !isWizardTowerMap(this.gameWorldId, this.mapManager?.getCurrentMapName())
+            ) {
+                EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+            }
 
             this.noteMapSetupProgress();
             await waitMs(120);
@@ -5309,9 +5570,14 @@ export class GameWorld extends Scene {
                 this.soundManager.stopAllSounds();
             }
 
+            this.invalidateMapLoadGeneration();
             this.initializationStarted = false;
             this.loadingMap = true;
             this.worldReadyForEntities = false;
+            this.heavyEnterDecodeStarted = false;
+            this.hudSpritesLoadStarted = false;
+            this.enterCompactInterior = false;
+            this.enterFromCompactInterior = false;
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;

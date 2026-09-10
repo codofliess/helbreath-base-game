@@ -7,6 +7,7 @@ import { getPivotData } from './RegistryUtils';
 import {
     loadPlayerItemAppearanceOnDemand,
     arePlayerItemAppearanceSheetsLoaded,
+    isPlayerItemAppearanceDecodeAllowed,
 } from './ItemAssets';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { getHumanSpriteName, resolveGearFromEquippedItems } from './playerAppearanceLook';
@@ -730,7 +731,11 @@ export function capturePaperDollBodyLayers(
         }
     };
 
-    if (LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND && pending.length > 0) {
+    if (
+        LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND &&
+        isPlayerItemAppearanceDecodeAllowed() &&
+        pending.length > 0
+    ) {
         // Idle-south sheets only — Promise.all of settle 0–7 per pack OOMs Elvine F5.
         console.debug('[paperdoll] loading gear textures:', pending.map((j) => j.name).join(', '));
         void (async () => {
@@ -820,7 +825,7 @@ function queuePaperDollPendingGearLoads(
     underwearColorIndex: number,
     equippedItems: Partial<Record<EquipmentSlot, InventoryItem>>,
 ): void {
-    if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND) {
+    if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !isPlayerItemAppearanceDecodeAllowed()) {
         return;
     }
     const layers = buildCompositeLayers(

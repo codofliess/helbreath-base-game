@@ -96,6 +96,11 @@ assert(
     'createCastingCircleEffect must refuse fogata on Missile prepare even when effect5-7 looks safe',
 );
 const appearanceMgr = read('src/utils/PlayerAppearanceManager.ts');
+assert(
+    /lazyItemAppearanceLoadsStarted\.size > 0/.test(appearanceMgr)
+        && /kickOffAllPendingItemAppearanceLoads\(\)/.test(appearanceMgr),
+    'Equipped appearance kick-off must load one pack at a time (Elvine F5 OOM path)',
+);
 const refuseMagiasFetch = appearanceMgr.slice(
     appearanceMgr.indexOf('private shouldRefuseMagiasAppearanceFetch'),
     appearanceMgr.indexOf('private scheduleLazyItemAppearanceIfNeeded'),
@@ -472,6 +477,7 @@ assert(
         /sheetIndices: new Set\(job\.sheets\)/.test(paperDollCapture) &&
         /arePlayerItemAppearanceSheetsLoaded/.test(paperDollCapture) &&
         /queuePaperDollPendingGearLoads/.test(paperDollCapture) &&
+        /isPlayerItemAppearanceDecodeAllowed/.test(paperDollCapture) &&
         /PENDING_APPEARANCE_TEXTURE_KEY/.test(paperDollCapture) &&
         /isWorldCanvasImageSource/.test(paperDollCapture) &&
         !/pending\.map\(\(name\) =>/.test(paperDollCapture),
@@ -688,6 +694,8 @@ assert(
         /ground-stream/.test(hbMap) &&
         /streamObjectsEnabled = false/.test(hbMap) &&
         /countUninstantiatedStreamObjects/.test(hbMap) &&
+        /setStreamObjectsEnabled/.test(hbMap) &&
+        /maxNewObjects/.test(hbMap) &&
         /maxNewInstances/.test(hbMap) &&
         !/ground-y-\$\{y\}/.test(hbMap),
     'HBMap must stream one ground layer, not one tilemap layer per world Y',
@@ -701,7 +709,10 @@ assert(
         /MAP_STAND_REFRESH_SLACK_TILES/.test(mapManager) &&
         /shouldRefreshMapStream/.test(mapManager) &&
         /evictUnusedMapTileTextures/.test(mapManager) &&
-        /streamRefreshQueued/.test(mapManager),
+        /streamRefreshQueued/.test(mapManager) &&
+        /maxNewObjects/.test(mapManager) &&
+        /MAP_OBJECT_INSTANTIATE_BATCH/.test(mapManager) &&
+        /countUninstantiatedStreamObjects/.test(mapManager),
     'MapManager must paint a tiny ground-only first window, restream later, and evict leftover sheets',
 );
 
@@ -830,21 +841,48 @@ assert(
     'GameWorld must defer equipped appearance prefetch and HUD sheets until after map setup',
 );
 
+const mapEnterSettle = read('src/utils/mapEnterSettle.ts');
+assert(
+    /MAP_ENTER_MONSTER_SYNC_MS = 400/.test(mapEnterSettle) &&
+        /MAP_ENTER_TREE_PASS_MS = 10_000/.test(mapEnterSettle) &&
+        /MAP_ENTER_ENTITY_CATCHUP_MS = 12_000/.test(mapEnterSettle) &&
+        /shouldDeferHeavyEnterDecode/.test(mapEnterSettle) &&
+        /standingAtEnterFocus/.test(mapEnterSettle) &&
+        /shouldSkipEnterHeavyCascade/.test(mapEnterSettle) &&
+        /shouldAbortEnterExpandForWalk/.test(mapEnterSettle) &&
+        /shouldSkipEnterPaperDollCapture/.test(mapEnterSettle) &&
+        /markEnterFromCompactInterior/.test(mapEnterSettle) &&
+        /isCompactInteriorMap/.test(mapEnterSettle) &&
+        /COMPACT_INTERIOR_MAX_SIZE_TILES = 100/.test(mapEnterSettle),
+    'mapEnterSettle must sync monsters before the 10s tree/gear cascade and hold gear on the enter pad / Tower',
+);
 assert(
     /worldReadyForEntities/.test(gameWorld) &&
         /tickMapSetupWatchdog/.test(gameWorld) &&
         /noteMapSetupProgress/.test(gameWorld) &&
         /onProgress: \(\) => this\.noteMapSetupProgress/.test(gameWorld) &&
-        /delayedCall\(10000/.test(gameWorld) &&
-        /delayedCall\(12000/.test(gameWorld) &&
-        /delayedCall\(14000/.test(gameWorld) &&
-        /delayedCall\(16000/.test(gameWorld) &&
-        /delayedCall\(18000/.test(gameWorld) &&
-        /delayedCall\(20000/.test(gameWorld) &&
+        /mapLoadGeneration/.test(gameWorld) &&
+        /invalidateMapLoadGeneration/.test(gameWorld) &&
+        /enableEntitiesAfterFirstPaint/.test(gameWorld) &&
+        /tryHeavyEnterDecode/.test(gameWorld) &&
+        /shouldDeferHeavyEnterDecode/.test(gameWorld) &&
+        /shouldSkipEnterHeavyCascade/.test(gameWorld) &&
+        /shouldAbortEnterExpandForWalk/.test(gameWorld) &&
+        /shouldSkipEnterPaperDollCapture/.test(gameWorld) &&
+        /enterFromCompactInterior/.test(gameWorld) &&
+        /enterCompactInterior/.test(gameWorld) &&
+        /standingAtEnterFocus/.test(gameWorld) &&
+        /MAP_ENTER_MONSTER_SYNC_MS/.test(gameWorld) &&
+        /MAP_ENTER_TREE_PASS_MS/.test(gameWorld) &&
+        /MAP_ENTER_ENTITY_CATCHUP_MS/.test(gameWorld) &&
+        /MAP_ENTER_NPC_SYNC_MS/.test(gameWorld) &&
+        /MAP_ENTER_HEAVY_DECODE_MS/.test(gameWorld) &&
+        /MAP_ENTER_ZOOM_RESTORE_MS/.test(gameWorld) &&
+        /MAP_ENTER_HUD_SPRITES_MS/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(false\)/.test(gameWorld) &&
         /setPlayerItemAppearanceDecodeAllowed\(true\)/.test(gameWorld) &&
         /displayedMap \|\| this\.pendingLoadedMap \|\| this\.mapPrepareInFlight/.test(gameWorld),
-    'GameWorld must fail-soft map timeout without retrying a painted map, delay NPC decode, and delay HUD packs',
+    'GameWorld must fail-soft map timeout, abort stale city↔tower expand, enable slimes after first paint, and idle-gate gear/zoom/HUD',
 );
 
 assert(
@@ -853,6 +891,17 @@ assert(
         /evictNpcSpriteSheets/.test(gameWorld) &&
         /loadingMap \|\| !this\.worldReadyForEntities/.test(gameWorld),
     'GameWorld must not spawn/decode monsters or NPCs during map setup, and must evict sheets that leave view',
+);
+
+const effectOneShotTs = read('src/game/effects/Effect.ts');
+const fireStrikeTs = read('src/game/spells/FireStrike.ts');
+const effectLiveCap = read('src/utils/effectLiveCap.ts');
+assert(
+    /MAX_LIVE_ONESHOT_EFFECTS = 24/.test(effectLiveCap) &&
+        /tryAcquireOneShotEffectSlot/.test(effectOneShotTs) &&
+        /releaseOneShotEffectSlot/.test(effectOneShotTs) &&
+        /isPhaserSceneActive/.test(fireStrikeTs),
+    'Fire Strike farm VFX must cap live one-shots and skip delayed explosions after scene.restart',
 );
 
 assert(

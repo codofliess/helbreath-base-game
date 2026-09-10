@@ -23,10 +23,21 @@ import {
     paintStreamTileRect,
     postPaintStreamRect,
 } from './mapViewportStream';
+import { isCompactInteriorMap, shouldSkipEnterHeavyCascade } from './mapEnterSettle';
 
 const LIVE_ORIGIN = 'https://play.chainlords.net';
-const ELVINE_SPAWN_X = 149;
-const ELVINE_SPAWN_Y = 131;
+/** Legacy traveler / plaza-hunt pad — farm FOV, not login spawn after PR #79. */
+const ELVINE_SLIME_PLAZA_X = 149;
+const ELVINE_SLIME_PLAZA_Y = 131;
+/** Olympia city streets (login / Restart! / City Hall). */
+const ELVINE_CITY_STREETS_X = 158;
+const ELVINE_CITY_STREETS_Y = 57;
+/** Wizard Tower door exit after Gandalf. */
+const ELVINE_TOWER_DOOR_X = 181;
+const ELVINE_TOWER_DOOR_Y = 78;
+/** First-paint HTTP budget remains the open plaza (historical OOM fixture). */
+const ELVINE_SPAWN_X = ELVINE_SLIME_PLAZA_X;
+const ELVINE_SPAWN_Y = ELVINE_SLIME_PLAZA_Y;
 
 function isTreeSpriteIndex(spriteIndex: number): boolean {
     return spriteIndex >= 100 && spriteIndex <= 145;
@@ -224,5 +235,79 @@ describe('live Elvine enter path (HTTP + stream)', () => {
         assert.ok(all.length > idle.length, `full slime sheets ${all.length} vs idle 8`);
         assert.ok(idleRgba < allRgba, `idle RGBA ${idleRgba} must be < full ${allRgba}`);
         assert.ok(idleRgba * 2 < allRgba || all.length >= 24, 'combat/death sheets must dominate VRAM if decoded eagerly');
+    });
+
+    it('city streets and Wizard Tower door stay inside the stream cap (PR #79 farm path)', async () => {
+        const buffer = await fetchGameAssetArrayBuffer('maps', catalogAmdFileName('elvine'), LIVE_ORIGIN);
+        const map = parseAmdMapCells(buffer);
+        const foci = [
+            { name: 'city streets', x: ELVINE_CITY_STREETS_X, y: ELVINE_CITY_STREETS_Y },
+            { name: 'tower door', x: ELVINE_TOWER_DOOR_X, y: ELVINE_TOWER_DOOR_Y },
+            { name: 'slime plaza', x: ELVINE_SLIME_PLAZA_X, y: ELVINE_SLIME_PLAZA_Y },
+        ];
+        for (const focus of foci) {
+            const firstPaint = firstPaintStreamRect(focus.x, focus.y, map.sizeX, map.sizeY);
+            const enter = initialFocusStreamRect(focus.x, focus.y, map.sizeX, map.sizeY);
+            const objectsEnter = countObjectInstances(map.tiles, enter, false);
+            const objectsTrees = countObjectInstances(map.tiles, enter, true);
+            assert.ok(
+                mapTileRectArea(enter) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES,
+                `${focus.name} enter window exceeds stream cap`,
+            );
+            assert.ok(
+                objectsEnter < 280,
+                `${focus.name} enter objects ${objectsEnter} must stay bounded (city is denser than plaza)`,
+            );
+            assert.ok(objectsEnter <= objectsTrees, `${focus.name} tree pass must not drop props`);
+            assert.ok(
+                mapTileRectArea(firstPaint) < mapTileRectArea(enter),
+                `${focus.name} first paint must stay smaller than enter FOV`,
+            );
+        }
+    });
+
+    it('city walk from Wizard Tower door toward north gates stays inside the stream cap', () => {
+        const mapsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../sp-client/public/assets/maps');
+        const buffer = fs.readFileSync(path.join(mapsDir, 'elvine.amd'));
+        const map = parseAmdMapCells(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+        const door = initialFocusStreamRect(ELVINE_TOWER_DOOR_X, ELVINE_TOWER_DOOR_Y, map.sizeX, map.sizeY);
+        const gates = initialFocusStreamRect(225, 20, map.sizeX, map.sizeY);
+        const doorObjects = countObjectInstances(map.tiles, door, false);
+        const gateObjects = countObjectInstances(map.tiles, gates, false);
+        assert.ok(doorObjects < 280, `tower-door enter objects ${doorObjects}`);
+        assert.ok(gateObjects < 280, `north-gate enter objects ${gateObjects}`);
+        const grown = growMapTileRectToward(door, gates);
+        assert.ok(
+            mapTileRectArea(grown) < mapTileRectArea(door) + mapTileRectArea(gates),
+            'walk grow must not union door+gates (that was the city-walk discard)',
+        );
+        assert.ok(mapTileRectArea(grown) <= MAP_STREAM_MAX_WIDTH_TILES * MAP_STREAM_MAX_HEIGHT_TILES);
+    });
+
+    it('Wizard Tower pad (43,34) is a compact interior — skip the city gear/zoom dump', () => {
+        const mapsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../sp-client/public/assets/maps');
+        const buffer = fs.readFileSync(path.join(mapsDir, 'wzdtwr_1.amd'));
+        const map = parseAmdMapCells(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+        assert.equal(map.sizeX, 100);
+        assert.equal(map.sizeY, 100);
+        assert.equal(isCompactInteriorMap(map.sizeX, map.sizeY), true);
+        assert.equal(
+            shouldSkipEnterHeavyCascade({
+                sizeX: map.sizeX,
+                sizeY: map.sizeY,
+                worldId: 'elvwzdtwr',
+                mapName: 'map-wzdtwr_1',
+            }),
+            true,
+        );
+        const gandalfPad = { x: 43, y: 34 };
+        const firstPaint = firstPaintStreamRect(gandalfPad.x, gandalfPad.y, map.sizeX, map.sizeY);
+        const enter = initialFocusStreamRect(gandalfPad.x, gandalfPad.y, map.sizeX, map.sizeY);
+        const objectsEnter = countObjectInstances(map.tiles, enter, false);
+        assert.ok(mapTileRectArea(firstPaint) <= mapTileRectArea(enter));
+        assert.ok(
+            objectsEnter < 80,
+            `tower pad enter objects ${objectsEnter} must stay tiny (Chile sit-discard is gear/zoom, not props)`,
+        );
     });
 });

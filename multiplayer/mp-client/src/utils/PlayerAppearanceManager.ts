@@ -415,6 +415,10 @@ export class PlayerAppearanceManager {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || !isPlayerItemAppearanceDecodeAllowed()) {
             return;
         }
+        // One pack at a time — kicking all 9 equipped sheets together is the Elvine F5 OOM path.
+        if (this.lazyItemAppearanceLoadsStarted.size > 0) {
+            return;
+        }
         const seen = new Set<string>();
         for (let i = 0; i < this.assets.length; i++) {
             const asset = this.assets[i];
@@ -438,7 +442,9 @@ export class PlayerAppearanceManager {
                 continue;
             }
             seen.add(name);
-            this.scheduleLazyItemAppearanceIfNeeded(name, asset);
+            if (this.scheduleLazyItemAppearanceIfNeeded(name, asset)) {
+                return;
+            }
         }
     }
 
@@ -1225,10 +1231,12 @@ export class PlayerAppearanceManager {
                 .then(() => {
                     this.lazyItemAppearanceLoadsStarted.delete(loadKey);
                     this.flushPendingLazyItemPromotionForSprite(sprite);
+                    this.kickOffAllPendingItemAppearanceLoads();
                 })
                 .catch((err) => {
                     this.lazyItemAppearanceLoadsStarted.delete(loadKey);
                     console.error(`[PlayerItemAppearanceLoader] Failed to load equipped appearance '${sprite}'`, err);
+                    this.kickOffAllPendingItemAppearanceLoads();
                 });
         }
         return true;

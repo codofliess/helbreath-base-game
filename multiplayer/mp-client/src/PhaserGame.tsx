@@ -308,10 +308,14 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
             }
             
         };
+        // Re-assert after React re-subscribe: GameWorld.create will not emit again,
+        // and cleanup must not strip the class (that race killed WASD after discard).
+        if (document.body.classList.contains('game-world-active')) {
+            document.body.classList.add('helbreath-game-active');
+        }
         EventBus.on(CURRENT_SCENE_READY, onCurrentSceneReady);
         return () =>
         {
-            document.body.classList.remove('helbreath-game-active');
             EventBus.off(CURRENT_SCENE_READY, onCurrentSceneReady);
         }
     }, [currentActiveScene, ref]);

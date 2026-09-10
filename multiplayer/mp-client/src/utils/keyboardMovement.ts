@@ -19,6 +19,22 @@ export type KeyboardWalkPlan = {
     cursorPixelY: number;
 };
 
+/** Scene-owned: GameWorld.create sets this. Survives React effect re-subscribe. */
+export const GAME_WORLD_ACTIVE_CLASS = 'game-world-active';
+/** React/F-key class. PhaserGame used to strip this on effect cleanup and kill WASD. */
+export const HELBREATH_GAME_ACTIVE_CLASS = 'helbreath-game-active';
+
+export type KeyboardFocusProbe = {
+    tagName?: string;
+    isContentEditable?: boolean;
+    hidden?: boolean;
+    disabled?: boolean;
+    type?: string;
+    isConnected?: boolean;
+    getAttribute?: (name: string) => string | null;
+    getBoundingClientRect?: () => { width: number; height: number; top?: number; left?: number; bottom?: number; right?: number };
+};
+
 /**
  * Chat / bag name fields must not steer the avatar. Tag-name check stays
  * DOM-constructor-free so unit tests can run under `tsx`.
@@ -32,6 +48,90 @@ export function isTypingTarget(active: { tagName?: string; isContentEditable?: b
         return true;
     }
     return active.isContentEditable === true;
+}
+
+export function isGameWorldKeyboardActive(
+    classList?: { contains: (token: string) => boolean } | null,
+): boolean {
+    const list = classList ?? (typeof document !== 'undefined' ? document.body.classList : null);
+    if (!list) {
+        return false;
+    }
+    return list.contains(GAME_WORLD_ACTIVE_CLASS) || list.contains(HELBREATH_GAME_ACTIVE_CLASS);
+}
+
+/**
+ * Phantom / Chrome-restore leftovers are often `type=hidden`, 0×0, or detached.
+ * Those must not count as "typing" or bare WASD dies without a canvas click.
+ */
+export function isVisiblyInteractive(active: KeyboardFocusProbe | null): boolean {
+    if (!active) {
+        return false;
+    }
+    if (active.isConnected === false || active.hidden === true || active.disabled === true) {
+        return false;
+    }
+    if ((active.type ?? '').toLowerCase() === 'hidden') {
+        return false;
+    }
+    if (active.getAttribute?.('aria-hidden') === 'true') {
+        return false;
+    }
+    if (typeof active.getBoundingClientRect !== 'function') {
+        return true;
+    }
+    const rect = active.getBoundingClientRect();
+    if (rect.width < 2 && rect.height < 2) {
+        return false;
+    }
+    if (typeof window !== 'undefined') {
+        const viewW = window.innerWidth || 0;
+        const viewH = window.innerHeight || 0;
+        const top = rect.top ?? 0;
+        const left = rect.left ?? 0;
+        const bottom = rect.bottom ?? top + rect.height;
+        const right = rect.right ?? left + rect.width;
+        if (viewW > 0 && viewH > 0 && (bottom < 0 || right < 0 || top > viewH || left > viewW)) {
+            return false;
+        }
+        try {
+            const style = window.getComputedStyle?.(active as Element);
+            if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+                return false;
+            }
+        } catch {
+            // jsdom / constructor-free probes
+        }
+    }
+    return true;
+}
+
+/** Visible chat / bag / dialog fields only. Hidden wallet leftovers do not block walk. */
+export function isLiveTypingSurface(active: KeyboardFocusProbe | null): boolean {
+    return isTypingTarget(active) && isVisiblyInteractive(active);
+}
+
+/** Focus that swallows keys after tab discard but is not a real compose field. */
+export function isStrayKeyboardTarget(active: KeyboardFocusProbe | null): boolean {
+    if (!active) {
+        return false;
+    }
+    if (active.tagName?.toUpperCase() === 'IFRAME' && !isVisiblyInteractive(active)) {
+        return true;
+    }
+    return isTypingTarget(active) && !isLiveTypingSurface(active);
+}
+
+/** Blur Phantom / restore leftovers so the next WASD reaches the boot tracker. */
+export function blurStrayKeyboardTargets(): void {
+    if (typeof document === 'undefined') {
+        return;
+    }
+    const active = document.activeElement;
+    if (!isStrayKeyboardTarget(active) || !(active instanceof HTMLElement)) {
+        return;
+    }
+    active.blur();
 }
 
 export function createEmptyMovementKeys(): MovementKeyHold {
@@ -167,8 +267,10 @@ export function directionFromMovementKeys(held: MovementKeyHold): Direction {
 }
 
 /**
- * Click-kite (LMB held) stays the overlay path. Chat compose / typing must
- * not walk. A focused tab is enough — canvas focus is not required.
+ * Click-kite (LMB held) stays the overlay path. Chat compose / live typing
+ * must not walk. A focused tab is enough — canvas focus is not required.
+ * `gameActive` should be {@link isGameWorldKeyboardActive} so a React
+ * `helbreath-game-active` miss after discard/reload cannot freeze feet.
  */
 export function shouldAcceptKeyboardWalk(opts: {
     gameActive: boolean;
@@ -183,17 +285,13 @@ let walkTrackerInstalled = false;
 const globalMovementKeys: MovementKeyHold = createEmptyMovementKeys();
 
 function onGlobalWalkKeyDown(event: KeyboardEvent): void {
-    if (hasKeyboardWalkModifier(event) || isTypingTarget(document.activeElement)) {
+    if (hasKeyboardWalkModifier(event) || isLiveTypingSurface(document.activeElement)) {
         return;
     }
     if (!applyMovementKeyHold(globalMovementKeys, event.code, event.key, true)) {
         return;
     }
-    if (
-        isArrowMovementKey(event.code, event.key)
-        && typeof document !== 'undefined'
-        && document.body.classList.contains('helbreath-game-active')
-    ) {
+    if (isArrowMovementKey(event.code, event.key) && isGameWorldKeyboardActive()) {
         event.preventDefault();
     }
 }
@@ -207,24 +305,41 @@ function onGlobalWalkBlur(): void {
 }
 
 function onGlobalWalkVisibility(): void {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        onGlobalWalkBlur();
+    if (typeof document === 'undefined') {
+        return;
     }
+    if (document.visibilityState === 'hidden') {
+        onGlobalWalkBlur();
+        return;
+    }
+    // Tab discard/restore and Chrome freeze resume: drop a stale chord and
+    // free leftover hidden inputs so the next hold is heard without a click.
+    globalMovementKeys.clear();
+    blurStrayKeyboardTargets();
+}
+
+function onGlobalWalkPageShow(): void {
+    globalMovementKeys.clear();
+    blurStrayKeyboardTargets();
 }
 
 /**
  * Arm WASD tracking at boot so a hold through login → enter-world is not
  * lost (GameWorld `InputManager.setup` is too late for that race).
- * Idempotent. Bubble phase — does not swallow Magias / F-keys.
+ * Idempotent. Document capture so a leftover focused input cannot swallow
+ * the bubble; does not stop Magias / F-keys.
  */
 export function installKeyboardWalkTracker(): void {
     if (walkTrackerInstalled || typeof window === 'undefined') {
         return;
     }
     walkTrackerInstalled = true;
+    document.addEventListener('keydown', onGlobalWalkKeyDown, true);
+    document.addEventListener('keyup', onGlobalWalkKeyUp, true);
     window.addEventListener('keydown', onGlobalWalkKeyDown);
     window.addEventListener('keyup', onGlobalWalkKeyUp);
     window.addEventListener('blur', onGlobalWalkBlur);
+    window.addEventListener('pageshow', onGlobalWalkPageShow);
     document.addEventListener('visibilitychange', onGlobalWalkVisibility);
 }
 

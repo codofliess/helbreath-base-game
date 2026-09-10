@@ -94,6 +94,12 @@ export class InputManager {
     }
 
     public isLeftMouseDown(): boolean {
+        if (this.leftMouseDown) {
+            const pointer = this.scene.input.activePointer;
+            if (pointer && !pointer.leftButtonDown()) {
+                this.leftMouseDown = false;
+            }
+        }
         return this.leftMouseDown;
     }
 

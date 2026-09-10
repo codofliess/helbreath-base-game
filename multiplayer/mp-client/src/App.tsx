@@ -395,7 +395,7 @@ function App()
                 setIsMapLoaded(false);
                 setIsInGameWorld(false);
                 hasInitialMapLoadRef.current = false;
-                document.body.classList.remove('game-world-active');
+                document.body.classList.remove('game-world-active', 'helbreath-game-active');
                 discordPresenceClear();
                 // Right-side event letters must not stick on Character List / hub.
                 toast.dismiss();

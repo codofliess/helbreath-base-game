@@ -271,6 +271,8 @@ assert(
         && /isLiveTypingSurface/.test(keyboardMovement)
         && /isGameWorldKeyboardActive/.test(keyboardMovement)
         && /blurStrayKeyboardTargets/.test(keyboardMovement)
+        && /rearmKeyboardWalkAfterResume/.test(keyboardMovement)
+        && /syncHelbreathGameActiveClass/.test(keyboardMovement)
         && /pageshow/.test(keyboardMovement)
         && /installKeyboardWalkTracker/.test(keyboardMovement)
         && /getHeldWalkDirection/.test(keyboardMovement)
@@ -293,7 +295,8 @@ assert(
         && /isLiveTypingSurface/.test(gameWorld)
         && /blurStrayKeyboardTargets/.test(gameWorld)
         && /GAME_WORLD_ACTIVE_CLASS/.test(gameWorld)
-        && /HELBREATH_GAME_ACTIVE_CLASS/.test(gameWorld),
+        && /HELBREATH_GAME_ACTIVE_CLASS/.test(gameWorld)
+        && /rearmKeyboardWalkAfterResume/.test(gameWorld),
     'GameWorld must apply held WASD via setDestination',
 );
 assert(
@@ -571,6 +574,12 @@ assert(
         walletAuth.indexOf('parkPhaserForWalletUi') < walletAuth.indexOf('phantom.connect'),
     'Phaser must not boot on the hub; PhaserGame must not import phaser; Phantom connect/sign must park the canvas (KindGem Aw Snap 9)',
 );
+const phaserWalletPark = read('src/game/phaserWalletPark.ts');
+assert(
+    /rearmKeyboardWalkAfterResume/.test(phaserWalletPark)
+        && /rearmKeyboardWalkAfterResume/.test(phaserGame),
+    'Wallet unpark and PhaserGame focus must re-arm WASD after discard/reconnect',
+);
 const phaserGameSceneReadyFx = phaserGame.slice(
     phaserGame.indexOf('const onCurrentSceneReady'),
     phaserGame.indexOf('[currentActiveScene, ref]'),
@@ -578,7 +587,7 @@ const phaserGameSceneReadyFx = phaserGame.slice(
 const phaserGameSceneReadyCleanup = phaserGameSceneReadyFx.slice(phaserGameSceneReadyFx.indexOf('return ()'));
 assert(
     /helbreath-game-active/.test(phaserGameSceneReadyFx)
-        && /game-world-active/.test(phaserGameSceneReadyFx)
+        && /rearmKeyboardWalkAfterResume/.test(phaserGameSceneReadyFx)
         && !/classList\.remove/.test(phaserGameSceneReadyCleanup),
     'PhaserGame must not strip helbreath-game-active on effect cleanup (reload/discard WASD race)',
 );

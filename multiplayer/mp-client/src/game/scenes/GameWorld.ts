@@ -30,10 +30,10 @@ import {
     blurStrayKeyboardTargets,
     GAME_WORLD_ACTIVE_CLASS,
     HELBREATH_GAME_ACTIVE_CLASS,
-    installKeyboardWalkTracker,
     isGameWorldKeyboardActive,
     isLiveTypingSurface,
     planKeyboardWalk,
+    rearmKeyboardWalkAfterResume,
     shouldAcceptKeyboardWalk,
 } from '../../utils/keyboardMovement';
 import { CameraManager } from '../../utils/CameraManager';
@@ -588,8 +588,7 @@ export class GameWorld extends Scene {
             installWorldCanvasPoolGuard(this.game);
             document.body.classList.add(GAME_WORLD_ACTIVE_CLASS, HELBREATH_GAME_ACTIVE_CLASS);
             applyGameWorldCanvasPresentation(this);
-            installKeyboardWalkTracker();
-            blurStrayKeyboardTargets();
+            rearmKeyboardWalkAfterResume();
             this.cameras.main.setBackgroundColor('#000');
             EventBus.emit(CURRENT_SCENE_READY, this);
         });
@@ -3290,9 +3289,9 @@ export class GameWorld extends Scene {
 
     /**
      * Tab-focused WASD / arrows → the same `setDestination` path as click-kite.
-     * Scene-owned `game-world-active` is enough (React may strip
-     * `helbreath-game-active` after discard/reload). Hidden leftovers are not
-     * typing. LMB hold keeps click-kite. Magias select/confirm is click-only.
+     * Primary FAIL path is Chrome discard → reconnect: scene-owned
+     * `game-world-active` is enough; hidden wallet leftovers are not typing.
+     * LMB hold keeps click-kite. Magias select/confirm is click-only.
      */
     private handleKeyboardMovement(): void {
         const inputManager = this.inputManager;

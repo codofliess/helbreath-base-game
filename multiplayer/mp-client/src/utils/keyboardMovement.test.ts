@@ -16,6 +16,8 @@ import {
     isLiveTypingSurface,
     isStrayKeyboardTarget,
     isTypingTarget,
+    rearmKeyboardWalkAfterResume,
+    syncHelbreathGameActiveClass,
     KEYBOARD_WALK_CURSOR_PIXELS,
     KEYBOARD_WALK_LOOKAHEAD_CELLS,
     planKeyboardWalk,
@@ -139,6 +141,25 @@ describe('keyboardMovement', () => {
             composeOpen: false,
             leftMouseDown: false,
         }), true);
+    });
+
+    it('re-syncs helbreath-game-active after discard/reconnect when only game-world-active remains', () => {
+        const tokens = new Set([GAME_WORLD_ACTIVE_CLASS]);
+        const classList = {
+            contains: (token: string) => tokens.has(token),
+            add: (token: string) => { tokens.add(token); },
+        };
+        assert.equal(syncHelbreathGameActiveClass(classList), true);
+        assert.equal(tokens.has(HELBREATH_GAME_ACTIVE_CLASS), true);
+        assert.equal(syncHelbreathGameActiveClass(classList), false);
+        assert.equal(shouldAcceptKeyboardWalk({
+            gameActive: isGameWorldKeyboardActive(classList),
+            typing: isLiveTypingSurface({ tagName: 'INPUT', type: 'hidden' }),
+            composeOpen: false,
+            leftMouseDown: false,
+        }), true);
+        rearmKeyboardWalkAfterResume();
+        assert.equal(getHeldWalkDirection(), Direction.None);
     });
 
     it('boot tracker is idempotent and starts with no held chord', () => {

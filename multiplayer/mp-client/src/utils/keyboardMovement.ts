@@ -134,6 +134,24 @@ export function blurStrayKeyboardTargets(): void {
     active.blur();
 }
 
+/**
+ * After Chrome discard → reload → wallet reconnect, React may have dropped
+ * `helbreath-game-active` while GameWorld left `game-world-active` on.
+ * Put the React class back so F-keys and older gates match the scene.
+ */
+export function syncHelbreathGameActiveClass(
+    classList?: { contains: (token: string) => boolean; add: (token: string) => void },
+): boolean {
+    const list = classList ?? (
+        typeof document !== 'undefined' ? document.body?.classList : undefined
+    );
+    if (!list || !list.contains(GAME_WORLD_ACTIVE_CLASS) || list.contains(HELBREATH_GAME_ACTIVE_CLASS)) {
+        return false;
+    }
+    list.add(HELBREATH_GAME_ACTIVE_CLASS);
+    return true;
+}
+
 export function createEmptyMovementKeys(): MovementKeyHold {
     return new Set();
 }
@@ -312,15 +330,11 @@ function onGlobalWalkVisibility(): void {
         onGlobalWalkBlur();
         return;
     }
-    // Tab discard/restore and Chrome freeze resume: drop a stale chord and
-    // free leftover hidden inputs so the next hold is heard without a click.
-    globalMovementKeys.clear();
-    blurStrayKeyboardTargets();
+    rearmKeyboardWalkAfterResume();
 }
 
 function onGlobalWalkPageShow(): void {
-    globalMovementKeys.clear();
-    blurStrayKeyboardTargets();
+    rearmKeyboardWalkAfterResume();
 }
 
 /**
@@ -341,6 +355,18 @@ export function installKeyboardWalkTracker(): void {
     window.addEventListener('blur', onGlobalWalkBlur);
     window.addEventListener('pageshow', onGlobalWalkPageShow);
     document.addEventListener('visibilitychange', onGlobalWalkVisibility);
+}
+
+/**
+ * Primary recover path after Chrome discard / reconnect / wallet unpark:
+ * tracker on, stale chord cleared, Phantom leftovers blurred, scene class synced.
+ * Does not require a canvas click.
+ */
+export function rearmKeyboardWalkAfterResume(): void {
+    installKeyboardWalkTracker();
+    globalMovementKeys.clear();
+    blurStrayKeyboardTargets();
+    syncHelbreathGameActiveClass();
 }
 
 export function getHeldWalkDirection(): Direction {

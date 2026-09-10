@@ -1,4 +1,5 @@
 import type { PhaserGameLike } from './phaserHubTypes';
+import { rearmKeyboardWalkAfterResume } from '../utils/keyboardMovement';
 
 /**
  * Parks leftover Phaser canvas while Phantom (or another wallet overlay) is open.
@@ -148,6 +149,9 @@ function unparkLiveCanvas(): void {
         }
     }
     loopWasSleeping = false;
+    // Discard → Phantom reconnect parks the loop; unpark must hear WASD
+    // again without a canvas click.
+    rearmKeyboardWalkAfterResume();
 }
 
 /**

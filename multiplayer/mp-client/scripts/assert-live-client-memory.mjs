@@ -262,10 +262,58 @@ assert(
         && !/noteMagiasMoveDuringPrepareHotkey/.test(wasdMoveFn),
     'WASD / arrows must not swallow keys or arm the move freeze from idle keydown',
 );
+const keyboardMovement = read('src/utils/keyboardMovement.ts');
+assert(
+    /directionFromMovementKeys/.test(keyboardMovement)
+        && /planKeyboardWalk/.test(keyboardMovement)
+        && /shouldAcceptKeyboardWalk/.test(keyboardMovement)
+        && /isTypingTarget/.test(keyboardMovement)
+        && /installKeyboardWalkTracker/.test(keyboardMovement)
+        && /getHeldWalkDirection/.test(keyboardMovement)
+        && !/stopImmediatePropagation/.test(keyboardMovement),
+    'Bare WASD must map keys to a walk destination without Phaser canvas focus',
+);
+const inputManagerTs = read('src/utils/InputManager.ts');
+assert(
+    /installKeyboardWalkTracker/.test(inputManagerTs)
+        && /getHeldWalkDirection/.test(inputManagerTs)
+        && !/stopImmediatePropagation/.test(inputManagerTs),
+    'InputManager must reuse the boot WASD tracker so a focused tab (not canvas) can walk',
+);
+assert(
+    /handleKeyboardMovement/.test(gameWorld)
+        && /planKeyboardWalk/.test(gameWorld)
+        && /shouldAcceptKeyboardWalk/.test(gameWorld),
+    'GameWorld must apply held WASD via setDestination',
+);
+assert(
+    /installKeyboardWalkTracker/.test(mainTsx),
+    'main.tsx must arm WASD tracking at boot so a hold through enter-world survives',
+);
+const setDestFn = playerTs.slice(
+    playerTs.indexOf('public override setDestination'),
+    playerTs.indexOf('public override cancelMovement'),
+);
+const movementGuard = setDestFn.slice(setDestFn.indexOf('Cast animation still freezes feet'));
+assert(
+    /this\.isCasting\(\)/.test(movementGuard)
+        && !/this\.isCastReady\(\)/.test(movementGuard),
+    'CastReady must accept WASD kite; only Cast animation freezes feet',
+);
+const onLeftClickFn = playerTs.slice(
+    playerTs.indexOf('public onLeftClickAt'),
+    playerTs.indexOf('public onSpellCastRejected'),
+);
+assert(
+    /PlayerState\.Cast/.test(onLeftClickFn)
+        && !/PlayerState\.CastReady/.test(onLeftClickFn),
+    'Soft-cast confirm after WASD kite must not require CastReady',
+);
 const pkgJson = read('package.json');
 assert(
-    /worldCanvasPoolGuard\.test\.ts/.test(pkgJson),
-    'test:map-stream must lock Missile-select world-canvas pool guard regressions',
+    /worldCanvasPoolGuard\.test\.ts/.test(pkgJson)
+        && /keyboardMovement\.test\.ts/.test(pkgJson),
+    'test:map-stream must lock Missile-select world-canvas pool guard and bare WASD mapping regressions',
 );
 const castDialogStore = read('src/ui/store/CastDialog.store.ts');
 assert(

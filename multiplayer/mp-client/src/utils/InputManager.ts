@@ -1,9 +1,13 @@
 import type { Scene } from 'phaser';
 import { EventBus } from '../game/EventBus';
-import { convertPixelPosToWorldPos } from './CoordinateUtils';
+import { convertPixelPosToWorldPos, Direction } from './CoordinateUtils';
 import { pointerWorldPixel } from './PointerUtils';
 import { MOVEMENT_COMMAND_THROTTLE_MS } from '../Config';
 import { OUT_UI_MOUSE_POSITION_UPDATE } from '../constants/EventNames';
+import {
+    getHeldWalkDirection,
+    installKeyboardWalkTracker,
+} from './keyboardMovement';
 
 export interface InputManagerConfig {
     scene: Scene;
@@ -20,9 +24,10 @@ export interface InputManagerConfig {
 }
 
 /**
- * Manages mouse/pointer input: tracks button state, pointer position, movement throttle,
- * and emits UI events. Game-specific logic (e.g. attack, movement, idle facing on right hold)
- * lives in the scene (e.g. GameWorld.handleRightMouseButton).
+ * Manages mouse/pointer input and tab-focused WASD / arrow holds.
+ * Keyboard state is tracked on `window` (not Phaser's canvas-focus plugin) so a
+ * focused tab can walk after enter-world without clicking the canvas first.
+ * Game-specific logic (attack, click-kite, keyboard walk apply) lives in GameWorld.
  */
 export class InputManager {
     private scene: Scene;
@@ -72,6 +77,8 @@ export class InputManager {
         if (gameCanvas) {
             gameCanvas.addEventListener('contextmenu', this.boundContextMenu);
         }
+        // Idempotent boot tracker — tab focus is enough (no canvas focus).
+        installKeyboardWalkTracker();
     }
 
     public destroy(): void {
@@ -128,6 +135,11 @@ export class InputManager {
     /** Resets the movement throttle so the next command is accepted immediately. */
     public resetMovementThrottle(): void {
         this.lastMovementCommandTime = 0;
+    }
+
+    /** Held WASD / arrow chord, or `Direction.None` when idle / cancelled. */
+    public getHeldWalkDirection(): Direction {
+        return getHeldWalkDirection();
     }
 
     private handlePointerMove(pointer: Phaser.Input.Pointer): void {

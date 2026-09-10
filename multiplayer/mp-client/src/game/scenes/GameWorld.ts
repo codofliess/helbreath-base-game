@@ -26,6 +26,11 @@ import {
     PLAYER_HOVER_OVERLAY_ANCHOR_OFFSET_Y,
 } from '../../Config';
 import { InputManager } from '../../utils/InputManager';
+import {
+    isTypingTarget,
+    planKeyboardWalk,
+    shouldAcceptKeyboardWalk,
+} from '../../utils/keyboardMovement';
 import { CameraManager } from '../../utils/CameraManager';
 import {
     getGameStateManager,
@@ -45,6 +50,7 @@ import { getMapIfPresent } from '../../utils/mapRegistry';
 import { getMusicManager } from '../../utils/musicManagerRegistry';
 import { cancelPlayerDialogPhaserNotificationDebouncers, playerDialogStore } from '../../ui/store/PlayerDialog.store';
 import { characterDialogStore } from '../../ui/store/CharacterDialog.store';
+import { chatDialogStore } from '../../ui/store/ChatDialog.store';
 import { MapManager } from '../../utils/MapManager';
 import { evictAllMapTileTextures, loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
@@ -457,6 +463,8 @@ export class GameWorld extends Scene {
     private worldTransferWatchdog: Phaser.Time.TimerEvent | undefined = undefined;
     /** While true, ignore left-click movement until the current confirm click has been released. */
     private suppressLeftMouseMovementUntilRelease = false;
+    /** True while a WASD / arrow chord is driving walk so release can cancel the leftover path. */
+    private keyboardWalkWasHeld = false;
     /** Spawn protection enabled for self before player was created (apply when player is created) */
     private pendingSpawnProtectionForSelf = false;
     /** Teleport lookup for the currently loaded world, keyed as "x,y". */
@@ -2803,6 +2811,7 @@ export class GameWorld extends Scene {
 
                 this.player.update(delta);
                 this.handleLeftMouseButton();
+                this.handleKeyboardMovement();
                 this.handleRightMouseButton();
                 this.cameraManager?.update();
                 // Camera fillRect(#000) is the WASD-mid-prepare wipe after #72.
@@ -3270,6 +3279,57 @@ export class GameWorld extends Scene {
                 inputManager.recordMovementCommand();
             }
         }
+    }
+
+    /**
+     * Tab-focused WASD / arrows → the same `setDestination` path as click-kite.
+     * Does not require Phaser canvas focus (that race left bare WASD dead after
+     * enter-world). LMB hold keeps click-kite. Magias select/confirm is click-only.
+     */
+    private handleKeyboardMovement(): void {
+        const inputManager = this.inputManager;
+        if (!inputManager || !this.player || this.loadingMap) {
+            return;
+        }
+        const accept = shouldAcceptKeyboardWalk({
+            gameActive: document.body.classList.contains('helbreath-game-active'),
+            typing: isTypingTarget(document.activeElement),
+            composeOpen: chatDialogStore.state.composeOpen,
+            leftMouseDown: inputManager.isLeftMouseDown(),
+        });
+        const direction = accept ? inputManager.getHeldWalkDirection() : Direction.None;
+        if (direction === Direction.None) {
+            if (this.keyboardWalkWasHeld) {
+                this.player.cancelMovement();
+                this.keyboardWalkWasHeld = false;
+            }
+            return;
+        }
+        this.keyboardWalkWasHeld = true;
+        if (!inputManager.canAcceptMovementCommand()) {
+            return;
+        }
+        const walk = planKeyboardWalk(
+            this.player.getWorldX(),
+            this.player.getWorldY(),
+            direction,
+            this.player.getAnimatedPixelX(),
+            this.player.getAnimatedPixelY(),
+        );
+        if (!walk) {
+            return;
+        }
+        this.player.clearAttackTarget();
+        this.player.setDestination(
+            walk.destX,
+            walk.destY,
+            true,
+            this.player.getAnimatedPixelX(),
+            this.player.getAnimatedPixelY(),
+            walk.cursorPixelX,
+            walk.cursorPixelY,
+        );
+        inputManager.recordMovementCommand();
     }
 
     private handleRightMouseButton(): void {
@@ -5182,6 +5242,7 @@ export class GameWorld extends Scene {
             }
             this.inputManager?.destroy();
             this.inputManager = undefined;
+            this.keyboardWalkWasHeld = false;
             if (this.updateInterval) {
                 clearInterval(this.updateInterval);
                 this.updateInterval = undefined;

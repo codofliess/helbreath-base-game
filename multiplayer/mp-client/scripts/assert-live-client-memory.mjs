@@ -869,13 +869,13 @@ assert(
     'GameWorld must not spawn/decode monsters or NPCs during map setup, and must evict sheets that leave view',
 );
 
-const effectTs = read('src/game/effects/Effect.ts');
+const effectOneShotTs = read('src/game/effects/Effect.ts');
 const fireStrikeTs = read('src/game/spells/FireStrike.ts');
 const effectLiveCap = read('src/utils/effectLiveCap.ts');
 assert(
     /MAX_LIVE_ONESHOT_EFFECTS = 24/.test(effectLiveCap) &&
-        /tryAcquireOneShotEffectSlot/.test(effectTs) &&
-        /releaseOneShotEffectSlot/.test(effectTs) &&
+        /tryAcquireOneShotEffectSlot/.test(effectOneShotTs) &&
+        /releaseOneShotEffectSlot/.test(effectOneShotTs) &&
         /isPhaserSceneActive/.test(fireStrikeTs),
     'Fire Strike farm VFX must cap live one-shots and skip delayed explosions after scene.restart',
 );

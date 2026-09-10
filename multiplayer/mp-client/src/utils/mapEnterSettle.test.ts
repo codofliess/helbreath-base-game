@@ -20,6 +20,7 @@ import {
     shouldAbortEnterExpandForWalk,
     shouldDeferHeavyEnterDecode,
     shouldSkipEnterHeavyCascade,
+    shouldSkipEnterPaperDollCapture,
     ENTER_FROM_COMPACT_INTERIOR_REGISTRY_KEY,
     markEnterFromCompactInterior,
     takeEnterFromCompactInterior,
@@ -77,6 +78,41 @@ describe('mapEnterSettle', () => {
         );
     });
 
+    it('skips paper-doll toDataURL on Tower enter and post-Tower city load', () => {
+        assert.equal(
+            shouldSkipEnterPaperDollCapture({
+                loadingMap: false,
+                compactInterior: false,
+                enterFromCompactInterior: false,
+            }),
+            false,
+        );
+        assert.equal(
+            shouldSkipEnterPaperDollCapture({
+                loadingMap: true,
+                compactInterior: false,
+                enterFromCompactInterior: false,
+            }),
+            true,
+        );
+        assert.equal(
+            shouldSkipEnterPaperDollCapture({
+                loadingMap: false,
+                compactInterior: true,
+                enterFromCompactInterior: false,
+            }),
+            true,
+        );
+        assert.equal(
+            shouldSkipEnterPaperDollCapture({
+                loadingMap: false,
+                compactInterior: false,
+                enterFromCompactInterior: true,
+            }),
+            true,
+        );
+    });
+
     it('aborts the enter-ring object dump once the player leaves the door cell', () => {
         assert.equal(shouldAbortEnterExpandForWalk(true), false);
         assert.equal(shouldAbortEnterExpandForWalk(false), true);
@@ -116,6 +152,7 @@ describe('mapEnterSettle', () => {
         assert.match(gameWorldSrc, /shouldDeferHeavyEnterDecode/);
         assert.match(gameWorldSrc, /shouldSkipEnterHeavyCascade/);
         assert.match(gameWorldSrc, /shouldAbortEnterExpandForWalk/);
+        assert.match(gameWorldSrc, /shouldSkipEnterPaperDollCapture/);
         assert.match(gameWorldSrc, /markEnterFromCompactInterior/);
         assert.match(gameWorldSrc, /takeEnterFromCompactInterior/);
         assert.match(gameWorldSrc, /enterCompactInterior/);

@@ -86,6 +86,7 @@ import {
     shouldAbortEnterExpandForWalk,
     shouldDeferHeavyEnterDecode,
     shouldSkipEnterHeavyCascade,
+    shouldSkipEnterPaperDollCapture,
     takeEnterFromCompactInterior,
 } from '../../utils/mapEnterSettle';
 import { MapWarpSystem } from '../systems/MapWarpSystem';
@@ -838,6 +839,15 @@ export class GameWorld extends Scene {
         EventBus.on(IN_UI_CHANGE_HAIR_STYLE, this.syncPlayerAppearanceHandler);
 
         subscribeSafe('GameWorld', IN_UI_PAPERDOLL_CAPTURE, () => {
+            if (
+                shouldSkipEnterPaperDollCapture({
+                    loadingMap: this.loadingMap,
+                    compactInterior: this.enterCompactInterior,
+                    enterFromCompactInterior: this.enterFromCompactInterior,
+                })
+            ) {
+                return;
+            }
             try {
                 const inv = getInventoryManager(this.game);
                 runPaperDollCapture(this as never, {
@@ -2600,11 +2610,16 @@ export class GameWorld extends Scene {
      */
     private setupMap(map: HBMap): void {
         this.displayedMap = map;
+        this.enterCompactInterior = shouldSkipEnterHeavyCascade({
+            sizeX: map.sizeX,
+            sizeY: map.sizeY,
+            worldId: this.gameWorldId,
+            mapName: map.fileName,
+        });
         // Now initialize game objects (player, NPCs, etc.)
         this.initializeGameObjects();
-        // Do not recapture paper-doll here — runDeferredMapLoad already emitted one,
-        // and Player construction queues another. A third toDataURL on Tower sit
-        // stacks with the T+16 gear dump (Chile discard at elvwzdtwr 43,34).
+        // No paper-doll emit here. Tower / post-Tower city skip toDataURL
+        // (login idle does not discard; world enter does).
 
         // Apply camera zoom AFTER minimap snapshot has been taken
         // This ensures the zoom is applied to the main camera, not the minimap snapshot camera
@@ -2643,12 +2658,6 @@ export class GameWorld extends Scene {
         this.pendingEnterCameraZoom = cameraZoom;
         this.heavyEnterDecodeStarted = false;
         this.hudSpritesLoadStarted = false;
-        this.enterCompactInterior = shouldSkipEnterHeavyCascade({
-            sizeX: map.sizeX,
-            sizeY: map.sizeY,
-            worldId: this.gameWorldId,
-            mapName: map.fileName,
-        });
         this.mapExpandAfterFirstPaint = this.expandMapAfterFirstPaint();
         // Saved zoom-out enlarges the camera frustum; keep zoom 1 until idle settle.
         this.scheduleEnterSettle(MAP_ENTER_MONSTER_SYNC_MS, () => {
@@ -3191,6 +3200,8 @@ export class GameWorld extends Scene {
                 // Walk restream (ground+objects) must not wait for the 10s tree pass —
                 // city streets → slime pit after Gandalf would keep the enter window.
                 this.mapStreamWalkEnabled = true;
+                // F5 paper-doll may run again after the post-Tower settle.
+                this.enterFromCompactInterior = false;
             }
         }
     }
@@ -3346,7 +3357,12 @@ export class GameWorld extends Scene {
                 underwearColorIndex: playerDialogStore.state.underwearColorIndex,
             });
             this.noteMapSetupProgress();
-            EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+            if (
+                !this.enterFromCompactInterior &&
+                !isWizardTowerMap(this.gameWorldId, this.mapManager?.getCurrentMapName())
+            ) {
+                EventBus.emit(IN_UI_PAPERDOLL_CAPTURE);
+            }
 
             this.noteMapSetupProgress();
             await waitMs(120);

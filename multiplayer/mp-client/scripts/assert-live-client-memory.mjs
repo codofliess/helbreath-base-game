@@ -850,6 +850,7 @@ assert(
         /standingAtEnterFocus/.test(mapEnterSettle) &&
         /shouldSkipEnterHeavyCascade/.test(mapEnterSettle) &&
         /shouldAbortEnterExpandForWalk/.test(mapEnterSettle) &&
+        /shouldSkipEnterPaperDollCapture/.test(mapEnterSettle) &&
         /markEnterFromCompactInterior/.test(mapEnterSettle) &&
         /isCompactInteriorMap/.test(mapEnterSettle) &&
         /COMPACT_INTERIOR_MAX_SIZE_TILES = 100/.test(mapEnterSettle),
@@ -867,6 +868,7 @@ assert(
         /shouldDeferHeavyEnterDecode/.test(gameWorld) &&
         /shouldSkipEnterHeavyCascade/.test(gameWorld) &&
         /shouldAbortEnterExpandForWalk/.test(gameWorld) &&
+        /shouldSkipEnterPaperDollCapture/.test(gameWorld) &&
         /enterFromCompactInterior/.test(gameWorld) &&
         /enterCompactInterior/.test(gameWorld) &&
         /standingAtEnterFocus/.test(gameWorld) &&

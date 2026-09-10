@@ -108,6 +108,18 @@ export function takeEnterFromCompactInterior(registry: {
     return flagged;
 }
 
+/**
+ * Login idle does not discard. Paper-doll toDataURL on Tower / post-Tower city
+ * enter is the Elvine F5 OOM path — skip until the map settle finishes.
+ */
+export function shouldSkipEnterPaperDollCapture(input: {
+    loadingMap: boolean;
+    compactInterior: boolean;
+    enterFromCompactInterior: boolean;
+}): boolean {
+    return input.loadingMap || input.compactInterior || input.enterFromCompactInterior;
+}
+
 /** True when an async expand/tree/prefetch closure belongs to a previous scene.restart. */
 export function isStaleMapLoad(currentGeneration: number, expectedGeneration: number): boolean {
     return currentGeneration !== expectedGeneration;

@@ -433,6 +433,7 @@ public static class Casting {
         var aoeRadius = Math.Max(0, spell.AoeRadius ?? 0);
         var tickRateMs = spell.TickRate;
         var resolvedAttackType = ResolveSpellAttackType(spell);
+        var damagePerTick = ScaleGroundEffectDamage(caster.Damage, wr.Settings.GroundEffectDamageFactor);
         var createdEffects = new List<GroundEffectState>();
         var minX = Math.Max(0, targetX - aoeRadius);
         var minY = Math.Max(0, targetY - aoeRadius);
@@ -453,7 +454,7 @@ public static class Casting {
                         group,
                         tickRateMs,
                         durationMs,
-                        caster.Damage,
+                        damagePerTick,
                         resolvedAttackType,
                         out var createdEffect) ||
                     createdEffect is null) {
@@ -467,6 +468,23 @@ public static class Casting {
         if (createdEffects.Count > 0) {
             GroundStateVisibility.BroadcastGroundEffectsCreated(wr, createdEffects);
         }
+    }
+
+    /// <summary>
+    /// Scales caster damage for ground-effect ticks and step-on hits.
+    /// Direct spells keep using unscaled <see cref="GameWorldPlayer.Damage"/>.
+    /// </summary>
+    private static int ScaleGroundEffectDamage(int fullDamage, double factor) {
+        if (fullDamage <= 0) {
+            return 1;
+        }
+
+        var scaled = (long)Math.Round(fullDamage * factor, MidpointRounding.AwayFromZero);
+        if (scaled < 1) {
+            return 1;
+        }
+
+        return scaled > int.MaxValue ? int.MaxValue : (int)scaled;
     }
 
     /// <summary>Resolves the visual/gameplay ground-effect kind created by this spell.</summary>

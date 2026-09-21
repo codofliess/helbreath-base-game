@@ -668,6 +668,11 @@ public static class Config {
         if (tm.AntiHackTimingLagFactor < 0 || tm.AntiHackTimingLagFactor > 1) {
             throw new ArgumentOutOfRangeException(nameof(tm.AntiHackTimingLagFactor), "Anti-hack timing lag factor must be between zero and one inclusive.");
         }
+        if (settings.GroundEffectDamageFactor <= 0 || settings.GroundEffectDamageFactor > 1) {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings.GroundEffectDamageFactor),
+                "Ground-effect damage factor must be greater than zero and at most one.");
+        }
         return settings;
     }
 }
@@ -755,7 +760,7 @@ public record SpellTimedEffectSpec(
     double? CastSpeedModifier = null);
 
 /// <summary>Server-authoritative spell catalog entry loaded from <c>Spells.json</c>.</summary>
-/// <remarks>For <see cref="DamageType.LinearAoe"/>, <c>projectileSpeed</c> is optional (omitted when the server does not need travel-time delay for damage; clients may use it for visuals when set). For <see cref="DamageType.SingleCell"/>, omit <c>aoeRadius</c> and <c>duration</c>; damage resolves immediately on cast. For <see cref="DamageType.GroundEffect"/>, define <c>group</c> and <c>duration</c>; <c>tickRate</c> is optional and, when set, makes the effect deal periodic damage. When <c>tickRate</c> is omitted, the effect is step-on-only until expiry. <c>aoeRadius</c> is optional and expands placement around the target cell. For <see cref="DamageType.RectangleAoe"/> with projectile-delayed damage, when <c>projectileDistance</c> is set, travel time uses that fixed pixel distance instead of caster-to-target distance. Optional <c>attackType</c> matches <see cref="AttackType"/> (default <see cref="AttackType.Interrupt"/> when omitted). <see cref="DamageType.GroundEffect"/> with <see cref="AttackType.Knockback"/> is applied as <see cref="AttackType.Stun"/> using the caster&apos;s <c>attackStunDuration</c>. Buff-only spells omit <c>damageType</c> and use <c>temporaryEffects</c> (Invisibility). Damage spells may list <c>temporaryEffects</c> for on-hit debuffs (e.g. Chill). For <see cref="DamageType.GroundEffect"/>, those debuffs apply each time damage is delivered (each periodic tick or step-on hit), subject to group stacking rules.</remarks>
+/// <remarks>For <see cref="DamageType.LinearAoe"/>, <c>projectileSpeed</c> is optional (omitted when the server does not need travel-time delay for damage; clients may use it for visuals when set). For <see cref="DamageType.SingleCell"/>, omit <c>aoeRadius</c> and <c>duration</c>; damage resolves immediately on cast. For <see cref="DamageType.GroundEffect"/>, define <c>group</c> and <c>duration</c>; <c>tickRate</c> is optional and, when set, makes the effect deal periodic damage. When <c>tickRate</c> is omitted, the effect is step-on-only until expiry. Ground-effect damage uses <see cref="SettingsConfig.GroundEffectDamageFactor"/> of the caster&apos;s full damage; rectangle/cone/linear/single-cell spells are unscaled. <c>aoeRadius</c> is optional and expands placement around the target cell. For <see cref="DamageType.RectangleAoe"/> with projectile-delayed damage, when <c>projectileDistance</c> is set, travel time uses that fixed pixel distance instead of caster-to-target distance. Optional <c>attackType</c> matches <see cref="AttackType"/> (default <see cref="AttackType.Interrupt"/> when omitted). <see cref="DamageType.GroundEffect"/> with <see cref="AttackType.Knockback"/> is applied as <see cref="AttackType.Stun"/> using the caster&apos;s <c>attackStunDuration</c>. Buff-only spells omit <c>damageType</c> and use <c>temporaryEffects</c> (Invisibility). Damage spells may list <c>temporaryEffects</c> for on-hit debuffs (e.g. Chill). For <see cref="DamageType.GroundEffect"/>, those debuffs apply each time damage is delivered (each periodic tick or step-on hit), subject to group stacking rules.</remarks>
 public record SpellConfig(
     int Id,
     string Name,
@@ -848,7 +853,7 @@ public record MonsterDefaultsConfig(
     int RespawnTime = 3000);
 
 /// <summary>Runtime tuning for networking, visibility, tick rate, spawn, and anti-cheat checks.</summary>
-/// <remarks><see cref="Port"/> is the HTTP listener port (all interfaces). <see cref="MonsterDefaults"/> (<see cref="MonsterDefaultsConfig"/>) supplies server-wide monster catalog fallbacks. <see cref="MonsterDefaultsConfig.ChaseMaxDistance"/> when <see langword="null"/> applies no max-follow default for omitted catalog <c>chaseMaxDistance</c>. <see cref="Radius"/> (<see cref="RadiusConfig"/>) defines visibility view radii and camera-bounded spell targets.</remarks>
+/// <remarks><see cref="Port"/> is the HTTP listener port (all interfaces). <see cref="MonsterDefaults"/> (<see cref="MonsterDefaultsConfig"/>) supplies server-wide monster catalog fallbacks. <see cref="MonsterDefaultsConfig.ChaseMaxDistance"/> when <see langword="null"/> applies no max-follow default for omitted catalog <c>chaseMaxDistance</c>. <see cref="Radius"/> (<see cref="RadiusConfig"/>) defines visibility view radii and camera-bounded spell targets. <see cref="GroundEffectDamageFactor"/> scales ground-effect tick/step-on damage only.</remarks>
 public record SettingsConfig(
     int Port,
     TimingsConfig Timings,
@@ -871,4 +876,6 @@ public record SettingsConfig(
     /// <summary>When true, serialize outbound protobuf with <c>MessageExtensions.WriteTo(Span&lt;byte&gt;)</c> instead of <see cref="System.IO.MemoryStream"/> + <see cref="Google.Protobuf.CodedOutputStream"/>; JSON <c>enableZeroCopyProtobufTransfer</c> in <c>Settings.json</c>. Produces less garbage, but in benchmarks reduces throughput versus the stream path.</summary>
     bool EnableZeroCopyProtobufTransfer = false,
     /// <summary>After this many consecutive outbound encode/send failures (excluding cancellation), cancel the connection receive loop. Zero disables the circuit breaker. JSON <c>maxConsecutiveOutboundSendFailures</c>.</summary>
-    int MaxConsecutiveOutboundSendFailures = 10);
+    int MaxConsecutiveOutboundSendFailures = 10,
+    /// <summary>Multiplier applied to caster <see cref="Server.World.Game.GameWorldPlayer.Damage"/> when placing ground-effect ticks/step-on hits (Fire Field, Poison Cloud, Spike Field, Ice Storm). Direct spells still use full damage. JSON <c>groundEffectDamageFactor</c>.</summary>
+    double GroundEffectDamageFactor = 0.3);

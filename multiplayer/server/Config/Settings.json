@@ -10,6 +10,7 @@
   "maxDroppedItemsInStack": 10,
   "enableZeroCopyProtobufTransfer": false,
   "maxConsecutiveOutboundSendFailures": 10,
+  "groundEffectDamageFactor": 0.3,
   "enableMessagePriorityQueue": true,
   "threads": {
     "gameWorldWorkers": 1,

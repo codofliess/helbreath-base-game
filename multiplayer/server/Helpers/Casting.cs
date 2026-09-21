@@ -936,8 +936,12 @@ public static class Casting {
                     continue;
                 }
 
-                // Snapshot Olympia magic damage at cast (not melee STR / caster.Damage).
-                var groundDamage = PlayerDerivedStats.RollMagicDamage(caster, spell);
+                // Snapshot Olympia magic damage at cast, then scale for ground hazards (direct spells unscaled).
+                var groundDamage = ScaleGroundEffectDamage(
+                    
+PlayerDerivedStats.RollMagicDamage(caster, spell),
+                    
+wr.Settings.GroundEffectDamageFactor);
                 if (!wr.GroundStateTracker.TryAddEffect(
                         spell.Id,
                         ResolveGroundEffectType(spell),
@@ -963,6 +967,23 @@ public static class Casting {
         }
     }
 
+
+    /// <summary>
+    /// Scales magic roll for ground-effect ticks and step-on hits.
+    /// Direct spells keep using unscaled <see cref="PlayerDerivedStats.RollMagicDamage"/>.
+    /// </summary>
+    private static int ScaleGroundEffectDamage(int fullDamage, double factor) {
+        if (fullDamage <= 0) {
+            return 1;
+        }
+
+        var scaled = (long)Math.Round(fullDamage * factor, MidpointRounding.AwayFromZero);
+        if (scaled < 1) {
+            return 1;
+        }
+
+        return scaled > int.MaxValue ? int.MaxValue : (int)scaled;
+    }
     /// <summary>Resolves the visual/gameplay ground-effect kind created by this spell.</summary>
     private static GroundEffectType ResolveGroundEffectType(SpellConfig spell) {
         return spell.Id switch {

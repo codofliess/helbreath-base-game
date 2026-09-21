@@ -1254,4 +1254,6 @@ public record SettingsConfig(
     /// Single WebSocket dual outbound queues: combat/movement/vitals before chat/auction/warehouse.
     /// Rollback: set <c>enableMessagePriorityQueue</c> false in Settings.json and restart.
     /// </summary>
-    bool EnableMessagePriorityQueue = true);
+    bool EnableMessagePriorityQueue = true,
+    /// <summary>Multiplier for ground-effect tick/step-on damage only (Fire Field, Poison Cloud, Spike Field, Ice Storm). Direct spells use full RollMagicDamage. JSON <c>groundEffectDamageFactor</c>.</summary>
+    double GroundEffectDamageFactor = 0.3);

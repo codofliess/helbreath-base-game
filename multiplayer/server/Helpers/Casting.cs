@@ -925,6 +925,10 @@ public static class Casting {
         var aoeRadius = Math.Max(0, spell.AoeRadius ?? 0);
         var tickRateMs = spell.TickRate;
         var resolvedAttackType = ResolveSpellAttackType(spell);
+        // Snapshot Olympia magic damage once at cast (not melee STR / caster.Damage), then scale ticks.
+        var groundDamage = ScaleGroundEffectDamage(
+            PlayerDerivedStats.RollMagicDamage(caster, spell),
+            wr.Settings.GroundEffectDamageFactor);
         var createdEffects = new List<GroundEffectState>();
         var minX = Math.Max(0, targetX - aoeRadius);
         var minY = Math.Max(0, targetY - aoeRadius);
@@ -936,8 +940,6 @@ public static class Casting {
                     continue;
                 }
 
-                // Snapshot Olympia magic damage at cast (not melee STR / caster.Damage).
-                var groundDamage = PlayerDerivedStats.RollMagicDamage(caster, spell);
                 if (!wr.GroundStateTracker.TryAddEffect(
                         spell.Id,
                         ResolveGroundEffectType(spell),
@@ -961,6 +963,23 @@ public static class Casting {
         if (createdEffects.Count > 0) {
             GroundStateVisibility.BroadcastGroundEffectsCreated(wr, createdEffects);
         }
+    }
+
+    /// <summary>
+    /// Scales Olympia magic damage for ground-effect ticks and step-on hits.
+    /// Direct spells keep using unscaled <see cref="PlayerDerivedStats.RollMagicDamage"/>.
+    /// </summary>
+    private static int ScaleGroundEffectDamage(int fullDamage, double factor) {
+        if (fullDamage <= 0) {
+            return 1;
+        }
+
+        var scaled = (long)Math.Round(fullDamage * factor, MidpointRounding.AwayFromZero);
+        if (scaled < 1) {
+            return 1;
+        }
+
+        return scaled > int.MaxValue ? int.MaxValue : (int)scaled;
     }
 
     /// <summary>Resolves the visual/gameplay ground-effect kind created by this spell.</summary>

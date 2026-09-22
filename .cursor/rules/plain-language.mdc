@@ -1,0 +1,13 @@
+---
+description: Hablarle al usuario en castellano claro, sin amontonar siglas.
+alwaysApply: true
+---
+
+# Lenguaje claro
+
+Cuando el usuario escribe en castellano, responder en castellano.
+
+- Frases completas. Una idea por párrafo corto.
+- Primero decir qué es la cosa, en palabras. El número de ticket, el cambio o el nombre de rama va después, y solo si hace falta para abrirlo.
+- Un estado tiene tres partes: qué está hecho, qué falta, y quién hace el próximo paso.
+- No amontonar siglas, tickets, hashes y roles en el mismo bloque.

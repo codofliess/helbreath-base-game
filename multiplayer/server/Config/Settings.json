@@ -11,6 +11,7 @@
   "enableZeroCopyProtobufTransfer": false,
   "maxConsecutiveOutboundSendFailures": 10,
   "enableMessagePriorityQueue": true,
+  "groundEffectDamageFactor": 0.3,
   "threads": {
     "gameWorldWorkers": 1,
     "globalWorldWorkerThread": 0

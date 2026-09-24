@@ -281,6 +281,8 @@ export interface LogoutCancelledRequest {
 export interface AuthenticateRequest {
   id: string;
   characterName: string;
+  /** Set only by the PLAYTEST door. Live clients omit it; the live server does not read it. */
+  authToken?: string | undefined;
 }
 
 export interface LogoutRequest {
@@ -3738,7 +3740,7 @@ export const LogoutCancelledRequest: MessageFns<LogoutCancelledRequest> = {
 };
 
 function createBaseAuthenticateRequest(): AuthenticateRequest {
-  return { id: "", characterName: "" };
+  return { id: "", characterName: "", authToken: undefined };
 }
 
 export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
@@ -3748,6 +3750,9 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     }
     if (message.characterName !== "") {
       writer.uint32(18).string(message.characterName);
+    }
+    if (message.authToken !== undefined) {
+      writer.uint32(26).string(message.authToken);
     }
     return writer;
   },
@@ -3775,6 +3780,14 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
           message.characterName = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.authToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3791,6 +3804,7 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     const message = createBaseAuthenticateRequest();
     message.id = object.id ?? "";
     message.characterName = object.characterName ?? "";
+    message.authToken = object.authToken ?? undefined;
     return message;
   },
 };

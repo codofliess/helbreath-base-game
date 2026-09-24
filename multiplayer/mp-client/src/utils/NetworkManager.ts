@@ -451,7 +451,10 @@ export class NetworkManager {
         >
         | undefined;
 
-    constructor(private readonly networkId: string) {
+    constructor(
+        private readonly networkId: string,
+        private readonly authToken?: string,
+    ) {
     }
 
     public connect(ip: string, port: number, characterName: string): Promise<void> {
@@ -1115,6 +1118,7 @@ export class NetworkManager {
                 value: {
                     id: this.networkId,
                     characterName: this.authenticateCharacterName,
+                    ...(this.authToken ? { authToken: this.authToken } : {}),
                 },
             },
         }).finish();

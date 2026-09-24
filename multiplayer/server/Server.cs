@@ -8,6 +8,7 @@ using Google.Protobuf;
 using Microsoft.Extensions.Hosting;
 using Mmorpg.Network;
 using Server;
+using Server.Helpers;
 using Server.World;
 using Server.World.Game;
 using Server.World.Global;
@@ -25,6 +26,8 @@ try {
 } catch (InvalidOperationException ex) {
     Console.Error.WriteLine($"[Server] Failed to enable sustained low-latency GC mode: {ex.Message}");
 }
+
+PlaytestMode.ThrowIfUnsafeConfiguration();
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -49,7 +52,7 @@ var itemsById = Config.BuildItemCatalog(itemsConfig);
 var npcsConfig = await Config.LoadNpcsConfig();
 var npcsById = Config.BuildNpcCatalog(npcsConfig);
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
-var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -131,6 +134,12 @@ app.UseWebSockets();
 
 // Per-connection state machine: authenticate → route binary ClientMessage to GameWorld; teardown notifies world and drains send queue.
 app.Map("/ws", async context => {
+    if (PlaytestMode.IsEnabled && !PlaytestMode.IsLoopback(context.Connection.RemoteIpAddress)) {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync("Playtest door accepts loopback clients only.");
+        return;
+    }
+
     if (!context.WebSockets.IsWebSocketRequest) {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         await context.Response.WriteAsync("Expected a WebSocket request.");
@@ -232,6 +241,7 @@ app.Map("/ws", async context => {
                 if (!TryAuthenticatePlayer(
                     clientMessage.AuthenticateRequest.Id,
                     clientMessage.AuthenticateRequest.CharacterName,
+                    clientMessage.AuthenticateRequest.HasAuthToken ? clientMessage.AuthenticateRequest.AuthToken : null,
                     webSocket,
                     initialGameWorldId,
                     sessionsByNetworkId,
@@ -398,7 +408,10 @@ app.Map("/ws", async context => {
     }
 });
 
-await app.RunAsync($"http://0.0.0.0:{settings.Port}");
+var listenUrl = PlaytestMode.IsEnabled
+    ? PlaytestMode.ListenUrl
+    : $"http://0.0.0.0:{settings.Port}";
+await app.RunAsync(listenUrl);
 disconnectedPlayerCleanupCts.Cancel();
 worldTransferCts.Cancel();
 try {
@@ -418,6 +431,7 @@ gcMonitor?.Dispose();
 static bool TryAuthenticatePlayer(
     string networkId,
     string characterName,
+    string? authToken,
     WebSocket webSocket,
     string initialGameWorldId,
     ConcurrentDictionary<string, PlayerSession> sessionsByNetworkId,
@@ -435,7 +449,15 @@ static bool TryAuthenticatePlayer(
     }
 
     var trimmedCharacterName = characterName.Trim();
-    if (string.IsNullOrEmpty(trimmedCharacterName)) {
+    if (PlaytestMode.IsEnabled) {
+        if (!PlaytestMode.TryValidate(networkId, authToken, out var seat, out errorMessage)) {
+            return false;
+        }
+        if (!string.Equals(trimmedCharacterName, seat.CharacterName, StringComparison.Ordinal)) {
+            errorMessage = "Playtest character name does not match the seat.";
+            return false;
+        }
+    } else if (string.IsNullOrEmpty(trimmedCharacterName)) {
         errorMessage = "Character name is required.";
         return false;
     }

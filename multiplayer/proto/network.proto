@@ -261,6 +261,8 @@ message LogoutCancelledRequest {
 message AuthenticateRequest {
   string id = 1;
   string character_name = 2;
+  // Set only by the PLAYTEST door. Live clients omit it; the live server does not read it.
+  optional string auth_token = 3;
 }
 
 message LogoutRequest {

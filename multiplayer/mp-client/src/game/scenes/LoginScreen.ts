@@ -24,6 +24,13 @@ import { NetworkManager } from '../../utils/NetworkManager';
 import type { InitialGameWorldStateEventData } from '../../Types';
 import { setConnectingDialogOpen } from '../../ui/store/ConnectingDialog.store';
 import { openConnectDialogForLogin, setConnectDialogOpen } from '../../ui/store/ConnectDialog.store';
+import {
+    getPlaytestSeat,
+    isPlaytestClient,
+    PLAYTEST_AUTH_TOKEN,
+    PLAYTEST_GAME_HOST,
+    PLAYTEST_GAME_PORT,
+} from '../../playtest/playtestMode';
 
 /**
  * Login screen scene. Displays title and opens the Connect dialog to join the server.
@@ -89,7 +96,10 @@ export class LoginScreen extends Scene {
         drawAppTitle(this);
 
         const gsm = getGameStateManager(this.game);
-        openConnectDialogForLogin(gsm.getCharacterName() ?? '');
+        const playtest = isPlaytestClient();
+        if (!playtest) {
+            openConnectDialogForLogin(gsm.getCharacterName() ?? '');
+        }
 
             const handleConnectToServer = async (payload: ConnectToServerPayload) => {
             if (this.isConnecting) {
@@ -121,7 +131,7 @@ export class LoginScreen extends Scene {
                 this.pendingInitialGameWorldStateListener = undefined;
                 this.isConnecting = false;
                 setConnectingDialogOpen(false);
-                gsm.setCharacterName(payload.characterName);
+                gsm.setCharacterName(characterName);
                 setInitialGameWorldState(this.game, {
                     gameWorldId: data.gameWorldId,
                     mapName: `${data.mapName}.amd`,
@@ -161,11 +171,18 @@ export class LoginScreen extends Scene {
             this.pendingInitialGameWorldStateListener = handleInitialGameWorldStateReceived;
             EventBus.once(INITIAL_GAME_WORLD_STATE_RECEIVED, handleInitialGameWorldStateReceived);
 
-            const networkManager = new NetworkManager(gsm.getNetworkId());
+            const playtestSeat = isPlaytestClient() ? getPlaytestSeat() : undefined;
+            const characterName = playtestSeat ? playtestSeat.characterName : payload.characterName;
+            const host = playtestSeat ? PLAYTEST_GAME_HOST : payload.host;
+            const port = playtestSeat ? PLAYTEST_GAME_PORT : payload.port;
+            const networkManager = new NetworkManager(
+                playtestSeat ? playtestSeat.accountId : gsm.getNetworkId(),
+                playtestSeat ? PLAYTEST_AUTH_TOKEN : undefined,
+            );
             setNetworkManager(this.game, networkManager);
 
             try {
-                await networkManager.connect(payload.host, payload.port, payload.characterName);
+                await networkManager.connect(host, port, characterName);
                 this.loginPendingDisconnectHandler = handleSocketDisconnectedDuringLogin;
                 EventBus.on(SOCKET_DISCONNECTED, handleSocketDisconnectedDuringLogin);
             } catch (error) {
@@ -181,6 +198,15 @@ export class LoginScreen extends Scene {
 
         this.connectToServerHandler = handleConnectToServer;
         EventBus.on(IN_UI_CONNECT_TO_SERVER, handleConnectToServer);
+
+        if (playtest) {
+            const seat = getPlaytestSeat();
+            EventBus.emit(IN_UI_CONNECT_TO_SERVER, {
+                host: PLAYTEST_GAME_HOST,
+                port: PLAYTEST_GAME_PORT,
+                characterName: seat.characterName,
+            });
+        }
 
         const queuePrefetch = (prefetch: PlayerItemAppearancePrefetchEventData) => {
             appendPendingPlayerItemAppearancePrefetch(this.game, prefetch.spriteNames);

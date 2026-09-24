@@ -488,6 +488,7 @@ public sealed class GameWorld : IWorkerWorld {
         if (connectedMessage.PersistedState is not null) {
             player.ApplyPersistedState(connectedMessage.PersistedState);
         }
+        PlaytestQaKit.ApplyIfFresh(player, connectedMessage.PersistedState is null);
         Console.WriteLine($"[GameWorld:{id}] Player connected. Players on world: {playersBySessionId.Count}");
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: true);
     }

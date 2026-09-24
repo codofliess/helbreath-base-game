@@ -5,6 +5,13 @@ import { RpgButton } from '../components/RpgButton';
 import { EventBus } from '../../game/EventBus';
 import { IN_UI_CONNECT_TO_SERVER, TOAST_REQUESTED } from '../../constants/EventNames';
 import { connectDialogStore, setConnectDialogOpen, setLastConnectAttempt } from '../store/ConnectDialog.store';
+import {
+    getPlaytestSeat,
+    isPlaytestClient,
+    isPlaytestGmClient,
+    PLAYTEST_GAME_HOST,
+    PLAYTEST_GAME_PORT,
+} from '../../playtest/playtestMode';
 
 const inputStyle: CSSProperties = {
     width: '100%',
@@ -31,12 +38,20 @@ export function ConnectDialog({
     onBringToFront,
 }: ConnectDialogProps) {
     const { isOpen, defaultCharacterName, lastAttempt } = useStore(connectDialogStore, (s) => s);
+    const playtest = isPlaytestClient();
     const [characterName, setCharacterName] = useState('');
     const [host, setHost] = useState('localhost');
     const [portText, setPortText] = useState('1337');
 
     useEffect(() => {
         if (!isOpen) {
+            return;
+        }
+        if (playtest) {
+            const seat = getPlaytestSeat();
+            setCharacterName(seat.characterName);
+            setHost(PLAYTEST_GAME_HOST);
+            setPortText(String(PLAYTEST_GAME_PORT));
             return;
         }
         const init = lastAttempt ?? {
@@ -47,25 +62,26 @@ export function ConnectDialog({
         setCharacterName(init.characterName);
         setHost(init.host);
         setPortText(String(init.port));
-    }, [isOpen, defaultCharacterName, lastAttempt]);
+    }, [isOpen, defaultCharacterName, lastAttempt, playtest]);
 
     const handleConnect = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const trimmedName = characterName.trim();
+        const seat = playtest ? getPlaytestSeat() : undefined;
+        const trimmedName = seat ? seat.characterName : characterName.trim();
+        const trimmedHost = seat ? PLAYTEST_GAME_HOST : host.trim();
+        const portNum = seat ? PLAYTEST_GAME_PORT : Number.parseInt(portText.trim(), 10);
         if (trimmedName.length === 0) {
             EventBus.emit(TOAST_REQUESTED, { message: 'Character name is required.', severity: 'warning' });
             return;
         }
 
-        const trimmedHost = host.trim();
         if (trimmedHost.length === 0) {
             EventBus.emit(TOAST_REQUESTED, { message: 'Host is required.', severity: 'warning' });
             return;
         }
 
-        const portNum = Number.parseInt(portText.trim(), 10);
         if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
             EventBus.emit(TOAST_REQUESTED, { message: 'Port must be a number from 1 to 65535.', severity: 'warning' });
             return;
@@ -119,8 +135,14 @@ export function ConnectDialog({
                         onChange={(ev) => setCharacterName(ev.target.value)}
                         style={inputStyle}
                         autoComplete="username"
+                        readOnly={playtest}
                     />
                 </label>
+                {playtest && (
+                    <div>
+                        {isPlaytestGmClient() ? 'GM' : 'Traveler'} · {getPlaytestSeat().agentLabel} · {getPlaytestSeat().accountId}
+                    </div>
+                )}
                 <label>
                     Host
                     <input
@@ -129,6 +151,7 @@ export function ConnectDialog({
                         onChange={(ev) => setHost(ev.target.value)}
                         style={inputStyle}
                         autoComplete="off"
+                        readOnly={playtest}
                     />
                 </label>
                 <label>
@@ -141,11 +164,12 @@ export function ConnectDialog({
                         onChange={(ev) => setPortText(ev.target.value)}
                         style={inputStyle}
                         autoComplete="off"
+                        readOnly={playtest}
                     />
                 </label>
                 <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0, paddingTop: '8px' }}>
-                    <RpgButton onClick={handleConnect} style={{ width: '140px' }}>
-                        Connect
+                    <RpgButton onClick={handleConnect} style={{ width: '180px' }}>
+                        {playtest ? `Enter as ${characterName}` : 'Connect'}
                     </RpgButton>
                 </div>
             </div>

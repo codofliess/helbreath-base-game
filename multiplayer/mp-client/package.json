@@ -27,6 +27,8 @@
         "build": "vite build --config vite/config.prod.mjs",
         "predev-nolog": "pnpm run proto:generate",
         "dev-nolog": "vite --config vite/config.dev.mjs",
+        "playtest": "vite --config vite/config.dev.playtest.mjs",
+        "gm": "vite --config vite/config.dev.gm.mjs",
         "prebuild-nolog": "pnpm run proto:generate",
         "build-nolog": "vite build --config vite/config.prod.mjs",
         "compress-assets": "node ../../tools/compress-assets.js --ratio=1",

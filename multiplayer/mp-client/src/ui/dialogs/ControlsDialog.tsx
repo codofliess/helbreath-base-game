@@ -20,6 +20,7 @@ import { toggleInventoryDialog } from '../store/InventoryDialog.store';
 import { toggleItemDialog } from '../store/ItemDialog.store';
 import { serverDialogStore } from '../store/ServerDialog.store';
 import { getNetworkManager } from '../../utils/RegistryUtils';
+import { isPlaytestTravelerClient } from '../../playtest/playtestMode';
 interface ControlsDialogProps {
     position: { x: number; y: number };
     phaserRef: React.RefObject<IRefPhaserGame | null>;
@@ -36,6 +37,7 @@ export function ControlsDialog({
     const isFullscreen = useStore(controlsDialogStore, (state) => state.isFullscreen);
     const minimapAvailable = useStore(minimapDialogStore, (state) => state.minimapAvailable);
     const logoutSecondsRemaining = useStore(controlsDialogStore, (state) => state.logoutSecondsRemaining);
+    const showGmTools = !isPlaytestTravelerClient();
     const syncWithServer = useStore(serverDialogStore, (state) => state.syncWithServer);
     const fullscreenResizeHandler = useRef<(() => void) | undefined>(undefined);
     const fullscreenHandlersBound = useRef(false);
@@ -160,41 +162,51 @@ export function ControlsDialog({
                     Player
                 </RpgButton>
             </div>
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleItemDialog}>
                     Items
                 </RpgButton>
             </div>
+            )}
             <div>
                 <RpgButton onClick={toggleInventoryDialog}>
                     Inventory
                 </RpgButton>
             </div>
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleMonsterDialog}>
                     Monsters
                 </RpgButton>
             </div>
+            )}
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleNPCDialog}>
                     NPCs
                 </RpgButton>
             </div>
+            )}
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleEffectDialog}>
                     Effects
                 </RpgButton>
             </div>
+            )}
             <div>
                 <RpgButton onClick={toggleCastDialog}>
                     Spells
                 </RpgButton>
             </div>
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleMapDialog}>
                     Maps
                 </RpgButton>
             </div>
+            )}
             <div>
                 <RpgButton onClick={toggleCameraDialog}>
                     Camera
@@ -210,16 +222,20 @@ export function ControlsDialog({
                     Sound
                 </RpgButton>
             </div>
+            {showGmTools && (
             <div>
                 <RpgButton onClick={toggleServerDialog}>
                     Server
                 </RpgButton>
             </div>
+            )}
+            {showGmTools && (
             <div>
                 <RpgButton onClick={togglePerformanceDialog}>
                     Performance
                 </RpgButton>
             </div>
+            )}
             <div>
                 <RpgButton onClick={toggleChatDialog}>
                     Chat

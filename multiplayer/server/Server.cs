@@ -867,9 +867,10 @@ app.Map("/ws", async context => {
                         remoteIp,
                         authReq.HasReferralCode ? authReq.ReferralCode : null,
                         authArenaKitJson);
+                var guildId = loadedPlayerState?.GuildId ?? string.Empty;
                 GlobalWorldMessage globalWorldMessage = isReconnect
-                    ? new GlobalPlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName)
-                    : new GlobalPlayerConnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName);
+                    ? new GlobalPlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName, guildId)
+                    : new GlobalPlayerConnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName, guildId);
                 await worldRegistry.RouteGameWorldMessageAsync(currentGameWorldId, gameWorldMessage, receiveCts.Token);
                 await worldRegistry.RouteGlobalMessageAsync(globalWorldMessage, receiveCts.Token);
                 isConnectedToGameWorld = true;

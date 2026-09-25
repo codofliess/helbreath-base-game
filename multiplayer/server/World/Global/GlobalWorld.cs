@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using Mmorpg.Network;
+using Server.Helpers;
 using Server.Utils;
 using Server.World;
 using Server.World.Game;
@@ -127,6 +128,10 @@ public sealed class GlobalWorld : IWorkerWorld {
                 new GlobalWorldPlayer(connectedMessage.SessionId, connectedMessage.SendMessage, connectedMessage.CharacterName));
         }
 
+        if (!string.IsNullOrWhiteSpace(connectedMessage.GuildId)) {
+            ChatMembership.SetGuild(connectedMessage.SessionId, connectedMessage.GuildId);
+        }
+
         Console.WriteLine($"[GlobalWorld:{id}] Player connected. Players on global world: {playersBySessionId.Count}");
     }
 
@@ -136,12 +141,15 @@ public sealed class GlobalWorld : IWorkerWorld {
                 reconnectedMessage.SessionId,
                 new GlobalWorldPlayer(reconnectedMessage.SessionId, reconnectedMessage.SendMessage, reconnectedMessage.CharacterName));
             Console.WriteLine($"[GlobalWorld:{id}] Reconnect arrived for missing session '{reconnectedMessage.SessionId}', recreated global player.");
-            return;
+        } else {
+            player.SetCharacterName(reconnectedMessage.CharacterName);
+            player.AttachConnection(reconnectedMessage.SendMessage);
+            Console.WriteLine($"[GlobalWorld:{id}] Player reconnected. Players on global world: {playersBySessionId.Count}");
         }
 
-        player.SetCharacterName(reconnectedMessage.CharacterName);
-        player.AttachConnection(reconnectedMessage.SendMessage);
-        Console.WriteLine($"[GlobalWorld:{id}] Player reconnected. Players on global world: {playersBySessionId.Count}");
+        if (!string.IsNullOrWhiteSpace(reconnectedMessage.GuildId)) {
+            ChatMembership.SetGuild(reconnectedMessage.SessionId, reconnectedMessage.GuildId);
+        }
     }
 
     private void HandlePlayerDisconnected(GlobalPlayerDisconnectedMessage disconnectedMessage) {
@@ -160,6 +168,7 @@ public sealed class GlobalWorld : IWorkerWorld {
             return;
         }
 
+        ChatMembership.Clear(removeDisconnectedPlayerMessage.SessionId);
         playersBySessionId.Remove(removeDisconnectedPlayerMessage.SessionId);
         Console.WriteLine($"[GlobalWorld:{id}] Removed disconnected player after grace period. Players on global world: {playersBySessionId.Count}");
     }
@@ -226,10 +235,64 @@ public sealed class GlobalWorld : IWorkerWorld {
             return;
         }
 
+        if (channel == ChatChannel.Guild) {
+            DeliverGuildChat(sender, chatMessage);
+            return;
+        }
+
+        if (channel == ChatChannel.Party) {
+            DeliverPartyChat(sender, chatMessage);
+            return;
+        }
+
         foreach (var player in playersBySessionId.Values) {
             if (!player.Disconnected) {
                 player.Send(chatMessage);
             }
+        }
+    }
+
+    /// <summary>
+    /// Delivers guild chat only to online members of the sender's guild (including the sender).
+    /// Senders with no guild get a system reply; the line is never broadcast.
+    /// </summary>
+    private void DeliverGuildChat(GlobalWorldPlayer sender, ServerMessage chatMessage) {
+        var guildId = ChatMembership.GetGuildId(sender.SessionId);
+        if (string.IsNullOrEmpty(guildId)) {
+            sender.Send(NetworkManager.CreateSendMessage("You are not in a guild."));
+            return;
+        }
+
+        foreach (var player in playersBySessionId.Values) {
+            if (player.Disconnected) {
+                continue;
+            }
+            if (!ChatMembership.SameGuild(player.SessionId, guildId)) {
+                continue;
+            }
+            player.Send(chatMessage);
+        }
+    }
+
+    /// <summary>
+    /// Delivers party chat only to online members of the sender's party (including the sender).
+    /// Senders with no party get a system reply; the line is never broadcast.
+    /// </summary>
+    private void DeliverPartyChat(GlobalWorldPlayer sender, ServerMessage chatMessage) {
+        var partyCode = ChatMembership.GetPartyCode(sender.SessionId);
+        if (string.IsNullOrEmpty(partyCode)) {
+            sender.Send(NetworkManager.CreateSendMessage("You are not in a party."));
+            return;
+        }
+
+        foreach (var player in playersBySessionId.Values) {
+            if (player.Disconnected) {
+                continue;
+            }
+            if (!ChatMembership.SameParty(player.SessionId, partyCode)) {
+                continue;
+            }
+            player.Send(chatMessage);
         }
     }
 

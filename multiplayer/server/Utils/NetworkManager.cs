@@ -1715,6 +1715,17 @@ public static class NetworkManager {
         return new ServerMessage { PartyState = state };
     }
 
+    /// <summary>Invitee prompt for <c>/invite</c> (Join uses join-by-code; Decline uses RespondPartyInviteRequest).</summary>
+    public static ServerMessage CreatePartyInvitePrompt(string inviterName, string message, string partyCode) {
+        return new ServerMessage {
+            PartyInvitePrompt = new PartyInvitePrompt {
+                InviterName = inviterName ?? string.Empty,
+                Message = message ?? string.Empty,
+                PartyCode = partyCode ?? string.Empty,
+            },
+        };
+    }
+
     public static ServerMessage CreateWarehouseState(GameWorldPlayer player, int maxSlots, string message) {
         ArgumentNullException.ThrowIfNull(player);
         var state = new WarehouseState {

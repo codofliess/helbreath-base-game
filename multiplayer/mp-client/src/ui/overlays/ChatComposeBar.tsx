@@ -74,13 +74,6 @@ export function ChatComposeBar({ phaserRef, duelOnly = false }: ChatComposeBarPr
             setSendError(parsed.error);
             return;
         }
-        if (duelOnly && parsed.channel !== 'global' && parsed.channel !== 'party' && parsed.channel !== 'nearby') {
-            // Allow /party for team callouts; block trade/town spam.
-            if (parsed.channel === 'trade' || parsed.channel === 'town' || parsed.channel === 'guild') {
-                setSendError('Duel chat: use plain text (global) or /party for team.');
-                return;
-            }
-        }
 
         const game = phaserRef.current?.game;
         if (!game) {
@@ -90,6 +83,22 @@ export function ChatComposeBar({ phaserRef, duelOnly = false }: ChatComposeBarPr
         const networkManager = getNetworkManager(game);
         if (!networkManager) {
             return;
+        }
+
+        if ('inviteName' in parsed) {
+            networkManager.requestInviteParty(parsed.inviteName);
+            setSendError(undefined);
+            closeChatCompose();
+            suppressPointerLeak();
+            return;
+        }
+
+        if (duelOnly && parsed.channel !== 'global' && parsed.channel !== 'party' && parsed.channel !== 'nearby') {
+            // Allow /party for team callouts; block trade/town spam.
+            if (parsed.channel === 'trade' || parsed.channel === 'town' || parsed.channel === 'guild') {
+                setSendError('Duel chat: use plain text (global) or /party for team.');
+                return;
+            }
         }
 
         networkManager.sendChatMessage(parsed.message, getLocalSourceLanguageTag(), {

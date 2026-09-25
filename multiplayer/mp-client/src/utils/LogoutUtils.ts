@@ -22,6 +22,7 @@ import { setTrainingDialogOpen } from '../ui/store/TrainingDialog.store';
 import { resetTimedChallengeStore } from '../ui/store/TimedChallenge.store';
 import { resetBeginnerPathStore } from '../ui/store/BeginnerPath.store';
 import { resetPartyStore } from '../ui/store/Party.store';
+import { closePartyInvitePrompt } from '../ui/store/PartyInvite.store';
 import { resetProgressionStore } from '../ui/store/Progression.store';
 import { resetSystemLogStore } from '../ui/store/SystemLog.store';
 import { resetChatDialogStore } from '../ui/store/ChatDialog.store';
@@ -66,6 +67,7 @@ export function performLogoutCleanup(game?: PhaserGameLike): void {
     setTrainingDialogOpen(false);
     resetBeginnerPathStore();
     resetPartyStore();
+    closePartyInvitePrompt();
     resetProgressionStore();
     resetSystemLogStore();
     resetChatDialogStore();

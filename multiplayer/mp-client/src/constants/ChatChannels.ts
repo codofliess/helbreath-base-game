@@ -36,14 +36,19 @@ export type ParsedChatSend = {
     whisperTarget?: string;
 };
 
+export type ParsedChatInvite = {
+    inviteName: string;
+};
+
 /**
- * Parses Olympia-style chat command prefixes (`/w Name hi`, `/trade …`, `/g …`).
+ * Parses Olympia-style chat command prefixes (`/w Name hi`, `/trade …`, `/g …`, `/invite Name`).
+ * `/party <text>` is always party chat — including `/party invite …`.
  * Bare text uses the active tab channel (or Nearby when viewing All).
  */
 export function parseChatSendInput(
     raw: string,
     activeTab: ChatChannelId,
-): ParsedChatSend | { error: string } {
+): ParsedChatSend | ParsedChatInvite | { error: string } {
     const trimmed = raw.trim();
     if (!trimmed) {
         return { error: 'Empty message.' };
@@ -59,6 +64,11 @@ export function parseChatSendInput(
         return { channel: 'whisper', message, whisperTarget: target };
     }
 
+    const inviteMatch = trimmed.match(/^\/invite(?:\s+(.*))?$/i);
+    if (inviteMatch) {
+        return { inviteName: (inviteMatch[1] ?? '').trim() };
+    }
+
     const prefixed = trimmed.match(/^\/(global|g|trade|t|town|nearby|n|guild|gu|party|p|misc|m)\s+(.+)$/i);
     if (prefixed) {
         const cmd = prefixed[1]!.toLowerCase();
@@ -70,7 +80,7 @@ export function parseChatSendInput(
     }
 
     if (trimmed.startsWith('/')) {
-        return { error: 'Unknown command. Try /w Name msg, /trade, /guild, /party, /nearby…' };
+        return { error: 'Unknown command. Try /w Name msg, /invite Name, /trade, /guild, /party, /nearby…' };
     }
 
     const channel =

@@ -32,6 +32,7 @@ import { PlayerHoverOverview } from './ui/overlays/PlayerHoverOverview';
 import { QuestTrackerHud } from './ui/overlays/QuestTrackerHud';
 import { SystemLogOverlay } from './ui/overlays/SystemLogOverlay';
 import { ChatComposeBar } from './ui/overlays/ChatComposeBar';
+import { PartyInvitePromptOverlay } from './ui/overlays/PartyInvitePromptOverlay';
 import { ChatWorldLog } from './ui/overlays/ChatWorldLog';
 import { CornerMinimapHud } from './ui/overlays/CornerMinimapHud';
 import { HudTutorialOverlay } from './ui/overlays/HudTutorialOverlay';
@@ -1393,6 +1394,7 @@ function App()
                 {showWorldHud && <SystemLogOverlay />}
                 {showWorldHud && <ChatWorldLog duelOnly={arenaSlim} />}
                 {showWorldHud && <ChatComposeBar phaserRef={phaserRef} duelOnly={arenaSlim} />}
+                {showWorldHud && <PartyInvitePromptOverlay />}
 
                 {!travelerMode && !arenaSlim && <AssetDebugOverlay />}
                 <InventoryItemHoverOverlay />

@@ -163,6 +163,9 @@ message ClientMessage {
     CreatePartyRequest create_party_request = 55;
     JoinPartyRequest join_party_request = 56;
     LeavePartyRequest leave_party_request = 57;
+    // Party invite by character name (/invite). Accept uses JoinPartyRequest (same as F5 join).
+    InvitePartyRequest invite_party_request = 107;
+    RespondPartyInviteRequest respond_party_invite_request = 108;
     // City NPC desk (Howard / Kennedy / Gail / Perry) — proximity-checked actions.
     CityNpcServiceRequest city_npc_service_request = 58;
     // GM ops: read / mutate anti-bot tool flags (rejected for traveler sessions).
@@ -1092,6 +1095,8 @@ message ServerMessage {
     CityNpcServiceResult city_npc_service_result = 76;
     // Minimal party snapshot after create / join / leave (self + members).
     PartyState party_state = 77;
+    // Invitee-only prompt for /invite (Join / Decline on the client).
+    PartyInvitePrompt party_invite_prompt = 107;
     // GM ops: current anti-bot tool flags + tunables (reply to get / after set).
     AntiBotToolsState anti_bot_tools_state = 78;
     SetAntiBotToolsResult set_anti_bot_tools_result = 79;
@@ -1562,6 +1567,23 @@ message JoinPartyRequest {
 
 // Leave the current party (or dismiss if last member).
 message LeavePartyRequest {
+}
+
+// Invite an online player into the sender's party (/invite Name). Empty name is a usage error.
+message InvitePartyRequest {
+  string character_name = 1;
+}
+
+// Invitee decline (or accept that joins via the stored party code). Join from F5 still uses JoinPartyRequest.
+message RespondPartyInviteRequest {
+  bool accept = 1;
+}
+
+// Shown to the invitee until they Join (existing join-by-code path) or Decline.
+message PartyInvitePrompt {
+  string inviter_name = 1;
+  string message = 2;
+  string party_code = 3;
 }
 
 // One party member with vitals for the F5 Party panel (Olympia parity P2.9).

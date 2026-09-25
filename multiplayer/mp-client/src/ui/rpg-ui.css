@@ -11681,3 +11681,45 @@ body.game-world-active .cl-desk-mode-tab {
 body.game-world-active .bi-online-strip {
     display: none;
 }
+
+.party-invite-prompt {
+    position: fixed;
+    left: 50%;
+    top: 28%;
+    transform: translateX(-50%);
+    z-index: 12040;
+    min-width: 280px;
+    max-width: 420px;
+    padding: 12px 14px;
+    background: rgba(18, 14, 10, 0.92);
+    border: 1px solid #c9a227;
+    color: #f2e6c9;
+    font-family: 'Spectral', Georgia, serif;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.party-invite-prompt-text {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+.party-invite-prompt-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.party-invite-prompt-btn {
+    min-width: 72px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border: 1px solid #c9a227;
+    background: #2a2218;
+    color: #f2e6c9;
+    font-family: inherit;
+}
+
+.party-invite-prompt-btn:hover {
+    background: #3a2f22;
+}

@@ -257,6 +257,12 @@ public sealed class InventoryManager {
         return VisibleAppearanceSlots.Contains(slot);
     }
 
+    /// <summary>Drops the seeded starter loadout so a caller can install a different kit before the first save.</summary>
+    public void ClearItems() {
+        equippedItems.Clear();
+        bagItems.Clear();
+    }
+
     /// <summary>Loads persisted bag/equipment state, replacing the current contents entirely.</summary>
     public void LoadFromPersistence(
         PersistedInventoryItem[]? persistedBagItems,

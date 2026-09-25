@@ -96,6 +96,8 @@ Startup logs:
 
 See [`LIVE-MULTIWALLET-AUTH.md`](./LIVE-MULTIWALLET-AUTH.md) for live Phantom + RH + Base login env (`WALLET_AUTH_SECRET`, `DATABASE_URL`; no RH/Base RPC for `personal_sign`).
 
+See [`PLAYTEST-DOOR.md`](./PLAYTEST-DOOR.md) for the isolated loopback multi-seat door (`PLAYTEST=1`). It is off unless that env is set; it never bypasses this HMAC path in production.
+
 ## Files touched
 
 - `Helpers/AdminSecurity.cs` (new)

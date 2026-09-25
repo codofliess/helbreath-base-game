@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
     readonly VITE_PLAYER_MODE?: string;
+    /** `'1'` only in isolated playtest Vite configs; ignored on public hosts. */
+    readonly VITE_PLAYTEST?: string;
     /**
      * When `'1'` or `'true'`, generate a full-world WebGL minimap snapshot on enter
      * for `Minimap.ON_DEMAND_GENERATED` maps. Default unset/off for live (OOM-safe).

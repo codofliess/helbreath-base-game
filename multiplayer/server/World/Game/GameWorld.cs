@@ -771,6 +771,8 @@ public sealed class GameWorld : IWorkerWorld {
             player.SetCitizenshipSide(CityNpcServices.ResolveCitizenshipSidePublic(id));
         }
         ForceCitizenOffHostilePlaza(player, reason: "connect");
+        PlaytestQaKit.ApplyIfFresh(player, connectedMessage.PersistedState is null);
+        PlaytestMode.ApplyGuildSeed(player);
         OnlinePlayerDirectory.Register(player);
         Console.WriteLine($"[GameWorld:{id}] Player connected. Players on world: {playersBySessionId.Count}");
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: true);

@@ -27,9 +27,11 @@
   <!-- Never ship player data / nested publish trees into the build output. -->
   <ItemGroup>
     <Content Remove="Chars/**" />
+    <Content Remove="CharsPlaytest/**" />
     <Content Remove="**/publish*/**" />
     <Content Remove="_build_check_out/**" />
     <None Remove="Chars/**" />
+    <None Remove="CharsPlaytest/**" />
     <None Remove="**/publish*/**" />
     <None Remove="_build_check_out/**" />
   </ItemGroup>

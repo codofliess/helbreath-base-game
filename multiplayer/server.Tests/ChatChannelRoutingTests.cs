@@ -110,7 +110,7 @@ public sealed class ChatChannelRoutingTests : IDisposable {
         Assert.DoesNotContain(otherInbox, m => m.PayloadCase == ServerMessage.PayloadOneofCase.ChatMessageReceived);
         Assert.Contains(senderInbox, m =>
             m.PayloadCase == ServerMessage.PayloadOneofCase.SendMessage &&
-            m.SendMessage.Message.Contains("not in a guild", StringComparison.OrdinalIgnoreCase));
+            m.SendMessage.Message == "You're not in a guild. Join one to use guild chat.");
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class ChatChannelRoutingTests : IDisposable {
         Assert.DoesNotContain(otherInbox, m => m.PayloadCase == ServerMessage.PayloadOneofCase.ChatMessageReceived);
         Assert.Contains(senderInbox, m =>
             m.PayloadCase == ServerMessage.PayloadOneofCase.SendMessage &&
-            m.SendMessage.Message.Contains("not in a party", StringComparison.OrdinalIgnoreCase));
+            m.SendMessage.Message == "You're not in a party. Invite someone to use party chat.");
     }
 
     [Fact]

@@ -259,7 +259,7 @@ public sealed class GlobalWorld : IWorkerWorld {
     private void DeliverGuildChat(GlobalWorldPlayer sender, ServerMessage chatMessage) {
         var guildId = ChatMembership.GetGuildId(sender.SessionId);
         if (string.IsNullOrEmpty(guildId)) {
-            sender.Send(NetworkManager.CreateSendMessage("You are not in a guild."));
+            sender.Send(NetworkManager.CreateSendMessage("You're not in a guild. Join one to use guild chat."));
             return;
         }
 
@@ -281,7 +281,7 @@ public sealed class GlobalWorld : IWorkerWorld {
     private void DeliverPartyChat(GlobalWorldPlayer sender, ServerMessage chatMessage) {
         var partyCode = ChatMembership.GetPartyCode(sender.SessionId);
         if (string.IsNullOrEmpty(partyCode)) {
-            sender.Send(NetworkManager.CreateSendMessage("You are not in a party."));
+            sender.Send(NetworkManager.CreateSendMessage("You're not in a party. Invite someone to use party chat."));
             return;
         }
 

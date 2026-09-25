@@ -2269,6 +2269,7 @@ export class GameWorld extends Scene {
         const savedCharacterName = getGameStateManager(this.game).getCharacterName();
         if (savedCharacterName) {
             this.player.setCharacterName(savedCharacterName);
+            setCharacterStats({ playerName: savedCharacterName.trim() });
         }
         setPlayerPosition(this.game, playerWorldX, playerWorldY);
 

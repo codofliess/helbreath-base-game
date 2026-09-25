@@ -5,8 +5,10 @@ using Server.World.Game;
 namespace Server.Helpers;
 
 /// <summary>
-/// Soul / Guild / Unbind seals (~USD 5). Bind state is server-authoritative on each
-/// <see cref="InventoryItemState"/>. Guildbound items may only be unbound by guild master or captains.
+/// Soul / Guild / Unbind seals. Item ids stay <see cref="SoulBindSealItemId"/>,
+/// <see cref="GuildBindSealItemId"/>, and <see cref="UnbindSealItemId"/>.
+/// USD amounts live in <see cref="EkEconomyConfig"/> and are recorded as an uncollected stub after the seal is consumed.
+/// Guildbound items may only be unbound by guild master or captains.
 /// </summary>
 public static class ItemBind {
     public const int SoulBindSealItemId = 960;
@@ -91,6 +93,7 @@ public static class ItemBind {
 
         item.BindState = BindStateSoulbound;
         item.BoundGuildId = "";
+        RecordSealStub(player, item, SoulBindSealItemId, guildBoundHeroPiece: false);
         NotifyItemUpdated(wr, player, item, equippedSlot);
         Send(player, ok: true, "Soulbound — will not drop on death; not tradeable until Unbind Seal.", item.ItemUid, item.BindState, item.BoundGuildId);
     }
@@ -119,6 +122,7 @@ public static class ItemBind {
 
         item.BindState = BindStateGuildbound;
         item.BoundGuildId = player.GuildId.Trim();
+        RecordSealStub(player, item, GuildBindSealItemId, guildBoundHeroPiece: false);
         NotifyItemUpdated(wr, player, item, equippedSlot);
         Send(
             player,
@@ -148,6 +152,8 @@ public static class ItemBind {
             }
         }
 
+        var guildBoundHeroPiece = item.BindState == BindStateGuildbound
+            && HeroFactionKit.IsHeroFactionItem(item.ItemId);
         if (!TryConsumeSeal(wr, player, UnbindSealItemId, out var fail)) {
             Send(player, ok: false, fail, item.ItemUid, item.BindState, item.BoundGuildId);
             return;
@@ -155,6 +161,7 @@ public static class ItemBind {
 
         item.BindState = BindStateUnbound;
         item.BoundGuildId = "";
+        RecordSealStub(player, item, UnbindSealItemId, guildBoundHeroPiece);
         NotifyItemUpdated(wr, player, item, equippedSlot);
         Send(player, ok: true, "Unbound — tradeable again (may drop on death without Zem).", item.ItemUid, item.BindState, item.BoundGuildId);
     }
@@ -180,6 +187,17 @@ public static class ItemBind {
             _ => "Need an Unbind Seal in your bag.",
         };
         return false;
+    }
+
+    static void RecordSealStub(GameWorldPlayer player, InventoryItemState item, int sealItemId, bool guildBoundHeroPiece) {
+        if (string.IsNullOrWhiteSpace(player.AccountWallet)) {
+            return;
+        }
+        EkEconomyHost.RecordSealStubFee(
+            player.AccountWallet,
+            sealItemId,
+            guildBoundHeroPiece,
+            $"item-bind:{player.AccountWallet}:{item.ItemUid}:{sealItemId}:{Guid.NewGuid():N}");
     }
 
     static bool TryFindItem(GameWorldPlayer player, long itemUid, out InventoryItemState item, out string? equippedSlot) {

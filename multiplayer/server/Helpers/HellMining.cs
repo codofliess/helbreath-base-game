@@ -62,14 +62,23 @@ public static class HellMining {
     }
 
     /// <summary>
+    /// Observes <see cref="OnEnemyKillAwarded"/>. Null in production.
+    /// Consuming an EK NFT must never enter that method.
+    /// </summary>
+    public static Action<string>? EnemyKillObserver { get; set; }
+
+    /// <summary>
     /// Eligible open-world EK.
     /// Testing week: +10 credits each (max 10/day), no direct tokens, does not count for post-TGE ladders.
     /// After testing: legendary / top-100 direct-token paths.
+    /// Purchased EK consumption must not call this.
     /// </summary>
+
     public static void OnEnemyKillAwarded(
-        GameWorldPlayer killer,
+        GameWorldPlayer? killer,
         int? victimCityKillerRank,
         EkScreenshotRarity rarity) {
+        EnemyKillObserver?.Invoke(nameof(OnEnemyKillAwarded));
         if (killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
             return;
         }

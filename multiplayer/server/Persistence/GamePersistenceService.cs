@@ -542,6 +542,35 @@ public sealed class GamePersistenceService : IAsyncDisposable {
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Upserts one row of <c>ek_balances</c>. Earned and purchased are the ledger balances after a committed op.
+    /// </summary>
+    public async Task UpsertEkBalanceAsync(
+        string playerId,
+        long earned,
+        long purchased,
+        CancellationToken cancellationToken = default) {
+        if (string.IsNullOrWhiteSpace(playerId) || earned < 0 || purchased < 0) {
+            return;
+        }
+
+        const string sql = """
+            INSERT INTO ek_balances (player_id, earned, purchased, updated_at)
+            VALUES (@playerId, @earned, @purchased, NOW())
+            ON CONFLICT (player_id) DO UPDATE SET
+                earned = EXCLUDED.earned,
+                purchased = EXCLUDED.purchased,
+                updated_at = NOW()
+            """;
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("playerId", playerId.Trim());
+        command.Parameters.AddWithValue("earned", earned);
+        command.Parameters.AddWithValue("purchased", purchased);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync() {
         await dataSource.DisposeAsync().ConfigureAwait(false);
     }

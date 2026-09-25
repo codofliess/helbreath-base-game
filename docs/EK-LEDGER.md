@@ -268,3 +268,36 @@ multiplayer/.../GameWorld.cs  PlayerDied → TryRecordKill
 ---
 
 *Doc satélite de Fase G. Cambios de reglas → append decisión en MASTERPLAN; no borrar este historial de diseño.*
+
+---
+
+## 11. Saldos duales, NFT y raid master (servidor, draft)
+
+Implementación off-chain en `multiplayer/server/Helpers/EkEconomyService.cs`. Config: `multiplayer/server/Config/EkEconomy.json`. **No** edita `MASTERPLAN.md` (se toca aparte). **No** hay mint, burn ni cobro on-chain. `emitir=false`.
+
+| Regla | Comportamiento |
+|-------|----------------|
+| Dos saldos | `earned` (ganado en juego) y `purchased` (EK de un NFT consumido) |
+| Ranking de killers | Lee **solo** el saldo `earned` actual (`KillerRanking`). Un jugador con solo `purchased` no entra |
+| Contador de academia | `PvpAcademy.EkCount` sigue siendo el lifetime de juego (handicap / packet `EnemyKills`). Los EK comprados **no** se suman ahí |
+| Migración | Un saldo único viejo (`balance` / `ek` / `ekCount` en el ledger, o el snapshot de `PvpAcademy.ExportLifetimeEkCounts` al arrancar) pasa a `earned`. Repetir el mismo número no lo suma dos veces. El `EkCount` diario de `HellMiningStore` **no** es un saldo y no se migra |
+| NFT | Cualquier cantidad ≥ `ek_nft_min_amount` (50). No hay packs fijos. Menos que el mínimo se rechaza |
+| Fee de bind | Una sola vez: `fees.ek_nft_bind_usd` (5). No escala con la cantidad de EK. Queda en auditoría con `collected=false` |
+| Consumir | Quema el stub local (`chainMint=null`) y acredita la cantidad a `purchased` de quien consume. No sube el ranking. Un segundo consumo falla. La misma idempotency key no acredita dos veces |
+| EK comprado (regla cerrada) | No da créditos ni tokens de minería a nadie, ni atributos, ni aura. No llama `HellMining.OnEnemyKillAwarded` ni `HellMiningStore.RecordEkCount` / `RecordLegendaryEk` / `RecordTop100Ek` ni `EkAura.NotifyEarned`. No suma al ranking histórico. Solo se usa (raid master del clan y otros gastos). No hay flag |
+| Tabla `ek_balances` | `player_id`, `earned`, `purchased`. El JSON `Chars/ek-economy.json` sigue siendo la fuente del server. Postgres es proyección cuando hay `DATABASE_URL` |
+| Primer EK del día | Solo un EK **ganado** marca `guildFirstEkDay` (ACTIVE KILLER / tax de guild). Un EK comprado no. Default, no es flag |
+| Raid master | Gasta EK de los dos saldos, más oro y otros materiales, en una sola operación. Orden `raid_master_spend_order`, default `purchased` luego `earned`. Si falta algo, no descuenta nada |
+| `emitir` | `false`: las operaciones de ledger siguen; ningún rail real se ejecuta. `true`: la operación se rechaza (este build no tiene rail) |
+
+`PvpAcademy.RecordEnemyKill` y el EK de academia (Hard/Elite) acreditan `earned` con clave idempotente. El origen del débito al **armar** el NFT es `ek_nft_craft_source`. En el JSON de producción está `null` (fail-closed, no mueve EK). No es una regla de producto: ver preguntas abiertas del PR.
+
+Regla cerrada: los EK comprados no minan créditos ni tokens, no dan atributos ni aura, y no suman al ranking. Solo se gastan. Consumir un NFT de EKs no entra a `HellMining.OnEnemyKillAwarded`.
+
+Preguntas abiertas (no cerradas en código):
+
+1. ¿De qué saldo salen los EK al armar un NFT? Flag `ek_nft_craft_source` sin valor. Los tests usan `earned` solo como fixture.
+2. Orden de consumo del raid master: default implementado `purchased` → `earned`, configurable. Falta el GO de Martín.
+3. Fee de pieza hero set **guild-bound**: implementado US$5 plano (`fees.hero_set_guild_bound_piece_unbind_usd`), configurable. Sigue abierto si ese caso es US$10 (la cifra de guild que se cita como § 1.12; ese apartado no está en `MASTERPLAN.md`, que llega a § 1.11).
+4. ¿El unbind se cobra con el seal del shop o con un pago directo? Hoy se **mantiene el seal** (ids 960/961/962) y el USD queda como stub (`collected=false`).
+5. ¿El EK comprado cuenta como el primer EK del día de ACTIVE KILLER / tax de guild? Default implementado: **no**.

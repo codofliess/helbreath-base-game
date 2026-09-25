@@ -76,6 +76,17 @@ CREATE TABLE IF NOT EXISTS pvp_kills (
 CREATE INDEX IF NOT EXISTS idx_pvp_kills_world_time ON pvp_kills(world_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pvp_kills_killer ON pvp_kills(killer_wallet, created_at DESC);
 
+-- Dual EK balances. Ranking and play-mine read earned only; purchased is spend-only.
+-- Game-server source of truth is Chars/ek-economy.json (works without Postgres). This table is the projection.
+CREATE TABLE IF NOT EXISTS ek_balances (
+    player_id TEXT PRIMARY KEY,
+    earned BIGINT NOT NULL DEFAULT 0 CHECK (earned >= 0),
+    purchased BIGINT NOT NULL DEFAULT 0 CHECK (purchased >= 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ek_balances_earned ON ek_balances (earned DESC);
+
 -- Tournament directory. format: 'solo' | 'team'. status: 'draft' | 'registration' | 'running' | 'finished' | 'cancelled'.
 CREATE TABLE IF NOT EXISTS tournaments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -260,7 +260,8 @@ public sealed class EkEconomyService {
 
     /// <summary>
     /// Burns the NFT stub once and credits its EK amount to the consumer's purchased balance.
-    /// Does not increase earned, killer ranking, or mining credits.
+    /// Purchased EK does not mine, grant tokens, apply attributes, raise <see cref="EkAura"/>,
+    /// call <see cref="HellMiningStore"/>, or change killer ranking. That is a hard rule, not config.
     /// </summary>
     public EkEconomyResult ConsumeEkNft(string playerId, string nftId, string idempotencyKey) {
         return Mutate("consume_ek_nft", playerId, idempotencyKey, () => {
@@ -280,9 +281,8 @@ public sealed class EkEconomyService {
             account.Purchased = checked(account.Purchased + nft.Amount);
             nft.Burned = true;
             nft.HolderId = account.PlayerId;
-            // Purchased EKs do not mine. The flag can be turned on in config, but the mine path is not implemented.
-            var note = config.PurchasedEkMiningEnabled ? EkEconomyCodes.PurchasedMiningNotImplemented : null;
-            var result = Success(
+            // Spend-only balance. Do not call HellMiningStore EK hooks or EkAura.NotifyEarned.
+            return Success(
                 "consume_ek_nft",
                 account,
                 nft.Amount,
@@ -292,8 +292,6 @@ public sealed class EkEconomyService {
                 beforePurchased,
                 miningApplied: false,
                 miningCredits: 0);
-            result.Note = note;
-            return result;
         });
     }
 
@@ -337,6 +335,7 @@ public sealed class EkEconomyService {
     /// <summary>
     /// Spends EK (both buckets, config order), gold, and other materials for a raid-master contribution.
     /// The whole debit commits or none of it does.
+    /// Spending purchased EK does not call <see cref="HellMiningStore"/> or <see cref="EkAura"/>.
     /// </summary>
     public EkEconomyResult ContributeRaidMaster(
         string playerId,

@@ -6,6 +6,5 @@
     "hero_set_piece_unbind_usd": 5
   },
   "raid_master_spend_order": ["purchased", "earned"],
-  "ek_nft_craft_source": null,
-  "purchased_ek_mining_enabled": false
+  "ek_nft_craft_source": null
 }

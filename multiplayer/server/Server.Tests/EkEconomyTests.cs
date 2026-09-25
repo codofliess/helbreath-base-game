@@ -27,7 +27,7 @@ public class EkEconomyTests {
         Assert.Equal(FlatUsd, config.Fees.HeroSetPieceUnbindUsd);
         Assert.Equal(new[] { "purchased", "earned" }, config.RaidMasterSpendOrder);
         Assert.True(string.IsNullOrWhiteSpace(config.EkNftCraftSource));
-        Assert.False(config.PurchasedEkMiningEnabled);
+        Assert.DoesNotContain("purchased_ek_mining", json);
     }
 
     [Fact]
@@ -363,29 +363,65 @@ public class EkEconomyTests {
     }
 
     [Fact]
-    public void Purchased_ek_mining_stays_off_even_if_the_flag_is_enabled() {
-        var off = FixtureEarned();
-        off.CreditGameplayEk("ada", 50, "earn-ada");
-        var nft = off.CraftEkNft("ada", 50, "craft-50");
-        var consumed = off.ConsumeEkNft("bob", nft.NftId!, "consume-1");
+    public void Purchased_ek_credit_does_not_call_hell_mining_or_aura_and_keeps_ranking() {
+        using var probe = new EffectProbe();
+        probe.AssertLive();
+
+        var svc = FixtureEarned();
+        svc.CreditGameplayEk("ada", 80, "earn-ada");
+        svc.CreditGameplayEk("grind", 4, "earn-grind");
+        var crafted = svc.CraftEkNft("ada", 50, "craft-50");
+        Assert.True(crafted.Ok);
+        var ranking = Ranking(svc);
+        probe.Clear();
+
+        var consumed = svc.ConsumeEkNft("bob", crafted.NftId!, "consume-buy");
+
         Assert.True(consumed.Ok);
+        Assert.Equal(50, svc.GetPurchased("bob"));
+        Assert.Equal(0, svc.GetEarned("bob"));
         Assert.False(consumed.MiningApplied);
         Assert.Equal(0, consumed.MiningCredits);
-        Assert.Null(consumed.Detail);
+        Assert.Equal(ranking, Ranking(svc));
+        Assert.DoesNotContain(Ranking(svc), row => row.PlayerId == "bob");
+        probe.AssertSilent();
+    }
 
-        var on = new EkEconomyService(
-            EkEconomyConfig.LoadOrDefault(ConfigPath())
-                .WithCraftSource(EkEconomyConfig.CraftSourceEarned)
-                .WithPurchasedMining(true));
-        on.CreditGameplayEk("ada", 50, "earn-ada");
-        var nftOn = on.CraftEkNft("ada", 50, "craft-50");
-        var consumedOn = on.ConsumeEkNft("bob", nftOn.NftId!, "consume-1");
-        Assert.True(consumedOn.Ok);
-        Assert.False(consumedOn.MiningApplied);
-        Assert.Equal(0, consumedOn.MiningCredits);
-        Assert.Equal(EkEconomyCodes.PurchasedMiningNotImplemented, consumedOn.Detail);
-        Assert.Equal(50, on.GetPurchased("bob"));
-        Assert.Equal(0, on.GetEarned("bob"));
+    [Fact]
+    public void Purchased_ek_spend_does_not_call_hell_mining_or_aura_and_keeps_ranking() {
+        using var probe = new EffectProbe();
+        probe.AssertLive();
+
+        var svc = FixtureEarned();
+        svc.CreditGameplayEk("ada", 80, "earn-ada");
+        svc.CreditGameplayEk("grind", 4, "earn-grind");
+        var crafted = svc.CraftEkNft("ada", 50, "craft-50");
+        Assert.True(crafted.Ok);
+        var consumed = svc.ConsumeEkNft("bob", crafted.NftId!, "consume-buy");
+        Assert.True(consumed.Ok);
+        svc.SetGameGold("bob", 100);
+        svc.SetGameMaterial("bob", "relic", 2);
+        var ranking = Ranking(svc);
+        probe.Clear();
+
+        var spent = svc.ContributeRaidMaster(
+            "bob",
+            ekCost: 50,
+            goldCost: 10,
+            otherCosts: new Dictionary<string, long> { ["relic"] = 1 },
+            "raid-buy");
+
+        Assert.True(spent.Ok);
+        Assert.Equal(0, svc.GetPurchased("bob"));
+        Assert.Equal(0, svc.GetEarned("bob"));
+        Assert.Equal(90, svc.GetGold("bob"));
+        Assert.False(spent.MiningApplied);
+        Assert.Equal(0, spent.MiningCredits);
+        Assert.Equal(ranking, Ranking(svc));
+        Assert.Equal(30, Ranking(svc).Single(row => row.PlayerId == "ada").Earned);
+        Assert.Equal(4, Ranking(svc).Single(row => row.PlayerId == "grind").Earned);
+        Assert.DoesNotContain(Ranking(svc), row => row.PlayerId == "bob");
+        probe.AssertSilent();
     }
 
     [Fact]
@@ -474,6 +510,49 @@ public class EkEconomyTests {
         Assert.Null(result.ChainTxId);
         if (result.Fee is not null) {
             Assert.False(result.Fee.Collected);
+        }
+    }
+
+    static List<EkRankingEntry> Ranking(EkEconomyService svc) => svc.KillerRanking().ToList();
+
+    /// <summary>
+    /// Records <see cref="HellMiningStore"/> EK hooks and <see cref="EkAura.NotifyEarned"/>.
+    /// Purchased credit and spend must leave both lists empty.
+    /// </summary>
+    sealed class EffectProbe : IDisposable {
+        public List<string> Mining { get; } = new();
+        public List<string> Aura { get; } = new();
+
+        public EffectProbe() {
+            HellMiningStore.EkHookObserver = (hook, wallet) => Mining.Add($"{hook}:{wallet}");
+            EkAura.Observer = player => Aura.Add(player);
+        }
+
+        public void Clear() {
+            Mining.Clear();
+            Aura.Clear();
+        }
+
+        public void AssertLive() {
+            HellMiningStore.RecordEkCount(null, null, 0);
+            HellMiningStore.RecordLegendaryEk(null, 0);
+            HellMiningStore.RecordTop100Ek(null, 0);
+            EkAura.NotifyEarned("probe");
+            Assert.Contains(Mining, row => row.StartsWith("RecordEkCount:", StringComparison.Ordinal));
+            Assert.Contains(Mining, row => row.StartsWith("RecordLegendaryEk:", StringComparison.Ordinal));
+            Assert.Contains(Mining, row => row.StartsWith("RecordTop100Ek:", StringComparison.Ordinal));
+            Assert.Contains("probe", Aura);
+            Clear();
+        }
+
+        public void AssertSilent() {
+            Assert.Empty(Mining);
+            Assert.Empty(Aura);
+        }
+
+        public void Dispose() {
+            HellMiningStore.EkHookObserver = null;
+            EkAura.Observer = null;
         }
     }
 }

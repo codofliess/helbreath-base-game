@@ -24,7 +24,6 @@ public static class EkEconomyCodes {
     public const string InvalidKey = "invalid_key";
     public const string InvalidPlayer = "invalid_player";
     public const string RaidOrderInvalid = "raid_order_invalid";
-    public const string PurchasedMiningNotImplemented = "purchased_mining_not_implemented";
 }
 
 /// <summary>

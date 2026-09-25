@@ -2,7 +2,7 @@ namespace Server.Helpers;
 
 /// <summary>
 /// Process-wide EK economy ledger. Gameplay credits from <see cref="PvpAcademy"/> land in the earned balance.
-/// Purchased NFT EKs never enter that path and do not call <see cref="HellMining"/>.
+/// Purchased EK is spend-only: it does not call <see cref="HellMiningStore"/> or <see cref="EkAura"/>.
 /// </summary>
 public static class EkEconomyHost {
     static EkEconomyService? current;
@@ -23,7 +23,7 @@ public static class EkEconomyHost {
             $"[EkEconomy] emitir={config.Emitir} min={config.EkNftMinAmount} " +
             $"bindUsd={config.Fees.EkNftBindUsd} unbindUsd={config.Fees.HeroSetPieceUnbindUsd} " +
             $"craftSource={(string.IsNullOrWhiteSpace(config.EkNftCraftSource) ? "unspecified" : config.EkNftCraftSource)} " +
-            $"purchasedMining={config.PurchasedEkMiningEnabled} legacyPlayers={legacyEarnedByPlayer.Count}.");
+            $"legacyPlayers={legacyEarnedByPlayer.Count}.");
     }
 
     /// <summary>Idempotent earned credit for a gameplay EK. No-op until <see cref="Initialize"/>.</summary>

@@ -284,14 +284,15 @@ Implementación off-chain en `multiplayer/server/Helpers/EkEconomyService.cs`. C
 | NFT | Cualquier cantidad ≥ `ek_nft_min_amount` (50). No hay packs fijos. Menos que el mínimo se rechaza |
 | Fee de bind | Una sola vez: `fees.ek_nft_bind_usd` (5). No escala con la cantidad de EK. Queda en auditoría con `collected=false` |
 | Consumir | Quema el stub local (`chainMint=null`) y acredita la cantidad a `purchased` de quien consume. No sube el ranking. Un segundo consumo falla. La misma idempotency key no acredita dos veces |
-| Minado § 1.7 | `purchased_ek_mining_enabled=false`. Aunque se prenda el flag, **no** se minan créditos ni tokens por EK comprados (no implementado) |
+| EK comprado (regla cerrada) | No da créditos ni tokens de minería a nadie, ni atributos, ni aura. No llama `HellMiningStore.RecordEkCount` / `RecordLegendaryEk` / `RecordTop100Ek` ni `EkAura.NotifyEarned`. No suma al ranking histórico. Solo se usa (raid master del clan y otros gastos). No hay flag |
 | Raid master | Gasta EK de los dos saldos, más oro y otros materiales, en una sola operación. Orden `raid_master_spend_order`, default `purchased` luego `earned`. Si falta algo, no descuenta nada |
 | `emitir` | `false`: las operaciones de ledger siguen; ningún rail real se ejecuta. `true`: la operación se rechaza (este build no tiene rail) |
 
 `PvpAcademy.RecordEnemyKill` y el EK de academia (Hard/Elite) acreditan `earned` con clave idempotente. El origen del débito al **armar** el NFT es `ek_nft_craft_source`. En el JSON de producción está `null` (fail-closed, no mueve EK). No es una regla de producto: ver preguntas abiertas del PR.
 
+Regla cerrada: los EK comprados no minan créditos ni tokens, no dan atributos ni aura, y no suman al ranking. Solo se gastan.
+
 Preguntas abiertas (no cerradas en código):
 
-1. ¿Los EK comprados minan créditos o tokens (§ 1.7)? Hoy no. Flag apagado y el camino no está implementado.
-2. ¿De qué saldo salen los EK al armar un NFT? Flag `ek_nft_craft_source` sin valor. Los tests usan `earned` solo como fixture.
-3. Orden de consumo del raid master: default implementado `purchased` → `earned`, configurable. Falta el GO de Martín.
+1. ¿De qué saldo salen los EK al armar un NFT? Flag `ek_nft_craft_source` sin valor. Los tests usan `earned` solo como fixture.
+2. Orden de consumo del raid master: default implementado `purchased` → `earned`, configurable. Falta el GO de Martín.

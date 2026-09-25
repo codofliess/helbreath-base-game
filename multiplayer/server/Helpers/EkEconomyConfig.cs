@@ -46,20 +46,12 @@ public sealed class EkEconomyConfig {
     [JsonPropertyName("ek_nft_craft_source")]
     public string? EkNftCraftSource { get; init; }
 
-    /// <summary>
-    /// Purchased EKs mining credits or tokens (§ 1.7). Default off. The mine path is not implemented;
-    /// turning this on still does not mint credits or tokens.
-    /// </summary>
-    [JsonPropertyName("purchased_ek_mining_enabled")]
-    public bool PurchasedEkMiningEnabled { get; init; }
-
     public static EkEconomyConfig CreateDefault() => new() {
         Emitir = false,
         EkNftMinAmount = 50,
         Fees = EkEconomyFees.CreateDefault(),
         RaidMasterSpendOrder = ["purchased", "earned"],
         EkNftCraftSource = null,
-        PurchasedEkMiningEnabled = false,
     };
 
     /// <summary>Loads <paramref name="path"/> or returns <see cref="CreateDefault"/> when the file is missing.</summary>
@@ -80,7 +72,6 @@ public sealed class EkEconomyConfig {
         Fees = Fees,
         RaidMasterSpendOrder = RaidMasterSpendOrder,
         EkNftCraftSource = craftSource,
-        PurchasedEkMiningEnabled = PurchasedEkMiningEnabled,
     };
 
     public EkEconomyConfig WithEmitir(bool emitir) => new() {
@@ -89,16 +80,6 @@ public sealed class EkEconomyConfig {
         Fees = Fees,
         RaidMasterSpendOrder = RaidMasterSpendOrder,
         EkNftCraftSource = EkNftCraftSource,
-        PurchasedEkMiningEnabled = PurchasedEkMiningEnabled,
-    };
-
-    public EkEconomyConfig WithPurchasedMining(bool enabled) => new() {
-        Emitir = Emitir,
-        EkNftMinAmount = EkNftMinAmount,
-        Fees = Fees,
-        RaidMasterSpendOrder = RaidMasterSpendOrder,
-        EkNftCraftSource = EkNftCraftSource,
-        PurchasedEkMiningEnabled = enabled,
     };
 
     public EkEconomyConfig WithSpendOrder(string[] order) => new() {
@@ -107,7 +88,6 @@ public sealed class EkEconomyConfig {
         Fees = Fees,
         RaidMasterSpendOrder = order,
         EkNftCraftSource = EkNftCraftSource,
-        PurchasedEkMiningEnabled = PurchasedEkMiningEnabled,
     };
 
     /// <summary>Rejects a config that would hide a negative fee or a zero minimum. Does not invent a craft-source side.</summary>

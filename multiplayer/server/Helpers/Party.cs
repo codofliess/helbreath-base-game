@@ -15,6 +15,7 @@ namespace Server.Helpers;
 /// </summary>
 public static class Party {
     public const string InviteUsageMessage = "Type /invite followed by a name.";
+    public const string InviteSelfMessage = "You can't invite yourself.";
     public const string PartyFullMessage = "Your party is full.";
     public const string PartyChatNeedInviteMessage =
         "You're not in a party. Type /invite and a name to start one.";
@@ -102,11 +103,21 @@ public static class Party {
             return;
         }
 
+        // Before the online lookup: a self-name must not be reported as offline.
+        if (IsOwnCharacterName(player, typedName)) {
+            SendSystem(player, InviteSelfMessage);
+            return;
+        }
+
         if (!OnlinePlayerDirectory.TryGetByCharacterName(typedName, out var target) ||
             target is null ||
-            target.Disconnected ||
-            target.SessionId == player.SessionId) {
+            target.Disconnected) {
             SendSystem(player, OfflineMessage(typedName));
+            return;
+        }
+
+        if (target.SessionId == player.SessionId) {
+            SendSystem(player, InviteSelfMessage);
             return;
         }
 
@@ -352,6 +363,12 @@ public static class Party {
 
     private static void SendSystem(GameWorldPlayer player, string message) {
         NetworkManager.SendToPlayer(player, NetworkManager.CreateSendMessage(message));
+    }
+
+    private static bool IsOwnCharacterName(GameWorldPlayer player, string typedName) {
+        var own = (player.CharacterName ?? string.Empty).Trim();
+        return own.Length > 0 &&
+            string.Equals(typedName, own, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string DisplayName(GameWorldPlayer player, string fallback) {

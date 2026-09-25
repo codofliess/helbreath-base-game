@@ -36,6 +36,23 @@ public sealed class PartyInviteTests : IDisposable {
     }
 
     [Fact]
+    public void Invite_SelfName_SendsCannotInviteYourself() {
+        var (elon, inbox) = CreateOnline("ElonQa");
+
+        Party.HandleInviteRequest(elon, "ElonQa");
+        Assert.Contains(inbox, SystemMessage(Party.InviteSelfMessage));
+        Assert.DoesNotContain(inbox, SystemMessage(Party.OfflineMessage("ElonQa")));
+        Assert.DoesNotContain(inbox, m => m.PayloadCase == ServerMessage.PayloadOneofCase.PartyInvitePrompt);
+
+        inbox.Clear();
+        Party.HandleInviteRequest(elon, "elonqa");
+        Assert.Contains(inbox, SystemMessage(Party.InviteSelfMessage));
+        Assert.DoesNotContain(inbox, SystemMessage(Party.OfflineMessage("elonqa")));
+        Assert.Equal("You can't invite yourself.", Party.InviteSelfMessage);
+        Assert.Null(elon.PartyCode);
+    }
+
+    [Fact]
     public void Invite_NameNotFound_SendsOffline() {
         var (alice, inbox) = CreateOnline("Alice");
 

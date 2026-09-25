@@ -732,13 +732,6 @@ function GuildPanel({ onBack }: { onBack: () => void }) {
     );
 }
 
-/** F5 character sheet player-name line (`Player: {login name}`). */
-export function CharacterF5PlayerLine({ playerName }: { playerName: string | undefined }) {
-    return (
-        <span className="character-f5-player">{`Player: ${playerName?.trim() || '—'}`}</span>
-    );
-}
-
 /**
  * F5 Character — DialogText panel (270×376).
  * Labels baked in ND_TEXT frame 0; Quest/Party/LevelSet ND_BUTTON at (15|98|180, 340).
@@ -837,7 +830,9 @@ export function CharacterDialog({
                                 </span>
                             </div>
                             <div className="character-f5-band character-f5-band-meta">
-                                <CharacterF5PlayerLine playerName={stats.playerName} />
+                                <span className="character-f5-player">
+                                    {`Player: ${stats.playerName?.trim() || '—'}`}
+                                </span>
                                 <span className="character-f5-contrib">
                                     {`Contribution: ${formatNum(stats.contribution)}`}
                                 </span>

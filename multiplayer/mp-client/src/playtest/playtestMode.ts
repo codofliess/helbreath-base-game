@@ -58,7 +58,7 @@ export function isPlaytestClient(): boolean {
     if (typeof window !== 'undefined' && !isLoopbackHostname(window.location.hostname)) {
         return false;
     }
-    const raw = (import.meta.env.VITE_PLAYTEST ?? '').toString().trim().toLowerCase();
+    const raw = (import.meta.env?.VITE_PLAYTEST ?? '').toString().trim().toLowerCase();
     return raw === '1' || raw === 'true' || raw === 'yes';
 }
 

@@ -25,18 +25,19 @@ public sealed class PlaytestModeTests {
 
     [Fact]
     public void TryValidate_WhenPlaytestUnset_IsInertEvenWithBypassToken() {
-        using var _ = PlaytestEnv.Set(null);
-        Assert.False(PlaytestMode.IsEnabled);
-        Assert.False(PlaytestMode.TryValidate("playtest-a", PlaytestMode.AuthToken, out _, out var error));
-        Assert.Equal("Playtest door is off.", error);
-        Assert.False(PlaytestMode.TryResolveSeededGuild("playtest-a", out var guildId, out _));
-        Assert.Equal("", guildId);
-        Assert.Equal("Chars", PlaytestMode.CharsDirectoryName);
+        using (PlaytestEnv.Set(null)) {
+            Assert.False(PlaytestMode.IsEnabled);
+            Assert.False(PlaytestMode.TryValidate("playtest-a", PlaytestMode.AuthToken, out _, out var error));
+            Assert.Equal("Playtest door is off.", error);
+            Assert.False(PlaytestMode.TryResolveSeededGuild("playtest-a", out var guildId, out _));
+            Assert.Equal("", guildId);
+            Assert.Equal("Chars", PlaytestMode.CharsDirectoryName);
+        }
     }
 
     [Fact]
     public void TryAuthorize_WhenPlaytestUnset_DoesNotAcceptBypassTokenAsWallet() {
-        using var _ = PlaytestEnv.Set(null);
+        using (PlaytestEnv.Set(null)) {
         // Without WALLET_AUTH_SECRET and without Development/ALLOW_INSECURE, this fails closed.
         var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
         var previousInsecure = Environment.GetEnvironmentVariable("ALLOW_INSECURE_AUTH");
@@ -51,11 +52,12 @@ public sealed class PlaytestModeTests {
             Environment.SetEnvironmentVariable("ALLOW_INSECURE_AUTH", previousInsecure);
             Environment.SetEnvironmentVariable("WALLET_AUTH_SECRET", previousSecret);
         }
+        }
     }
 
     [Fact]
     public void Seed_WhenPlaytestOn_PutsAAndCInSameGuild_BInAnother_NoPartyOnSeats() {
-        using var _ = PlaytestEnv.Set("1");
+        using (PlaytestEnv.Set("1")) {
         Assert.True(PlaytestMode.IsEnabled);
         Assert.True(PlaytestMode.TryGetSeatByKey("a", out var seatA));
         Assert.True(PlaytestMode.TryGetSeatByKey("b", out var seatB));
@@ -81,6 +83,7 @@ public sealed class PlaytestModeTests {
         Assert.Equal(guildA, guildC);
         Assert.NotEqual(guildA, guildB);
         Assert.Equal("CharsPlaytest", PlaytestMode.CharsDirectoryName);
+        }
     }
 
     [Fact]

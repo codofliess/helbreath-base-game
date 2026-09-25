@@ -496,11 +496,39 @@ describe('hub Phantom sign path (source)', () => {
 
     it('walletAuth prefers Phantom signMessage and clears stale Sol tokens', () => {
         const src = fs.readFileSync(path.join(clientRoot, 'src/utils/walletAuth.ts'), 'utf8');
+        const detect = fs.readFileSync(path.join(clientRoot, 'src/utils/phantomDetect.ts'), 'utf8');
         assert.match(src, /Approve the signature in the Phantom extension/);
         assert.match(src, /phantom\.signMessage\(encoded, 'utf8'\)/);
         assert.match(src, /clearStoredWalletAuth\(\)/);
         assert.match(src, /onlyIfTrusted: false/);
-        assert.match(src, /w\.phantom\?\.solana \?\? w\.solana/);
+        assert.match(src, /detectPhantomProvider/);
+        assert.match(detect, /w\.phantom\?\.solana \?\? w\.solana/);
+        assert.match(detect, /wallet-standard:register-wallet/);
+        assert.match(detect, /wallet-standard:app-ready/);
+        assert.match(detect, /solana:signMessage/);
+        assert.doesNotMatch(src, /signTransaction/);
+        assert.doesNotMatch(detect, /signTransaction/);
+    });
+
+    it('ConnectDialog shows Phantom reach notice under Bind Phantom & enter', () => {
+        const src = fs.readFileSync(path.join(clientRoot, 'src/ui/dialogs/ConnectDialog.tsx'), 'utf8');
+        const bindIdx = src.indexOf('Bind Phantom & enter');
+        const desktopTitle = src.indexOf("Can't reach Phantom.");
+        const retry = src.search(/>\s*Retry\s*</);
+        const getIt = src.indexOf('No Phantom? Get it');
+        const mobileTitle = src.indexOf('Open ChainLords inside Phantom.');
+        const openIn = src.search(/>\s*Open in Phantom\s*</);
+        const hubError = src.indexOf('login-hub-error');
+        assert.ok(bindIdx >= 0);
+        assert.ok(desktopTitle > bindIdx, 'desktop notice must sit below Bind Phantom');
+        assert.ok(retry > desktopTitle);
+        assert.ok(getIt > retry);
+        assert.ok(mobileTitle > bindIdx);
+        assert.ok(openIn > mobileTitle);
+        assert.ok(hubError > desktopTitle);
+        assert.match(src, /isPhantomNotFoundError/);
+        assert.match(src, /buildPhantomBrowseLink/);
+        assert.match(src, /https:\/\/phantom\.app\/download/);
     });
 });
 

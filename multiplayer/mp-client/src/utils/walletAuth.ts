@@ -1,4 +1,9 @@
 import { parkPhaserForWalletUi } from '../game/phaserWalletPark';
+import {
+    detectPhantomProvider,
+    PhantomNotFoundError,
+    type PhantomProvider,
+} from './phantomDetect';
 
 const DEFAULT_MIDDLEWARE_URL = 'http://localhost:3001';
 const PROD_MIDDLEWARE_URL =
@@ -14,37 +19,22 @@ export interface WalletSession {
     chainId?: AuthChainId;
 }
 
-type PhantomProvider = {
-    isPhantom?: boolean;
-    isConnected?: boolean;
-    publicKey?: { toBase58: () => string };
-    connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toBase58: () => string } }>;
-    signMessage: (
-        message: Uint8Array,
-        display?: string,
-    ) => Promise<{ signature: Uint8Array; publicKey?: { toBase58: () => string } }>;
-    request?: (args: { method: string; params: { message: Uint8Array; display: string } }) => Promise<{
-        signature: Uint8Array;
-        publicKey?: { toBase58: () => string };
-    }>;
-    on?: (event: string, handler: (publicKey?: { toBase58: () => string } | null) => void) => void;
-    off?: (event: string, handler: (publicKey?: { toBase58: () => string } | null) => void) => void;
-};
-
 export const PHANTOM_SIGN_PENDING_TOAST = 'Approve the signature in the Phantom extension';
+
+export {
+    PhantomNotFoundError,
+    isPhantomNotFoundError,
+    isMobileUserAgent,
+    buildPhantomBrowseLink,
+} from './phantomDetect';
 
 type Eip1193Provider = {
     request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
     providers?: Eip1193Provider[];
 };
 
-function getPhantom(): PhantomProvider | undefined {
-    const w = window as Window & {
-        solana?: PhantomProvider;
-        phantom?: { solana?: PhantomProvider };
-    };
-    const injected = w.phantom?.solana ?? w.solana;
-    return injected?.isPhantom ? injected : undefined;
+async function getPhantom(): Promise<PhantomProvider | undefined> {
+    return detectPhantomProvider();
 }
 
 function getInjectedEvm(): Eip1193Provider | undefined {
@@ -780,9 +770,9 @@ function resolvePhantomWalletAfterConnect(
 }
 
 async function connectSolanaAndAuthenticate(onSignPending?: () => void): Promise<WalletSession> {
-    const phantom = getPhantom();
+    const phantom = await getPhantom();
     if (!phantom) {
-        throw new Error('Phantom wallet not found. Install it from phantom.app');
+        throw new PhantomNotFoundError();
     }
 
     return parkPhaserForWalletUi(async () => {

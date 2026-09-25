@@ -36,6 +36,9 @@ import {
 } from '../store/ArenaPactDialog.store';
 import {
     PHANTOM_SIGN_PENDING_TOAST,
+    buildPhantomBrowseLink,
+    isMobileUserAgent,
+    isPhantomNotFoundError,
     abortHubWorldEnter,
     clearInMemorySolSession,
     clearStoredWalletAuth,
@@ -137,6 +140,8 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     const [pvpInboxBusy, setPvpInboxBusy] = useState(false);
     /** Phantom (sol) / RH Chain / Base — same /auth/challenge + /auth/verify. */
     const [authChain, setAuthChain] = useState<AuthChainId>('sol');
+    /** Inline under Bind Phantom — not the bottom-of-screen hubError. */
+    const [phantomNotice, setPhantomNotice] = useState<'desktop' | 'mobile' | undefined>(undefined);
 
     const collectInboxNames = useCallback((): string[] => {
         const wallet = walletSession?.wallet ?? getStoredWalletPubkey();
@@ -760,6 +765,9 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     ): Promise<typeof walletSession> => {
         setWalletBusy(true);
         setHubError(undefined);
+        if (chainId === 'sol') {
+            setPhantomNotice(undefined);
+        }
         persistPreferredAuthChain(chainId);
         setAuthChain(chainId);
         try {
@@ -776,6 +784,7 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                           }
                         : undefined,
             });
+            setPhantomNotice(undefined);
             setConnectWalletSession(session);
             EventBus.emit(TOAST_REQUESTED, {
                 message: `Wallet connected (${chainId}): ${session.wallet.slice(0, 4)}…${session.wallet.slice(-4)}`,
@@ -783,6 +792,11 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
             });
             return session;
         } catch (error) {
+            if (chainId === 'sol' && isPhantomNotFoundError(error)) {
+                const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+                setPhantomNotice(isMobileUserAgent(ua) ? 'mobile' : 'desktop');
+                return null;
+            }
             const message = error instanceof Error ? error.message : 'Wallet connection failed';
             setHubError(message);
             EventBus.emit(TOAST_REQUESTED, { message, severity: 'error' });
@@ -987,6 +1001,48 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
                                         ? 'Enter Helbreath World'
                                         : 'Bind seal & enter'}
                             </button>
+                            {authChain === 'sol' && phantomNotice === 'desktop' && (
+                                <div className="login-hub-phantom-notice" role="alert">
+                                    <p className="login-hub-phantom-notice-title">Can't reach Phantom.</p>
+                                    <p className="login-hub-phantom-notice-body">
+                                        Make sure it's unlocked and allowed on this site, then tap Retry.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className="login-gate-primary-btn login-hub-phantom-notice-retry"
+                                        disabled={walletBusy}
+                                        onClick={() => void handleEnterWorldFromHub()}
+                                    >
+                                        Retry
+                                    </button>
+                                    <a
+                                        className="login-hub-phantom-notice-get"
+                                        href="https://phantom.app/download"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        No Phantom? Get it
+                                    </a>
+                                </div>
+                            )}
+                            {authChain === 'sol' && phantomNotice === 'mobile' && (
+                                <div className="login-hub-phantom-notice" role="alert">
+                                    <p className="login-hub-phantom-notice-title">
+                                        Open ChainLords inside Phantom.
+                                    </p>
+                                    <a
+                                        className="login-gate-primary-btn login-hub-phantom-notice-retry"
+                                        href={buildPhantomBrowseLink(
+                                            window.location.href,
+                                            window.location.origin,
+                                        )}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        Open in Phantom
+                                    </a>
+                                </div>
+                            )}
                             <button
                                 type="button"
                                 className="login-gate-secondary-btn login-hub-resign-btn"

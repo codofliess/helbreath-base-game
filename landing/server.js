@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
+const { injectReglasIntoHtml } = require('./reglas-economicas');
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
@@ -42,6 +43,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
   '.woff2': 'font/woff2',
+  '.md': 'text/markdown; charset=utf-8',
 };
 
 function shouldProxy(pathname) {
@@ -97,6 +99,25 @@ async function proxyRequest(req, res, route, url) {
   }
 }
 
+function isLandingIndex(filePath) {
+  return path.resolve(filePath) === path.join(ROOT, 'index.html');
+}
+
+function withReglasEconomicas(html) {
+  try {
+    const markdown = fs.readFileSync(path.join(ROOT, 'content', 'reglas-economicas.md'), 'utf8');
+    return injectReglasIntoHtml(html, markdown);
+  } catch (error) {
+    return html;
+  }
+}
+
+function sendIndex(res, status, data) {
+  send(res, status, withReglasEconomicas(data.toString('utf8')), {
+    'Content-Type': 'text/html; charset=utf-8',
+  });
+}
+
 function serveStatic(req, res, url) {
   let filePath = path.join(ROOT, decodeURIComponent(url.pathname));
   if (url.pathname.endsWith('/')) {
@@ -120,7 +141,7 @@ function serveStatic(req, res, url) {
           send(res, 404, 'Not found');
           return;
         }
-        send(res, 200, data, { 'Content-Type': 'text/html; charset=utf-8' });
+        sendIndex(res, 200, data);
       });
       return;
     }
@@ -128,6 +149,10 @@ function serveStatic(req, res, url) {
     fs.readFile(filePath, (readErr, data) => {
       if (readErr) {
         send(res, 500, 'Read error');
+        return;
+      }
+      if (isLandingIndex(filePath)) {
+        sendIndex(res, 200, data);
         return;
       }
       const ext = path.extname(filePath).toLowerCase();
@@ -158,4 +183,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { shouldProxy, isAssetPath, PROXY_ROUTES, MIDDLEWARE_URL, PLAY_URL, server };
+module.exports = {
+  shouldProxy,
+  isAssetPath,
+  PROXY_ROUTES,
+  MIDDLEWARE_URL,
+  PLAY_URL,
+  server,
+  withReglasEconomicas,
+};

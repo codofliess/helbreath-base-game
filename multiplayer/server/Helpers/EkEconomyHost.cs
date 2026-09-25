@@ -1,3 +1,5 @@
+using Server.Persistence;
+
 namespace Server.Helpers;
 
 /// <summary>
@@ -17,6 +19,7 @@ public static class EkEconomyHost {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(legacyEarnedByPlayer);
         var service = EkEconomyService.Load(ledgerPath, config);
+        service.BalanceProjection = ProjectBalance;
         service.ImportLegacyBalances(legacyEarnedByPlayer);
         current = service;
         Console.WriteLine(
@@ -40,5 +43,42 @@ public static class EkEconomyHost {
         } catch (Exception ex) {
             Console.WriteLine($"[EkEconomy] gameplay credit failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Records the config fee for a seal <see cref="ItemBind"/> already consumed.
+    /// No-op until <see cref="Initialize"/>. Never throws back into the bind packet.
+    /// </summary>
+    public static void RecordSealStubFee(
+        string playerId,
+        int sealItemId,
+        bool guildBoundHeroPiece,
+        string idempotencyKey) {
+        var service = current;
+        if (service is null || string.IsNullOrWhiteSpace(playerId)) {
+            return;
+        }
+        try {
+            var result = service.RecordSealStubFee(playerId, sealItemId, guildBoundHeroPiece, idempotencyKey);
+            if (!result.Ok && !result.Replay) {
+                Console.WriteLine($"[EkEconomy] seal stub skipped: {result.Code}");
+            }
+        } catch (Exception ex) {
+            Console.WriteLine($"[EkEconomy] seal stub failed: {ex.Message}");
+        }
+    }
+
+    static void ProjectBalance(string playerId, long earned, long purchased) {
+        var persistence = GamePersistence.Current;
+        if (persistence is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                await persistence.UpsertEkBalanceAsync(playerId, earned, purchased).ConfigureAwait(false);
+            } catch (Exception ex) {
+                Console.Error.WriteLine($"[EkEconomy] ek_balances upsert failed for '{playerId}': {ex.Message}");
+            }
+        });
     }
 }

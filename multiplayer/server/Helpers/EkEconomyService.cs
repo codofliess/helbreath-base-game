@@ -30,6 +30,11 @@ public sealed class EkEconomyService {
     readonly List<AuditState> audit = new();
     long nextAuditId = 1;
 
+    /// <summary>
+    /// Optional projection into <c>ek_balances</c>. Null in unit tests. The host points this at Postgres when it is enabled.
+    /// </summary>
+    public Action<string, long, long>? BalanceProjection { get; set; }
+
     public EkEconomyService(EkEconomyConfig config, string? ledgerPath = null) {
         ArgumentNullException.ThrowIfNull(config);
         config.Validate();
@@ -114,6 +119,7 @@ public sealed class EkEconomyService {
     /// </summary>
     public void ImportLegacyBalances(IReadOnlyDictionary<string, long> lifetimeEarnedByPlayer) {
         ArgumentNullException.ThrowIfNull(lifetimeEarnedByPlayer);
+        List<(string PlayerId, long Earned, long Purchased)> projected;
         lock (gate) {
             foreach (var pair in lifetimeEarnedByPlayer) {
                 var playerId = NormalizeId(pair.Key);
@@ -134,6 +140,15 @@ public sealed class EkEconomyService {
                 }
             }
             PersistUnlocked();
+            projected = accounts.Values.Select(account => (account.PlayerId, account.Earned, account.Purchased)).ToList();
+        }
+        ProjectBalances(projected);
+    }
+
+    /// <summary>UTC day of this player's first gameplay EK, if any. Purchased EK never sets it.</summary>
+    public string? GetGuildFirstEkDay(string playerId) {
+        lock (gate) {
+            return TryAccount(playerId, out var account) ? account.GuildFirstEkDay : null;
         }
     }
 
@@ -149,6 +164,11 @@ public sealed class EkEconomyService {
             account.Earned = checked(account.Earned + amount);
             account.GameplayCursor = checked(account.GameplayCursor + amount);
             account.AcademySynced = true;
+            var today = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (!string.Equals(account.GuildFirstEkDay, today, StringComparison.Ordinal)) {
+                account.GuildFirstEkDay = today;
+                EkGuildTax.NotifyGameplayFirstEk(account.PlayerId, today);
+            }
             return Success(
                 "credit_gameplay",
                 account,
@@ -191,7 +211,12 @@ public sealed class EkEconomyService {
     }
 
     /// <summary>Registers a persistent hero piece. Tournament loadout pieces cannot be unbound for sale.</summary>
-    public void GrantHeroPiece(string playerId, string pieceUid, int itemId, bool tournamentLoadout = false) {
+    public void GrantHeroPiece(
+        string playerId,
+        string pieceUid,
+        int itemId,
+        bool tournamentLoadout = false,
+        bool guildBound = false) {
         lock (gate) {
             if (!TryNormalizePlayer(playerId, out var owner) || !TryNormalizePlayer(pieceUid, out var uid)) {
                 throw new ArgumentException("Invalid id.");
@@ -202,6 +227,7 @@ public sealed class EkEconomyService {
                 ItemId = itemId,
                 Bound = true,
                 TournamentLoadout = tournamentLoadout,
+                GuildBound = guildBound,
             };
             PersistUnlocked();
         }
@@ -281,7 +307,8 @@ public sealed class EkEconomyService {
             account.Purchased = checked(account.Purchased + nft.Amount);
             nft.Burned = true;
             nft.HolderId = account.PlayerId;
-            // Spend-only balance. Do not call HellMiningStore EK hooks or EkAura.NotifyEarned.
+            // Spend-only. Do not call HellMining.OnEnemyKillAwarded, HellMiningStore EK hooks,
+            // EkAura.NotifyEarned, or EkGuildTax.NotifyGameplayFirstEk.
             return Success(
                 "consume_ek_nft",
                 account,
@@ -305,7 +332,7 @@ public sealed class EkEconomyService {
                 return Fail(error, "unbind_hero_piece", playerId, 0, 0, nftHint);
             }
             taken[0].Bound = false;
-            var fee = StubFee(EkEconomyConfig.HeroSetPieceUnbindFeeKey, config.Fees.HeroSetPieceUnbindUsd, 1);
+            var fee = FeeForPieces(taken);
             var account = GetOrCreate(NormalizeId(playerId));
             return Success("unbind_hero_piece", account, 1, fee, null, account.Earned, account.Purchased, false, 0);
         });
@@ -323,10 +350,7 @@ public sealed class EkEconomyService {
             foreach (var piece in taken) {
                 piece.Bound = false;
             }
-            var fee = StubFee(
-                EkEconomyConfig.HeroSetPieceUnbindFeeKey,
-                config.Fees.HeroSetPieceUnbindUsd,
-                taken.Count);
+            var fee = FeeForPieces(taken);
             var account = GetOrCreate(NormalizeId(playerId));
             return Success("sell_hero_set", account, taken.Count, fee, null, account.Earned, account.Purchased, false, 0);
         });
@@ -420,6 +444,36 @@ public sealed class EkEconomyService {
     }
 
     /// <summary>
+    /// Audit-only fee for a seal that <see cref="ItemBind"/> already consumed.
+    /// Does not move EK, does not collect USD, and does not call mining, aura, or guild first-EK.
+    /// Seal item ids stay on <see cref="ItemBind"/>.
+    /// </summary>
+    public EkEconomyResult RecordSealStubFee(
+        string playerId,
+        int sealItemId,
+        bool guildBoundHeroPiece,
+        string idempotencyKey) {
+        return Mutate("seal_stub", playerId, idempotencyKey, () => {
+            if (!TrySealFee(sealItemId, guildBoundHeroPiece, out var feeKey, out var usd)) {
+                return Fail(EkEconomyCodes.InvalidAmount, "seal_stub", playerId, 0, 0);
+            }
+            var account = GetOrCreate(NormalizeId(playerId));
+            var beforeEarned = account.Earned;
+            var beforePurchased = account.Purchased;
+            return Success(
+                "seal_stub",
+                account,
+                1,
+                StubFee(feeKey, usd, 1),
+                nftId: null,
+                beforeEarned,
+                beforePurchased,
+                miningApplied: false,
+                miningCredits: 0);
+        });
+    }
+
+    /// <summary>
     /// Explicit attempt to move USD or submit a mint/burn. Always refused.
     /// <c>emitir=false</c> blocks the attempt; <c>emitir=true</c> is also refused because this build has no rail.
     /// </summary>
@@ -431,6 +485,8 @@ public sealed class EkEconomyService {
     }
 
     EkEconomyResult Mutate(string op, string playerId, string idempotencyKey, Func<Mutation> apply) {
+        (string PlayerId, long Earned, long Purchased)? projected = null;
+        EkEconomyResult result;
         lock (gate) {
             if (!TryNormalizePlayer(playerId, out var player)) {
                 return ToResult(Fail(EkEconomyCodes.InvalidPlayer, op, playerId ?? "", 0, 0), replay: false);
@@ -456,7 +512,11 @@ public sealed class EkEconomyService {
                 AppendAudit(mutation);
                 receipts[key] = ToReceipt(mutation);
                 PersistUnlocked();
-                return ToResult(mutation, replay: false);
+                if (mutation.Ok &&
+                    (mutation.EarnedAfter != mutation.EarnedBefore || mutation.PurchasedAfter != mutation.PurchasedBefore)) {
+                    projected = (player, mutation.EarnedAfter, mutation.PurchasedAfter);
+                }
+                result = ToResult(mutation, replay: false);
             } catch (Exception ex) {
                 RestoreUnlocked(backup);
                 return new EkEconomyResult {
@@ -470,6 +530,10 @@ public sealed class EkEconomyService {
                 };
             }
         }
+        if (projected is { } row) {
+            ProjectBalances([row]);
+        }
+        return result;
     }
 
     bool RefuseRealEmission(string playerId, string op, long amount, out Mutation refused) {
@@ -586,6 +650,70 @@ public sealed class EkEconomyService {
     static FeeAssessment StubFee(string key, decimal unitUsd, int count) {
         var usd = unitUsd * count;
         return new FeeAssessment(key, usd, count);
+    }
+
+    FeeAssessment FeeForPieces(IReadOnlyList<PieceState> taken) {
+        var guild = 0;
+        var plain = 0;
+        foreach (var piece in taken) {
+            if (piece.GuildBound) {
+                guild++;
+            } else {
+                plain++;
+            }
+        }
+        if (guild > 0 && plain == 0) {
+            return StubFee(
+                EkEconomyConfig.HeroSetGuildBoundPieceUnbindFeeKey,
+                config.Fees.HeroSetGuildBoundPieceUnbindUsd,
+                guild);
+        }
+        if (guild == 0) {
+            return StubFee(EkEconomyConfig.HeroSetPieceUnbindFeeKey, config.Fees.HeroSetPieceUnbindUsd, plain);
+        }
+        var usd = (guild * config.Fees.HeroSetGuildBoundPieceUnbindUsd) +
+                  (plain * config.Fees.HeroSetPieceUnbindUsd);
+        return new FeeAssessment(EkEconomyConfig.HeroSetPieceUnbindFeeKey, usd, taken.Count);
+    }
+
+    bool TrySealFee(int sealItemId, bool guildBoundHeroPiece, out string feeKey, out decimal usd) {
+        if (sealItemId == ItemBind.SoulBindSealItemId) {
+            feeKey = EkEconomyConfig.SoulBindSealFeeKey;
+            usd = config.Fees.SoulBindSealUsd;
+            return true;
+        }
+        if (sealItemId == ItemBind.GuildBindSealItemId) {
+            feeKey = EkEconomyConfig.GuildBindSealFeeKey;
+            usd = config.Fees.GuildBindSealUsd;
+            return true;
+        }
+        if (sealItemId == ItemBind.UnbindSealItemId) {
+            if (guildBoundHeroPiece) {
+                feeKey = EkEconomyConfig.HeroSetGuildBoundPieceUnbindFeeKey;
+                usd = config.Fees.HeroSetGuildBoundPieceUnbindUsd;
+            } else {
+                feeKey = EkEconomyConfig.UnbindSealFeeKey;
+                usd = config.Fees.UnbindSealUsd;
+            }
+            return true;
+        }
+        feeKey = "";
+        usd = 0;
+        return false;
+    }
+
+    void ProjectBalances(IReadOnlyList<(string PlayerId, long Earned, long Purchased)> rows) {
+        var sink = BalanceProjection;
+        if (sink is null || rows.Count == 0) {
+            return;
+        }
+        foreach (var (playerId, earned, purchased) in rows) {
+            try {
+                sink(playerId, earned, purchased);
+            } catch (Exception ex) {
+                Console.Error.WriteLine($"[EkEconomy] ek_balances projection failed for '{playerId}': {ex.Message}");
+            }
+        }
     }
 
     Mutation Success(
@@ -889,6 +1017,7 @@ public sealed class EkEconomyService {
             ItemId = (int)ReadLong(element, "itemId"),
             Bound = !element.TryGetProperty("bound", out _) || ReadBool(element, "bound"),
             TournamentLoadout = ReadBool(element, "tournamentLoadout"),
+            GuildBound = ReadBool(element, "guildBound"),
         });
         AddRange(state.Receipts, root, "receipts", element => new ReceiptState {
             Key = ReadString(element, "key"),
@@ -942,6 +1071,7 @@ public sealed class EkEconomyService {
             Gold = TryReadLong(element, "gold", out var gold) ? gold : 0,
             GameplayCursor = TryReadLong(element, "gameplayCursor", out var cursor) ? cursor : 0,
             AcademySynced = ReadBool(element, "academySynced"),
+            GuildFirstEkDay = ReadNullableString(element, "guildFirstEkDay"),
         };
         if (hasEarned) {
             account.Earned = earned;
@@ -1100,6 +1230,9 @@ public sealed class EkEconomyService {
         [JsonPropertyName("academySynced")]
         public bool AcademySynced { get; set; }
 
+        [JsonPropertyName("guildFirstEkDay")]
+        public string? GuildFirstEkDay { get; set; }
+
         [JsonPropertyName("materials")]
         public Dictionary<string, long> Materials { get; set; } = new(StringComparer.Ordinal);
 
@@ -1110,6 +1243,7 @@ public sealed class EkEconomyService {
             Gold = Gold,
             GameplayCursor = GameplayCursor,
             AcademySynced = AcademySynced,
+            GuildFirstEkDay = GuildFirstEkDay,
             Materials = new Dictionary<string, long>(Materials, StringComparer.Ordinal),
         };
     }
@@ -1159,12 +1293,16 @@ public sealed class EkEconomyService {
         [JsonPropertyName("tournamentLoadout")]
         public bool TournamentLoadout { get; set; }
 
+        [JsonPropertyName("guildBound")]
+        public bool GuildBound { get; set; }
+
         public PieceState Copy() => new() {
             PieceUid = PieceUid,
             OwnerId = OwnerId,
             ItemId = ItemId,
             Bound = Bound,
             TournamentLoadout = TournamentLoadout,
+            GuildBound = GuildBound,
         };
     }
 

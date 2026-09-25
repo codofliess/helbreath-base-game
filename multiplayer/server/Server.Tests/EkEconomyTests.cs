@@ -1,3 +1,4 @@
+using Mmorpg.Network;
 using Server.Helpers;
 using Xunit;
 
@@ -25,6 +26,13 @@ public class EkEconomyTests {
         Assert.Equal(50, config.EkNftMinAmount);
         Assert.Equal(FlatUsd, config.Fees.EkNftBindUsd);
         Assert.Equal(FlatUsd, config.Fees.HeroSetPieceUnbindUsd);
+        Assert.Equal(FlatUsd, config.Fees.HeroSetGuildBoundPieceUnbindUsd);
+        Assert.Equal(FlatUsd, config.Fees.SoulBindSealUsd);
+        Assert.Equal(FlatUsd, config.Fees.GuildBindSealUsd);
+        Assert.Equal(FlatUsd, config.Fees.UnbindSealUsd);
+        Assert.Equal(960, ItemBind.SoulBindSealItemId);
+        Assert.Equal(961, ItemBind.GuildBindSealItemId);
+        Assert.Equal(962, ItemBind.UnbindSealItemId);
         Assert.Equal(new[] { "purchased", "earned" }, config.RaidMasterSpendOrder);
         Assert.True(string.IsNullOrWhiteSpace(config.EkNftCraftSource));
         Assert.DoesNotContain("purchased_ek_mining", json);
@@ -425,6 +433,103 @@ public class EkEconomyTests {
     }
 
     [Fact]
+    public void Schema_projects_earned_and_purchased_balances() {
+        var schema = File.ReadAllText(RepoFile("Persistence", "schema.sql"));
+        Assert.Contains("CREATE TABLE IF NOT EXISTS ek_balances", schema);
+        Assert.Contains("earned BIGINT", schema);
+        Assert.Contains("purchased BIGINT", schema);
+
+        var svc = FixtureEarned();
+        var rows = new List<(string PlayerId, long Earned, long Purchased)>();
+        svc.BalanceProjection = (playerId, earned, purchased) => rows.Add((playerId, earned, purchased));
+        svc.CreditGameplayEk("ada", 80, "earn-ada");
+        var crafted = svc.CraftEkNft("ada", 50, "craft-50");
+        var consumed = svc.ConsumeEkNft("bob", crafted.NftId!, "consume-buy");
+
+        Assert.True(consumed.Ok);
+        Assert.Contains(rows, row => row.PlayerId == "ada" && row.Earned == 30 && row.Purchased == 0);
+        Assert.Contains(rows, row => row.PlayerId == "bob" && row.Earned == 0 && row.Purchased == 50);
+    }
+
+    [Fact]
+    public void Guild_bound_hero_piece_unbind_is_flat_five_and_configurable() {
+        var svc = FixtureEarned();
+        svc.GrantHeroPiece("ada", "cape", 400, guildBound: true);
+        var unbound = svc.UnbindHeroPiece("ada", "cape", "unbind-guild");
+
+        Assert.True(unbound.Ok);
+        AssertFlatFee(unbound, EkEconomyConfig.HeroSetGuildBoundPieceUnbindFeeKey, 1);
+        Assert.Equal(FlatUsd, unbound.Fee!.Usd);
+        Assert.NotEqual(10m, unbound.Fee.Usd);
+        AssertNoRealMovement(unbound);
+
+        var tuned = new EkEconomyService(
+            EkEconomyConfig.LoadOrDefault(ConfigPath())
+                .WithCraftSource(EkEconomyConfig.CraftSourceEarned)
+                .WithFees(FeesWithGuildBound(7m)));
+        tuned.GrantHeroPiece("ada", "helm", 403, guildBound: true);
+        var custom = tuned.UnbindHeroPiece("ada", "helm", "unbind-guild-7");
+        Assert.True(custom.Ok);
+        Assert.Equal(EkEconomyConfig.HeroSetGuildBoundPieceUnbindFeeKey, custom.Fee!.Key);
+        Assert.Equal(7m, custom.Fee.Usd);
+        Assert.False(custom.Fee.Collected);
+    }
+
+    [Fact]
+    public void Seal_stub_fee_comes_from_config_and_does_not_move_ek_or_call_mining() {
+        using var probe = new EffectProbe();
+        probe.AssertLive();
+
+        var svc = FixtureEarned();
+        svc.CreditGameplayEk("ada", 20, "earn-ada");
+        var ranking = Ranking(svc);
+        var day = svc.GetGuildFirstEkDay("ada");
+        probe.Clear();
+
+        var soul = svc.RecordSealStubFee("ada", ItemBind.SoulBindSealItemId, false, "seal-soul");
+        var guild = svc.RecordSealStubFee("ada", ItemBind.GuildBindSealItemId, false, "seal-guild");
+        var hero = svc.RecordSealStubFee("ada", ItemBind.UnbindSealItemId, guildBoundHeroPiece: true, "seal-hero");
+
+        AssertFlatFee(soul, EkEconomyConfig.SoulBindSealFeeKey, 1);
+        AssertFlatFee(guild, EkEconomyConfig.GuildBindSealFeeKey, 1);
+        AssertFlatFee(hero, EkEconomyConfig.HeroSetGuildBoundPieceUnbindFeeKey, 1);
+        Assert.Equal(20, svc.GetEarned("ada"));
+        Assert.Equal(0, svc.GetPurchased("ada"));
+        Assert.Equal(ranking, Ranking(svc));
+        Assert.Equal(day, svc.GetGuildFirstEkDay("ada"));
+        AssertNoRealMovement(soul);
+        AssertNoRealMovement(guild);
+        AssertNoRealMovement(hero);
+        probe.AssertSilent();
+    }
+
+    [Fact]
+    public void Purchased_ek_does_not_count_as_guild_first_ek_of_the_day() {
+        using var probe = new EffectProbe();
+        probe.AssertLive();
+
+        var svc = FixtureEarned();
+        svc.CreditGameplayEk("ada", 80, "earn-ada");
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        Assert.Equal(today, svc.GetGuildFirstEkDay("ada"));
+        Assert.Contains(probe.FirstEk, row => row.StartsWith("ada:", StringComparison.Ordinal));
+        probe.Clear();
+
+        var crafted = svc.CraftEkNft("ada", 50, "craft-50");
+        var consumed = svc.ConsumeEkNft("bob", crafted.NftId!, "consume-buy");
+        Assert.True(consumed.Ok);
+        Assert.Equal(50, svc.GetPurchased("bob"));
+        Assert.Null(svc.GetGuildFirstEkDay("bob"));
+        Assert.Equal(today, svc.GetGuildFirstEkDay("ada"));
+
+        svc.SetGameGold("bob", 20);
+        var spent = svc.ContributeRaidMaster("bob", 50, 1, null, "raid-buy");
+        Assert.True(spent.Ok);
+        Assert.Null(svc.GetGuildFirstEkDay("bob"));
+        probe.AssertSilent();
+    }
+
+    [Fact]
     public void Legacy_single_balance_migrates_to_earned_and_does_not_double() {
         var dir = Path.Combine(Path.GetTempPath(), "ek-economy-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -484,16 +589,30 @@ public class EkEconomyTests {
     static EkEconomyService ProductionConfigService() =>
         new(EkEconomyConfig.LoadOrDefault(ConfigPath()));
 
-    static string ConfigPath() {
+    static string ConfigPath() => RepoFile("Config", "EkEconomy.json");
+
+    static string RepoFile(string folder, string name) {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null) {
-            var candidate = Path.Combine(dir.FullName, "Config", "EkEconomy.json");
+            var candidate = Path.Combine(dir.FullName, folder, name);
             if (File.Exists(candidate)) {
                 return candidate;
             }
             dir = dir.Parent;
         }
-        throw new FileNotFoundException("Config/EkEconomy.json");
+        throw new FileNotFoundException(Path.Combine(folder, name));
+    }
+
+    static EkEconomyFees FeesWithGuildBound(decimal usd) {
+        var fees = EkEconomyConfig.LoadOrDefault(ConfigPath()).Fees;
+        return new EkEconomyFees {
+            EkNftBindUsd = fees.EkNftBindUsd,
+            HeroSetPieceUnbindUsd = fees.HeroSetPieceUnbindUsd,
+            HeroSetGuildBoundPieceUnbindUsd = usd,
+            SoulBindSealUsd = fees.SoulBindSealUsd,
+            GuildBindSealUsd = fees.GuildBindSealUsd,
+            UnbindSealUsd = fees.UnbindSealUsd,
+        };
     }
 
     static void AssertFlatFee(EkEconomyResult result, string key, int count) {
@@ -516,21 +635,27 @@ public class EkEconomyTests {
     static List<EkRankingEntry> Ranking(EkEconomyService svc) => svc.KillerRanking().ToList();
 
     /// <summary>
-    /// Records <see cref="HellMiningStore"/> EK hooks and <see cref="EkAura.NotifyEarned"/>.
-    /// Purchased credit and spend must leave both lists empty.
+    /// Records HellMining EK hooks, <see cref="HellMining.OnEnemyKillAwarded"/>, the EK aura, and guild first-EK.
+    /// Purchased credit and spend must leave every list empty.
     /// </summary>
     sealed class EffectProbe : IDisposable {
         public List<string> Mining { get; } = new();
         public List<string> Aura { get; } = new();
+        public List<string> EnemyKills { get; } = new();
+        public List<string> FirstEk { get; } = new();
 
         public EffectProbe() {
             HellMiningStore.EkHookObserver = (hook, wallet) => Mining.Add($"{hook}:{wallet}");
             EkAura.Observer = player => Aura.Add(player);
+            HellMining.EnemyKillObserver = hook => EnemyKills.Add(hook);
+            EkGuildTax.FirstEkObserver = (player, day) => FirstEk.Add($"{player}:{day}");
         }
 
         public void Clear() {
             Mining.Clear();
             Aura.Clear();
+            EnemyKills.Clear();
+            FirstEk.Clear();
         }
 
         public void AssertLive() {
@@ -538,21 +663,29 @@ public class EkEconomyTests {
             HellMiningStore.RecordLegendaryEk(null, 0);
             HellMiningStore.RecordTop100Ek(null, 0);
             EkAura.NotifyEarned("probe");
+            HellMining.OnEnemyKillAwarded(null, null, EkScreenshotRarity.Unspecified);
+            EkGuildTax.NotifyGameplayFirstEk("probe", "day");
             Assert.Contains(Mining, row => row.StartsWith("RecordEkCount:", StringComparison.Ordinal));
             Assert.Contains(Mining, row => row.StartsWith("RecordLegendaryEk:", StringComparison.Ordinal));
             Assert.Contains(Mining, row => row.StartsWith("RecordTop100Ek:", StringComparison.Ordinal));
             Assert.Contains("probe", Aura);
+            Assert.Contains(nameof(HellMining.OnEnemyKillAwarded), EnemyKills);
+            Assert.Contains("probe:day", FirstEk);
             Clear();
         }
 
         public void AssertSilent() {
             Assert.Empty(Mining);
             Assert.Empty(Aura);
+            Assert.Empty(EnemyKills);
+            Assert.Empty(FirstEk);
         }
 
         public void Dispose() {
             HellMiningStore.EkHookObserver = null;
             EkAura.Observer = null;
+            HellMining.EnemyKillObserver = null;
+            EkGuildTax.FirstEkObserver = null;
         }
     }
 }

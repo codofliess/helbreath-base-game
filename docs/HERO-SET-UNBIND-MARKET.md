@@ -325,6 +325,10 @@ El unbind de hero set para vender cobra un fee **plano por pieza**, no un % ni u
 | Key | Default |
 |-----|---------|
 | `fees.hero_set_piece_unbind_usd` | **5** |
+| `fees.hero_set_guild_bound_piece_unbind_usd` | **5** (plano; no US$10) |
+| `fees.soul_bind_seal_usd` | **5** |
+| `fees.guild_bind_seal_usd` | **5** |
+| `fees.unbind_seal_usd` | **5** |
 
 | Operación | Fee de auditoría |
 |-----------|------------------|
@@ -339,4 +343,4 @@ Reglas del ledger (`EkEconomyService.UnbindHeroPiece` / `SellHeroSet`):
 - Misma idempotency key no cobra dos veces. Una segunda key sobre una pieza ya suelta se rechaza.
 - `collected=false`, `chainTx=null`, `emitir=false`. El número USD es registro, no un cargo.
 
-El packet existente `ItemBind` (seals 960–962) **no** se redirigió a este fee: sigue consumiendo el seal. Así no se cobra seal y USD a la vez, y no hace falta tocar el cliente. Pasar el packet al ledger nuevo queda para cuando Martín lo pida.
+El packet `ItemBind` **sigue consumiendo** el seal (ids 960, 961 y 962, sin cambiar). Después registra el fee de config como stub (`collected=false`, sin mover EK). Una pieza hero guild-bound usa `fees.hero_set_guild_bound_piece_unbind_usd` (5). Si el unbind pasa a pago directo y deja el seal, es pregunta abierta.

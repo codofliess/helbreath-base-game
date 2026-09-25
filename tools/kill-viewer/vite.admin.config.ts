@@ -7,5 +7,6 @@ export default defineConfig({
   base: '/admin/',
   plugins: [react()],
   build: { outDir: '../../dist/admin', emptyOutDir: true, sourcemap: false },
-  server: { port: 5174, proxy: { '/admin/api': 'http://127.0.0.1:8788' } },
+  // Same prefix trap as the public viewer: only proxy real API paths, not modules whose URL starts with /admin/api.
+  server: { port: 5174, proxy: { '^/admin/api/': 'http://127.0.0.1:8788' } },
 });

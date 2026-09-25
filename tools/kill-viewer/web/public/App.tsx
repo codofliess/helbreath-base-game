@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CharacterResponse, CharacterSummary, KillListResponse, KillStatus, RankingsResponse } from '../../src/shared/public-types';
-import { api, type PublicConfig } from './api';
+import { api, type PublicConfig } from './apiClient';
 import { DeathsChart, KillRow } from './components';
 import { COPY } from './copy';
 import { fmtZem, tzShort, viewerTz } from './format';

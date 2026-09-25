@@ -1,4 +1,5 @@
 // Public viewer data access. Talks only to the public API (/api/*).
+// Named apiClient.ts so the Vite dev proxy for ^/api/ cannot swallow this module.
 import type { CharacterResponse, CharacterSummary, KillListResponse, KillStatus, RankingsResponse } from '../../src/shared/public-types';
 
 export interface PublicConfig {

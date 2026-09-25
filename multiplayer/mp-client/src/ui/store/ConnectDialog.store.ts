@@ -280,6 +280,7 @@ export function installConnectDialogDevHooks(): void {
         __helbreathDevEnterCreateChar?: (slotIndex?: number) => void;
         __helbreathDevStartSelectedChar?: () => boolean;
         __helbreathDevConnectAs?: (characterName?: string) => boolean;
+        __helbreathDevSeedSelectChar?: () => void;
         __helbreathDevConnectSnapshot?: () => {
             phase: ConnectGatePhase;
             isOpen: boolean;
@@ -300,6 +301,55 @@ export function installConnectDialogDevHooks(): void {
         }
         setConnectDialogOpen(true);
         setConnectGatePhase('play-world');
+    };
+
+    w.__helbreathDevSeedSelectChar = () => {
+        ensureDevWallet();
+        const session = connectDialogStore.state.walletSession;
+        setCharacterSlots([
+            {
+                slotIndex: 0,
+                name: 'Co2',
+                level: 150,
+                exp: 0,
+                rebirth: 0,
+                hoursPlayed: 0,
+                str: 10,
+                vit: 10,
+                dex: 10,
+                intel: 10,
+                mag: 10,
+                chr: 10,
+                gender: 0,
+                skinColor: 0,
+                hairStyleIndex: 1,
+                underwearColorIndex: 0,
+                citizenshipSide: 'aresden',
+                lastMap: 'Aresden Farm',
+            },
+            {
+                slotIndex: 1,
+                name: 'BebaMaster',
+                level: 1,
+                exp: 0,
+                rebirth: 0,
+                hoursPlayed: 0,
+                str: 10,
+                vit: 10,
+                dex: 10,
+                intel: 10,
+                mag: 22,
+                chr: 10,
+                gender: 1,
+                skinColor: 2,
+                hairStyleIndex: 0,
+                underwearColorIndex: 1,
+                citizenshipSide: 'elvine',
+            },
+        ]);
+        if (session) {
+            enterPlayWorldPhase(session);
+        }
     };
 
     w.__helbreathDevEnterCreateChar = (slotIndex = 0) => {

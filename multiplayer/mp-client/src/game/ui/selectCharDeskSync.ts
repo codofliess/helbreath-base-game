@@ -2,6 +2,7 @@ import {
     normalizeDeskCharacterSlots,
     type CharacterSlotSummary,
 } from '../../utils/characterListApi';
+import { formatSelectCharLevelClassLine, formatSelectCharTown } from './selectCharSelection';
 
 /** Minimal SELECTCHAR desk surface used by LoginScreen and unit tests. */
 export interface SelectCharDeskPaintTarget {
@@ -47,6 +48,9 @@ export interface SelectCharSlotPaintRow {
     name: string;
     lev: string;
     occupied: CharacterSlotSummary | undefined;
+    town?: string;
+    lastMap?: string;
+    heroLine?: string;
 }
 
 /** KindGem Lev. line — numeric even when proto/store omitted level. */
@@ -82,10 +86,14 @@ export function paintSelectCharSlotRows(slots: CharacterSlotSummary[]): SelectCh
         }
         const displayName =
             occupied.name.length > 16 ? `${occupied.name.slice(0, 15)}…` : occupied.name;
+        const lastMap = (occupied.lastMap ?? '').trim();
         rows.push({
             name: displayName,
             lev: formatSelectCharOccupiedLev(occupied.level, occupied.rebirth),
             occupied,
+            town: formatSelectCharTown(occupied.citizenshipSide),
+            lastMap: lastMap.length > 0 ? lastMap : undefined,
+            heroLine: formatSelectCharLevelClassLine(occupied),
         });
     }
     return rows;

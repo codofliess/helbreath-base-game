@@ -173,6 +173,7 @@ describe('paintSelectCharSlotRows', () => {
         assert.equal(rows[0]?.name, 'Elon');
         assert.equal(rows[0]?.lev, 'Lev. 150');
         assert.equal(rows[0]?.occupied?.name, 'Elon');
+        assert.equal(rows[0]?.town, 'Traveler');
         assert.equal(rows[1]?.name, 'Empty');
         assert.equal(rows[1]?.lev, 'Create Character');
         assert.equal(rows[2]?.name, 'Empty');
@@ -305,7 +306,7 @@ describe('paintSelectCharReactOccupiedBannerNodes — DOM not console', () => {
         assert.equal(selectCharOccupiedNamesRequireVisibleBanner('Elon', painted.joined), true);
         assert.equal(stale.style.visibility, 'visible');
         assert.equal(stale.style.opacity, '1');
-        assert.equal(stale.style.fontSize, '28px');
+        assert.equal(stale.style.fontSize, '13px');
         assert.equal(stale.style.color, '#1a0a12');
         assert.equal(attrs.get('data-selectchar-banner-text'), banner);
     });
@@ -533,7 +534,7 @@ describe('syncSelectCharReactOccupiedBannerDom — fail-closed KindGem paint', (
         assert.ok(rect.width > 100);
         assert.ok(rect.height > 20);
         assert.notEqual(kindgem!.style.opacity, '0');
-        assert.equal(kindgem!.style.fontSize, '28px');
+        assert.equal(kindgem!.style.fontSize, '13px');
         assert.equal(kindgem!.parentNode, doc.body);
         assert.equal(doc.body.children[doc.body.children.length - 1], kindgem);
     });

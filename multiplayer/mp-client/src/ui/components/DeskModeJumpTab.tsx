@@ -7,7 +7,7 @@ import { TOAST_REQUESTED } from '../../constants/EventNames';
 /**
  * Side “oreja” on Character List / Arena Pre-Ready desks:
  * fully outside the referral strip so it never sits under the panel edge.
- * World → Ir a Arena · Arena → Ir a World.
+ * World → Arena · Arena → World.
  */
 export function DeskModeJumpTab() {
     const isOpen = useStore(connectDialogStore, (s) => s.isOpen);
@@ -40,14 +40,14 @@ export function DeskModeJumpTab() {
             type="button"
             className={`cl-desk-mode-tab${toArena ? ' cl-desk-mode-tab--arena' : ' cl-desk-mode-tab--world'}`}
             onClick={onClick}
-            title={toArena ? 'Ir a Arena — Pre-Ready Fighters' : 'Ir a World — Character List'}
-            aria-label={toArena ? 'Ir a Arena' : 'Ir a World'}
+            title={toArena ? 'Arena — Pre-Ready Fighters' : 'World — Character List'}
+            aria-label={toArena ? 'Arena' : 'World'}
         >
             <span className="cl-desk-mode-tab__arrow" aria-hidden>
                 {toArena ? '▸' : '◂'}
             </span>
             <span className="cl-desk-mode-tab__label">
-                {toArena ? 'Ir a Arena' : 'Ir a World'}
+                {toArena ? 'Arena' : 'World'}
             </span>
         </button>
     );

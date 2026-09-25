@@ -31,6 +31,13 @@ export interface CharacterSlotSummary {
     equipped?: CharacterEquipPreview[];
     /** aresden | elvine | traveler */
     citizenshipSide?: string;
+    /**
+     * Last map display name when the list payload includes it.
+     * Current CharacterList proto has no last-map field — omit when absent.
+     */
+    lastMap?: string;
+    /** Optional Mage/Warrior label when the list payload includes it. */
+    heroClass?: string;
 }
 
 /** Wallet-level referral info from CharacterListResponse. */

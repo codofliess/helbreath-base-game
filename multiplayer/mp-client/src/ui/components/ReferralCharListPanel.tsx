@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { connectDialogStore } from '../store/ConnectDialog.store';
 import {
@@ -9,18 +9,23 @@ import {
 } from '../../utils/referral';
 import { EventBus } from '../../game/EventBus';
 import { TOAST_REQUESTED } from '../../constants/EventNames';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
+
+interface ReferralCharListPanelProps {
+    /** `inline` sits under the SELECTCHAR frame; default is the legacy fixed footer. */
+    variant?: 'fixed' | 'inline';
+}
 
 /**
- * Overlay on Character List (play-world desk): copy your NAME-XXXX link + paste a friend's code.
+ * Character List referral: copy your NAME-XXXX link + paste a friend's code.
  * Lifetime once per wallet is enforced server-side; client first-touch stores the code for auth.
  */
-export function ReferralCharListPanel() {
+export function ReferralCharListPanel({ variant = 'fixed' }: ReferralCharListPanelProps) {
     const phase = useStore(connectDialogStore, (s) => s.phase);
     const isOpen = useStore(connectDialogStore, (s) => s.isOpen);
     const referralInfo = useStore(connectDialogStore, (s) => s.referralInfo);
     const [paste, setPaste] = useState(() => getStoredReferralCode() ?? '');
     const [copied, setCopied] = useState(false);
+    const [inviteOpen, setInviteOpen] = useState(true);
 
     const show = isOpen && phase === 'play-world';
     const myCode = referralInfo?.code ?? '';
@@ -62,16 +67,33 @@ export function ReferralCharListPanel() {
         }
     };
 
+    const inline = variant === 'inline';
+
     return (
-        <div className="cl-ref-panel" role="region" aria-label="Referral">
+        <div
+            className={`cl-ref-panel${inline ? ' cl-ref-panel--inline' : ''}`}
+            role="region"
+            aria-label="Referral"
+        >
+            {inline ? (
+                <button
+                    type="button"
+                    className="cl-ref-panel__toggle"
+                    aria-expanded={inviteOpen}
+                    onClick={() => setInviteOpen((open) => !open)}
+                >
+                    Invite friends
+                </button>
+            ) : null}
+            {inline && !inviteOpen ? null : (
+                <>
             <div className="cl-ref-panel__glow" aria-hidden />
             <div className="cl-ref-panel__inner">
                 <div className="cl-ref-panel__brand">
                     <span className="cl-ref-panel__kicker">Recruitment</span>
                     <h3 className="cl-ref-panel__title">Referral link</h3>
                     <p className="cl-ref-panel__hint">
-                        One benefit per wallet, lifetime. Friend gets starter gold + tablets; you earn locked{' '}
-                        {PLAYER_TOKEN_DISPLAY} when they hit 150.
+                        Invite friends. They start with gold and gems.
                     </p>
                 </div>
 
@@ -137,6 +159,8 @@ export function ReferralCharListPanel() {
                     </div>
                 </div>
             </div>
+                </>
+            )}
         </div>
     );
 }

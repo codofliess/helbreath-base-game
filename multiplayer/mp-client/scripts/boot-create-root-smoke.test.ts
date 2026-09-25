@@ -215,6 +215,7 @@ describe('createRoot boot path (no wallet)', () => {
             'utf8',
         );
         assert.match(reactDesk, /Explorer/);
+        assert.match(reactDesk, /Choose your hero/);
         assert.match(reactDesk, /SELECTCHAR_OCCUPIED_SLOT_LABEL/);
         assert.match(reactDesk, /SelectCharReactDesk/);
         const store = fs.readFileSync(

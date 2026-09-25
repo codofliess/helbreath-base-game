@@ -56,7 +56,6 @@ import { ItemDialog } from './ui/dialogs/ItemDialog';
 import { ServerDialog } from './ui/dialogs/ServerDialog';
 import { PerformanceDialog } from './ui/dialogs/PerformanceDialog';
 import { ConnectDialog } from './ui/dialogs/ConnectDialog';
-import { ReferralCharListPanel } from './ui/components/ReferralCharListPanel';
 import { DeskModeJumpTab } from './ui/components/DeskModeJumpTab';
 import { BleedingOnlineStrip } from './ui/components/BleedingOnlineStrip';
 import { CitySelectDialog } from './ui/dialogs/CitySelectDialog';
@@ -1419,7 +1418,6 @@ function App()
                     <ConnectDialog zIndex={connectDialogZIndex} />
                 )}
                 <ArenaKitBuilderDialog zIndex={10050} />
-                <ReferralCharListPanel />
                 <DeskModeJumpTab />
                 <BleedingOnlineStrip />
                 {showCitySelectDialog && travelerMode && (

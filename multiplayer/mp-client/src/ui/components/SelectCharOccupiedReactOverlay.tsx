@@ -73,6 +73,8 @@ export function SelectCharOccupiedReactOverlay({
         .filter((entry) => entry.row.occupied || (entry.row.name !== 'Empty' && entry.row.name.trim()));
 
     const occupiedNames = occupied.map((entry) => entry.row.name).join(',');
+    // Slot cards live on SelectCharReactDesk. This overlay only keeps the KindGem
+    // banner so Occupied names are not painted twice (owner-reported middle-slot overlap).
 
     useLayoutEffect(() => {
         selectCharWarn(
@@ -152,22 +154,10 @@ export function SelectCharOccupiedReactOverlay({
             data-selectchar-react-occupied="1"
             data-occupied-count={occupied.length}
             data-occupied-names={occupiedNames}
+            data-occupied-label={SELECTCHAR_OCCUPIED_SLOT_LABEL}
             style={{ zIndex: Math.max(zIndex + 22, 2147483000) }}
             aria-hidden="true"
-        >
-            {occupied.map(({ row, slotIndex }) => (
-                <div
-                    key={`${slotIndex}-${row.name}`}
-                    className="selectchar-react-occupied__slot"
-                    data-react-slot={slotIndex}
-                    data-occupied="1"
-                >
-                    <div className="selectchar-react-occupied__status">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>
-                    <div className="selectchar-react-occupied__name">{row.name}</div>
-                    <div className="selectchar-react-occupied__lev">{row.lev}</div>
-                </div>
-            ))}
-        </div>,
+        />,
         document.body,
     );
 }

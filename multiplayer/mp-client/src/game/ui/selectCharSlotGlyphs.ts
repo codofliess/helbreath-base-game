@@ -84,16 +84,16 @@ export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
  */
 export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'display:block!important;visibility:visible!important;opacity:1!important;' +
-    'position:fixed!important;top:12px!important;left:50%!important;right:auto!important;bottom:auto!important;' +
-    'inset:auto!important;transform:translateX(-50%)!important;margin:0!important;' +
+    'position:fixed!important;top:10px!important;left:auto!important;right:56px!important;bottom:auto!important;' +
+    'inset:auto!important;transform:none!important;margin:0!important;' +
     'z-index:2147483646!important;pointer-events:none!important;overflow:visible!important;' +
     'clip:auto!important;clip-path:none!important;contain:none!important;filter:none!important;' +
     'color:#1a0a12!important;background:#f4ead5!important;background-color:#f4ead5!important;' +
-    'font-size:28px!important;font-weight:700!important;line-height:1.2!important;' +
-    'font-family:Georgia,serif!important;max-width:90vw!important;min-width:280px!important;' +
-    'min-height:44px!important;width:max-content!important;height:auto!important;' +
-    'padding:12px 20px!important;text-align:center!important;border:2px solid #3a2810!important;' +
-    'box-sizing:border-box!important;white-space:nowrap!important;';
+    'font-size:13px!important;font-weight:700!important;line-height:1.25!important;' +
+    'font-family:Georgia,serif!important;max-width:min(360px,42vw)!important;min-width:120px!important;' +
+    'min-height:28px!important;width:max-content!important;height:auto!important;' +
+    'padding:6px 10px!important;text-align:center!important;border:2px solid #3a2810!important;' +
+    'box-sizing:border-box!important;white-space:normal!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
 let stickyNamedOccupiedBanner = '';
@@ -191,19 +191,20 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.opacity = '1';
     node.style.zIndex = '2147483646';
     node.style.position = 'fixed';
-    node.style.top = '12px';
-    node.style.left = '50%';
-    node.style.transform = 'translateX(-50%)';
+    node.style.top = '10px';
+    node.style.left = 'auto';
+    node.style.right = '56px';
+    node.style.transform = 'none';
     node.style.overflow = 'visible';
-    node.style.maxWidth = '90vw';
+    node.style.maxWidth = 'min(360px, 42vw)';
     node.style.color = '#1a0a12';
     node.style.background = '#f4ead5';
-    node.style.fontSize = '28px';
-    node.style.lineHeight = '1.2';
-    node.style.padding = '12px 20px';
-    node.style.minWidth = '280px';
-    node.style.minHeight = '44px';
-    node.style.whiteSpace = 'nowrap';
+    node.style.fontSize = '13px';
+    node.style.lineHeight = '1.25';
+    node.style.padding = '6px 10px';
+    node.style.minWidth = '120px';
+    node.style.minHeight = '28px';
+    node.style.whiteSpace = 'normal';
     node.style.pointerEvents = 'none';
     const css = node.style as { cssText?: string };
     if (typeof css.cssText === 'string') {

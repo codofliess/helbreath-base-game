@@ -6430,28 +6430,28 @@ body.arena-slim-mode .bag-glass-toggle-btn {
 #selectchar-kindgem-occupied-banner,
 .selectchar-react-occupied__banner {
     position: fixed;
-    left: 50%;
-    top: 12px;
-    right: auto;
+    left: auto;
+    top: 10px;
+    right: 56px;
     bottom: auto;
     inset: auto;
-    transform: translateX(-50%);
-    min-width: 280px;
-    min-height: 44px;
-    max-width: 90vw;
+    transform: none;
+    min-width: 120px;
+    min-height: 28px;
+    max-width: min(360px, 42vw);
     width: max-content;
-    padding: 12px 20px;
+    padding: 6px 10px;
     background: #f4ead5 !important;
     background-color: #f4ead5 !important;
     border: 2px solid #3a2810;
     color: #1a0a12 !important;
     font-family: Georgia, serif;
-    font-size: 28px !important;
+    font-size: 13px !important;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.25;
     text-align: center;
     text-shadow: none;
-    white-space: nowrap;
+    white-space: normal;
     overflow: visible;
     clip: auto;
     clip-path: none;
@@ -6475,10 +6475,15 @@ body.arena-slim-mode .bag-glass-toggle-btn {
     white-space: nowrap;
     z-index: 2;
 }
-.selectchar-react-occupied__slot[data-react-slot="0"] { left: calc(3.5cm + 7%); top: calc(2cm + 26%); }
-.selectchar-react-occupied__slot[data-react-slot="1"] { left: calc(3.5cm + 20%); top: calc(2cm + 26%); }
-.selectchar-react-occupied__slot[data-react-slot="2"] { left: calc(3.5cm + 33%); top: calc(2cm + 26%); }
-.selectchar-react-occupied__slot[data-react-slot="3"] { left: calc(3.5cm + 46%); top: calc(2cm + 26%); }
+.selectchar-react-occupied__slot {
+    display: none;
+}
+.selectchar-react-occupied__slot[data-react-slot="0"],
+.selectchar-react-occupied__slot[data-react-slot="1"],
+.selectchar-react-occupied__slot[data-react-slot="2"],
+.selectchar-react-occupied__slot[data-react-slot="3"] {
+    display: none;
+}
 .selectchar-react-occupied__status {
     font-size: 12px;
     font-weight: 700;
@@ -6836,6 +6841,230 @@ body:not(.game-world-active):not(.helbreath-game-active) .testnet-hud {
 
 .login-arena-lobby-actions {
     margin-top: 16px;
+}
+
+/* Explorer SELECTCHAR — centered column, four equal slots, no classic alcove overlap. */
+.login-desk-gate--explorer {
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 2vh, 28px);
+    pointer-events: auto;
+    overflow: auto;
+}
+
+.login-desk-stack {
+    width: min(1100px, calc(100vw - 96px));
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.login-desk-frame--explorer {
+    width: 100%;
+    aspect-ratio: auto;
+    height: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 16px;
+    box-sizing: border-box;
+}
+
+.login-desk-frame--explorer .login-desk-brand {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    margin: 0 0 12px;
+}
+
+.login-desk-frame--explorer .login-desk-slots {
+    position: static;
+    left: auto;
+    top: auto;
+    width: 100%;
+    height: auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.login-desk-frame--explorer .login-desk-slot {
+    min-height: 260px;
+    justify-content: flex-start;
+    padding: 10px 8px 12px;
+    border: 1px solid rgba(196, 154, 72, 0.35);
+    background: rgba(12, 8, 4, 0.45);
+    color: #e8d8b0;
+}
+
+.login-desk-frame--explorer .login-desk-slot:focus-visible {
+    outline: 2px solid rgba(255, 220, 120, 0.9);
+    outline-offset: 2px;
+}
+
+.login-desk-frame--explorer .login-desk-slot.is-selected {
+    border-color: rgba(232, 196, 96, 0.95);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 220, 140, 0.35),
+        0 0 0 2px rgba(196, 154, 72, 0.35);
+    background: rgba(36, 22, 8, 0.72);
+}
+
+.login-desk-frame--explorer .login-desk-slot-name,
+.login-desk-frame--explorer .login-desk-slot-line,
+.login-desk-frame--explorer .login-desk-slot-town,
+.login-desk-frame--explorer .login-desk-slot-map,
+.login-desk-frame--explorer .login-desk-slot-bracket {
+    color: #f0e0c0;
+}
+
+.login-desk-slot-town,
+.login-desk-slot-map {
+    display: block;
+    font-size: 0.92em;
+    color: #c9b888;
+}
+
+.login-desk-slot-avatar {
+    position: relative;
+    width: 100%;
+    height: 128px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.login-desk-slot-avatar-canvas {
+    width: 96px;
+    height: 128px;
+    image-rendering: pixelated;
+}
+
+.login-desk-slot-avatar-stand {
+    position: absolute;
+    bottom: 8px;
+    width: 28px;
+    height: 72px;
+    border-radius: 14px 14px 8px 8px;
+    background: linear-gradient(180deg, #c9a07a 0%, #6a4030 100%);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.login-desk-slot-avatar--aresden .login-desk-slot-avatar-stand {
+    background: linear-gradient(180deg, #e04545 0%, #7a1c1c 100%);
+}
+
+.login-desk-slot-avatar--elvine .login-desk-slot-avatar-stand {
+    background: linear-gradient(180deg, #5ec8ff 0%, #1a4a7a 100%);
+}
+
+.login-desk-slot-avatar.is-ready .login-desk-slot-avatar-stand {
+    display: none;
+}
+
+.login-desk-wallet-chip--corner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+}
+
+.login-desk-frame--explorer .login-desk-form-slot {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    margin-top: 14px;
+}
+
+.login-desk-frame--explorer .login-desk-actions--row {
+    justify-content: center;
+}
+
+.login-desk-frame--explorer .login-desk-actions--row .login-gate-primary-btn,
+.login-desk-frame--explorer .login-desk-actions--row .login-gate-secondary-btn {
+    flex: 1 1 140px;
+    min-width: 120px;
+}
+
+.login-desk-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.62);
+}
+
+.login-desk-delete-modal__panel {
+    width: min(420px, calc(100vw - 32px));
+    padding: 18px 16px 14px;
+    border: 1px solid rgba(196, 154, 72, 0.55);
+    background: rgba(18, 10, 6, 0.96);
+    color: #f0e0c0;
+}
+
+.login-desk-delete-modal__panel h2 {
+    margin: 0 0 8px;
+    font-family: Cinzel, Georgia, serif;
+    font-size: 18px;
+    color: #f0d890;
+}
+
+.login-desk-delete-modal__panel p {
+    margin: 0 0 12px;
+    font-size: 13px;
+}
+
+.cl-ref-panel--inline {
+    position: static;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    width: 100%;
+    z-index: auto;
+}
+
+.cl-ref-panel__toggle {
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 8px 12px;
+    border: 1px solid rgba(196, 154, 72, 0.45);
+    background: rgba(18, 10, 6, 0.88);
+    color: #f0d890;
+    font-family: Cinzel, Georgia, serif;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+}
+
+.cl-ref-panel__toggle:focus-visible {
+    outline: 2px solid rgba(255, 220, 120, 0.85);
+    outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+    .login-desk-stack {
+        width: min(960px, calc(100vw - 72px));
+    }
+}
+
+@media (max-width: 900px) {
+    .login-desk-frame--explorer .login-desk-slots {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .login-desk-frame--explorer .login-desk-slot {
+        min-height: 220px;
+    }
 }
 
 /* After World / Arena: classic SELECTCHAR desk (800Ã—600 art) enlarged; form in central lower band. */
@@ -11529,8 +11758,8 @@ body.game-world-active .cl-ref-panel {
     position: fixed;
     z-index: 10060;
     left: auto;
-    right: 10px;
-    top: 44%;
+    right: 16px;
+    top: 50%;
     bottom: auto;
     transform: translateY(-50%);
     display: flex;
@@ -11538,10 +11767,10 @@ body.game-world-active .cl-ref-panel {
     align-items: center;
     justify-content: center;
     gap: 6px;
-    min-width: 40px;
-    min-height: 100px;
+    min-width: 48px;
+    min-height: 132px;
     margin: 0;
-    padding: 10px 8px;
+    padding: 12px 10px;
     border-radius: 10px;
     border: 1px solid rgba(224, 184, 74, 0.85);
     background: linear-gradient(180deg, rgba(72, 52, 24, 0.98) 0%, rgba(28, 20, 12, 0.97) 100%);

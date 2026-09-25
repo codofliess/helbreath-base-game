@@ -93,7 +93,7 @@ export function ReferralCharListPanel({ variant = 'fixed' }: ReferralCharListPan
                     <span className="cl-ref-panel__kicker">Recruitment</span>
                     <h3 className="cl-ref-panel__title">Referral link</h3>
                     <p className="cl-ref-panel__hint">
-                        Invite friends. They start with gold and tablets.
+                        Invite friends. They start with gold and gems.
                     </p>
                 </div>
 

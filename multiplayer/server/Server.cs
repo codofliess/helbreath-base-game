@@ -1022,6 +1022,8 @@ app.Map("/ws", async context => {
 var listenUrl = PlaytestMode.IsEnabled
     ? PlaytestMode.ListenUrl
     : $"http://0.0.0.0:{settings.Port}";
+// PLAYTEST=1 is not enough: refuse to listen unless this exact URL is loopback-only.
+PlaytestMode.ConfirmLoopbackBind(listenUrl);
 await app.RunAsync(listenUrl);
 disconnectedPlayerCleanupCts.Cancel();
 worldTransferCts.Cancel();

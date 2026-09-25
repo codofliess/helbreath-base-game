@@ -29,6 +29,7 @@ public sealed class PlaytestModeTests {
             Assert.False(PlaytestMode.IsEnabled);
             Assert.False(PlaytestMode.TryValidate("playtest-a", PlaytestMode.AuthToken, out _, out var error));
             Assert.Equal("Playtest door is off.", error);
+            Assert.False(PlaytestMode.LoopbackBindConfirmed);
             Assert.False(PlaytestMode.TryResolveSeededGuild("playtest-a", out var guildId, out _));
             Assert.Equal("", guildId);
             Assert.Equal("Chars", PlaytestMode.CharsDirectoryName);
@@ -58,6 +59,8 @@ public sealed class PlaytestModeTests {
     [Fact]
     public void Seed_WhenPlaytestOn_PutsAAndCInSameGuild_BInAnother_NoPartyOnSeats() {
         using (PlaytestEnv.Set("1")) {
+        PlaytestMode.ConfirmLoopbackBind(PlaytestMode.ListenUrl);
+        Assert.True(PlaytestMode.LoopbackBindConfirmed);
         Assert.True(PlaytestMode.IsEnabled);
         Assert.True(PlaytestMode.TryGetSeatByKey("a", out var seatA));
         Assert.True(PlaytestMode.TryGetSeatByKey("b", out var seatB));
@@ -83,6 +86,67 @@ public sealed class PlaytestModeTests {
         Assert.Equal(guildA, guildC);
         Assert.NotEqual(guildA, guildB);
         Assert.Equal("CharsPlaytest", PlaytestMode.CharsDirectoryName);
+        }
+    }
+
+    [Fact]
+    public void TryValidate_WhenPlaytestOnWithoutLoopbackBind_StaysInert() {
+        using (PlaytestEnv.Set("1")) {
+            PlaytestMode.ResetLoopbackBindConfirmation();
+            Assert.False(PlaytestMode.TryValidate("playtest-a", PlaytestMode.AuthToken, out _, out var error));
+            Assert.Equal("Playtest door refused: server is not bound to loopback only.", error);
+        }
+    }
+
+    [Fact]
+    public void ConfirmLoopbackBind_WhenPlaytestOn_RejectsNonLoopbackAndWildcard() {
+        using (PlaytestEnv.Set("1")) {
+            Assert.False(PlaytestMode.IsLoopbackOnlyListenUrl("http://0.0.0.0:31337", out _));
+            Assert.False(PlaytestMode.IsLoopbackOnlyListenUrl("http://*:31337", out _));
+            Assert.False(PlaytestMode.IsLoopbackOnlyListenUrl("http://+:1337", out _));
+            Assert.False(PlaytestMode.IsLoopbackOnlyListenUrl("http://8.8.8.8:31337", out _));
+            Assert.True(PlaytestMode.IsLoopbackOnlyListenUrl("http://127.0.0.1:31337", out _));
+            Assert.True(PlaytestMode.IsLoopbackOnlyListenUrl("http://[::1]:31337", out _));
+            Assert.True(PlaytestMode.IsLoopbackOnlyListenUrl("http://localhost:31337", out _));
+
+            var thrown = Assert.Throws<InvalidOperationException>(
+                () => PlaytestMode.ConfirmLoopbackBind("http://0.0.0.0:31337"));
+            Assert.Contains("loopback only", thrown.Message, StringComparison.Ordinal);
+            Assert.False(PlaytestMode.LoopbackBindConfirmed);
+        }
+    }
+
+    [Fact]
+    public void ConfirmLoopbackBind_WhenPlaytestUnset_DoesNotThrowOnPublicBind() {
+        using (PlaytestEnv.Set(null)) {
+            PlaytestMode.ConfirmLoopbackBind("http://0.0.0.0:1337");
+            Assert.False(PlaytestMode.LoopbackBindConfirmed);
+        }
+    }
+
+    [Fact]
+    public void ThrowIfUnsafeConfiguration_WhenPlaytestOn_RejectsAspNetCoreUrlsOverride() {
+        using (PlaytestEnv.Set("1")) {
+            var previousUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+            var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            string[] secretNames = ["WALLET_AUTH_SECRET", "DATABASE_URL", "HELL_MINT", "MARKET_MIDDLEWARE_URL", "SOLANA_RPC_URL"];
+            var previousSecrets = secretNames.ToDictionary(n => n, Environment.GetEnvironmentVariable);
+            try {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+                foreach (var name in secretNames) {
+                    Environment.SetEnvironmentVariable(name, null);
+                }
+                Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:31337");
+                var thrown = Assert.Throws<InvalidOperationException>(PlaytestMode.ThrowIfUnsafeConfiguration);
+                Assert.Contains("ASPNETCORE_URLS", thrown.Message, StringComparison.Ordinal);
+            } finally {
+                Environment.SetEnvironmentVariable("ASPNETCORE_URLS", previousUrls);
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnv);
+                foreach (var kv in previousSecrets) {
+                    Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+                }
+                PlaytestMode.ResetLoopbackBindConfirmation();
+            }
         }
     }
 
@@ -116,6 +180,7 @@ public sealed class PlaytestEnv : IDisposable {
 
         public void Dispose() {
             Environment.SetEnvironmentVariable("PLAYTEST", previous);
+            PlaytestMode.ResetLoopbackBindConfirmation();
         }
     }
 }

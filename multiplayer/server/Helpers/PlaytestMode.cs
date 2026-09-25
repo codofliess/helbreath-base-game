@@ -64,6 +64,14 @@ public static class PlaytestMode {
     /// <summary>JSON save directory so playtest never writes live <c>Chars/</c>.</summary>
     public static string CharsDirectoryName => IsEnabled ? "CharsPlaytest" : "Chars";
 
+    /// <summary>
+    /// True only after <see cref="ConfirmLoopbackBind"/> accepted a 127.0.0.1/::1 listen URL.
+    /// PLAYTEST=1 without this confirmation stays inert (no auth bypass).
+    /// </summary>
+    static bool loopbackBindConfirmed;
+
+    public static bool LoopbackBindConfirmed => loopbackBindConfirmed;
+
     public static bool IsLoopback(IPAddress? address) {
         if (address is null) {
             return false;
@@ -75,6 +83,80 @@ public static class PlaytestMode {
             return IPAddress.IsLoopback(address.MapToIPv4());
         }
         return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="url"/> is HTTP(S) on 127.0.0.1, localhost, or ::1 only.
+    /// Wildcards (<c>*</c>, <c>+</c>), <c>0.0.0.0</c>, <c>::</c>, and any public host fail closed.
+    /// </summary>
+    public static bool IsLoopbackOnlyListenUrl(string? url, out string? errorMessage) {
+        errorMessage = null;
+        var raw = (url ?? "").Trim();
+        if (raw.Length == 0) {
+            errorMessage = "listen URL is empty.";
+            return false;
+        }
+        if (raw.Contains('*', StringComparison.Ordinal) || raw.Contains('+', StringComparison.Ordinal)) {
+            errorMessage = $"listen URL '{raw}' is a wildcard bind, not loopback.";
+            return false;
+        }
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) {
+            errorMessage = $"listen URL '{raw}' is not an absolute http(s) URI.";
+            return false;
+        }
+        var host = uri.IdnHost;
+        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+        if (!IPAddress.TryParse(host, out var address) || !IsLoopback(address)) {
+            errorMessage = $"listen URL '{raw}' binds '{host}', not 127.0.0.1/::1.";
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// PLAYTEST=1 may listen only on loopback. Logs and throws otherwise; does not enable the bypass.
+    /// No-op when PLAYTEST is unset (live bind 0.0.0.0 is unchanged).
+    /// </summary>
+    public static void ConfirmLoopbackBind(string? listenUrl) {
+        if (!IsEnabled) {
+            loopbackBindConfirmed = false;
+            return;
+        }
+        if (!IsLoopbackOnlyListenUrl(listenUrl, out var errorMessage)) {
+            loopbackBindConfirmed = false;
+            var message =
+                "PLAYTEST=1 refused to start: the game must bind loopback only (127.0.0.1 or ::1), " +
+                $"regardless of the PLAYTEST flag. {errorMessage}";
+            Console.Error.WriteLine($"[PLAYTEST] {message}");
+            throw new InvalidOperationException(message);
+        }
+        loopbackBindConfirmed = true;
+    }
+
+    /// <summary>Clears bind confirmation (tests / process teardown).</summary>
+    public static void ResetLoopbackBindConfirmation() {
+        loopbackBindConfirmed = false;
+    }
+
+    static void ThrowIfUrlOverridesAreNotLoopback() {
+        string[] names = ["ASPNETCORE_URLS", "DOTNET_URLS"];
+        foreach (var name in names) {
+            var raw = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrWhiteSpace(raw)) {
+                continue;
+            }
+            foreach (var part in raw.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+                if (!IsLoopbackOnlyListenUrl(part, out var errorMessage)) {
+                    var message =
+                        $"PLAYTEST=1 refused to start: {name}='{raw}' is not loopback-only. {errorMessage}";
+                    Console.Error.WriteLine($"[PLAYTEST] {message}");
+                    throw new InvalidOperationException(message);
+                }
+            }
+        }
     }
 
     public static string CanonicalSeatKey(string? rawKey) {
@@ -139,6 +221,10 @@ public static class PlaytestMode {
             errorMessage = "Playtest door is off.";
             return false;
         }
+        if (!loopbackBindConfirmed) {
+            errorMessage = "Playtest door refused: server is not bound to loopback only.";
+            return false;
+        }
         if (!string.Equals((authToken ?? "").Trim(), AuthToken, StringComparison.Ordinal)) {
             errorMessage = "Playtest door rejected the auth token.";
             return false;
@@ -191,6 +277,7 @@ public static class PlaytestMode {
     /// </summary>
     public static void ThrowIfUnsafeConfiguration() {
         if (!IsEnabled) {
+            loopbackBindConfirmed = false;
             return;
         }
 
@@ -211,6 +298,9 @@ public static class PlaytestMode {
                 "PLAYTEST=1 refuses to start with WALLET_AUTH_SECRET, DATABASE_URL, HELL_MINT, MARKET_MIDDLEWARE_URL, or SOLANA_RPC_URL. " +
                 "This door is isolated from live. Unset those variables.");
         }
+
+        ThrowIfUrlOverridesAreNotLoopback();
+        ConfirmLoopbackBind(ListenUrl);
 
         var seatList = string.Join(", ", Array.ConvertAll(Seats, s => $"{s.SeatKey}={s.CharacterName}/{s.GuildId}"));
         Console.WriteLine(

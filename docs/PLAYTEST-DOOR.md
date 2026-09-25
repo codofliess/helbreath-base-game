@@ -1,6 +1,8 @@
-# Playtest door (PLAYTEST=1)
+# Playtest door (PLAYTEST=1) — local throwaway only
 
-Loopback sandbox on the consolidacion client and server. Not live Chile, not a public host. Off unless `PLAYTEST=1` **and** the game binds `127.0.0.1`. Unset `PLAYTEST` → zero behavior change (no auth bypass).
+**Do not merge into `consolidacion` (production line).** This is a local sandbox to exercise PR #93 (guild/party chat) with three seats. Unset `PLAYTEST` → zero behavior change (no auth bypass).
+
+The door **refuses to start** unless the game listen URL is loopback-only (`127.0.0.1` / `::1` / `localhost`), even when `PLAYTEST=1`. `ASPNETCORE_URLS` / `DOTNET_URLS` wildcards or `0.0.0.0` abort with an error. Auth bypass stays inert until that bind is confirmed.
 
 | | |
 |---|---|
@@ -30,7 +32,7 @@ chmod +x ops/run-playtest-door.sh
 
 Ctrl+C stops the game, traveler, and GM. The script unsets `DATABASE_URL`, `WALLET_AUTH_SECRET`, `HELL_MINT`, `MARKET_MIDDLEWARE_URL`, and `SOLANA_RPC_URL`. The server refuses to start if any of those are set, or if the host environment is production, while `PLAYTEST=1`. It binds `127.0.0.1` only and rejects non-loopback WebSockets. Opening the client on any host other than loopback turns the playtest UI off.
 
-To playtest guild/party chat scoping together with this door, merge or rebase the chat-scope branch (`cursor/guild-party-chat-scope-844e`) onto this playtest checkout locally. This PR does not include that work.
+To playtest guild/party chat scoping together with this door, merge or rebase PR #93 (`cursor/guild-party-chat-scope-844e`) onto this throwaway checkout locally. Do not land this branch on `consolidacion`.
 
 ## Kit
 

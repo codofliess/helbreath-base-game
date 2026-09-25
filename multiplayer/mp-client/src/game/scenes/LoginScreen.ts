@@ -22,6 +22,7 @@ import { EventBus } from '../EventBus';
 import { NetworkManager } from '../../utils/NetworkManager';
 import type { InitialGameWorldStateEventData } from '../../Types';
 import { setConnectingDialogOpen } from '../../ui/store/ConnectingDialog.store';
+import { setCharacterStats } from '../../ui/store/CharacterDialog.store';
 import {
     connectDialogStore,
     setConnectDialogOpen,
@@ -133,6 +134,7 @@ export class LoginScreen extends Scene {
                 this.isConnecting = false;
                 setConnectingDialogOpen(false);
                 gsm.setCharacterName(payload.characterName);
+                setCharacterStats({ playerName: payload.characterName.trim() });
                 setInitialGameWorldState(this.game, {
                     gameWorldId: data.gameWorldId,
                     mapName: catalogAmdFileName(data.mapName),

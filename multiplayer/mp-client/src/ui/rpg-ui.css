@@ -6853,7 +6853,7 @@ body:not(.game-world-active):not(.helbreath-game-active) .testnet-hud {
 }
 
 .login-desk-stack {
-    width: min(1100px, calc(100vw - 96px));
+    width: min(1100px, calc(100vw - 140px));
     display: flex;
     flex-direction: column;
     align-items: stretch;

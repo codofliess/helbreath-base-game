@@ -22,5 +22,11 @@ export default defineConfig({
         fs: {
             allow: [repoRoot],
         },
+        proxy: {
+            '/game-assets': {
+                target: 'https://play.chainlords.net',
+                changeOrigin: true,
+            },
+        },
     },
 })

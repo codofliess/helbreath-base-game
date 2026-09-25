@@ -51,6 +51,20 @@ export function SelectCharReactDesk() {
     }, []);
 
     useEffect(() => {
+        if (!deleteOpen) {
+            return;
+        }
+        const onWin = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setDeleteOpen(false);
+                setDeleteTyped('');
+            }
+        };
+        window.addEventListener('keydown', onWin);
+        return () => window.removeEventListener('keydown', onWin);
+    }, [deleteOpen]);
+
+    useEffect(() => {
         if (rememberedApplied.current || characterSlots.length === 0) {
             return;
         }
@@ -88,6 +102,11 @@ export function SelectCharReactDesk() {
 
     const onDeskKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         if (deleteOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setDeleteOpen(false);
+                setDeleteTyped('');
+            }
             return;
         }
         const target = event.target as HTMLElement | null;

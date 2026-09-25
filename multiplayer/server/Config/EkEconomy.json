@@ -1,0 +1,11 @@
+{
+  "emitir": false,
+  "ek_nft_min_amount": 50,
+  "fees": {
+    "ek_nft_bind_usd": 5,
+    "hero_set_piece_unbind_usd": 5
+  },
+  "raid_master_spend_order": ["purchased", "earned"],
+  "ek_nft_craft_source": null,
+  "purchased_ek_mining_enabled": false
+}

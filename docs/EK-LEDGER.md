@@ -268,3 +268,30 @@ multiplayer/.../GameWorld.cs  PlayerDied → TryRecordKill
 ---
 
 *Doc satélite de Fase G. Cambios de reglas → append decisión en MASTERPLAN; no borrar este historial de diseño.*
+
+---
+
+## 11. Saldos duales, NFT y raid master (servidor, draft)
+
+Implementación off-chain en `multiplayer/server/Helpers/EkEconomyService.cs`. Config: `multiplayer/server/Config/EkEconomy.json`. **No** edita `MASTERPLAN.md` (se toca aparte). **No** hay mint, burn ni cobro on-chain. `emitir=false`.
+
+| Regla | Comportamiento |
+|-------|----------------|
+| Dos saldos | `earned` (ganado en juego) y `purchased` (EK de un NFT consumido) |
+| Ranking de killers | Lee **solo** el saldo `earned` actual (`KillerRanking`). Un jugador con solo `purchased` no entra |
+| Contador de academia | `PvpAcademy.EkCount` sigue siendo el lifetime de juego (handicap / packet `EnemyKills`). Los EK comprados **no** se suman ahí |
+| Migración | Un saldo único viejo (`balance` / `ek` / `ekCount` en el ledger, o el snapshot de `PvpAcademy.ExportLifetimeEkCounts` al arrancar) pasa a `earned`. Repetir el mismo número no lo suma dos veces. El `EkCount` diario de `HellMiningStore` **no** es un saldo y no se migra |
+| NFT | Cualquier cantidad ≥ `ek_nft_min_amount` (50). No hay packs fijos. Menos que el mínimo se rechaza |
+| Fee de bind | Una sola vez: `fees.ek_nft_bind_usd` (5). No escala con la cantidad de EK. Queda en auditoría con `collected=false` |
+| Consumir | Quema el stub local (`chainMint=null`) y acredita la cantidad a `purchased` de quien consume. No sube el ranking. Un segundo consumo falla. La misma idempotency key no acredita dos veces |
+| Minado § 1.7 | `purchased_ek_mining_enabled=false`. Aunque se prenda el flag, **no** se minan créditos ni tokens por EK comprados (no implementado) |
+| Raid master | Gasta EK de los dos saldos, más oro y otros materiales, en una sola operación. Orden `raid_master_spend_order`, default `purchased` luego `earned`. Si falta algo, no descuenta nada |
+| `emitir` | `false`: las operaciones de ledger siguen; ningún rail real se ejecuta. `true`: la operación se rechaza (este build no tiene rail) |
+
+`PvpAcademy.RecordEnemyKill` y el EK de academia (Hard/Elite) acreditan `earned` con clave idempotente. El origen del débito al **armar** el NFT es `ek_nft_craft_source`. En el JSON de producción está `null` (fail-closed, no mueve EK). No es una regla de producto: ver preguntas abiertas del PR.
+
+Preguntas abiertas (no cerradas en código):
+
+1. ¿Los EK comprados minan créditos o tokens (§ 1.7)? Hoy no. Flag apagado y el camino no está implementado.
+2. ¿De qué saldo salen los EK al armar un NFT? Flag `ek_nft_craft_source` sin valor. Los tests usan `earned` solo como fixture.
+3. Orden de consumo del raid master: default implementado `purchased` → `earned`, configurable. Falta el GO de Martín.

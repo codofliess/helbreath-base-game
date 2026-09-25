@@ -70,6 +70,7 @@ import {
     type KillMilestoneClaimResult,
     type BeginnerPathState,
     type PartyState,
+    type PartyInvitePrompt,
     type AntiBotToolsState as ProtoAntiBotToolsState,
     type SetAntiBotToolsResult as ProtoSetAntiBotToolsResult,
     type TimedChallengeState as ProtoTimedChallengeState,
@@ -108,6 +109,7 @@ import {
     KILL_MILESTONE_CLAIM_RESULT_RECEIVED,
     BEGINNER_PATH_STATE_RECEIVED,
     PARTY_STATE_RECEIVED,
+    PARTY_INVITE_PROMPT_RECEIVED,
     INITIAL_GAME_WORLD_STATE_RECEIVED,
     MONSTER_ATTACKED_MONSTER_RECEIVED,
     MONSTER_ATTACKED_RECEIVED,
@@ -1952,6 +1954,9 @@ export class NetworkManager {
                 case 'partyState':
                     this.handlePartyState(message.payload.value);
                     break;
+                case 'partyInvitePrompt':
+                    this.handlePartyInvitePrompt(message.payload.value);
+                    break;
                 case 'trainingPresetApplied':
                     this.handleTrainingPresetApplied(message.payload.value);
                     break;
@@ -3018,6 +3023,14 @@ export class NetworkManager {
         EventBus.emit(PARTY_STATE_RECEIVED, data);
     }
 
+    private handlePartyInvitePrompt(data: PartyInvitePrompt): void {
+        EventBus.emit(PARTY_INVITE_PROMPT_RECEIVED, {
+            inviterName: data.inviterName || '',
+            message: data.message || '',
+            partyCode: data.partyCode || '',
+        });
+    }
+
     private handleTrainingPresetApplied(data: {
         ok: boolean;
         message: string;
@@ -3173,6 +3186,26 @@ export class NetworkManager {
             payload: {
                 $case: 'leavePartyRequest',
                 value: {},
+            },
+        }).finish();
+        this.sendPacket(command);
+    }
+
+    public requestInviteParty(characterName: string): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'invitePartyRequest',
+                value: { characterName },
+            },
+        }).finish();
+        this.sendPacket(command);
+    }
+
+    public requestRespondPartyInvite(accept: boolean): void {
+        const command = ClientMessage.encode({
+            payload: {
+                $case: 'respondPartyInviteRequest',
+                value: { accept },
             },
         }).finish();
         this.sendPacket(command);

@@ -308,6 +308,10 @@ export const IN_UI_BEGINNER_PATH_UI_ACTION = 'ui-beginner-path-ui-action';
 export const IN_UI_CREATE_PARTY = 'ui-create-party';
 /** UI → NetworkManager: join a party by code. Payload: { partyCode: string }. */
 export const IN_UI_JOIN_PARTY = 'ui-join-party';
+/** UI → NetworkManager: decline a pending /invite prompt. */
+export const IN_UI_DECLINE_PARTY_INVITE = 'ui-decline-party-invite';
+/** Server → UI: invitee party invite prompt. Payload: { inviterName, message, partyCode }. */
+export const PARTY_INVITE_PROMPT_RECEIVED = 'party-invite-prompt-received';
 /** UI → NetworkManager: leave the current party. */
 export const IN_UI_LEAVE_PARTY = 'ui-leave-party';
 /** UI requests a rebirth (requires max level; server validates). */

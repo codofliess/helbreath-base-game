@@ -281,7 +281,7 @@ public sealed class GlobalWorld : IWorkerWorld {
     private void DeliverPartyChat(GlobalWorldPlayer sender, ServerMessage chatMessage) {
         var partyCode = ChatMembership.GetPartyCode(sender.SessionId);
         if (string.IsNullOrEmpty(partyCode)) {
-            sender.Send(NetworkManager.CreateSendMessage("You're not in a party. Invite someone to use party chat."));
+            sender.Send(NetworkManager.CreateSendMessage(Party.PartyChatNeedInviteMessage));
             return;
         }
 

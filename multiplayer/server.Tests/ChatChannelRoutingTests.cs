@@ -95,6 +95,28 @@ public sealed class ChatChannelRoutingTests : IDisposable {
     }
 
     [Fact]
+    public async Task PartyChat_DoesNotParseInviteSubcommand_DeliversTextAsChat() {
+        var senderId = Guid.NewGuid();
+        var allyId = Guid.NewGuid();
+        var senderInbox = new List<ServerMessage>();
+        var allyInbox = new List<ServerMessage>();
+
+        await ConnectAsync(senderId, "Alice", senderInbox.Add);
+        await ConnectAsync(allyId, "Juan", allyInbox.Add);
+        ChatMembership.SetParty(senderId, "PARTY1");
+        ChatMembership.SetParty(allyId, "PARTY1");
+
+        await SendChatAsync(senderId, "invite Juan to the raid", ChatChannel.Party);
+
+        Assert.Contains(senderInbox, IsChat("invite Juan to the raid", ChatChannel.Party));
+        Assert.Contains(allyInbox, IsChat("invite Juan to the raid", ChatChannel.Party));
+        Assert.DoesNotContain(senderInbox, m =>
+            m.PayloadCase == ServerMessage.PayloadOneofCase.SendMessage &&
+            m.SendMessage.Message == Party.InviteSentMessage("Juan"));
+        Assert.DoesNotContain(allyInbox, m => m.PayloadCase == ServerMessage.PayloadOneofCase.PartyInvitePrompt);
+    }
+
+    [Fact]
     public async Task GuildChat_FromUnguildedSender_DoesNotBroadcast() {
         var senderId = Guid.NewGuid();
         var otherId = Guid.NewGuid();
@@ -130,7 +152,7 @@ public sealed class ChatChannelRoutingTests : IDisposable {
         Assert.DoesNotContain(otherInbox, m => m.PayloadCase == ServerMessage.PayloadOneofCase.ChatMessageReceived);
         Assert.Contains(senderInbox, m =>
             m.PayloadCase == ServerMessage.PayloadOneofCase.SendMessage &&
-            m.SendMessage.Message == "You're not in a party. Invite someone to use party chat.");
+            m.SendMessage.Message == Party.PartyChatNeedInviteMessage);
     }
 
     [Fact]

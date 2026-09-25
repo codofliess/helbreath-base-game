@@ -209,6 +209,10 @@ export interface ClientMessage {
     | { $case: "joinPartyRequest"; value: JoinPartyRequest }
     | { $case: "leavePartyRequest"; value: LeavePartyRequest }
     | //
+    /** Party invite by character name (/invite). Accept uses JoinPartyRequest (same as F5 join). */
+    { $case: "invitePartyRequest"; value: InvitePartyRequest }
+    | { $case: "respondPartyInviteRequest"; value: RespondPartyInviteRequest }
+    | //
     /** City NPC desk (Howard / Kennedy / Gail / Perry) — proximity-checked actions. */
     { $case: "cityNpcServiceRequest"; value: CityNpcServiceRequest }
     | //
@@ -1204,6 +1208,9 @@ export interface ServerMessage {
     /** Minimal party snapshot after create / join / leave (self + members). */
     { $case: "partyState"; value: PartyState }
     | //
+    /** Invitee-only prompt for /invite (Join / Decline on the client). */
+    { $case: "partyInvitePrompt"; value: PartyInvitePrompt }
+    | //
     /** GM ops: current anti-bot tool flags + tunables (reply to get / after set). */
     { $case: "antiBotToolsState"; value: AntiBotToolsState }
     | { $case: "setAntiBotToolsResult"; value: SetAntiBotToolsResult }
@@ -1731,6 +1738,23 @@ export interface JoinPartyRequest {
 
 /** Leave the current party (or dismiss if last member). */
 export interface LeavePartyRequest {
+}
+
+/** Invite an online player into the sender's party (/invite Name). Empty name is a usage error. */
+export interface InvitePartyRequest {
+  characterName: string;
+}
+
+/** Invitee decline (or accept that joins via the stored party code). Join from F5 still uses JoinPartyRequest. */
+export interface RespondPartyInviteRequest {
+  accept: boolean;
+}
+
+/** Shown to the invitee until they Join (existing join-by-code path) or Decline. */
+export interface PartyInvitePrompt {
+  inviterName: string;
+  message: string;
+  partyCode: string;
 }
 
 /** One party member with vitals for the F5 Party panel (Olympia parity P2.9). */
@@ -2849,6 +2873,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "leavePartyRequest":
         LeavePartyRequest.encode(message.payload.value, writer.uint32(458).fork()).join();
         break;
+      case "invitePartyRequest":
+        InvitePartyRequest.encode(message.payload.value, writer.uint32(858).fork()).join();
+        break;
+      case "respondPartyInviteRequest":
+        RespondPartyInviteRequest.encode(message.payload.value, writer.uint32(866).fork()).join();
+        break;
       case "cityNpcServiceRequest":
         CityNpcServiceRequest.encode(message.payload.value, writer.uint32(466).fork()).join();
         break;
@@ -3589,6 +3619,25 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           }
 
           message.payload = { $case: "leavePartyRequest", value: LeavePartyRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 107: {
+          if (tag !== 858) {
+            break;
+          }
+
+          message.payload = { $case: "invitePartyRequest", value: InvitePartyRequest.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 108: {
+          if (tag !== 866) {
+            break;
+          }
+
+          message.payload = {
+            $case: "respondPartyInviteRequest",
+            value: RespondPartyInviteRequest.decode(reader, reader.uint32()),
+          };
           continue;
         }
         case 58: {
@@ -4608,6 +4657,24 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "leavePartyRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "leavePartyRequest", value: LeavePartyRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "invitePartyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "invitePartyRequest",
+            value: InvitePartyRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "respondPartyInviteRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "respondPartyInviteRequest",
+            value: RespondPartyInviteRequest.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -13232,6 +13299,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "partyState":
         PartyState.encode(message.payload.value, writer.uint32(618).fork()).join();
         break;
+      case "partyInvitePrompt":
+        PartyInvitePrompt.encode(message.payload.value, writer.uint32(858).fork()).join();
+        break;
       case "antiBotToolsState":
         AntiBotToolsState.encode(message.payload.value, writer.uint32(626).fork()).join();
         break;
@@ -14021,6 +14091,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           }
 
           message.payload = { $case: "partyState", value: PartyState.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 107: {
+          if (tag !== 858) {
+            break;
+          }
+
+          message.payload = { $case: "partyInvitePrompt", value: PartyInvitePrompt.decode(reader, reader.uint32()) };
           continue;
         }
         case 78: {
@@ -14879,6 +14957,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "partyState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "partyState", value: PartyState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "partyInvitePrompt": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "partyInvitePrompt", value: PartyInvitePrompt.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -19273,6 +19357,168 @@ export const LeavePartyRequest: MessageFns<LeavePartyRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<LeavePartyRequest>, I>>(_: I): LeavePartyRequest {
     const message = createBaseLeavePartyRequest();
+    return message;
+  },
+};
+
+function createBaseInvitePartyRequest(): InvitePartyRequest {
+  return { characterName: "" };
+}
+
+export const InvitePartyRequest: MessageFns<InvitePartyRequest> = {
+  encode(message: InvitePartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.characterName !== "") {
+      writer.uint32(10).string(message.characterName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InvitePartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseInvitePartyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.characterName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<InvitePartyRequest>, I>>(base?: I): InvitePartyRequest {
+    return InvitePartyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<InvitePartyRequest>, I>>(object: I): InvitePartyRequest {
+    const message = createBaseInvitePartyRequest();
+    message.characterName = object.characterName ?? "";
+    return message;
+  },
+};
+
+function createBaseRespondPartyInviteRequest(): RespondPartyInviteRequest {
+  return { accept: false };
+}
+
+export const RespondPartyInviteRequest: MessageFns<RespondPartyInviteRequest> = {
+  encode(message: RespondPartyInviteRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.accept !== false) {
+      writer.uint32(8).bool(message.accept);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RespondPartyInviteRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRespondPartyInviteRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.accept = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<RespondPartyInviteRequest>, I>>(base?: I): RespondPartyInviteRequest {
+    return RespondPartyInviteRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RespondPartyInviteRequest>, I>>(object: I): RespondPartyInviteRequest {
+    const message = createBaseRespondPartyInviteRequest();
+    message.accept = object.accept ?? false;
+    return message;
+  },
+};
+
+function createBasePartyInvitePrompt(): PartyInvitePrompt {
+  return { inviterName: "", message: "", partyCode: "" };
+}
+
+export const PartyInvitePrompt: MessageFns<PartyInvitePrompt> = {
+  encode(message: PartyInvitePrompt, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.inviterName !== "") {
+      writer.uint32(10).string(message.inviterName);
+    }
+    if (message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.partyCode !== "") {
+      writer.uint32(26).string(message.partyCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyInvitePrompt {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePartyInvitePrompt();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.inviterName = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.partyCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PartyInvitePrompt>, I>>(base?: I): PartyInvitePrompt {
+    return PartyInvitePrompt.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyInvitePrompt>, I>>(object: I): PartyInvitePrompt {
+    const message = createBasePartyInvitePrompt();
+    message.inviterName = object.inviterName ?? "";
+    message.message = object.message ?? "";
+    message.partyCode = object.partyCode ?? "";
     return message;
   },
 };

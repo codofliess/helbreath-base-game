@@ -8,10 +8,17 @@ using Server.World.Game;
 namespace Server.Helpers;
 
 /// <summary>
-/// Minimal in-memory party MVP: create / join-by-code / leave. Credits Beginner Path
-/// <c>create_or_join_party</c> on successful create or join. Not a full matchmaking system.
+/// Minimal in-memory party MVP: create / join-by-code / leave / invite-by-name.
+/// <c>/invite</c> and the F5 Party panel share create and join-by-code; invite only
+/// adds an online-target prompt. Credits Beginner Path <c>create_or_join_party</c>
+/// on successful create or join.
 /// </summary>
 public static class Party {
+    public const string InviteUsageMessage = "Type /invite followed by a name.";
+    public const string PartyFullMessage = "Your party is full.";
+    public const string PartyChatNeedInviteMessage =
+        "You're not in a party. Type /invite and a name to start one.";
+
     private const int MaxMembers = 8;
     private const int PartyCodeLength = 5;
 
@@ -19,6 +26,7 @@ public static class Party {
     private static readonly Dictionary<string, PartyInstance> PartiesByCode =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<Guid, string> PartyCodeBySessionId = new();
+    private static readonly Dictionary<Guid, PendingInvite> PendingByInviteeSessionId = new();
     private static int nextCodeSeed;
 
     /// <summary>Creates a solo party for the player (fails if already in one).</summary>
@@ -31,13 +39,7 @@ public static class Party {
                 return;
             }
 
-            var code = AllocateCodeLocked();
-            var party = new PartyInstance(code, player.SessionId);
-            party.Members[player.SessionId] = player;
-            PartiesByCode[code] = party;
-            PartyCodeBySessionId[player.SessionId] = code;
-            player.SetPartyCode(code);
-            BroadcastStateLocked(party, $"Party created. Code: {code}");
+            CreatePartyLocked(player);
         }
 
         BeginnerPath.OnPartyJoinedOrCreated(player);
@@ -73,10 +75,128 @@ public static class Party {
             party.Members[player.SessionId] = player;
             PartyCodeBySessionId[player.SessionId] = party.Code;
             player.SetPartyCode(party.Code);
+            PendingByInviteeSessionId.Remove(player.SessionId);
             BroadcastStateLocked(party, $"{player.CharacterName} joined the party.");
         }
 
         BeginnerPath.OnPartyJoinedOrCreated(player);
+    }
+
+    /// <summary>
+    /// Invites an online player into the sender's party, creating a solo party first when needed.
+    /// Join still goes through <see cref="HandleJoinRequest"/> (same as the F5 Party panel).
+    /// </summary>
+    public static void HandleInviteRequest(GameWorldPlayer player, InvitePartyRequest request) {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(request);
+        HandleInviteRequest(player, request.CharacterName);
+    }
+
+    /// <summary>Invites by character name (chat <c>/invite</c> and tests).</summary>
+    public static void HandleInviteRequest(GameWorldPlayer player, string? characterName) {
+        ArgumentNullException.ThrowIfNull(player);
+
+        var typedName = (characterName ?? string.Empty).Trim();
+        if (typedName.Length == 0) {
+            SendSystem(player, InviteUsageMessage);
+            return;
+        }
+
+        if (!OnlinePlayerDirectory.TryGetByCharacterName(typedName, out var target) ||
+            target is null ||
+            target.Disconnected ||
+            target.SessionId == player.SessionId) {
+            SendSystem(player, OfflineMessage(typedName));
+            return;
+        }
+
+        var displayName = DisplayName(target, typedName);
+        var createdParty = false;
+        string partyCode;
+        string inviterName;
+
+        lock (Gate) {
+            if (PartyCodeBySessionId.ContainsKey(target.SessionId)) {
+                SendSystem(player, AlreadyInPartyMessage(displayName));
+                return;
+            }
+
+            if (!PartyCodeBySessionId.TryGetValue(player.SessionId, out var existingCode) ||
+                !PartiesByCode.TryGetValue(existingCode, out var party)) {
+                partyCode = CreatePartyLocked(player);
+                createdParty = true;
+                party = PartiesByCode[partyCode];
+            } else {
+                partyCode = existingCode;
+            }
+
+            if (party.Members.Count >= MaxMembers) {
+                SendSystem(player, PartyFullMessage);
+                return;
+            }
+
+            inviterName = DisplayName(player, "Player");
+            PendingByInviteeSessionId[target.SessionId] = new PendingInvite(
+                player.SessionId,
+                partyCode,
+                inviterName);
+        }
+
+        if (createdParty) {
+            BeginnerPath.OnPartyJoinedOrCreated(player);
+        }
+
+        SendSystem(player, InviteSentMessage(displayName));
+        NetworkManager.SendToPlayer(target, NetworkManager.CreatePartyInvitePrompt(
+            inviterName,
+            InvitePromptMessage(inviterName),
+            partyCode));
+    }
+
+    /// <summary>
+    /// Invitee accept joins via <see cref="HandleJoinRequest"/>; decline notifies the inviter.
+    /// </summary>
+    public static void HandleInviteResponse(GameWorldPlayer player, RespondPartyInviteRequest request) {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Accept) {
+            string? code = null;
+            lock (Gate) {
+                if (PendingByInviteeSessionId.TryGetValue(player.SessionId, out var pending)) {
+                    code = pending.PartyCode;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(code)) {
+                return;
+            }
+
+            HandleJoinRequest(player, new JoinPartyRequest { PartyCode = code });
+            return;
+        }
+
+        HandleInviteDecline(player);
+    }
+
+    public static string OfflineMessage(string name) => $"{name} isn't online.";
+
+    public static string AlreadyInPartyMessage(string name) => $"{name} is already in a party.";
+
+    public static string InviteSentMessage(string name) => $"Invite sent to {name}.";
+
+    public static string InvitePromptMessage(string inviterName) =>
+        $"{inviterName} invites you to their party.";
+
+    public static string DeclinedMessage(string name) => $"{name} declined your invite.";
+
+    /// <summary>Clears in-memory parties and pending invites so server tests do not leak across cases.</summary>
+    public static void ResetTransientState() {
+        lock (Gate) {
+            PartiesByCode.Clear();
+            PartyCodeBySessionId.Clear();
+            PendingByInviteeSessionId.Clear();
+        }
     }
 
     /// <summary>Leaves the current party; if the leader leaves, promotes another member or dissolves.</summary>
@@ -88,7 +208,40 @@ public static class Party {
     /// <summary>Called when a player is fully removed from a world after disconnect grace.</summary>
     public static void OnPlayerRemoved(GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
+        ClearPendingForInvitee(player.SessionId);
         LeaveInternal(player, notifyMessage: $"{player.CharacterName} disconnected.");
+    }
+
+    private static void HandleInviteDecline(GameWorldPlayer invitee) {
+        PendingInvite? pending;
+        lock (Gate) {
+            if (!PendingByInviteeSessionId.TryGetValue(invitee.SessionId, out pending)) {
+                return;
+            }
+
+            PendingByInviteeSessionId.Remove(invitee.SessionId);
+        }
+
+        GameWorldPlayer? inviter = null;
+        lock (Gate) {
+            if (PartyCodeBySessionId.TryGetValue(pending.InviterSessionId, out var code) &&
+                PartiesByCode.TryGetValue(code, out var party) &&
+                party.Members.TryGetValue(pending.InviterSessionId, out var member)) {
+                inviter = member;
+            }
+        }
+
+        if (inviter is null || inviter.Disconnected) {
+            return;
+        }
+
+        SendSystem(inviter, DeclinedMessage(DisplayName(invitee, "Player")));
+    }
+
+    private static void ClearPendingForInvitee(Guid inviteeSessionId) {
+        lock (Gate) {
+            PendingByInviteeSessionId.Remove(inviteeSessionId);
+        }
     }
 
     /// <summary>
@@ -150,6 +303,7 @@ public static class Party {
 
             party.Members.Remove(player.SessionId);
             PartyCodeBySessionId.Remove(player.SessionId);
+            PendingByInviteeSessionId.Remove(player.SessionId);
             player.ClearPartyCode();
 
             if (party.Members.Count == 0) {
@@ -183,6 +337,25 @@ public static class Party {
         }
 
         return Guid.NewGuid().ToString("N")[..PartyCodeLength].ToUpperInvariant();
+    }
+
+    private static string CreatePartyLocked(GameWorldPlayer player) {
+        var code = AllocateCodeLocked();
+        var party = new PartyInstance(code, player.SessionId);
+        party.Members[player.SessionId] = player;
+        PartiesByCode[code] = party;
+        PartyCodeBySessionId[player.SessionId] = code;
+        player.SetPartyCode(code);
+        BroadcastStateLocked(party, $"Party created. Code: {code}");
+        return code;
+    }
+
+    private static void SendSystem(GameWorldPlayer player, string message) {
+        NetworkManager.SendToPlayer(player, NetworkManager.CreateSendMessage(message));
+    }
+
+    private static string DisplayName(GameWorldPlayer player, string fallback) {
+        return string.IsNullOrWhiteSpace(player.CharacterName) ? fallback : player.CharacterName;
     }
 
     private static void BroadcastStateLocked(PartyInstance party, string message) {
@@ -239,6 +412,18 @@ public static class Party {
         public PartyInstance(string code, Guid leaderSessionId) {
             Code = code;
             LeaderSessionId = leaderSessionId;
+        }
+    }
+
+    private sealed class PendingInvite {
+        public Guid InviterSessionId { get; }
+        public string PartyCode { get; }
+        public string InviterName { get; }
+
+        public PendingInvite(Guid inviterSessionId, string partyCode, string inviterName) {
+            InviterSessionId = inviterSessionId;
+            PartyCode = partyCode;
+            InviterName = inviterName;
         }
     }
 }

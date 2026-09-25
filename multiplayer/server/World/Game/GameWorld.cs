@@ -1325,6 +1325,12 @@ public sealed class GameWorld : IWorkerWorld {
             case ClientMessage.PayloadOneofCase.LeavePartyRequest:
                 Party.HandleLeaveRequest(playerConnection);
                 break;
+            case ClientMessage.PayloadOneofCase.InvitePartyRequest:
+                Party.HandleInviteRequest(playerConnection, message.Message.InvitePartyRequest);
+                break;
+            case ClientMessage.PayloadOneofCase.RespondPartyInviteRequest:
+                Party.HandleInviteResponse(playerConnection, message.Message.RespondPartyInviteRequest);
+                break;
             case ClientMessage.PayloadOneofCase.CityNpcServiceRequest:
                 CityNpcServices.HandleCityNpcServiceRequest(
                     gameWorldRef,

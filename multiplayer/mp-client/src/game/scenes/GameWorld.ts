@@ -172,6 +172,7 @@ import {
     IN_UI_BEGINNER_PATH_UI_ACTION,
     IN_UI_CREATE_PARTY,
     IN_UI_JOIN_PARTY,
+    IN_UI_DECLINE_PARTY_INVITE,
     IN_UI_LEAVE_PARTY,
     IN_UI_REQUEST_REBIRTH,
     IN_UI_REQUEST_REBIRTH_ROLLBACK,
@@ -905,6 +906,9 @@ export class GameWorld extends Scene {
         });
         subscribeSafe('GameWorld', IN_UI_JOIN_PARTY, (data: { partyCode: string }) => {
             getNetworkManager(this.game)?.requestJoinParty(data.partyCode);
+        });
+        subscribeSafe('GameWorld', IN_UI_DECLINE_PARTY_INVITE, () => {
+            getNetworkManager(this.game)?.requestRespondPartyInvite(false);
         });
         subscribeSafe('GameWorld', IN_UI_LEAVE_PARTY, () => {
             getNetworkManager(this.game)?.requestLeaveParty();
@@ -5634,6 +5638,7 @@ export class GameWorld extends Scene {
             EventBus.off(IN_UI_BEGINNER_PATH_UI_ACTION);
             EventBus.off(IN_UI_CREATE_PARTY);
             EventBus.off(IN_UI_JOIN_PARTY);
+            EventBus.off(IN_UI_DECLINE_PARTY_INVITE);
             EventBus.off(IN_UI_LEAVE_PARTY);
             EventBus.off(IN_UI_REQUEST_REBIRTH);
             EventBus.off(IN_UI_REQUEST_REBIRTH_ROLLBACK);

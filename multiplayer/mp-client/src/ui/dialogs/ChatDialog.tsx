@@ -94,6 +94,14 @@ export function ChatDialog({
             return;
         }
 
+        if ('inviteName' in parsed) {
+            networkManager.requestInviteParty(parsed.inviteName);
+            setDraft('');
+            setSendError(undefined);
+            suppressPointerLeak();
+            return;
+        }
+
         networkManager.sendChatMessage(parsed.message, getLocalSourceLanguageTag(), {
             channel: parsed.channel,
             whisperTargetCharacterName: parsed.whisperTarget,

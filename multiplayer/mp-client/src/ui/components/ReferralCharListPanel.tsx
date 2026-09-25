@@ -9,7 +9,6 @@ import {
 } from '../../utils/referral';
 import { EventBus } from '../../game/EventBus';
 import { TOAST_REQUESTED } from '../../constants/EventNames';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 interface ReferralCharListPanelProps {
     /** `inline` sits under the SELECTCHAR frame; default is the legacy fixed footer. */
@@ -94,8 +93,7 @@ export function ReferralCharListPanel({ variant = 'fixed' }: ReferralCharListPan
                     <span className="cl-ref-panel__kicker">Recruitment</span>
                     <h3 className="cl-ref-panel__title">Referral link</h3>
                     <p className="cl-ref-panel__hint">
-                        One benefit per wallet, lifetime. Friend gets starter gold + tablets; you earn locked{' '}
-                        {PLAYER_TOKEN_DISPLAY} when they hit 150.
+                        Invite friends. They start with gold and tablets.
                     </p>
                 </div>
 

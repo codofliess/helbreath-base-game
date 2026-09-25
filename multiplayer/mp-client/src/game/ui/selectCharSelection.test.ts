@@ -6,7 +6,10 @@ import { selectCharAvatarLookFromSlot } from './selectCharAvatarLook';
 import {
     canConfirmSelectCharDelete,
     clampSelectCharIndex,
+    formatSelectCharHeroClass,
+    formatSelectCharLevelClassLine,
     formatSelectCharTown,
+    SELECTCHAR_SECOND_TOWN_DISPLAY,
     moveSelectCharIndex,
     readLastUsedCharacterName,
     resolveRememberedSelectCharIndex,
@@ -96,7 +99,8 @@ describe('selectChar selection', () => {
 
     it('formats town and last map only when the list row has them', () => {
         assert.equal(formatSelectCharTown('aresden'), 'Aresden');
-        assert.equal(formatSelectCharTown('elvine'), 'Elvine');
+        assert.equal(formatSelectCharTown('elvine'), SELECTCHAR_SECOND_TOWN_DISPLAY);
+        assert.equal(SELECTCHAR_SECOND_TOWN_DISPLAY, 'Elvine');
         assert.equal(formatSelectCharTown('traveler'), 'Traveler');
         const withMap = selectCharTownMapLines(
             slot({ slotIndex: 0, name: 'Co2', lastMap: 'Aresden Farm' }),
@@ -106,6 +110,10 @@ describe('selectChar selection', () => {
         const noMap = selectCharTownMapLines(slot({ slotIndex: 0, name: 'Co2' }));
         assert.equal(noMap?.lastMap, undefined);
         assert.equal(selectCharTownMapLines(undefined), undefined);
+        assert.equal(formatSelectCharHeroClass({ str: 20, mag: 10 }), 'Warrior');
+        assert.equal(formatSelectCharHeroClass({ str: 10, mag: 20 }), 'Mage');
+        assert.equal(formatSelectCharLevelClassLine({ level: 150, str: 10, mag: 30 }), 'Lv 150 · Mage');
+        assert.equal(formatSelectCharHeroClass({ str: 10, mag: 30, heroClass: 'warrior' }), 'Warrior');
     });
 });
 

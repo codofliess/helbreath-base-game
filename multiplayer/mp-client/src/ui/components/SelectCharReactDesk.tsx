@@ -13,6 +13,7 @@ import {
 import { SELECTCHAR_OCCUPIED_SLOT_LABEL } from '../../game/ui/selectCharSlotGlyphs';
 import {
     canConfirmSelectCharDelete,
+    formatSelectCharTown,
     isSelectCharStartKey,
     readLastUsedCharacterName,
     resolveRememberedSelectCharIndex,
@@ -41,6 +42,7 @@ export function SelectCharReactDesk() {
     const selected = resolveSelectCharSelectedIndex(characterSlots, selectedSlotIndex);
     const selectedOccupied = rows[selected]?.occupied;
     const hasEmpty = rows.some((row) => !row.occupied);
+    const selectedTown = selectedOccupied ? formatSelectCharTown(selectedOccupied.citizenshipSide) : '';
 
     useEffect(() => {
         document.body.classList.add('login-selectchar-active');
@@ -153,20 +155,30 @@ export function SelectCharReactDesk() {
             <div className="login-desk-stack">
                 <div className="login-desk-frame login-desk-frame--fallback login-desk-frame--explorer">
                     <div className="login-desk-brand">
-                        <span className="login-desk-brand-kicker">Helbreath</span>
-                        <span className="login-desk-brand-title">Explorer</span>
+                        <span className="login-desk-brand-kicker">Under the Goddesses</span>
+                        <span className="login-desk-brand-title">Choose your hero</span>
                     </div>
                     {walletShort ? (
                         <div className="login-desk-wallet-chip login-desk-wallet-chip--corner">
-                            Seal {walletShort}
+                            Sealed · {walletShort}
                         </div>
                     ) : null}
+                    <p className="login-desk-selected-lead" aria-live="polite">
+                        {loading
+                            ? 'Loading character list…'
+                            : selectedOccupied
+                              ? `${rows[selected].name} · ${rows[selected].heroLine ?? rows[selected].lev}${
+                                    selectedTown ? ` · ${selectedTown}` : ''
+                                }`
+                              : 'Pledge a new hero'}
+                    </p>
                     <div className="login-desk-slots" role="listbox" aria-label="Character slots">
                         {rows.map((row, slotIndex) => {
                             const occupied = !!row.occupied;
                             const isSelected = slotIndex === selected;
+                            const town = row.town ?? '';
                             const label = occupied
-                                ? `${row.name}, ${row.lev}${row.town ? `, ${row.town}` : ''}`
+                                ? `${row.name}, ${row.heroLine ?? row.lev}${town ? `, ${town}` : ''}`
                                 : `Empty slot ${slotIndex + 1}, Create Character`;
                             return (
                                 <button
@@ -181,6 +193,7 @@ export function SelectCharReactDesk() {
                                     }`}
                                     data-occupied={occupied ? '1' : '0'}
                                     data-slot-index={slotIndex}
+                                    data-town={town}
                                     onClick={() => setSelectedSlotIndex(slotIndex)}
                                     onDoubleClick={() => {
                                         setSelectedSlotIndex(slotIndex);
@@ -200,56 +213,66 @@ export function SelectCharReactDesk() {
                                 >
                                     {occupied && row.occupied ? (
                                         <>
-                                            <SelectCharSlotAvatar slot={row.occupied} />
-                                            <span className="login-desk-slot-bracket">
-                                                {SELECTCHAR_OCCUPIED_SLOT_LABEL}
-                                            </span>
+                                            <SelectCharSlotAvatar
+                                                slot={row.occupied}
+                                                animate={isSelected}
+                                            />
                                             <span className="login-desk-slot-name">{row.name}</span>
-                                            <span className="login-desk-slot-line">{row.lev}</span>
-                                            {row.town ? (
-                                                <span className="login-desk-slot-town">{row.town}</span>
+                                            <span className="login-desk-slot-line">
+                                                {row.heroLine ?? row.lev}
+                                            </span>
+                                            {town ? (
+                                                <span className="login-desk-slot-town">{town}</span>
                                             ) : null}
                                             {row.lastMap ? (
-                                                <span className="login-desk-slot-map">{row.lastMap}</span>
+                                                <span className="login-desk-slot-map">
+                                                    Last seen: {row.lastMap}
+                                                </span>
                                             ) : null}
+                                            <span className="login-desk-slot-faction" data-town={town} />
                                         </>
                                     ) : (
-                                        <span className="login-desk-slot-empty">Create Character</span>
+                                        <>
+                                            <span className="login-desk-slot-empty">+ Create Character</span>
+                                            <span className="login-desk-slot-pledge">Pledge a new hero</span>
+                                        </>
                                     )}
                                 </button>
                             );
                         })}
                     </div>
                     <div className="login-desk-form-slot">
-                        <p className="login-desk-status">
-                            {loading
-                                ? 'Loading character list…'
-                                : selectedOccupied
-                                  ? `${SELECTCHAR_OCCUPIED_SLOT_LABEL} — ${rows[selected].name} ${rows[selected].lev}`
-                                  : 'Empty slot — Create Character'}
-                        </p>
+                        <span className="sr-only">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</span>
                         <div className="login-desk-actions login-desk-actions--row">
                             <button
                                 type="button"
-                                className="login-gate-primary-btn"
-                                aria-label="Start with selected character"
+                                className="login-gate-primary-btn login-desk-enter-btn"
+                                aria-label="Enter World with selected character"
                                 disabled={!selectedOccupied}
                                 onClick={startSelected}
                             >
-                                Start
+                                Enter World
                             </button>
                             <button
                                 type="button"
-                                className="login-gate-secondary-btn"
-                                aria-label="Create Character"
+                                className="login-gate-secondary-btn login-desk-quiet-btn"
+                                aria-label="Create"
                                 disabled={!hasEmpty}
                                 onClick={createAtEmpty}
                             >
-                                Create Character
+                                Create
                             </button>
                             <button
                                 type="button"
-                                className="login-gate-secondary-btn"
+                                className="login-gate-secondary-btn login-desk-quiet-btn"
+                                aria-label="Back to hub"
+                                onClick={() => EventBus.emit(OUT_UI_SELECTCHAR_BACK)}
+                            >
+                                Back
+                            </button>
+                            <button
+                                type="button"
+                                className="login-gate-secondary-btn login-desk-quiet-btn"
                                 aria-label="Delete selected character"
                                 disabled={!selectedOccupied}
                                 onClick={() => {
@@ -258,14 +281,6 @@ export function SelectCharReactDesk() {
                                 }}
                             >
                                 Delete
-                            </button>
-                            <button
-                                type="button"
-                                className="login-gate-secondary-btn"
-                                aria-label="Back to hub"
-                                onClick={() => EventBus.emit(OUT_UI_SELECTCHAR_BACK)}
-                            >
-                                Back
                             </button>
                         </div>
                     </div>
@@ -280,12 +295,12 @@ export function SelectCharReactDesk() {
                     aria-labelledby="selectchar-delete-title"
                 >
                     <div className="login-desk-delete-modal__panel">
-                        <h2 id="selectchar-delete-title">Delete character</h2>
+                        <h2 id="selectchar-delete-title">Delete hero</h2>
                         <p>
-                            Type <strong>{selectedOccupied.name}</strong> exactly to confirm.
+                            Type <strong>{selectedOccupied.name}</strong> to delete this hero forever.
                         </p>
                         <label className="login-gate-field">
-                            <span>Character name</span>
+                            <span>Hero name</span>
                             <input
                                 className="olympia-input"
                                 value={deleteTyped}

@@ -84,7 +84,7 @@ export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
  */
 export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'display:block!important;visibility:visible!important;opacity:1!important;' +
-    'position:fixed!important;top:10px!important;left:auto!important;right:56px!important;bottom:auto!important;' +
+    'position:fixed!important;top:auto!important;left:auto!important;right:12px!important;bottom:12px!important;' +
     'inset:auto!important;transform:none!important;margin:0!important;' +
     'z-index:2147483646!important;pointer-events:none!important;overflow:visible!important;' +
     'clip:auto!important;clip-path:none!important;contain:none!important;filter:none!important;' +
@@ -191,9 +191,10 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.opacity = '1';
     node.style.zIndex = '2147483646';
     node.style.position = 'fixed';
-    node.style.top = '10px';
+    node.style.top = 'auto';
     node.style.left = 'auto';
-    node.style.right = '56px';
+    node.style.right = '12px';
+    node.style.bottom = '12px';
     node.style.transform = 'none';
     node.style.overflow = 'visible';
     node.style.maxWidth = 'min(360px, 42vw)';

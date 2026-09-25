@@ -81,6 +81,50 @@ function equippedMapFromPreview(
     return map;
 }
 
+const WALK_HUMAN_BASE = 16;
+const WALK_ARMOUR_BASE = 2;
+const WALK_ARMAMENT_STATE = 2;
+const WALK_ANGELIC_STATE = 5;
+
+function poseLayer(
+    kind: SelectCharAvatarLayerKind,
+    spriteName: string,
+    sheetPack: number,
+    tint: number | undefined,
+    walkFrame: number | undefined,
+): SelectCharAvatarLayer {
+    if (walkFrame === undefined) {
+        return idleLayer(kind, spriteName, sheetPack, tint);
+    }
+    const f = Math.max(0, Math.min(FRAMES_PER_DIR - 1, walkFrame));
+    const dir = IDLE_SOUTH_DIR;
+    let sheetIndex = 0;
+    let frameIndex = 0;
+    switch (kind) {
+        case 'human':
+            sheetIndex = WALK_HUMAN_BASE + dir;
+            frameIndex = f;
+            break;
+        case 'armour':
+            sheetIndex = Math.max(0, sheetPack) + WALK_ARMOUR_BASE;
+            frameIndex = dir * FRAMES_PER_DIR + f;
+            break;
+        case 'weapon':
+            sheetIndex = Math.max(0, sheetPack) + WALK_ARMAMENT_STATE * 8 + dir;
+            frameIndex = f;
+            break;
+        case 'shield':
+            sheetIndex = Math.max(0, sheetPack) + WALK_ARMAMENT_STATE;
+            frameIndex = dir * FRAMES_PER_DIR + f;
+            break;
+        case 'accessory':
+            sheetIndex = WALK_ANGELIC_STATE * 8 + dir;
+            frameIndex = f;
+            break;
+    }
+    return { kind, spriteName, sheetIndex, frameIndex, tint };
+}
+
 function idleLayer(
     kind: SelectCharAvatarLayerKind,
     spriteName: string,
@@ -118,7 +162,10 @@ function idleLayer(
  * Idle-south layers matching paperDollCapture / menuCharacterPreview
  * (body, hair, underwear, worn gear, default shirt/pants when unequipped).
  */
-export function selectCharAvatarLookFromSlot(slot: CharacterSlotSummary): SelectCharAvatarLook {
+export function selectCharAvatarLookFromSlot(
+    slot: CharacterSlotSummary,
+    opts?: { walkFrame?: number },
+): SelectCharAvatarLook {
     const gender = genderFromSlot(slot.gender);
     const skinColor = skinColorFromSlot(slot.skinColor);
     const hairStyleIndex = Math.max(0, Math.min(7, slot.hairStyleIndex ?? 0));
@@ -136,44 +183,52 @@ export function selectCharAvatarLookFromSlot(slot: CharacterSlotSummary): Select
     );
     const hasVisibleGear = VISIBLE_EQUIP_SLOTS.some((s) => (equippedMap[s]?.itemId ?? 0) > 0);
 
-    const layers: SelectCharAvatarLayer[] = [idleLayer('human', human, 0)];
+    const walkFrame = opts?.walkFrame;
+    const layer = (
+        kind: SelectCharAvatarLayerKind,
+        spriteName: string,
+        sheetPack: number,
+        tint?: number,
+    ) => poseLayer(kind, spriteName, sheetPack, tint, walkFrame);
+
+    const layers: SelectCharAvatarLayer[] = [layer('human', human, 0)];
     if (hairStyleIndex !== 2) {
-        layers.push(idleLayer('armour', hair, hairPack, DEFAULT_HAIR_TINT));
+        layers.push(layer('armour', hair, hairPack, DEFAULT_HAIR_TINT));
     }
-    layers.push(idleLayer('armour', underwear, underPack));
+    layers.push(layer('armour', underwear, underPack));
 
     if (!hasVisibleGear) {
         const shirt = gender === Gender.MALE ? 'mshirt' : 'wshirt';
         const pants = gender === Gender.MALE ? 'mhtrouser' : 'whtrouser';
-        layers.push(idleLayer('armour', shirt, 0));
-        layers.push(idleLayer('armour', pants, 0));
+        layers.push(layer('armour', shirt, 0));
+        layers.push(layer('armour', pants, 0));
     } else {
         if (resolved.hauberk) {
-            layers.push(idleLayer('armour', resolved.hauberk, 0));
+            layers.push(layer('armour', resolved.hauberk, 0));
         }
         if (resolved.leggings) {
-            layers.push(idleLayer('armour', resolved.leggings, 0));
+            layers.push(layer('armour', resolved.leggings, 0));
         }
         if (resolved.boots) {
-            layers.push(idleLayer('armour', resolved.boots, 0));
+            layers.push(layer('armour', resolved.boots, 0));
         }
         if (resolved.helm) {
-            layers.push(idleLayer('armour', resolved.helm, 0));
+            layers.push(layer('armour', resolved.helm, 0));
         }
         if (resolved.armor) {
-            layers.push(idleLayer('armour', resolved.armor, 0));
+            layers.push(layer('armour', resolved.armor, 0));
         }
         if (resolved.shield) {
-            layers.push(idleLayer('shield', resolved.shield, resolved.shieldStartSpriteSheetIndex ?? 0));
+            layers.push(layer('shield', resolved.shield, resolved.shieldStartSpriteSheetIndex ?? 0));
         }
         if (resolved.cape) {
-            layers.push(idleLayer('armour', resolved.cape, 0));
+            layers.push(layer('armour', resolved.cape, 0));
         }
         if (resolved.weapon) {
-            layers.push(idleLayer('weapon', resolved.weapon, resolved.weaponStartSpriteSheetIndex ?? 0));
+            layers.push(layer('weapon', resolved.weapon, resolved.weaponStartSpriteSheetIndex ?? 0));
         }
         if (resolved.accessory) {
-            layers.push(idleLayer('accessory', resolved.accessory, 0));
+            layers.push(layer('accessory', resolved.accessory, 0));
         }
     }
 

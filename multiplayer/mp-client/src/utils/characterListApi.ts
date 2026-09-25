@@ -36,6 +36,8 @@ export interface CharacterSlotSummary {
      * Current CharacterList proto has no last-map field — omit when absent.
      */
     lastMap?: string;
+    /** Optional Mage/Warrior label when the list payload includes it. */
+    heroClass?: string;
 }
 
 /** Wallet-level referral info from CharacterListResponse. */

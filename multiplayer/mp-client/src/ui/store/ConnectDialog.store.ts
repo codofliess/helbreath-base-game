@@ -338,7 +338,7 @@ export function installConnectDialogDevHooks(): void {
                 vit: 10,
                 dex: 10,
                 intel: 10,
-                mag: 10,
+                mag: 22,
                 chr: 10,
                 gender: 1,
                 skinColor: 2,

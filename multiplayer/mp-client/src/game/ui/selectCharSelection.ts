@@ -8,6 +8,15 @@ export const SELECTCHAR_SLOT_COUNT = 4;
 
 export const SELECTCHAR_LAST_USED_STORAGE_PREFIX = 'cl-selectchar-last:';
 
+/**
+ * Display name for the second city on this desk only.
+ * Owner has not signed Elvine vs Elendiel — change this one line to switch the screen.
+ * Default matches the in-game client citizenship string today (`elvine` → Elvine).
+ */
+export const SELECTCHAR_SECOND_TOWN_DISPLAY = 'Elvine';
+
+export type SelectCharHeroClass = 'Mage' | 'Warrior';
+
 export type SelectCharMoveDirection = 'left' | 'right' | 'next' | 'prev';
 
 export interface SelectCharTownMapLines {
@@ -129,9 +138,34 @@ export function formatSelectCharTown(side: string | undefined | null): string {
         return 'Aresden';
     }
     if (normalized === 'elvine') {
-        return 'Elvine';
+        return SELECTCHAR_SECOND_TOWN_DISPLAY;
     }
     return 'Traveler';
+}
+
+/**
+ * Mage vs Warrior for the slot line. CharacterList has no class field —
+ * Mag &gt; Str reads as Mage, otherwise Warrior. Optional `heroClass` wins.
+ */
+export function formatSelectCharHeroClass(
+    occupied: Pick<CharacterSlotSummary, 'str' | 'mag'> & { heroClass?: string },
+): SelectCharHeroClass {
+    const named = (occupied.heroClass ?? '').trim().toLowerCase();
+    if (named === 'mage') {
+        return 'Mage';
+    }
+    if (named === 'warrior') {
+        return 'Warrior';
+    }
+    return Number(occupied.mag) > Number(occupied.str) ? 'Mage' : 'Warrior';
+}
+
+export function formatSelectCharLevelClassLine(
+    occupied: Pick<CharacterSlotSummary, 'level' | 'str' | 'mag'> & { heroClass?: string },
+): string {
+    const lv = Number(occupied.level);
+    const shown = Number.isFinite(lv) ? lv : 0;
+    return `Lv ${shown} · ${formatSelectCharHeroClass(occupied)}`;
 }
 
 export function selectCharTownMapLines(

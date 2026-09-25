@@ -9,7 +9,6 @@ import {
 } from '../../utils/referral';
 import { EventBus } from '../../game/EventBus';
 import { TOAST_REQUESTED } from '../../constants/EventNames';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 /**
  * Overlay on Character List (play-world desk): copy your NAME-XXXX link + paste a friend's code.
@@ -69,10 +68,7 @@ export function ReferralCharListPanel() {
                 <div className="cl-ref-panel__brand">
                     <span className="cl-ref-panel__kicker">Recruitment</span>
                     <h3 className="cl-ref-panel__title">Referral link</h3>
-                    <p className="cl-ref-panel__hint">
-                        One benefit per wallet, lifetime. Friend gets starter gold + tablets; you earn locked{' '}
-                        {PLAYER_TOKEN_DISPLAY} when they hit 150.
-                    </p>
+                    <p className="cl-ref-panel__hint">Invite friends. They start with gold and gems.</p>
                 </div>
 
                 <div className="cl-ref-panel__row">

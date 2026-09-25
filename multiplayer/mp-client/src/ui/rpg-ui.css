@@ -5467,6 +5467,56 @@ body.arena-slim-mode .bag-glass-toggle-btn {
     pointer-events: none;
 }
 
+.login-hub-phantom-notice {
+    width: 100%;
+    margin: 8px 0 2px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    text-align: center;
+    pointer-events: auto;
+    position: relative;
+    z-index: 2;
+    border: 1px solid rgba(181, 77, 63, 0.65);
+    background: rgba(40, 12, 8, 0.92);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.login-hub-phantom-notice-title {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #f0d0b8;
+}
+
+.login-hub-phantom-notice-body {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #e8d4c4;
+}
+
+.login-hub-phantom-notice-retry {
+    width: 100%;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+a.login-hub-phantom-notice-retry {
+    padding: 11px 14px;
+}
+
+.login-hub-phantom-notice-get {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #c4b08a;
+    text-decoration: underline;
+}
+
 /* Rails sit under each portal card (in-column flow) */
 .hub-rail {
     border-radius: 10px;

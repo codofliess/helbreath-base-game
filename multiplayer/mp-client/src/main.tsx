@@ -37,7 +37,20 @@ import {
     setShowSpeakerLanguageTag,
 } from './ui/store/ChatTranslation.store';
 import { isTravelerPlayerMode } from './utils/playerMode';
-import { ensureLoginHubOpenAtBoot, installConnectDialogDevHooks } from './ui/store/ConnectDialog.store';
+import {
+    beginEnteringWorld,
+    ensureLoginHubOpenAtBoot,
+    installConnectDialogDevHooks,
+    setConnectWalletSession,
+} from './ui/store/ConnectDialog.store';
+import {
+    getPlaytestSeat,
+    isPlaytestClient,
+    isPlaytestTravelerClient,
+    PLAYTEST_AUTH_TOKEN,
+    PLAYTEST_GAME_HOST,
+    PLAYTEST_GAME_PORT,
+} from './playtest/playtestMode';
 import { captureReferralFromUrl } from './utils/referral';
 import { announcePlayClientEntry, unregisterStaleServiceWorkers } from './utils/selectCharTrace';
 
@@ -73,9 +86,42 @@ unregisterStaleServiceWorkers();
 bootstrapWalletDeepLinkAtBoot();
 // Hub must paint even if Phaser WebGL/Canvas never starts (empty #root was the prod symptom).
 ensureLoginHubOpenAtBoot();
+bootPlaytestDoorIfEnabled();
 
 installConnectDialogDevHooks();
 installSkillDialogDevHooks();
+
+/** PLAYTEST Vite on loopback: skip Phantom and enter the queried seat. No-op in live builds. */
+function bootPlaytestDoorIfEnabled(): void {
+    if (!isPlaytestClient()) {
+        return;
+    }
+    const seat = getPlaytestSeat();
+    const walletSession = {
+        wallet: seat.accountId,
+        token: PLAYTEST_AUTH_TOKEN,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    setConnectWalletSession(walletSession);
+    beginEnteringWorld({
+        host: PLAYTEST_GAME_HOST,
+        port: PLAYTEST_GAME_PORT,
+        characterName: seat.characterName,
+        slotIndex: 0,
+        preferredInitialWorldId: isPlaytestTravelerClient() ? 'traveler' : undefined,
+        gender: 'male',
+        skinColor: 'light',
+        hairStyleIndex: 0,
+        underwearColorIndex: 0,
+        str: 14,
+        vit: 12,
+        dex: 12,
+        int: 10,
+        mag: 10,
+        chr: 12,
+        walletSession,
+    });
+}
 
 const FUNCTION_KEY = /^F([1-9]|1[0-2])$/;
 

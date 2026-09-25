@@ -29,6 +29,8 @@ try {
     Console.Error.WriteLine($"[Server] Failed to enable sustained low-latency GC mode: {ex.Message}");
 }
 
+PlaytestMode.ThrowIfUnsafeConfiguration();
+
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -54,10 +56,10 @@ if (AdminSecurity.AllowOpenGmSandbox) {
         "[SECURITY] GM sandbox locked: only GM_WALLET_ALLOWLIST wallets (or Development+ALLOW_OPEN_GM_SANDBOX). " +
         "All other sessions are forced traveler.");
 }
-AuctionBoardStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-HellMiningStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-ArenaIncentives.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
-Referral.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
+AuctionBoardStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+HellMiningStore.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+ArenaIncentives.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
+Referral.Initialize(Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName));
 Console.WriteLine(
     $"[HellMining] TestingWeek={HellMiningStore.IsTestingWeekActive()} " +
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
@@ -124,7 +126,7 @@ try {
     Console.WriteLine($"[Server] ArenaKitCatalog load failed: {ex.Message}");
 }
 var mapsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Config", "maps");
-var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Chars");
+var charsDirectory = Path.Combine(Directory.GetCurrentDirectory(), PlaytestMode.CharsDirectoryName);
 foreach (var gw in gameWorlds) {
     Config.ValidateGameWorldDwellAreas(gw, monstersById);
     Config.ValidateGameWorldNpcPlacements(gw, npcsById);
@@ -387,6 +389,12 @@ Console.WriteLine(
 
 // Per-connection state machine: authenticate → route binary ClientMessage to GameWorld; teardown notifies world and drains send queue.
 app.Map("/ws", async context => {
+    if (PlaytestMode.IsEnabled && !PlaytestMode.IsLoopback(context.Connection.RemoteIpAddress)) {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync("Playtest door accepts loopback clients only.");
+        return;
+    }
+
     if (!context.WebSockets.IsWebSocketRequest) {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         await context.Response.WriteAsync("Expected a WebSocket request.");
@@ -512,7 +520,7 @@ app.Map("/ws", async context => {
             if (!isConnectedToGameWorld) {
                 if (clientMessage.PayloadCase == ClientMessage.PayloadOneofCase.CharacterListRequest) {
                     var listReq = clientMessage.CharacterListRequest;
-                    if (!WalletAuthValidator.TryValidate(listReq.Id.Trim(), listReq.AuthToken, out var listAuthError)) {
+                    if (!PlaytestMode.TryAuthorize(listReq.Id.Trim(), listReq.AuthToken, out var listAuthError)) {
                         var rejectPreview = string.IsNullOrEmpty(listReq.Id)
                             ? "?"
                             : listReq.Id.Trim()[..Math.Min(8, listReq.Id.Trim().Length)];
@@ -609,7 +617,7 @@ app.Map("/ws", async context => {
                         RequestDisconnect("Arena pact inbox requires wallet auth on hub.");
                         return;
                     }
-                    if (!WalletAuthValidator.TryValidate(inboxReq.Id.Trim(), inboxReq.AuthToken, out var inboxAuthError)) {
+                    if (!PlaytestMode.TryAuthorize(inboxReq.Id.Trim(), inboxReq.AuthToken, out var inboxAuthError)) {
                         RequestDisconnect(inboxAuthError);
                         return;
                     }
@@ -635,7 +643,7 @@ app.Map("/ws", async context => {
 
                 if (clientMessage.PayloadCase == ClientMessage.PayloadOneofCase.CharacterNameCheckRequest) {
                     var nameReq = clientMessage.CharacterNameCheckRequest;
-                    if (!WalletAuthValidator.TryValidate(nameReq.Id.Trim(), nameReq.AuthToken, out var nameAuthError)) {
+                    if (!PlaytestMode.TryAuthorize(nameReq.Id.Trim(), nameReq.AuthToken, out var nameAuthError)) {
                         RequestDisconnect(nameAuthError);
                         return;
                     }
@@ -759,7 +767,9 @@ app.Map("/ws", async context => {
                         travelerMode);
                     // Brand-new create: only via Create Character desk (name + looks + stats).
                     if (loadedPlayerState is null) {
-                        if (!authReq.HasGender || !authReq.HasStr) {
+                        var playtestFreshSeat = PlaytestMode.IsEnabled
+                            && PlaytestMode.IsSeatCharacter(session.CharacterName);
+                        if (!playtestFreshSeat && (!authReq.HasGender || !authReq.HasStr)) {
                             RequestDisconnect(
                                 "Create your character first: choose a name, appearance, and stats.");
                             return;
@@ -841,6 +851,13 @@ app.Map("/ws", async context => {
                 var authArenaKitJson = authReq.HasArenaKitJson && !string.IsNullOrWhiteSpace(authReq.ArenaKitJson)
                     ? authReq.ArenaKitJson
                     : null;
+                if (PlaytestMode.TryResolveSeededGuild(session.NetworkId, out var seedGuildId, out var seedGuildRank)
+                    && loadedPlayerState is not null) {
+                    loadedPlayerState = loadedPlayerState with {
+                        GuildId = seedGuildId,
+                        GuildRank = seedGuildRank,
+                    };
+                }
                 GameWorldMessage gameWorldMessage = isReconnect
                     ? new PlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, RequestDisconnect, RequestWorldChange, session.CharacterName, session.NetworkId, remoteIp)
                     : new PlayerConnectedMessage(
@@ -1002,7 +1019,10 @@ app.Map("/ws", async context => {
     }
 });
 
-await app.RunAsync($"http://0.0.0.0:{settings.Port}");
+var listenUrl = PlaytestMode.IsEnabled
+    ? PlaytestMode.ListenUrl
+    : $"http://0.0.0.0:{settings.Port}";
+await app.RunAsync(listenUrl);
 disconnectedPlayerCleanupCts.Cancel();
 worldTransferCts.Cancel();
 try {
@@ -1042,11 +1062,19 @@ static bool TryAuthenticatePlayer(
         return false;
     }
 
-    if (!WalletAuthValidator.TryValidate(networkId.Trim(), authToken, out errorMessage)) {
+    var trimmedCharacterName = characterName.Trim();
+    if (PlaytestMode.IsEnabled) {
+        if (!PlaytestMode.TryValidate(networkId.Trim(), authToken, out var seat, out errorMessage)) {
+            return false;
+        }
+        if (!string.Equals(trimmedCharacterName, seat.CharacterName, StringComparison.Ordinal)) {
+            errorMessage = "Playtest character name does not match the seat.";
+            return false;
+        }
+    } else if (!WalletAuthValidator.TryValidate(networkId.Trim(), authToken, out errorMessage)) {
         return false;
     }
 
-    var trimmedCharacterName = characterName.Trim();
     if (string.IsNullOrEmpty(trimmedCharacterName)) {
         errorMessage = "Character name is required.";
         return false;

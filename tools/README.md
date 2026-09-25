@@ -2,6 +2,8 @@
 
 Build and asset conversion utilities for the game client.
 
+Standalone **Kill Ledger viewer** (draft, not deployed): [`kill-viewer/README.md`](kill-viewer/README.md). It does not change game client or server code.
+
 ## Setup
 
 ```bash

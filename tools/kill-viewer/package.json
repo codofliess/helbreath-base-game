@@ -1,0 +1,46 @@
+{
+  "name": "chainlords-kill-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ChainLords EK (enemy-kill) log viewer: public viewer + separately deployable admin/ops API. DRAFT \u2014 not deployed.",
+  "scripts": {
+    "gen:sample": "tsx scripts/gen-sample.ts",
+    "dev:public-api": "tsx watch src/server/public/index.ts",
+    "dev:admin-api": "tsx watch src/server/admin/index.ts",
+    "dev:web": "vite --config vite.public.config.ts",
+    "dev:admin-web": "vite --config vite.admin.config.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "build:web": "vite build --config vite.public.config.ts && vite build --config vite.admin.config.ts",
+    "build:server": "node scripts/build-server.mjs",
+    "check:public-bundle": "node scripts/check-public-bundle.mjs",
+    "build": "npm run typecheck && npm run build:web && npm run build:server && npm run check:public-bundle",
+    "start:public": "node dist/server/public-api.mjs",
+    "start:admin": "node dist/server/admin-api.mjs",
+    "test": "vitest run",
+    "screenshots": "node scripts/screenshot.mjs",
+    "test:unit": "SKIP_PG_INTEGRATION=1 vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.9",
+    "jose": "^6.2.12",
+    "pg": "^8.23.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.63.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

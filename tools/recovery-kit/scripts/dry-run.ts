@@ -26,8 +26,10 @@ import {
   configSetRentCollectorIxs,
   configExecuteIx,
   cancelProposalIx,
+  rejectProposalIx,
   closeLegacyTxIxs,
   nextTxIndex,
+  type VaultBundle,
 } from "../src/builders/squads";
 import { dbcCreatorClaimIxs } from "../src/builders/dbc";
 import { batchAccounts, closeAccountIxs } from "../src/builders/rent";
@@ -90,11 +92,22 @@ async function main() {
 
   const groups = await buildVaultInnerGroups(connection, live.damm, live.vaultLamports, live.rentExemptMin);
   for (const g of groups) log(`inner group: ${g.label} (${g.ixs.length} ixs)`);
-  const bundles = await packVaultBundles(connection, MEMBER_2A4B, groups);
-  log(`vault bundles: ${bundles.length}${bundles[0]?.splitReason ? " — " + bundles[0].splitReason : ""}`);
+  let bundles: VaultBundle[] = [];
+  try {
+    bundles = await packVaultBundles(connection, MEMBER_2A4B, groups);
+    log(`vault bundles: ${bundles.length}${bundles[0]?.splitReason ? " — " + bundles[0].splitReason : ""}`);
+  } catch (e) {
+    log(`vault pack failed: ${e instanceof Error ? e.message : e}`);
+    bundles = [];
+    for (const g of groups) {
+      log(` simulating inner only: ${g.label}`);
+      await simNamed(connection, `inner ${g.label}`, VAULT, g.ixs, [DEST, VAULT]);
+    }
+  }
   for (const b of bundles) {
     log(` bundle index ${b.index} memo=${b.memo} innerIxs=${b.innerIxs.length}`);
-    await simNamed(connection, `squads create+propose ${b.index}`, MEMBER_2A4B, b.createIxs, [DEST, VAULT, MEMBER_2A4B]);
+    await simNamed(connection, `squads vaultTransactionCreate ${b.index}`, MEMBER_2A4B, b.createIxs, [DEST, VAULT, MEMBER_2A4B]);
+    await simNamed(connection, `squads proposalCreate ${b.index}`, MEMBER_2A4B, b.proposeIxs, [MEMBER_2A4B]);
     await simNamed(connection, `inner vault message ${b.index} (sigVerify=false, payer=vault)`, VAULT, b.innerIxs, [
       DEST,
       VAULT,
@@ -115,12 +128,13 @@ async function main() {
   const cfgIdx = await nextTxIndex(connection);
   await simNamed(
     connection,
-    "config set rentCollector",
+    "config set rentCollector (next index; conflicts on-chain until vault txs land)",
     MEMBER_2A4B,
-    configSetRentCollectorIxs({ index: cfgIdx + BigInt(bundles.length), creator: MEMBER_2A4B, newCollector: DEST }),
+    configSetRentCollectorIxs({ index: cfgIdx, creator: MEMBER_2A4B, newCollector: DEST }),
     [MEMBER_2A4B, DEST]
   );
   await simNamed(connection, "cancel proposal 1", MEMBER_2A4B, [cancelProposalIx(1n, MEMBER_2A4B)], [MEMBER_2A4B]);
+  await simNamed(connection, "reject proposal 1", MEMBER_2A4B, [rejectProposalIx(1n, MEMBER_2A4B)], [MEMBER_2A4B]);
   await simNamed(connection, "close vault tx 1+2 (needs rentCollector)", MEMBER_2A4B, closeLegacyTxIxs(DEST), [
     MEMBER_2A4B,
     DEST,
@@ -161,18 +175,15 @@ async function main() {
     try {
       const built = await btvnSellIxs(connection, {
         owner: BTVN,
-        payer: live.btvnLamports > 50_000 ? BTVN : DEST,
+        payer: DEST,
         amountIn: new BN(live.btvnA8fnRaw.toString()),
         slippageBps: 150,
       });
       log(`BTvN quote expectedOut=${built.expectedOut.toString()} minOut=${built.minOut.toString()}`);
-      await simNamed(
-        connection,
-        "optional BTvN DBC sell + close",
-        live.btvnLamports > 50_000 ? BTVN : DEST,
-        built.ixs,
-        [BTVN, DEST]
-      );
+      await simNamed(connection, "optional BTvN DBC sell + close (feePayer 2a4b)", DEST, built.ixs, [
+        BTVN,
+        DEST,
+      ]);
     } catch (e) {
       log(`BTvN swap build failed: ${e instanceof Error ? e.message : e}`);
     }

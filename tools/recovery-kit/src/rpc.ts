@@ -10,7 +10,7 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 8): Promise<T> 
     } catch (e) {
       last = e;
       const msg = e instanceof Error ? e.message : String(e);
-      const retryable = /429|rate.?limit|Too Many|fetch failed|ECONNRESET|ETIMEDOUT|503|502/i.test(msg);
+      const retryable = /429|403|Access forbidden|rate.?limit|Too Many|fetch failed|ECONNRESET|ETIMEDOUT|503|502/i.test(msg);
       if (!retryable || i === tries - 1) throw e;
       await sleep(1500 * (i + 1) * (i + 1));
     }

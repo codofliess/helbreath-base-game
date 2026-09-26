@@ -1,0 +1,242 @@
+
+> recovery-kit@1.0.0 dry-run
+> node --import tsx scripts/dry-run.ts
+
+RPC https://api.mainnet-beta.solana.com
+Fetching live snapshot…
+vault 0.03351156 SOL dest 0.078581073 SOL
+squads txIndex=2 threshold=2 rentCollector=null
+configAuthority=11111111111111111111111111111111
+DBC A8fN pool=4HQX8w9bKfvFKg7NsUoRUpNboH4LyBb1ZkSkW1N2uL9q config=2icgSDTf6GCpFEmS2koDBYA4hTsjixVQEtgtSwAv6mSm feeClaimer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g creator=65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q partnerQuote=823440535 creatorQuote=823440453
+DBC 4Sk2 pool=ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx config=14CeTDGTgV1CFgpo746MLFEheV8UMcVq3rrN1TLnwwXu feeClaimer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g creator=65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q partnerQuote=195944935 creatorQuote=195944906
+DBC 3gZV pool=7jeKLhW7VEgCjnrR97XmXBEovMygCf8dZ1jb2RncM1dj config=DieVdwM72gqvQhJ6ree7uhRVoCkybCiGqeUBq5D4ZmQQ feeClaimer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g creator=65GhX7QsKfvdmbsaMBz4iEGgpcZZQnDRh4kgjTJbgT8q partnerQuote=39086797 creatorQuote=39086788
+DAMM pool=6SBVggXowp5N7PGB2QzocLjDWGMdxyXxKWDAYPzA1GpY nftAta=CKtnF2Pz7mUnezZmAXvwgNP7ytMyfhF8gkPMze7yUJc9 feeA=0 feeB=385755860
+inner group: DBC partner A8fN (4 ixs)
+inner group: DBC partner 4Sk2 (4 ixs)
+inner group: DBC partner 3gZV (4 ixs)
+inner group: DAMM v2 claim_position_fee (4 ixs)
+inner group: unwrap WSOL + transfer vault SOL (1 ixs)
+vault bundles: 3 — No cabe en UNA vault tx al crear (límite 1232 B). Mínimo 3 vault txs; proposalCreate es un paso aparte.
+ bundle index 3 memo=DBC partner A8fN | DBC partner 4Sk2 innerIxs=8
+
+=== squads vaultTransactionCreate 3 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=1181
+ok=true units=53144 err=null
+dest SOL delta: -0.005684 SOL
+
+=== squads proposalCreate 3 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=289
+Server responded with 429 Too Many Requests.  Retrying after 500ms delay...
+ok=false units=14157 err={"InstructionError":[0,{"Custom":6009}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalCreate
+  Program 11111111111111111111111111111111 invoke [2]
+  Program 11111111111111111111111111111111 success
+  Program log: AnchorError thrown in programs/squads_multisig_program/src/instructions/proposal_create.rs:57. Error Code: InvalidTransactionIndex. Error Number: 6009. Error Message: Invalid transaction index.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 14157 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x1779
+
+=== inner vault message 3 (sigVerify=false, payer=vault) ===
+feePayer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g ixs=8 bytes=944
+ok=true units=78564 err=null
+dest SOL delta: +1.022362 SOL
+
+=== approve 3 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=247
+ok=false units=5457 err={"InstructionError":[0,{"Custom":3012}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalApprove
+  Program log: AnchorError caused by account: proposal. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 5457 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0xbc4
+execute build failed (expected if tx account does not exist yet): Unable to find VaultTransaction account at 4kckck34iE6TedGtpdouZvfXt4u7LnvWTWQzZNYKJwjd
+ bundle index 4 memo=DBC partner 3gZV innerIxs=4
+
+=== squads vaultTransactionCreate 4 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=898
+ok=false units=9391 err={"InstructionError":[0,{"Custom":2006}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: VaultTransactionCreate
+  Program log: AnchorError caused by account: transaction. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+  Program log: Left:
+  Program log: AEaidr6FPaejGz5M1JqqCnHev9q8STBnbJxaTy1U5mnp
+  Program log: Right:
+  Program log: 4kckck34iE6TedGtpdouZvfXt4u7LnvWTWQzZNYKJwjd
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 9391 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x7d6
+
+=== squads proposalCreate 4 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=289
+ok=false units=14157 err={"InstructionError":[0,{"Custom":6009}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalCreate
+  Program 11111111111111111111111111111111 invoke [2]
+  Program 11111111111111111111111111111111 success
+  Program log: AnchorError thrown in programs/squads_multisig_program/src/instructions/proposal_create.rs:57. Error Code: InvalidTransactionIndex. Error Number: 6009. Error Message: Invalid transaction index.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 14157 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x1779
+
+=== inner vault message 4 (sigVerify=false, payer=vault) ===
+feePayer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g ixs=4 bytes=684
+ok=true units=46072 err=null
+dest SOL delta: +0.040575 SOL
+
+=== approve 4 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=247
+ok=false units=5457 err={"InstructionError":[0,{"Custom":3012}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalApprove
+  Program log: AnchorError caused by account: proposal. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 5457 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0xbc4
+execute build failed (expected if tx account does not exist yet): Unable to find VaultTransaction account at AEaidr6FPaejGz5M1JqqCnHev9q8STBnbJxaTy1U5mnp
+ bundle index 5 memo=DAMM v2 claim_position_fee | unwrap WSOL + transfer vault SOL innerIxs=5
+
+=== squads vaultTransactionCreate 5 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=978
+ok=false units=9691 err={"InstructionError":[0,{"Custom":2006}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: VaultTransactionCreate
+  Program log: AnchorError caused by account: transaction. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+  Program log: Left:
+  Program log: Ct2AXD3dC2s7ZtChBrdGHKYPJQ8PYmGSzwDQis6VsgEJ
+  Program log: Right:
+  Program log: 4kckck34iE6TedGtpdouZvfXt4u7LnvWTWQzZNYKJwjd
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 9691 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x7d6
+
+=== squads proposalCreate 5 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=289
+ok=false units=15657 err={"InstructionError":[0,{"Custom":6009}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalCreate
+  Program 11111111111111111111111111111111 invoke [2]
+  Program 11111111111111111111111111111111 success
+  Program log: AnchorError thrown in programs/squads_multisig_program/src/instructions/proposal_create.rs:57. Error Code: InvalidTransactionIndex. Error Number: 6009. Error Message: Invalid transaction index.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 15657 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x1779
+
+=== inner vault message 5 (sigVerify=false, payer=vault) ===
+feePayer=A782eAeXcyMwnn2eqTmY96MVbf8Cai3TRA1eEmXixG8g ixs=5 bytes=718
+ok=true units=38106 err=null
+dest SOL delta: +0.415106 SOL
+
+=== approve 5 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=247
+ok=false units=5457 err={"InstructionError":[0,{"Custom":3012}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalApprove
+  Program log: AnchorError caused by account: proposal. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 5457 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0xbc4
+execute build failed (expected if tx account does not exist yet): Unable to find VaultTransaction account at Ct2AXD3dC2s7ZtChBrdGHKYPJQ8PYmGSzwDQis6VsgEJ
+
+=== config set rentCollector (next index; conflicts on-chain until vault txs land) ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=2 bytes=405
+ok=true units=29980 err=null
+dest SOL delta: -0.003729 SOL
+Server responded with 429 Too Many Requests.  Retrying after 500ms delay...
+
+=== cancel proposal 1 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=247
+ok=false units=10338 err={"InstructionError":[0,{"Custom":6008}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ProposalCancel
+  Program log: AnchorError thrown in programs/squads_multisig_program/src/instructions/proposal_vote.rs:77. Error Code: InvalidProposalStatus. Error Number: 6008. Error Message: Invalid proposal status.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 10338 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x1778
+
+=== reject proposal 1 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=247
+ok=true units=9158 err=null
+dest SOL delta: -0.000005 SOL
+
+=== close vault tx 1+2 (needs rentCollector) ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=2 bytes=392
+ok=false units=12203 err={"InstructionError":[0,{"Custom":6032}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: VaultTransactionAccountsClose
+  Program log: AnchorError caused by account: multisig. Error Code: RentReclamationDisabled. Error Number: 6032. Error Message: Rent reclamation is disabled for this multisig.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 12203 of 400000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0x1790
+
+=== config execute (needs approved config tx) ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=313
+ok=false units=6276 err={"InstructionError":[0,{"Custom":3012}]}
+dest SOL delta: n/a
+logs tail:
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf invoke [1]
+  Program log: Instruction: ConfigTransactionExecute
+  Program log: AnchorError caused by account: proposal. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized.
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf consumed 6276 of 200000 compute units
+  Program SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf failed: custom program error: 0xbc4
+
+=== fund 0.001 to 65Gh ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=1 bytes=217
+ok=true units=150 err=null
+dest SOL delta: -0.001005 SOL
+
+=== creator claims (feePayer 2a4b, signer 65Gh) ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=12 bytes=1169
+ok=true units=123287 err=null
+dest SOL delta: +1.055485 SOL
+rent 2a4b: empty=2 frozen=1 nonzero=53
+
+=== close 2a4b batch 1 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=2 bytes=278
+ok=true units=1800 err=null
+dest SOL delta: +0.003023 SOL
+rent 6shB: empty=8 frozen=0 nonzero=4
+
+=== close 6shB batch 1 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=8 bytes=576
+ok=true units=944 err=null
+dest SOL delta: +0.016304 SOL
+rent 97Ly: empty=7 frozen=0 nonzero=2
+
+=== close 97Ly batch 1 ===
+feePayer=97Lyu9zYzxRiivnv67BEJL7wwXATeYQqcbRgk62CXVpH ixs=7 bytes=473
+ok=true units=826 err=null
+dest SOL delta: +0.014275 SOL
+rent EW4o: empty=10 frozen=0 nonzero=3
+
+=== close EW4o batch 1 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=8 bytes=576
+ok=true units=944 err=null
+dest SOL delta: +0.016304 SOL
+
+=== close EW4o batch 2 ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=2 bytes=342
+Server responded with 429 Too Many Requests.  Retrying after 500ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 1000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 2000ms delay...
+ok=true units=236 err=null
+dest SOL delta: +0.004069 SOL
+BTvN quote expectedOut=3956543 minOut=3897194
+
+=== optional BTvN DBC sell + close (feePayer 2a4b) ===
+feePayer=2a4bUA9ChQ3NZdrr8HTpB8zbDTv6EzJW1LMJYCY3djyy ixs=5 bytes=763
+ok=true units=44899 err=null
+dest SOL delta: +0.004254 SOL
+
+Dry-run finished. No transactions were sent.

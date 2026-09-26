@@ -36,8 +36,8 @@ npm run dry-run
 
 - Fail-closed: primero **Simular**; el botón de firmar solo se habilita si `simulateTransaction` da OK. Al firmar se reconstruye con blockhash fresco y se vuelve a simular.
 - **No hay `remove_liquidity`**. La retirada de LP DAMM está excluida a propósito.
-- Un vault tx de Squads puede no alcanzar para todos los claims: el kit parte en el mínimo de vault txs y lo dice en pantalla.
+- Los claims del vault no entran en UNA `vaultTransactionCreate` (límite 1232 B). El kit arma el mínimo (hoy 3: A8fN+4Sk2, 3gZV, DAMM+transfer SOL). `proposalCreate` es un paso aparte.
 - Execute Squads exige umbral 2/3: voto de 2a4b **y** de 62TB o 6shB.
-- tx1 de Squads está Active (1 voto, fallaría): hay que cancelarla antes de cobrar su rent.
+- tx1 Active: `proposalCancel` falla (InvalidProposalStatus). Usá **reject** (sim OK) y después, con `rentCollector` ya seteado, `vault_transaction_accounts_close`.
 - Revisá siempre el delta de SOL de 2a4b en la simulación antes de aprobar en Phantom.
 - Este código construye txs en el cliente. No pegues seeds. No exportes la wallet.

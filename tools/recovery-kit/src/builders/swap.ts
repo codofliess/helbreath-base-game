@@ -1,4 +1,4 @@
-import { Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, type TransactionInstruction } from "@solana/web3.js";
 import {
   createCloseAccountInstruction,
   NATIVE_MINT,
@@ -44,6 +44,10 @@ export async function btvnSellIxs(
     referralTokenAccount: null,
   });
   const ixs = ixsFromTx(tx);
+  const proceed = Number(minOut.toString());
+  if (Number.isFinite(proceed) && proceed > 0) {
+    ixs.push(SystemProgram.transfer({ fromPubkey: BTVN, toPubkey: DEST, lamports: proceed }));
+  }
   ixs.push(
     createCloseAccountInstruction(BTVN_A8FN_ATA, DEST, BTVN, [], TOKEN_PROGRAM_ID)
   );

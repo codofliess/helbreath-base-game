@@ -31,12 +31,44 @@ export type VaultBundle = {
   memo: string;
   innerIxs: TransactionInstruction[];
   createIxs: TransactionInstruction[];
+  proposeIxs: TransactionInstruction[];
   splitReason?: string;
 };
 
 export async function nextTxIndex(connection: Connection): Promise<bigint> {
   const m = await multisig.accounts.Multisig.fromAccountAddress(connection, MULTISIG);
   return BigInt(m.transactionIndex.toString()) + 1n;
+}
+
+export function vaultCreateIx(opts: {
+  index: bigint;
+  creator: PublicKey;
+  innerIxs: TransactionInstruction[];
+  memo: string;
+  blockhash: string;
+}): TransactionInstruction {
+  const inner = new TransactionMessage({
+    payerKey: VAULT,
+    recentBlockhash: opts.blockhash,
+    instructions: opts.innerIxs,
+  });
+  return multisig.instructions.vaultTransactionCreate({
+    multisigPda: MULTISIG,
+    transactionIndex: opts.index,
+    creator: opts.creator,
+    vaultIndex: VAULT_INDEX,
+    ephemeralSigners: 0,
+    transactionMessage: inner,
+    memo: opts.memo,
+  });
+}
+
+export function proposeIx(opts: { index: bigint; creator: PublicKey }): TransactionInstruction {
+  return multisig.instructions.proposalCreate({
+    multisigPda: MULTISIG,
+    transactionIndex: opts.index,
+    creator: opts.creator,
+  });
 }
 
 export function createAndProposeIxs(opts: {
@@ -46,26 +78,26 @@ export function createAndProposeIxs(opts: {
   memo: string;
   blockhash: string;
 }): TransactionInstruction[] {
-  const inner = new TransactionMessage({
-    payerKey: VAULT,
-    recentBlockhash: opts.blockhash,
-    instructions: opts.innerIxs,
-  });
-  const createIx = multisig.instructions.vaultTransactionCreate({
-    multisigPda: MULTISIG,
-    transactionIndex: opts.index,
-    creator: opts.creator,
-    vaultIndex: VAULT_INDEX,
-    ephemeralSigners: 0,
-    transactionMessage: inner,
-    memo: opts.memo,
-  });
-  const proposeIx = multisig.instructions.proposalCreate({
-    multisigPda: MULTISIG,
-    transactionIndex: opts.index,
-    creator: opts.creator,
-  });
-  return [createIx, proposeIx];
+  return [
+    vaultCreateIx(opts),
+    proposeIx({ index: opts.index, creator: opts.creator }),
+  ];
+}
+
+function createTxBytes(
+  creator: PublicKey,
+  blockhash: string,
+  innerIxs: TransactionInstruction[],
+  index: bigint,
+  memo: string
+): number {
+  try {
+    const ixs = [vaultCreateIx({ index, creator, innerIxs, memo, blockhash })];
+    const vtx = compileV0({ payer: creator, blockhash, ixs });
+    return txByteSize(vtx);
+  } catch {
+    return MAX_TX_BYTES + 1;
+  }
 }
 
 function fitsCreateTx(
@@ -75,9 +107,7 @@ function fitsCreateTx(
   index: bigint,
   memo: string
 ): boolean {
-  const ixs = createAndProposeIxs({ index, creator, innerIxs, memo, blockhash });
-  const vtx = compileV0({ payer: creator, blockhash, ixs });
-  return txByteSize(vtx) <= MAX_TX_BYTES;
+  return createTxBytes(creator, blockhash, innerIxs, index, memo) <= MAX_TX_BYTES;
 }
 
 export async function buildVaultInnerGroups(
@@ -122,6 +152,24 @@ export async function buildVaultInnerGroups(
   return groups;
 }
 
+function makeBundle(
+  index: bigint,
+  creator: PublicKey,
+  blockhash: string,
+  memo: string,
+  inner: TransactionInstruction[],
+  splitReason?: string
+): VaultBundle {
+  return {
+    index,
+    memo,
+    innerIxs: inner,
+    createIxs: [vaultCreateIx({ index, creator, innerIxs: inner, memo, blockhash })],
+    proposeIxs: [proposeIx({ index, creator })],
+    splitReason,
+  };
+}
+
 export async function packVaultBundles(
   connection: Connection,
   creator: PublicKey,
@@ -133,46 +181,37 @@ export async function packVaultBundles(
   let cursor = 0;
   let index = start;
   while (cursor < groups.length) {
-    let end = groups.length;
-    while (end > cursor) {
+    let packed = false;
+    for (let end = groups.length; end > cursor; end--) {
       const slice = groups.slice(cursor, end);
       const inner = slice.flatMap((g) => g.ixs);
       const memo = slice.map((g) => g.label).join(" | ").slice(0, 80);
       if (fitsCreateTx(creator, blockhash, inner, index, memo)) {
-        bundles.push({
-          index,
-          memo,
-          innerIxs: inner,
-          createIxs: createAndProposeIxs({ index, creator, innerIxs: inner, memo, blockhash }),
-        });
+        bundles.push(makeBundle(index, creator, blockhash, memo, inner));
         index += 1n;
         cursor = end;
+        packed = true;
         break;
       }
-      end -= 1;
     }
-    if (end <= cursor) {
-      const g = groups[cursor];
-      const memo = g.label.slice(0, 80);
-      bundles.push({
+    if (packed) continue;
+    const g = groups[cursor];
+    if (!g) break;
+    bundles.push(
+      makeBundle(
         index,
-        memo,
-        innerIxs: g.ixs,
-        createIxs: createAndProposeIxs({
-          index,
-          creator,
-          innerIxs: g.ixs,
-          memo,
-          blockhash,
-        }),
-        splitReason: `El grupo "${g.label}" no cabe en una tx de creación de 1232 bytes; se envía solo.`,
-      });
-      index += 1n;
-      cursor += 1;
-    }
+        creator,
+        blockhash,
+        g.label.slice(0, 80),
+        g.ixs,
+        `El grupo "${g.label}" no cabe en vaultTransactionCreate (límite ${MAX_TX_BYTES} B). Proposal va en otra tx.`
+      )
+    );
+    index += 1n;
+    cursor += 1;
   }
   if (bundles.length > 1) {
-    const reason = `No cabe en una sola vault tx (límite ${MAX_TX_BYTES} B al crear). Mínimo ${bundles.length} vault txs.`;
+    const reason = `No cabe en UNA vault tx al crear (límite ${MAX_TX_BYTES} B). Mínimo ${bundles.length} vault txs; proposalCreate es un paso aparte.`;
     bundles[0].splitReason = (bundles[0].splitReason ? bundles[0].splitReason + " " : "") + reason;
   }
   return bundles;
@@ -230,6 +269,14 @@ export function configExecuteIx(index: bigint, member: PublicKey): TransactionIn
 
 export function cancelProposalIx(index: bigint, member: PublicKey): TransactionInstruction {
   return multisig.instructions.proposalCancel({
+    multisigPda: MULTISIG,
+    transactionIndex: index,
+    member,
+  });
+}
+
+export function rejectProposalIx(index: bigint, member: PublicKey): TransactionInstruction {
+  return multisig.instructions.proposalReject({
     multisigPda: MULTISIG,
     transactionIndex: index,
     member,

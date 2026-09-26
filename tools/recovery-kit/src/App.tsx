@@ -24,7 +24,7 @@ import {
 import { createConnection, lamportsToSol, uiSol } from "./rpc";
 import { fetchLive, solFromLamports, type LiveSnapshot } from "./live";
 import { compileV0, expectedDelta, freshBlockhash, simulateV0, type SimResult } from "./tx";
-import { packVaultBundles, buildVaultInnerGroups, approveIx, executeIxs, configSetRentCollectorIxs, configExecuteIx, cancelProposalIx, closeLegacyTxIxs, nextTxIndex } from "./builders/squads";
+import { packVaultBundles, buildVaultInnerGroups, approveIx, executeIxs, configSetRentCollectorIxs, configExecuteIx, cancelProposalIx, rejectProposalIx, closeLegacyTxIxs, nextTxIndex } from "./builders/squads";
 import { dbcCreatorClaimIxs } from "./builders/dbc";
 import { batchAccounts, closeAccountIxs } from "./builders/rent";
 import { btvnSellIxs } from "./builders/swap";
@@ -355,8 +355,45 @@ function Kit() {
           </button>
         </div>
         <p className="muted">
-          Si hay más de una vault tx, repetí el flujo: el kit toma el siguiente índice on-chain al reconstruir.
+          vaultTransactionCreate y proposalCreate van en txs distintas (el mensaje inner no entra junto al proposal).
+          Si hay más de una vault tx, repetí crear/proponer para cada índice.
         </p>
+        <div className="row">
+          <button
+            disabled={!!busy || vaultIndexes.length === 0}
+            onClick={async () => {
+              if (!live) return;
+              const groups = await buildVaultInnerGroups(
+                connection,
+                live.damm,
+                live.vaultLamports,
+                live.rentExemptMin
+              );
+              const bundles = await packVaultBundles(connection, MEMBER_2A4B, groups);
+              await runSim("squads-propose-0", MEMBER_2A4B, bundles[0].proposeIxs, [MEMBER_2A4B]);
+            }}
+          >
+            Simular proposalCreate #1
+          </button>
+          <button
+            disabled={armed !== "squads-propose-0" || !!busy}
+            onClick={() =>
+              sendArmed("squads-propose-0", async () => {
+                if (!live) throw new Error("Sin live");
+                const groups = await buildVaultInnerGroups(
+                  connection,
+                  live.damm,
+                  live.vaultLamports,
+                  live.rentExemptMin
+                );
+                const bundles = await packVaultBundles(connection, MEMBER_2A4B, groups);
+                return { feePayer: MEMBER_2A4B, ixs: bundles[0].proposeIxs, required: [MEMBER_2A4B] };
+              })
+            }
+          >
+            Firmar proposalCreate
+          </button>
+        </div>
         <div className="row">
           <button
             disabled={!!busy || vaultIndexes.length === 0}
@@ -513,6 +550,28 @@ function Kit() {
             }
           >
             Firmar cancelar tx1
+          </button>
+          <button
+            disabled={!!busy}
+            onClick={async () => {
+              await runSim("squads-reject-1", MEMBER_2A4B, [rejectProposalIx(1n, MEMBER_2A4B)], [MEMBER_2A4B], [
+                "Cancel falló en dry-run (InvalidProposalStatus). Reject es el plan B para invalidar tx1.",
+              ]);
+            }}
+          >
+            Simular reject tx1
+          </button>
+          <button
+            disabled={armed !== "squads-reject-1" || !!busy}
+            onClick={() =>
+              sendArmed("squads-reject-1", async () => ({
+                feePayer: MEMBER_2A4B,
+                ixs: [rejectProposalIx(1n, MEMBER_2A4B)],
+                required: [MEMBER_2A4B],
+              }))
+            }
+          >
+            Firmar reject tx1
           </button>
           <button
             disabled={!!busy}
@@ -764,22 +823,14 @@ function Kit() {
             onClick={async () => {
               const built = await btvnSellIxs(connection, {
                 owner: BTVN,
-                payer: live && live.btvnLamports > 50_000 ? BTVN : DEST,
+                payer: DEST,
                 amountIn: new BN(live!.btvnA8fnRaw.toString()),
                 slippageBps: slippage,
               });
-              await runSim(
-                "btvn-sell",
-                live && live.btvnLamports > 50_000 ? BTVN : DEST,
-                built.ixs,
-                [BTVN],
-                [
-                  `minOut ${built.minOut.toString()} lamports · expected ${built.expectedOut.toString()}`,
-                  live && live.btvnLamports <= 50_000
-                    ? "BTvN tiene poco SOL: fee payer 2a4b + firma BTvN (o fondeá BTvN)."
-                    : "",
-                ].filter(Boolean)
-              );
+              await runSim("btvn-sell", DEST, built.ixs, [BTVN, DEST], [
+                `minOut ${built.minOut.toString()} lamports · expected ${built.expectedOut.toString()}`,
+                "BTvN no tiene rent para ATA WSOL: fee payer 2a4b. Conectá BTvN para firmar el swap, o fondeá BTvN y cambiá el flujo.",
+              ]);
             }}
           >
             Simular swap+close
@@ -789,14 +840,13 @@ function Kit() {
             onClick={() =>
               sendArmed("btvn-sell", async () => {
                 if (!live) throw new Error("sin live");
-                const payer = live.btvnLamports > 50_000 ? BTVN : DEST;
                 const built = await btvnSellIxs(connection, {
                   owner: BTVN,
-                  payer,
+                  payer: DEST,
                   amountIn: new BN(live.btvnA8fnRaw.toString()),
                   slippageBps: slippage,
                 });
-                return { feePayer: payer, ixs: built.ixs, required: [BTVN] };
+                return { feePayer: DEST, ixs: built.ixs, required: [BTVN] };
               })
             }
           >

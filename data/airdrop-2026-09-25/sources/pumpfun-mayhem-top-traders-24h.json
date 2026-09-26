@@ -1,0 +1,406 @@
+{
+  "window": "24h",
+  "items": [
+    {
+      "rank": 1,
+      "address": "9YdtQaDhsNwxSJaZ39HLCCMCVjgMNQscbd9f3UbqmFfB",
+      "realisedPnlUsd": 9630.265106634943,
+      "winRate": 0.2095,
+      "volumeUsd": 125570.3507389088,
+      "tradeCount": 583
+    },
+    {
+      "rank": 2,
+      "address": "2KQKDA9RtgB8wfGMcnGsKMfFY2BkktG2ETMtRPSAzB8C",
+      "realisedPnlUsd": 5360.754472217201,
+      "winRate": 0.3784,
+      "volumeUsd": 326323.73637666745,
+      "tradeCount": 5535
+    },
+    {
+      "rank": 3,
+      "address": "34Kq3jEpUxjr41CCE9ot6nSgdANgvqA44hLpYwuPHTB6",
+      "realisedPnlUsd": 4196.654390375772,
+      "winRate": 0.3333,
+      "volumeUsd": 34098.506181789526,
+      "tradeCount": 76
+    },
+    {
+      "rank": 4,
+      "address": "AAPgisSsYHBE12CzrWsSDNgtMcska1hwTq1yDb418SNY",
+      "realisedPnlUsd": 3793.3840899663082,
+      "winRate": 0.75,
+      "volumeUsd": 54227.18618495166,
+      "tradeCount": 40
+    },
+    {
+      "rank": 5,
+      "address": "BpmqDkGDfs1dgCq48HQM97uqLPYjWLWRz5RUZ1yFydZM",
+      "realisedPnlUsd": 3002.3712790150253,
+      "winRate": 0.5152,
+      "volumeUsd": 11340.51420068626,
+      "tradeCount": 101
+    },
+    {
+      "rank": 6,
+      "address": "EoqodDDzKqEGcKBuEHtkAAzs3rM2dZtoNqpgcNkyY7Zq",
+      "realisedPnlUsd": 2935.8951239400235,
+      "winRate": 0.4332,
+      "volumeUsd": 47924.28696991237,
+      "tradeCount": 380
+    },
+    {
+      "rank": 7,
+      "address": "DFihBUSKbGsLWELT6i1Wv4W85VRKp9Y1R1fWFvEQcdvF",
+      "realisedPnlUsd": 2126.397294173138,
+      "winRate": 0.4815,
+      "volumeUsd": 16119.356556679686,
+      "tradeCount": 424
+    },
+    {
+      "rank": 8,
+      "address": "6Xu7sCDy5pGvwhVwi97Sea67U6W4szseokNEzfcW6GDV",
+      "realisedPnlUsd": 2028.0663905014787,
+      "winRate": 1,
+      "volumeUsd": 2028.0663905014787,
+      "tradeCount": 836
+    },
+    {
+      "rank": 9,
+      "address": "J331AkJ63VUnxKoFHvGBpUeSyR72WCZqaYynXqj8va3R",
+      "realisedPnlUsd": 1978.4387536003157,
+      "winRate": 1,
+      "volumeUsd": 1978.4387536003157,
+      "tradeCount": 821
+    },
+    {
+      "rank": 10,
+      "address": "DKwQ4jHa6gdKxGzcB44iwTfs6WGBBGw35s1sY8ysxAX3",
+      "realisedPnlUsd": 1853.2039889751888,
+      "winRate": 1,
+      "volumeUsd": 1853.2039889751888,
+      "tradeCount": 878
+    },
+    {
+      "rank": 11,
+      "address": "98z74dZMGgNSd6nojCxqksMCP72Mb98Z3xA9WbLfCH7Y",
+      "realisedPnlUsd": 1815.4640414538458,
+      "winRate": 1,
+      "volumeUsd": 1815.4640414538458,
+      "tradeCount": 850
+    },
+    {
+      "rank": 12,
+      "address": "5BPNwtDn64fZQVugM2TJPLgTvShyzNKCMe7QBvwwHg9h",
+      "realisedPnlUsd": 1648.1716604412334,
+      "winRate": 1,
+      "volumeUsd": 1648.1716604412334,
+      "tradeCount": 918
+    },
+    {
+      "rank": 13,
+      "address": "3ZEjXEyDGyNvmTBSNsXQrcttVrqQRHiNe5BMK4YVaxwQ",
+      "realisedPnlUsd": 1624.7652647702275,
+      "winRate": 1,
+      "volumeUsd": 1624.7652647702275,
+      "tradeCount": 750
+    },
+    {
+      "rank": 14,
+      "address": "FJoyRPMzTdUPQE2JDs7bRBb7BfHhfWamFMzS4LPyECKk",
+      "realisedPnlUsd": 1591.521789768289,
+      "winRate": 1,
+      "volumeUsd": 1591.521789768289,
+      "tradeCount": 55
+    },
+    {
+      "rank": 15,
+      "address": "GzjFEeAF9ui1RZLTepaVyhJ4DS6PwgQF3hGQM6NwBDjk",
+      "realisedPnlUsd": 1528.4440133369153,
+      "winRate": 0.4571,
+      "volumeUsd": 33548.95343505316,
+      "tradeCount": 293
+    },
+    {
+      "rank": 16,
+      "address": "9yygWoHs9K9FhUPEo26adHREw4MFaF5aE2haEooc2acm",
+      "realisedPnlUsd": 1432.3229638388943,
+      "winRate": 1,
+      "volumeUsd": 1432.3229638388943,
+      "tradeCount": 59
+    },
+    {
+      "rank": 17,
+      "address": "6mczNS4tb3Wyfk51xtZBkmjVF7JrruLEy5NVWLkHgbPs",
+      "realisedPnlUsd": 1413.8973476290357,
+      "winRate": 1,
+      "volumeUsd": 1413.8973476290357,
+      "tradeCount": 67
+    },
+    {
+      "rank": 18,
+      "address": "EEFSGqU6DxKdnfyNbjeNEDqfXTDS9WqMGZv95fCuiPS4",
+      "realisedPnlUsd": 1377.9801228010224,
+      "winRate": 1,
+      "volumeUsd": 1377.9801228010224,
+      "tradeCount": 46
+    },
+    {
+      "rank": 19,
+      "address": "13TYLRoYphHt5p78RyDCNP3gi98fkPESzu1PMtkHpnGk",
+      "realisedPnlUsd": 1377.319785391968,
+      "winRate": 1,
+      "volumeUsd": 1377.319785391968,
+      "tradeCount": 5
+    },
+    {
+      "rank": 20,
+      "address": "3daRxQXYPYVC12pn2MxvzkuqprV4yMG18qLc7TqDEgJ7",
+      "realisedPnlUsd": 1339.9097188867138,
+      "winRate": 1,
+      "volumeUsd": 1339.9097188867138,
+      "tradeCount": 48
+    },
+    {
+      "rank": 21,
+      "address": "DrEsuS2NgEPF6UzgFiQqSk8VeXPh1GALxQPYYkrXMN31",
+      "realisedPnlUsd": 1319.068474368363,
+      "winRate": 1,
+      "volumeUsd": 1319.068474368363,
+      "tradeCount": 56
+    },
+    {
+      "rank": 22,
+      "address": "7qS94nqG8TXifQ7ptKrFWs9aU34uh6RssdJ5QBYAQDk5",
+      "realisedPnlUsd": 1271.0560127820877,
+      "winRate": 0.4929,
+      "volumeUsd": 40074.16797184327,
+      "tradeCount": 1428
+    },
+    {
+      "rank": 23,
+      "address": "5mbo1CogP1VEyHExZCkaegSwXwdrbdomQJSZTEHSnJdJ",
+      "realisedPnlUsd": 1071.7448014597867,
+      "winRate": 0.489,
+      "volumeUsd": 35313.86336321313,
+      "tradeCount": 1234
+    },
+    {
+      "rank": 24,
+      "address": "JCzdJNiujoKEYYS57PFdZmaWAcAH6dCWVH2QmghHcHbR",
+      "realisedPnlUsd": 1035.407404510337,
+      "winRate": 0.6404,
+      "volumeUsd": 29103.427378836997,
+      "tradeCount": 974
+    },
+    {
+      "rank": 25,
+      "address": "kzcvJmXFhgxh5QuMQejp2r4mLUjFSu2ziFfKQjBKedf",
+      "realisedPnlUsd": 991.1607524484915,
+      "winRate": 0.32,
+      "volumeUsd": 16340.349286912526,
+      "tradeCount": 1040
+    },
+    {
+      "rank": 26,
+      "address": "Hx44ecKZzK2UqZfVSxBp6B46jLBc2KGUwp4x9bLoR9GJ",
+      "realisedPnlUsd": 945.8545152462051,
+      "winRate": 0.5056,
+      "volumeUsd": 31492.21794889429,
+      "tradeCount": 14654
+    },
+    {
+      "rank": 27,
+      "address": "BFoPaiKxCbrDM6gYB1gAr1sNUANTw3g9drWgVRExtYUB",
+      "realisedPnlUsd": 926.4239821137644,
+      "winRate": 0.3871,
+      "volumeUsd": 5759.738807421969,
+      "tradeCount": 123
+    },
+    {
+      "rank": 28,
+      "address": "54D38cdUMdo4HNm9hbu1T6u5mRtnJkmiUnyBTTJhjXMF",
+      "realisedPnlUsd": 866.0788351772344,
+      "winRate": 0.6024,
+      "volumeUsd": 39935.90562995194,
+      "tradeCount": 12788
+    },
+    {
+      "rank": 29,
+      "address": "B9h6X9WQ5d9j2YzeJXt929sW5Lhq5vGHTSrrN9e6q6aS",
+      "realisedPnlUsd": 848.4388949565405,
+      "winRate": 0.3968,
+      "volumeUsd": 15138.559667885062,
+      "tradeCount": 964
+    },
+    {
+      "rank": 30,
+      "address": "2eX1SFxf5zsCs3z7HA3YbHdzmR4SAP6sfPQKLK1po4A6",
+      "realisedPnlUsd": 846.9790947875722,
+      "winRate": 0.6111,
+      "volumeUsd": 6635.532143240259,
+      "tradeCount": 38
+    },
+    {
+      "rank": 31,
+      "address": "ATYuKgxGUJy2zVRmccY3FbiepdErSrQJDv6YEBsrCae5",
+      "realisedPnlUsd": 835.2832324141165,
+      "winRate": 0.4118,
+      "volumeUsd": 2770.0729257633934,
+      "tradeCount": 84
+    },
+    {
+      "rank": 32,
+      "address": "5pUgxQGgX36GyV5BdsBNRAw9JxJ6Br4UVddJmJ3sumhc",
+      "realisedPnlUsd": 830.2403995161592,
+      "winRate": 0.434,
+      "volumeUsd": 23223.665952926123,
+      "tradeCount": 175
+    },
+    {
+      "rank": 33,
+      "address": "9CF4GGtQJ2SMZPZh4f6917QBqKVJV6egykGmoBAaxWRK",
+      "realisedPnlUsd": 823.5358112109508,
+      "winRate": 1,
+      "volumeUsd": 823.5358112109508,
+      "tradeCount": 400
+    },
+    {
+      "rank": 34,
+      "address": "9hwLkUCy8fqyJ7ukL5JETeZpDyiyJCboZCyaDtn3gBY6",
+      "realisedPnlUsd": 819.0038476837723,
+      "winRate": 0.5417,
+      "volumeUsd": 23210.863569916022,
+      "tradeCount": 545
+    },
+    {
+      "rank": 35,
+      "address": "4qYiA6i4mnqRVgdmheSCg2jQjvwpd1AoVxmQ65JhSJUi",
+      "realisedPnlUsd": 811.1596607369651,
+      "winRate": 1,
+      "volumeUsd": 811.1596607369651,
+      "tradeCount": 6
+    },
+    {
+      "rank": 36,
+      "address": "hoZ7nAUxL4CZ2m1uAcMJqzqmJdqjRfFubu2USBgKFux",
+      "realisedPnlUsd": 807.2562556721134,
+      "winRate": 0.5,
+      "volumeUsd": 13692.802527948046,
+      "tradeCount": 12
+    },
+    {
+      "rank": 37,
+      "address": "Am8bimwyPn6B358hQWpCCZM6uMRX7x2Nx17VKXnvCDxY",
+      "realisedPnlUsd": 768.1454304431809,
+      "winRate": 0.5668,
+      "volumeUsd": 20654.256458556192,
+      "tradeCount": 692
+    },
+    {
+      "rank": 38,
+      "address": "8RZrLdqoJU2AFnCvWw8KTbtpkyHidaPgEQAwoPjFtM4z",
+      "realisedPnlUsd": 762.4818837784119,
+      "winRate": 0.4488,
+      "volumeUsd": 66482.72721126046,
+      "tradeCount": 3196
+    },
+    {
+      "rank": 39,
+      "address": "6zESg784MsaN7xvnFMPkAJBXLygctkCDcFst4xgSVBdj",
+      "realisedPnlUsd": 743.467221003809,
+      "winRate": 1,
+      "volumeUsd": 743.467221003809,
+      "tradeCount": 362
+    },
+    {
+      "rank": 40,
+      "address": "9vDqT3tfVGe8KGMXhNgNgkf5ciaxbM7hKvjvqT6hinqK",
+      "realisedPnlUsd": 724.0837881724815,
+      "winRate": 0.2883,
+      "volumeUsd": 8170.600074932446,
+      "tradeCount": 1177
+    },
+    {
+      "rank": 41,
+      "address": "Cu3nUxTHDcdQiCRWU3oW9aw5RA7dAdBqVrj3GjZdQEvj",
+      "realisedPnlUsd": 723.4428369491111,
+      "winRate": 0.2941,
+      "volumeUsd": 5050.149661977927,
+      "tradeCount": 58
+    },
+    {
+      "rank": 42,
+      "address": "FoowXWNysZqT2b3HXcYDqLKqzf8z6ThE6HJWAM4A1Es3",
+      "realisedPnlUsd": 707.9643861747584,
+      "winRate": 0.2667,
+      "volumeUsd": 4637.858380018519,
+      "tradeCount": 52
+    },
+    {
+      "rank": 43,
+      "address": "4cupcAnEfuZ1JyGbm8nYY886WyyoQsLB23aa8WqqNW1C",
+      "realisedPnlUsd": 699.4026922488113,
+      "winRate": 0.5352,
+      "volumeUsd": 12013.632653342298,
+      "tradeCount": 512
+    },
+    {
+      "rank": 44,
+      "address": "HrrUxSw4uwk24wai2XvKqeUuNUY7VFpkh9QxBnR5b3DA",
+      "realisedPnlUsd": 691.1674305794674,
+      "winRate": 0.7456,
+      "volumeUsd": 10009.370585178256,
+      "tradeCount": 7532
+    },
+    {
+      "rank": 45,
+      "address": "FxQv4cExaubbo8N5y8HcfjDHvsLivkHhg3tvGa8PFqBQ",
+      "realisedPnlUsd": 674.9873623585704,
+      "winRate": 1,
+      "volumeUsd": 674.9873623585704,
+      "tradeCount": 30
+    },
+    {
+      "rank": 46,
+      "address": "BDa3iMpdFbyWCwoaXdhcCSgHogSCm2SEuKwiwNnHMYXq",
+      "realisedPnlUsd": 671.2192617245119,
+      "winRate": 1,
+      "volumeUsd": 671.2192617245119,
+      "tradeCount": 6
+    },
+    {
+      "rank": 47,
+      "address": "3NsTAKARF3HqgFj6JnnPU8iymmXfCfNcKrN9Z9rUJxak",
+      "realisedPnlUsd": 654.4286415001211,
+      "winRate": 0.3571,
+      "volumeUsd": 3863.019858143754,
+      "tradeCount": 138
+    },
+    {
+      "rank": 48,
+      "address": "DQifC9AbRL4GJFFyKGhgzLV9XWjCpGaBNC5LFv5uAaqb",
+      "realisedPnlUsd": 652.1895850255395,
+      "winRate": 0.5556,
+      "volumeUsd": 1540.9379633712078,
+      "tradeCount": 19
+    },
+    {
+      "rank": 49,
+      "address": "DeFG8i8zoJ3hN155nmvLq266ZVxWmNgRaTz5KQVHfe2S",
+      "realisedPnlUsd": 637.265577532028,
+      "winRate": 0.5072,
+      "volumeUsd": 13936.553295657042,
+      "tradeCount": 8076
+    },
+    {
+      "rank": 50,
+      "address": "LeKqG2SZdGaVPB8N285rqWoz5FXg7cnNfXy8JTdXoN7",
+      "realisedPnlUsd": 617.7127789214613,
+      "winRate": 0.45,
+      "volumeUsd": 3304.2674809794576,
+      "tradeCount": 198
+    }
+  ],
+  "updatedAt": 1790387216383
+}

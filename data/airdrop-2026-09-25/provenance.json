@@ -1,0 +1,92 @@
+{
+  "built_at": "2026-09-26T02:00:25.402333+00:00",
+  "mint": "4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq",
+  "token": "HELL",
+  "total_amount_hell": 120000000,
+  "seed": "hell-airdrop-2026-09-25",
+  "base_amount": 80000.0,
+  "row_count": 1500,
+  "sol_usd": 121.93939680955805,
+  "sol_price_source": "https://frontend-api-v3.pump.fun/sol-price",
+  "quotas": {
+    "pumpfun": 500,
+    "fomo": 300,
+    "stonkfun": 100,
+    "moby": 100
+  },
+  "shortfalls": {
+    "pumpfun": {
+      "quota": 500,
+      "achieved": 447,
+      "available_positive_realized": 447,
+      "reason": "Official pump.fun PnL API only publishes 100 wallets per window (daily/weekly/monthly). Union + Mayhem + Kolscan (positive profit) + GMGN launchpad_smart snapshot still under 500 after existing-list dedupe and invalid/infra filters. Stopped at real positive realized PnL.",
+      "backfill": "Dune query 4032586 (Top Pump Fun Wallet by profit) with a Dune API key; or Solana Tracker PnL V2 /v2/pnl/leaderboard/top?platform= (paid)."
+    },
+    "fomo": {
+      "quota": 300,
+      "achieved": 0,
+      "reason": "fomo.family prod-api.fomo.family returns 430 unauthorized without a Privy session. Independent api.fomoapi.io /v2/leaderboard/{window} returns 401 API key required. No public wallet list with PnL was reachable.",
+      "backfill": "Register a free key at https://fomoapi.io/dashboard and pull GET https://api.fomoapi.io/v2/leaderboard/30d (documented as realized on-chain PnL with wallets.solana). Then re-run this script after adding sources/fomo-leaderboard-30d.json."
+    },
+    "stonkfun": {
+      "quota": 100,
+      "achieved": 0,
+      "reason": "stonk.fun DNS does not resolve. stonkfun.xyz public API exposes tokens/launches/creators (Raydium LaunchLab) but no trader PnL leaderboard. Bitquery StonkFun docs only show per-token volume aggregations (API key).",
+      "backfill": "Aggregate realized PnL from Raydium LaunchLab program LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj filtered to StonkFun platform configs 6BwHHDg3u1854jC8PDLXvR4spTcLNaoBxLJNGC4nTESt (reward) and 4E876qZTE9FJMrBzgVtBrSrzz2TLivB5Y5QXPjB4gZL7 (standard) via Bitquery or Dune."
+    },
+    "moby": {
+      "quota": 100,
+      "achieved": 0,
+      "reason": "Moby (moby.win / AssetDash) hourly leaderboard publishes rank and 24h PnL only; docs state wallets stay private. No public program-id trader board.",
+      "backfill": "If Moby later exposes wallets, ingest that feed. Until then do not treat screener 'smart money' aliases as Moby user wallets. Alternate: none that are actually Moby traders."
+    }
+  },
+  "pumpfun_collection_stats": {
+    "raw_by_source": {
+      "pnl_monthly": 100,
+      "pnl_weekly": 100,
+      "pnl_daily": 100,
+      "mayhem_7d": 50,
+      "mayhem_24h": 50,
+      "kolscan_rows": 1304,
+      "gmgn_launchpad_smart": 135
+    },
+    "positive_realized_by_source": {
+      "pnl_monthly": 85,
+      "pnl_weekly": 70,
+      "pnl_daily": 38,
+      "mayhem_7d": 50,
+      "mayhem_24h": 50,
+      "kolscan_unique_positive": 83,
+      "gmgn_launchpad_positive": 135
+    },
+    "dropped_existing": 8,
+    "dropped_invalid": 0,
+    "dropped_infra": 0,
+    "dropped_nonpositive": 103,
+    "cross_source_dupes_kept_higher": 60,
+    "unique_positive_after_dedupe": 447
+  },
+  "existing_list_stats": {
+    "players_with_wallet": 11,
+    "nft_gamer": 80,
+    "pump_person": 962,
+    "skipped_need_wallet": 0,
+    "skipped_team": 0,
+    "skipped_invalid": 0,
+    "skipped_already_taken": 0,
+    "skipped_not_in": 0
+  },
+  "final_mix": {
+    "trader_pumpfun": 447,
+    "player_ronda1": 11,
+    "nft_gamer": 80,
+    "pump_person": 962
+  },
+  "prior_send_summary_excerpt": {
+    "playersWithWallet": 11,
+    "keptPump": 965,
+    "keptNft": 80
+  },
+  "no_onchain_sends": true
+}

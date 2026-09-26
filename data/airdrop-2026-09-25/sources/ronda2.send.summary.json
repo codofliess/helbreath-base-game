@@ -1,0 +1,67 @@
+{
+  "builtAt": "2026-08-31T02:35:03.991Z",
+  "players": 12,
+  "playersNeedWallet": 1,
+  "playerHell": 4035116,
+  "playersWithWallet": 11,
+  "onchainUnique": 1081,
+  "keptPersons": 1045,
+  "droppedInfra": 36,
+  "dropReasons": {
+    "cex_or_dust": 5,
+    "protocol_vault_gt_50b": 2,
+    "treasury_round_lot": 6,
+    "pda_owner": 23
+  },
+  "sendRowsWithWallet": 1056,
+  "sendRowsNeedWallet": 1,
+  "totalSendRows": 1057,
+  "keptPump": 965,
+  "keptNft": 80,
+  "droppedTop": [
+    {
+      "wallet": "Cfq1ts1iFr1eUWWBm8eFxUzm5R3YA3UvMZznwiShbgZt",
+      "pump": 303261857223.2221,
+      "reason": "protocol_vault_gt_50b"
+    },
+    {
+      "wallet": "8UhbNoBXmGoxJr2TeWW8wmSMoWmjS2rTT2tVJxzuTogC",
+      "pump": 80000000010.00024,
+      "reason": "protocol_vault_gt_50b"
+    },
+    {
+      "wallet": "9pkFKCR1mdS31JxjKdtmWg2awZUg6vJUYVY722DAcXzv",
+      "pump": 35000000010.00026,
+      "reason": "treasury_round_lot"
+    },
+    {
+      "wallet": "BBvQteuawKB2UtExfevL8HYLjWWsgmWXsp922vFbvCfT",
+      "pump": 25000000010.02305,
+      "reason": "treasury_round_lot"
+    },
+    {
+      "wallet": "GTeSSwovPiVirpvWJpThUWiLDSLsuApmJw621Yom3MhB",
+      "pump": 25000000010.000233,
+      "reason": "treasury_round_lot"
+    },
+    {
+      "wallet": "AvqFxKNrYZNvxsj2oWhLW8det68HzCXBqswshoD2TdT6",
+      "pump": 24000000010.000267,
+      "reason": "treasury_round_lot"
+    },
+    {
+      "wallet": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+      "pump": 16629591453.178,
+      "reason": "cex_or_dust"
+    },
+    {
+      "wallet": "GhFaBi8sy3M5mgG97YguQ6J3f7XH4JwV5CoW8MbzRgAU",
+      "pump": 15625000010.000263,
+      "reason": "treasury_round_lot"
+    }
+  ],
+  "audienceAmountHellEach": 10000,
+  "audienceHell": 10450000,
+  "audienceRows": 1045,
+  "audienceAmountAppliedAt": "2026-08-31T18:30:55.007Z"
+}

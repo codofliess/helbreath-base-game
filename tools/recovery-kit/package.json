@@ -1,0 +1,40 @@
+{
+  "name": "recovery-kit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Self-custody Phantom recovery kit. Never holds keys.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dry-run": "node --import tsx scripts/dry-run.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meteora-ag/cp-amm-sdk": "^1.4.10",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.13",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.37",
+    "@solana/web3.js": "^1.98.0",
+    "@sqds/multisig": "^2.1.4",
+    "bn.js": "^5.2.5",
+    "buffer": "^6.0.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-node-polyfills": "^0.23.0",
+    "vitest": "^3.0.4"
+  }
+}

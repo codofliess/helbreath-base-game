@@ -1,0 +1,53 @@
+:root {
+  color-scheme: dark;
+  --bg: #0e1116;
+  --card: #171c24;
+  --line: #2a3340;
+  --ok: #3dd68c;
+  --warn: #f5c16c;
+  --bad: #ff6b6b;
+  --muted: #9aa4b2;
+  --accent: #6cb6ff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: #e8edf4; }
+a { color: var(--accent); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+h1 { font-size: 1.4rem; margin: 0 0 8px; }
+h2 { font-size: 1.1rem; margin: 28px 0 10px; }
+.muted { color: var(--muted); font-size: 0.92rem; }
+.warn { color: var(--warn); }
+.bad { color: var(--bad); }
+.ok { color: var(--ok); }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+input[type="text"], input[type="number"] {
+  background: #0e1116; color: inherit; border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; min-width: 280px;
+}
+button {
+  background: #2b6cb0; color: white; border: 0; border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; font-weight: 600;
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; background: #334; }
+button.secondary { background: #3a4556; }
+pre {
+  background: #0b0e13; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px; overflow: auto; max-height: 240px; font-size: 0.75rem;
+}
+.banner {
+  border: 1px solid #8a6d1d; background: #2a220e; color: #f5e6b8;
+  padding: 12px; border-radius: 10px; margin: 12px 0;
+}
+.wallet { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }

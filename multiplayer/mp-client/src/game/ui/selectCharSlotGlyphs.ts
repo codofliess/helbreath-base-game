@@ -129,35 +129,91 @@ function levelFromPaintRow(row: SlotGlyphRow): unknown {
     return digits ? Number(digits[0]) : 0;
 }
 
+interface BannerStoreSlot {
+    name?: string;
+    level?: unknown;
+    slotIndex?: number;
+}
+
+/** One name per desk index. A repeated or invalid slotIndex takes the next free 0–3. */
+function uniqueNamedBannerSlots(storeSlots: BannerStoreSlot[] | undefined): BannerStoreSlot[] {
+    const used = new Set<number>();
+    const out: BannerStoreSlot[] = [];
+    for (const row of storeSlots ?? []) {
+        const name = (row?.name ?? '').trim();
+        if (!name) {
+            continue;
+        }
+        const raw = Number(row.slotIndex);
+        let slotIndex = 0;
+        if (Number.isInteger(raw) && raw >= 0 && raw <= 3 && !used.has(raw)) {
+            slotIndex = raw;
+        } else {
+            for (let i = 0; i < 4; i++) {
+                if (!used.has(i)) {
+                    slotIndex = i;
+                    break;
+                }
+            }
+        }
+        used.add(slotIndex);
+        out.push({ name, level: row.level, slotIndex });
+    }
+    out.sort((a, b) => Number(a.slotIndex) - Number(b.slotIndex));
+    return out;
+}
+
+function bannerFromPaintRow(row: SlotGlyphRow): string {
+    return `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${formatSelectCharKindGemNameLev(
+        row.name,
+        levelFromPaintRow(row),
+    )}`;
+}
+
 /**
  * Banner KindGem can read without Phaser Text.
- * Named store slots win over paint-row `occupied` so a live Elon list cannot
- * stay on «waiting» after CharacterList (empty paint rows / missing level).
- * Occupied paint is `OCCUPIED Elon Lev.150` — never a «waiting» substring.
+ * The line is the selected character only (`OCCUPIED Elon Lev.150`).
+ * Joining every occupied name mixed Co2 and BebaMaster into one title.
+ * Named store slots still win over an empty paint so a live list cannot stay on «waiting».
  */
 export function buildSelectCharReactOccupiedBanner(
     rows: SlotGlyphRow[],
-    storeSlots?: Array<{ name?: string; level?: unknown; rebirth?: unknown }>,
+    storeSlots?: BannerStoreSlot[],
+    selectedSlotIndex?: number,
 ): string {
-    const fromStore = (storeSlots ?? []).filter((row) => (row?.name ?? '').trim().length > 0);
-    if (fromStore.length > 0) {
-        const names = fromStore
-            .map((row) => formatSelectCharKindGemNameLev(row.name ?? '', row.level))
-            .join(' · ');
-        stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
+    const selected =
+        selectedSlotIndex === undefined || !Number.isFinite(Number(selectedSlotIndex))
+            ? undefined
+            : Math.max(0, Math.min(3, Math.trunc(Number(selectedSlotIndex))));
+    if (selected !== undefined && paintRowLooksOccupied(rows[selected])) {
+        stickyNamedOccupiedBanner = bannerFromPaintRow(rows[selected]);
         return stickyNamedOccupiedBanner;
     }
-    const occupied = rows.filter(paintRowLooksOccupied);
+    const fromStore = uniqueNamedBannerSlots(storeSlots);
+    if (fromStore.length > 0) {
+        const picked =
+            (selected !== undefined
+                ? fromStore.find((row) => Number(row.slotIndex) === selected)
+                : undefined) ?? fromStore[0];
+        stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${formatSelectCharKindGemNameLev(
+            picked.name ?? '',
+            picked.level,
+        )}`;
+        return stickyNamedOccupiedBanner;
+    }
+    const occupied = rows
+        .map((row, slotIndex) => ({ row, slotIndex }))
+        .filter((entry) => paintRowLooksOccupied(entry.row));
     if (occupied.length === 0) {
         if (stickyNamedOccupiedBanner) {
             return stickyNamedOccupiedBanner;
         }
         return `${REACT_OCCUPIED_BANNER_PREFIX} — waiting`;
     }
-    const names = occupied
-        .map((row) => formatSelectCharKindGemNameLev(row.name, levelFromPaintRow(row)))
-        .join(' · ');
-    stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
+    const picked =
+        (selected !== undefined ? occupied.find((entry) => entry.slotIndex === selected) : undefined) ??
+        occupied[0];
+    stickyNamedOccupiedBanner = bannerFromPaintRow(picked.row);
     return stickyNamedOccupiedBanner;
 }
 

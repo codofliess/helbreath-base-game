@@ -185,6 +185,37 @@ describe('paintSelectCharSlotRows', () => {
         assert.equal(rows.some((r) => r.name === 'Elon' && r.lev === 'Lev. 150'), true);
         assert.equal(rows[0]?.name, 'Elon');
     });
+
+    it('maps Co2 and BebaMaster onto two slot indexes and leaves the other cards Empty', () => {
+        const co2 = { ...elon, name: 'Co2', level: 150, slotIndex: 0 };
+        const beba = { ...elon, name: 'BebaMaster', level: 1, slotIndex: 1 };
+        const rows = paintSelectCharSlotRows([co2, beba]);
+        assert.equal(rows[0]?.name, 'Co2');
+        assert.equal(rows[0]?.occupied?.slotIndex, 0);
+        assert.equal(rows[1]?.name, 'BebaMaster');
+        assert.equal(rows[1]?.lev, 'Lev. 1');
+        assert.equal(rows[1]?.occupied?.slotIndex, 1);
+        assert.equal(rows[2]?.name, 'Empty');
+        assert.equal(rows[2]?.occupied, undefined);
+        assert.equal(rows[3]?.name, 'Empty');
+        assert.equal(rows[3]?.occupied, undefined);
+        assert.equal(rows.filter((row) => row.occupied).length, 2);
+    });
+
+    it('moves a duplicated slotIndex onto the next free desk instead of stacking both cards', () => {
+        const rows = paintSelectCharSlotRows([
+            { ...elon, name: 'Co2', level: 150, slotIndex: 0 },
+            { ...elon, name: 'BebaMaster', level: 1, slotIndex: 0 },
+        ]);
+        assert.equal(rows[0]?.occupied?.name, 'Co2');
+        assert.equal(rows[0]?.occupied?.slotIndex, 0);
+        assert.equal(rows[1]?.occupied?.name, 'BebaMaster');
+        assert.equal(rows[1]?.occupied?.slotIndex, 1);
+        assert.equal(rows[2]?.occupied, undefined);
+        assert.equal(rows[3]?.occupied, undefined);
+        const indexes = rows.filter((row) => row.occupied).map((row) => row.occupied?.slotIndex);
+        assert.deepEqual(indexes, [0, 1]);
+    });
 });
 
 describe('formatSelectCharOccupiedLev', () => {
@@ -288,6 +319,34 @@ describe('buildSelectCharReactOccupiedBanner', () => {
         const later = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([]), []);
         assert.equal(later, 'OCCUPIED Elon Lev.150');
         assert.equal(later.includes('waiting'), false);
+    });
+
+    it('reads the selected character only, not a join of Co2 and BebaMaster', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const slots = [
+            { ...elon, name: 'Co2', level: 150, slotIndex: 0 },
+            { ...elon, name: 'BebaMaster', level: 1, slotIndex: 1 },
+        ];
+        const rows = paintSelectCharSlotRows(slots);
+        const co2Banner = buildSelectCharReactOccupiedBanner(rows, slots, 0);
+        assert.equal(co2Banner, 'OCCUPIED Co2 Lev.150');
+        assert.equal(co2Banner.includes('BebaMaster'), false);
+        assert.equal(co2Banner.includes('·'), false);
+        const bebaBanner = buildSelectCharReactOccupiedBanner(rows, slots, 1);
+        assert.equal(bebaBanner, 'OCCUPIED BebaMaster Lev.1');
+        assert.equal(bebaBanner.includes('Co2'), false);
+    });
+
+    it('keeps the selected name when both characters arrived with the same slotIndex', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const slots = [
+            { ...elon, name: 'Co2', level: 150, slotIndex: 0 },
+            { ...elon, name: 'BebaMaster', level: 1, slotIndex: 0 },
+        ];
+        const rows = paintSelectCharSlotRows(slots);
+        const banner = buildSelectCharReactOccupiedBanner(rows, slots, 1);
+        assert.equal(banner, 'OCCUPIED BebaMaster Lev.1');
+        assert.equal(banner.includes('Co2'), false);
     });
 });
 
@@ -592,6 +651,22 @@ describe('occupiedSlotOverlayInnerHtml', () => {
         assert.match(html, />Lev\. 150</);
         assert.equal(html.includes('Empty'), false);
         assert.equal(html.includes('Create Character'), false);
+    });
+
+    it('emits one glyph per occupied index and none on an Empty slot', () => {
+        const rows = paintSelectCharSlotRows([
+            { ...elon, name: 'BebaMaster', level: 1, slotIndex: 0 },
+            { ...elon, name: 'Co2', level: 150, slotIndex: 1 },
+        ]);
+        const html = occupiedSlotOverlayInnerHtml(rows);
+        assert.equal(html.match(/data-slot="/g)?.length, 2);
+        assert.match(html, /data-slot="0"[^>]*>/);
+        assert.match(html, /data-slot="1"/);
+        assert.equal(html.includes('data-slot="2"'), false);
+        assert.equal(html.includes('data-slot="3"'), false);
+        assert.equal(html.includes('Empty'), false);
+        assert.match(html, />BebaMaster</);
+        assert.match(html, />Co2</);
     });
 });
 

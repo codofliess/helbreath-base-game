@@ -7,9 +7,13 @@ export const PLAYER_TOKEN_TICKER = 'helbreath';
 /** Canonical player-visible ticker, including the $ prefix. */
 export const PLAYER_TOKEN_DISPLAY = `$${PLAYER_TOKEN_TICKER}`;
 
-const LEGACY_PLAYER_TICKER = /\$HELL\b|\$hell\b|\$Hell\b/g;
+const PLAYER_FACING_TOKEN_NAME =
+    /(?:\ba\s+|\bthe\s+)?helbreath token|\$helbreath\b|\$HELL\b|\$hell\b|\$Hell\b/gi;
 
-/** Rewrites leftover $HELL / $hell in copy that reaches the player (server notes, toasts). */
+/**
+ * Strips a token name from copy that reaches the player (server notes, toasts).
+ * Identifiers such as HELL_MINT stay. The replacement is the words "a reward".
+ */
 export function playerTokenCopy(text: string): string {
-    return text.replace(LEGACY_PLAYER_TICKER, PLAYER_TOKEN_DISPLAY);
+    return text.replace(PLAYER_FACING_TOKEN_NAME, 'a reward');
 }

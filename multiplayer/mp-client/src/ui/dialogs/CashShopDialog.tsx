@@ -25,8 +25,6 @@ import { appStore } from '../store/App.store';
 import { getItemById, getItemInventorySpriteKeyWithOverrides } from '../../constants/Items';
 import { Gender } from '../../Types';
 import { inventoryDialogStore } from '../store/InventoryDialog.store';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
-
 interface CashShopDialogProps {
     position: { x: number; y: number };
     zIndex?: number;
@@ -93,14 +91,14 @@ export function CashShopDialog({
         }
         if (market === 'hell' && !skuAcceptsHell(sku)) {
             setCashShopStatusMessage(
-                `Stablecoin only (USDC/USDT) — this product does not accept ${PLAYER_TOKEN_DISPLAY}.`,
+                'Stablecoin only (USDC/USDT) — this product does not accept a reward.',
             );
             return;
         }
         const currency = cashCurrencyFromMarket(market);
         const priceLabel =
             market === 'hell'
-                ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
+                ? `${sku.priceHell * qty} a reward`
                 : `${formatStablePrice(sku.priceStableUsdCents * qty)} stable`;
         setCashShopStatusMessage(`Buying ${sku.name} for ${priceLabel}…`);
         nm.requestBuyCashShopItem({
@@ -167,14 +165,14 @@ export function CashShopDialog({
                             cursor: 'pointer',
                         }}
                     >
-                        {PLAYER_TOKEN_DISPLAY} Market
+                        Reward Market
                     </button>
                 </div>
 
                 <p style={{ margin: '0 0 8px', color: '#ccc', fontSize: 12 }}>
                     {market === 'stablecoin'
                         ? 'List prices in USDT (or USDC). Bound gear is stablecoin-only.'
-                        : `${PLAYER_TOKEN_DISPLAY} market (design FDV +20%). Gear may be stable-only.`}
+                        : 'Reward market (design FDV +20%). Gear may be stable-only.'}
                 </p>
 
                 {market === 'stablecoin' && (
@@ -272,7 +270,7 @@ export function CashShopDialog({
                 >
                     {rows.length === 0 ? (
                         <div style={{ padding: 12, color: '#aaa', fontSize: 12 }}>
-                            No products in this tab for {PLAYER_TOKEN_DISPLAY}. Switch to Stablecoin Market for
+                            No products in this tab for a reward. Switch to Stablecoin Market for
                             shoes / boots / capes / seals.
                         </div>
                     ) : (
@@ -280,13 +278,13 @@ export function CashShopDialog({
                             const hellOk = skuAcceptsHell(sku);
                             const price =
                                 market === 'hell'
-                                    ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
+                                    ? `${sku.priceHell * qty} a reward`
                                     : `${formatStablePrice(sku.priceStableUsdCents * qty)}`;
                             const alt =
                                 market === 'hell'
                                     ? `(vs ${formatStablePrice(sku.priceStableUsdCents * qty)} stable)`
                                     : hellOk
-                                      ? `(or ${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY})`
+                                      ? `(or ${sku.priceHell * qty} a reward)`
                                       : '(stablecoin only)';
                             const icon = skuIconUrl(sku);
                             return (
@@ -360,8 +358,8 @@ export function CashShopDialog({
                 </div>
                 <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
                     Right-click closes. Fake mints rejected. Boosts soulbound. Seals &amp; single
-                    boosts = USDC/USDT only; combos, stones &amp; utility (Zem, greens, balls) also
-                    {PLAYER_TOKEN_DISPLAY}.
+                    boosts = USDC/USDT only; combos, stones &amp; utility (Zem, greens, balls) also a
+                    reward.
                 </p>
             </div>
         </OlympiaDialogShell>

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import { classifyEquippedCover, formatMonsterGroupLine, formatPendingNftLine } from './selectCharCover';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 describe('character cover', () => {
     it('splits equipped legendary ids from other equipped pieces', () => {
@@ -34,7 +37,7 @@ describe('character cover', () => {
 
     it('keeps the explorer hub free of a ticker or mint', () => {
         const src = fs.readFileSync(
-            path.join(import.meta.dirname, '../../ui/components/SelectCharReactDesk.tsx'),
+            path.join(here, '../../ui/components/SelectCharReactDesk.tsx'),
             'utf8',
         );
         assert.match(src, /Explorer/);

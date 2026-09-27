@@ -12,7 +12,6 @@ import {
     type MilestoneRow,
     type MonsterKillRow,
 } from '../store/Progression.store';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 
 interface MobKillsDialogProps {
     position: { x: number; y: number };
@@ -170,7 +169,7 @@ export function MobKillsDialog({
                 <p className="mob-kills-total">
                     Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                     {' · '}
-                    Staked {PLAYER_TOKEN_DISPLAY}: <strong>{progression.stakedHell.toLocaleString()}</strong>
+                    Staked a reward: <strong>{progression.stakedHell.toLocaleString()}</strong>
                     {stakeBonus > 0 ? ` (+${stakeBonus} final all mobs)` : ''}
                 </p>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { EventBus } from '../../game/EventBus';
 import {
@@ -19,6 +19,11 @@ import {
 import { getItemById } from '../../constants/Items';
 import { fetchUnclaimedDrops, type UnclaimedDrop } from '../../utils/dropLedger';
 import { connectDialogStore, setSelectedSlotIndex } from '../store/ConnectDialog.store';
+import type { CharacterSlotSummary } from '../../utils/characterListApi';
+import {
+    renderSelectCharPaperDoll,
+    selectCharPaperDollLookKey,
+} from '../../utils/selectCharPaperDoll';
 import { ReferralCharListPanel } from './ReferralCharListPanel';
 
 type SealDrops =
@@ -173,6 +178,8 @@ export function SelectCharReactDesk() {
                         </div>
                     </section>
 
+                    <ExplorerPaperDoll slot={occupied} />
+
                     <section className="explorer-hub-cover" aria-labelledby="explorer-cover-title">
                         {occupied ? (
                             <>
@@ -269,6 +276,94 @@ export function SelectCharReactDesk() {
                 <ReferralCharListPanel placement="embedded" />
             </div>
         </div>
+    );
+}
+
+/**
+ * Middle column: the selected character's idle-south paper-doll, drawn at an
+ * integer multiple of its sprite size so the pixels stay crisp, and sized to
+ * the detail card beside it.
+ */
+function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined }) {
+    const frameRef = useRef<HTMLDivElement>(null);
+    const slotRef = useRef(slot);
+    slotRef.current = slot;
+    const lookKey = slot ? selectCharPaperDollLookKey(slot) : '';
+    const [avatar, setAvatar] = useState<{ key: string; url: string } | undefined>();
+    const url = avatar?.key === lookKey ? avatar.url : undefined;
+    const [natural, setNatural] = useState<{ w: number; h: number } | undefined>();
+    const [box, setBox] = useState({ w: 0, h: 0 });
+
+    useEffect(() => {
+        const current = slotRef.current;
+        if (!current || !lookKey) {
+            setAvatar(undefined);
+            setNatural(undefined);
+            return;
+        }
+        let cancelled = false;
+        const key = lookKey;
+        setNatural(undefined);
+        void renderSelectCharPaperDoll(current).then((next) => {
+            if (!cancelled && next) {
+                setAvatar({ key, url: next });
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [lookKey]);
+
+    useLayoutEffect(() => {
+        const node = frameRef.current;
+        if (!node) {
+            return;
+        }
+        const measure = () => {
+            const rect = node.getBoundingClientRect();
+            setBox({ w: Math.floor(rect.width), h: Math.floor(rect.height) });
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, []);
+
+    const scale =
+        natural && box.w > 16 && box.h > 16
+            ? Math.max(
+                  1,
+                  Math.min(
+                      Math.floor((box.w - 12) / natural.w),
+                      Math.floor((box.h - 12) / natural.h),
+                  ),
+              )
+            : 0;
+    const drawnW = natural && scale > 0 ? natural.w * scale : 0;
+    const drawnH = natural && scale > 0 ? natural.h * scale : 0;
+
+    return (
+        <section className="explorer-hub-doll" aria-label="Selected character" ref={frameRef}>
+            {url ? (
+                <img
+                    className="explorer-hub-doll-sprite"
+                    src={url}
+                    alt=""
+                    width={drawnW > 0 ? drawnW : undefined}
+                    height={drawnH > 0 ? drawnH : undefined}
+                    style={drawnW > 0 ? { width: drawnW, height: drawnH } : undefined}
+                    draggable={false}
+                    data-explorer-doll={slot?.name ?? ''}
+                    data-doll-scale={scale > 0 ? scale : undefined}
+                    onLoad={(event) => {
+                        const img = event.currentTarget;
+                        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                            setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+                        }
+                    }}
+                />
+            ) : null}
+        </section>
     );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@tanstack/react-store';
 import { selectCharWarn } from '../../utils/selectCharTrace';
@@ -27,11 +27,6 @@ import {
     syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
 import { peekCachedOccupiedCharacterList, type CharacterSlotSummary } from '../../utils/characterListApi';
-import {
-    mountSelectCharKindGemAvatar,
-    renderSelectCharPaperDoll,
-    selectCharPaperDollLookKey,
-} from '../../utils/selectCharPaperDoll';
 import { connectDialogStore } from '../store/ConnectDialog.store';
 import { cashShopDialogStore } from '../store/CashShopDialog.store';
 
@@ -51,18 +46,22 @@ interface SelectCharOccupiedReactOverlayProps {
  * the DOM for the KindGem path; `body.login-selectchar-active` hides them so
  * they do not sit on the Explorer roster.
  *
- * The selected character's idle-south paper-doll hangs to the left of that title
- * and is swapped when the roster selection changes. While Cash Shop is open the
- * cream title moves to the bottom of the viewport: the shop header starts at
- * y=20 and would otherwise leave a strip of that title across its top edge.
+ * The paper-doll lives in the Explorer panel's middle column, not on this title.
+ * While Cash Shop is open the cream title is hidden so it cannot cover the shop
+ * header or the referral card. Otherwise the hub reserves the title's height so
+ * the panel border never scrolls underneath it.
  */
-function parkKindGemBannerBelowCashShop(kindgem: HTMLElement, cashShopOpen: boolean): void {
-    if (!cashShopOpen) {
+function syncKindGemBannerWithHub(kindgem: HTMLElement, cashShopOpen: boolean): void {
+    kindgem.querySelector('#selectchar-kindgem-avatar')?.remove();
+    kindgem.removeAttribute('data-selectchar-avatar');
+    if (cashShopOpen) {
+        kindgem.style.setProperty('display', 'none', 'important');
+        document.documentElement.style.setProperty('--explorer-title-clearance', '16px');
         return;
     }
-    kindgem.style.setProperty('z-index', '1000', 'important');
-    kindgem.style.setProperty('top', 'auto', 'important');
-    kindgem.style.setProperty('bottom', '36px', 'important');
+    const bottom = Math.ceil(kindgem.getBoundingClientRect().bottom);
+    const clearance = Math.max(84, bottom + 20);
+    document.documentElement.style.setProperty('--explorer-title-clearance', `${clearance}px`);
 }
 
 export function SelectCharOccupiedReactOverlay({
@@ -71,7 +70,6 @@ export function SelectCharOccupiedReactOverlay({
     characterListLoading,
 }: SelectCharOccupiedReactOverlayProps) {
     const rootRef = useRef<HTMLDivElement>(null);
-    const dollSlotRef = useRef<CharacterSlotSummary | undefined>(undefined);
     const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
     const selectedSlotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
@@ -102,33 +100,9 @@ export function SelectCharOccupiedReactOverlay({
     const selectedEntry = occupied.find((entry) => entry.slotIndex === selected);
     const selectedName = selectedEntry?.row.name ?? '';
     const selectedLev = selectedEntry?.row.lev ?? '';
-    const selectedSlot = rows[selected]?.occupied;
-    const dollKey = selectedSlot ? selectCharPaperDollLookKey(selectedSlot) : '';
     const cashShopOpen = useStore(cashShopDialogStore, (s) => s.isOpen);
-    const [avatar, setAvatar] = useState<{ key: string; url: string } | undefined>();
-    const avatarUrl = avatar?.key === dollKey ? avatar.url : undefined;
 
     const occupiedNames = occupied.map((entry) => entry.row.name).join(',');
-
-    dollSlotRef.current = selectedSlot;
-
-    useEffect(() => {
-        const slot = dollSlotRef.current;
-        const key = dollKey;
-        if (!slot || !key) {
-            setAvatar(undefined);
-            return;
-        }
-        let cancelled = false;
-        void renderSelectCharPaperDoll(slot).then((url) => {
-            if (!cancelled && url) {
-                setAvatar({ key, url });
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [dollKey]);
 
     useLayoutEffect(() => {
         selectCharWarn(
@@ -145,8 +119,7 @@ export function SelectCharOccupiedReactOverlay({
         const kindgem = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
         if (kindgem) {
             document.body.appendChild(kindgem);
-            mountSelectCharKindGemAvatar(kindgem, dollKey ? avatarUrl : undefined, selectedName);
-            parkKindGemBannerBelowCashShop(kindgem, cashShopOpen);
+            syncKindGemBannerWithHub(kindgem, cashShopOpen);
         }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
         if (
@@ -173,8 +146,7 @@ export function SelectCharOccupiedReactOverlay({
             const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
             const retried = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
             if (retried) {
-                mountSelectCharKindGemAvatar(retried, dollKey ? avatarUrl : undefined, selectedName);
-                parkKindGemBannerBelowCashShop(retried, cashShopOpen);
+                syncKindGemBannerWithHub(retried, cashShopOpen);
             }
             selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
@@ -197,7 +169,7 @@ export function SelectCharOccupiedReactOverlay({
             node.style.left = `${Math.round(pos.left)}px`;
             node.style.top = `${Math.round(pos.top)}px`;
         });
-    }, [avatarUrl, banner, cashShopOpen, dollKey, loading, occupiedNames, selectedLev, selectedName]);
+    }, [banner, cashShopOpen, loading, occupiedNames, selectedLev, selectedName]);
 
     useLayoutEffect(() => {
         return () => {

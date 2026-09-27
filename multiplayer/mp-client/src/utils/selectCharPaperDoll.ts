@@ -19,7 +19,6 @@ import { sliceSprSheets, type SprSheetFrameMeta } from './sprSheetSlice';
 const IDLE_SOUTH_DIR = 4;
 const FRAMES_PER_DIR = 8;
 const HAIR_TINT = 0x5a3a28;
-const AVATAR_ID = 'selectchar-kindgem-avatar';
 
 export type SelectCharDollKind = 'human' | 'armour' | 'weapon' | 'shield' | 'accessory';
 
@@ -381,36 +380,4 @@ export function renderSelectCharPaperDoll(slot: CharacterSlotSummary): Promise<s
     });
     dollCache.set(key, pending);
     return pending;
-}
-
-/**
- * Hang the paper-doll on the cream KindGem banner, to the left of the title text.
- * `textContent` paints wipe children, so callers append this after that write.
- * The image has no alt text, so the banner string KindGem reads stays exact.
- */
-export function mountSelectCharKindGemAvatar(
-    banner: HTMLElement,
-    url: string | undefined,
-    characterName: string,
-): void {
-    const existing = banner.querySelector<HTMLImageElement>(`#${AVATAR_ID}`);
-    if (!url) {
-        existing?.remove();
-        banner.removeAttribute('data-selectchar-avatar');
-        return;
-    }
-    const img = existing ?? document.createElement('img');
-    img.id = AVATAR_ID;
-    img.className = 'selectchar-kindgem-avatar';
-    img.alt = '';
-    img.draggable = false;
-    img.decoding = 'async';
-    if (img.getAttribute('src') !== url) {
-        img.src = url;
-    }
-    img.dataset.character = characterName;
-    if (!existing) {
-        banner.appendChild(img);
-    }
-    banner.setAttribute('data-selectchar-avatar', characterName);
 }

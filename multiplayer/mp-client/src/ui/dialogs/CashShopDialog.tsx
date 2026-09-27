@@ -34,6 +34,15 @@ interface CashShopDialogProps {
     phaserRef: React.RefObject<IRefPhaserGame | null>;
 }
 
+/** "Cash Shop — Cash Shop" collapses to one title. A real NPC name stays as the suffix. */
+function cashShopHeading(npcName: string): string {
+    const name = npcName.trim();
+    if (!name || name.toLowerCase() === 'cash shop') {
+        return 'Cash Shop';
+    }
+    return `Cash Shop — ${name}`;
+}
+
 function stopBubble(e: PointerEvent | MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -130,7 +139,7 @@ export function CashShopDialog({
             bgSpriteKey={LEVELSET_DIALOG_BG}
             rootClassName="cash-shop-dialog-root"
         >
-            <div className="olympia-dialog-title-bar">Cash Shop — {npcName}</div>
+            <div className="olympia-dialog-title-bar">{cashShopHeading(npcName)}</div>
             <div style={{ padding: '8px 12px', fontFamily: 'Tahoma, sans-serif', fontSize: 13 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                     <button

@@ -11721,7 +11721,8 @@ body.game-world-active .bi-online-strip {
 
 /* Explorer character hub — flow layout, not the 800×600 absolute desk.
    The gate does not scroll: its top padding stays under the fixed cream title.
-   The panel scrolls inside that inset, so its border never meets the title.
+   The panel's body scrolls inside that inset, so its border never meets the title.
+   The Helbreath / Explorer / seal header stays outside that scroll.
    Right padding clears the toast gutter. */
 .explorer-hub-gate.login-desk-gate {
     flex-direction: column;
@@ -11733,14 +11734,15 @@ body.game-world-active .bi-online-strip {
 
 .explorer-hub {
     pointer-events: auto;
+    display: flex;
+    flex-direction: column;
     width: min(1120px, 100%);
     margin: 0 auto;
     flex: 1 1 auto;
     min-height: 0;
     max-height: 100%;
-    overflow: auto;
+    overflow: hidden;
     box-sizing: border-box;
-    padding: 20px 22px 16px;
     border: 1px solid rgba(196, 154, 72, 0.55);
     border-radius: 12px;
     background: #1a120c;
@@ -11749,12 +11751,23 @@ body.game-world-active .bi-online-strip {
     font-family: 'Spectral', Georgia, serif;
 }
 
+/* Brand and seal stay fully visible. Only the body below them scrolls. */
 .explorer-hub-header {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 8px 16px;
-    margin-bottom: 16px;
+    margin: 0;
+    padding: 20px 22px 12px;
+    background: #1a120c;
+}
+
+.explorer-hub-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 4px 22px 16px;
 }
 
 .explorer-hub-title {

@@ -97,192 +97,210 @@ export function SelectCharReactDesk() {
                     {walletShort ? <p className="explorer-hub-seal">Seal {walletShort}</p> : null}
                 </header>
 
-                <div className="explorer-hub-grid">
-                    <section className="explorer-hub-roster" aria-labelledby="explorer-roster-title">
-                        <h2 id="explorer-roster-title" className="explorer-hub-kicker">
-                            Characters
-                        </h2>
-                        <div className="explorer-hub-slots" role="list">
-                            {rows.map((row, slotIndex) => {
-                                const slotOccupied = !!row.occupied;
-                                const isSelected = slotIndex === selected;
-                                return (
-                                    <button
-                                        key={slotIndex}
-                                        type="button"
-                                        role="listitem"
-                                        aria-pressed={isSelected}
-                                        className={`explorer-hub-slot${slotOccupied ? '' : ' is-empty'}${
-                                            isSelected ? ' is-selected' : ''
-                                        }`}
-                                        data-occupied={slotOccupied ? '1' : '0'}
-                                        onClick={() => setSelectedSlotIndex(slotIndex)}
-                                    >
-                                        {slotOccupied ? (
-                                            <>
-                                                <span className="explorer-hub-slot-kicker">
-                                                    {SELECTCHAR_OCCUPIED_SLOT_LABEL}
-                                                </span>
-                                                <span className="explorer-hub-slot-name">{row.name}</span>
-                                                <span className="explorer-hub-slot-line">{row.lev}</span>
-                                            </>
-                                        ) : (
-                                            <span className="explorer-hub-slot-empty">Empty</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <p className="explorer-hub-status">
-                            {loading
-                                ? 'Loading character list…'
-                                : selectedOccupied
-                                  ? `${SELECTCHAR_OCCUPIED_SLOT_LABEL} — ${selectedRow.name} ${selectedRow.lev}`
-                                  : 'Empty slot — Create Character'}
-                        </p>
-                        <div className="explorer-hub-actions">
-                            <button
-                                type="button"
-                                className="login-gate-primary-btn"
-                                disabled={!selectedOccupied}
-                                onClick={() =>
-                                    EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
-                                        kind: 'start',
-                                        slotIndex: selected,
-                                    })
-                                }
-                            >
-                                Start
-                            </button>
-                            <button
-                                type="button"
-                                className="login-gate-secondary-btn"
-                                disabled={!hasEmpty}
-                                onClick={() => {
-                                    const empty = rows.findIndex((r) => !r.occupied);
-                                    EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
-                                        kind: 'create',
-                                        slotIndex: empty >= 0 ? empty : selected,
-                                    });
-                                }}
-                            >
-                                Create Character
-                            </button>
-                            <button
-                                type="button"
-                                className="login-gate-secondary-btn"
-                                onClick={() => EventBus.emit(OUT_UI_SELECTCHAR_BACK)}
-                            >
-                                Back
-                            </button>
-                        </div>
-                    </section>
+                <div className="explorer-hub-scroll">
+                    <div className="explorer-hub-grid">
+                        <section className="explorer-hub-roster" aria-labelledby="explorer-roster-title">
+                            <h2 id="explorer-roster-title" className="explorer-hub-kicker">
+                                Characters
+                            </h2>
+                            <div className="explorer-hub-slots" role="list">
+                                {rows.map((row, slotIndex) => {
+                                    const slotOccupied = !!row.occupied;
+                                    const isSelected = slotIndex === selected;
+                                    return (
+                                        <button
+                                            key={slotIndex}
+                                            type="button"
+                                            role="listitem"
+                                            aria-pressed={isSelected}
+                                            className={`explorer-hub-slot${slotOccupied ? '' : ' is-empty'}${
+                                                isSelected ? ' is-selected' : ''
+                                            }`}
+                                            data-occupied={slotOccupied ? '1' : '0'}
+                                            onClick={() => setSelectedSlotIndex(slotIndex)}
+                                        >
+                                            {slotOccupied ? (
+                                                <>
+                                                    <span className="explorer-hub-slot-kicker">
+                                                        {SELECTCHAR_OCCUPIED_SLOT_LABEL}
+                                                    </span>
+                                                    <span className="explorer-hub-slot-name">{row.name}</span>
+                                                    <span className="explorer-hub-slot-line">{row.lev}</span>
+                                                </>
+                                            ) : (
+                                                <span className="explorer-hub-slot-empty">Empty</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="explorer-hub-status">
+                                {loading
+                                    ? 'Loading character list…'
+                                    : selectedOccupied
+                                      ? `${SELECTCHAR_OCCUPIED_SLOT_LABEL} — ${selectedRow.name} ${selectedRow.lev}`
+                                      : 'Empty slot — Create Character'}
+                            </p>
+                            <div className="explorer-hub-actions">
+                                <button
+                                    type="button"
+                                    className="login-gate-primary-btn"
+                                    disabled={!selectedOccupied}
+                                    onClick={() =>
+                                        EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
+                                            kind: 'start',
+                                            slotIndex: selected,
+                                        })
+                                    }
+                                >
+                                    Start
+                                </button>
+                                <button
+                                    type="button"
+                                    className="login-gate-secondary-btn"
+                                    disabled={!hasEmpty}
+                                    onClick={() => {
+                                        const empty = rows.findIndex((r) => !r.occupied);
+                                        EventBus.emit(OUT_UI_SELECTCHAR_ACTION, {
+                                            kind: 'create',
+                                            slotIndex: empty >= 0 ? empty : selected,
+                                        });
+                                    }}
+                                >
+                                    Create Character
+                                </button>
+                                <button
+                                    type="button"
+                                    className="login-gate-secondary-btn"
+                                    onClick={() => EventBus.emit(OUT_UI_SELECTCHAR_BACK)}
+                                >
+                                    Back
+                                </button>
+                            </div>
+                        </section>
 
-                    <ExplorerPaperDoll slot={occupied} />
+                        <ExplorerPaperDoll slot={occupied} />
 
-                    <section className="explorer-hub-cover" aria-labelledby="explorer-cover-title">
-                        {occupied ? (
-                            <>
-                                <h2 id="explorer-cover-title" className="explorer-hub-cover-name">
-                                    {occupied.name}
-                                </h2>
-                                <p className="explorer-hub-meta">
-                                    {citySealLabel(occupied.citizenshipSide)}
-                                    {' · '}
-                                    Level {occupied.level}
-                                    {occupied.rebirth > 0 ? ` · Rebirth +${occupied.rebirth}` : ''}
-                                    {' · '}
-                                    {hours}
-                                </p>
-                                <dl className="explorer-hub-stats">
-                                    <div>
-                                        <dt>STR</dt>
-                                        <dd>{occupied.str}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>VIT</dt>
-                                        <dd>{occupied.vit}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>DEX</dt>
-                                        <dd>{occupied.dex}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>INT</dt>
-                                        <dd>{occupied.intel}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>MAG</dt>
-                                        <dd>{occupied.mag}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>CHR</dt>
-                                        <dd>{occupied.chr}</dd>
-                                    </div>
-                                </dl>
-
-                                <h3 className="explorer-hub-section">Legendary items</h3>
-                                <ItemList names={gear.legendary} empty="No legendary items equipped." />
-
-                                <h3 className="explorer-hub-section">Rare items</h3>
-                                <ItemList names={gear.rare} empty="No rare items equipped." />
-
-                                <h3 className="explorer-hub-section">Pending NFT drops</h3>
-                                <p className="explorer-hub-note">
-                                    These drops belong to this seal. They are not stored on one character.
-                                </p>
-                                <SealDropList drops={drops} />
-
-                                <h3 className="explorer-hub-section">Monster group tiers</h3>
-                                {tiers.length > 0 ? (
-                                    <>
-                                        <ul className="explorer-hub-list">
-                                            {tiers.map((tier) => (
-                                                <li key={tier.segment || tier.label}>
-                                                    {formatMonsterGroupLine(tier)}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <p className="explorer-hub-note">
-                                            Level is the highest kill specialty in that group. Character stake
-                                            bonus +{occupied.monsterStakeBonus ?? 0}.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <p className="explorer-hub-empty">
-                                        Monster group levels are not in this character list.
+                        <section className="explorer-hub-cover" aria-labelledby="explorer-cover-title">
+                            {occupied ? (
+                                <>
+                                    <h2 id="explorer-cover-title" className="explorer-hub-cover-name">
+                                        {occupied.name}
+                                    </h2>
+                                    <p className="explorer-hub-meta">
+                                        {citySealLabel(occupied.citizenshipSide)}
+                                        {' · '}
+                                        Level {occupied.level}
+                                        {occupied.rebirth > 0 ? ` · Rebirth +${occupied.rebirth}` : ''}
+                                        {' · '}
+                                        {hours}
                                     </p>
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <h2 id="explorer-cover-title" className="explorer-hub-cover-name">
-                                    Empty slot
-                                </h2>
-                                <p className="explorer-hub-note">
-                                    Create a character to bind a player here. Legendary items, rare items, and
-                                    monster group levels appear on the character you select.
-                                </p>
-                                <h3 className="explorer-hub-section">Pending NFT drops</h3>
-                                <p className="explorer-hub-note">
-                                    These drops belong to this seal. They are not stored on one character.
-                                </p>
-                                <SealDropList drops={drops} />
-                            </>
-                        )}
-                    </section>
-                </div>
+                                    <dl className="explorer-hub-stats">
+                                        <div>
+                                            <dt>STR</dt>
+                                            <dd>{occupied.str}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>VIT</dt>
+                                            <dd>{occupied.vit}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>DEX</dt>
+                                            <dd>{occupied.dex}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>INT</dt>
+                                            <dd>{occupied.intel}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>MAG</dt>
+                                            <dd>{occupied.mag}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>CHR</dt>
+                                            <dd>{occupied.chr}</dd>
+                                        </div>
+                                    </dl>
 
-                <ReferralCharListPanel placement="embedded" />
+                                    <h3 className="explorer-hub-section">Legendary items</h3>
+                                    <ItemList names={gear.legendary} empty="No legendary items equipped." />
+
+                                    <h3 className="explorer-hub-section">Rare items</h3>
+                                    <ItemList names={gear.rare} empty="No rare items equipped." />
+
+                                    <h3 className="explorer-hub-section">Pending NFT drops</h3>
+                                    <p className="explorer-hub-note">
+                                        These drops belong to this seal. They are not stored on one character.
+                                    </p>
+                                    <SealDropList drops={drops} />
+
+                                    <h3 className="explorer-hub-section">Monster group tiers</h3>
+                                    {tiers.length > 0 ? (
+                                        <>
+                                            <ul className="explorer-hub-list">
+                                                {tiers.map((tier) => (
+                                                    <li key={tier.segment || tier.label}>
+                                                        {formatMonsterGroupLine(tier)}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <p className="explorer-hub-note">
+                                                Level is the highest kill specialty in that group. Character stake
+                                                bonus +{occupied.monsterStakeBonus ?? 0}.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="explorer-hub-empty">
+                                            Monster group levels are not in this character list.
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <h2 id="explorer-cover-title" className="explorer-hub-cover-name">
+                                        Empty slot
+                                    </h2>
+                                    <p className="explorer-hub-note">
+                                        Create a character to bind a player here. Legendary items, rare items, and
+                                        monster group levels appear on the character you select.
+                                    </p>
+                                    <h3 className="explorer-hub-section">Pending NFT drops</h3>
+                                    <p className="explorer-hub-note">
+                                        These drops belong to this seal. They are not stored on one character.
+                                    </p>
+                                    <SealDropList drops={drops} />
+                                </>
+                            )}
+                        </section>
+                    </div>
+
+                    <ReferralCharListPanel placement="embedded" />
+                </div>
             </div>
         </div>
     );
 }
 
 /**
- * Middle column: the selected character's idle-south paper-doll, drawn at an
- * integer multiple of its sprite size so the pixels stay crisp, and sized to
- * the detail card beside it.
+ * Largest integer scale that fits, then the integer nearest 70% of that.
+ * Width and height stay whole multiples of the sprite, so the pixels stay sharp.
+ */
+function integerScaleNearRatio(fit: number, ratio: number): number {
+    if (fit <= 1) {
+        return Math.max(0, fit);
+    }
+    const target = fit * ratio;
+    const lower = Math.max(1, Math.floor(target));
+    const upper = Math.min(fit, Math.ceil(target));
+    if (lower === upper) {
+        return lower;
+    }
+    return target - lower <= upper - target ? lower : upper;
+}
+
+/**
+ * Middle column: the selected character's idle-south paper-doll, centered,
+ * at the integer scale nearest 70% of the size that fills this column.
  */
 function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined }) {
     const frameRef = useRef<HTMLDivElement>(null);
@@ -329,7 +347,7 @@ function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined })
         return () => observer.disconnect();
     }, []);
 
-    const scale =
+    const fit =
         natural && box.w > 16 && box.h > 16
             ? Math.max(
                   1,
@@ -339,6 +357,7 @@ function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined })
                   ),
               )
             : 0;
+    const scale = integerScaleNearRatio(fit, 0.7);
     const drawnW = natural && scale > 0 ? natural.w * scale : 0;
     const drawnH = natural && scale > 0 ? natural.h * scale : 0;
 
@@ -354,6 +373,7 @@ function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined })
                     style={drawnW > 0 ? { width: drawnW, height: drawnH } : undefined}
                     draggable={false}
                     data-explorer-doll={slot?.name ?? ''}
+                    data-doll-fit={fit > 0 ? fit : undefined}
                     data-doll-scale={scale > 0 ? scale : undefined}
                     onLoad={(event) => {
                         const img = event.currentTarget;

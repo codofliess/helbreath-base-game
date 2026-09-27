@@ -231,16 +231,16 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
 .selectchar-react-occupied__banner {
     position: fixed;
     left: 50%;
-    top: 12px;
+    top: 8px;
     right: auto;
     bottom: auto;
-    inset: auto;
     transform: translateX(-50%);
-    min-width: 280px;
+    min-width: min(280px, calc(100vw - 16px));
     min-height: 44px;
-    max-width: 90vw;
+    max-width: calc(100vw - 16px);
     width: max-content;
     padding: 12px 20px;
+    box-sizing: border-box;
     background: #f4ead5 !important;
     background-color: #f4ead5 !important;
     border: 2px solid #3a2810;
@@ -251,7 +251,8 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
     line-height: 1.2;
     text-align: center;
     text-shadow: none;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     overflow: visible;
     clip: auto;
     clip-path: none;
@@ -277,6 +278,10 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
 .selectchar-react-occupied__slot[data-react-slot="1"] { left: calc(3.5cm + 20%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="2"] { left: calc(3.5cm + 33%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="3"] { left: calc(3.5cm + 46%); top: calc(2cm + 26%); }
+/* Explorer roster owns the cards. These absolute chips stacked on the desk. */
+body.login-selectchar-active .selectchar-react-occupied__slot {
+    display: none !important;
+}
 .selectchar-react-occupied__status {
     font-size: 12px;
     font-weight: 700;

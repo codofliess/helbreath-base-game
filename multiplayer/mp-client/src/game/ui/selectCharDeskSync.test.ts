@@ -19,6 +19,7 @@ import {
     paintSelectCharReactOccupiedBannerNodes,
     paintSlotGlyphCanvas,
     projectDeskPointToCss,
+    SELECTCHAR_KINDGEM_BANNER_CSS_TEXT,
     selectCharKindGemBannerRectOnScreen,
     selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
@@ -239,6 +240,18 @@ describe('paintSlotGlyphCanvas', () => {
         assert.deepEqual(written, ['Occupied', 'Elon', 'Lev. 150']);
         assert.deepEqual(texts, ['Occupied', 'Elon', 'Lev. 150']);
         assert.equal(texts.includes('Empty'), false);
+    });
+});
+
+describe('KindGem occupied banner stays inside the viewport', () => {
+    it('does not reset left/top with inset, which clipped Lev.150 off the left edge', () => {
+        assert.equal(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT.includes('inset:'), false);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /left:50%!important/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /top:8px!important/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /transform:translateX\(-50%\)!important/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /max-width:calc\(100vw - 16px\)!important/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /white-space:normal!important/);
+        assert.match(SELECTCHAR_KINDGEM_BANNER_CSS_TEXT, /font-size:28px!important/);
     });
 });
 

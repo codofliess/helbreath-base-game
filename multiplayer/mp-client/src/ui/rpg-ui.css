@@ -85,6 +85,37 @@
     bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 72px) + 10px) !important;
 }
 
+/*
+ * Explorer hub: toasts used to sit on the referral card (bottom-center).
+ * Stack them in the right gutter, under the cream title and left of the Arena tab,
+ * so the referral card is never underneath.
+ */
+body.login-selectchar-active {
+    --explorer-toast-col: 280px;
+    --explorer-toast-right: 72px;
+}
+
+body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+    top: 132px !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: var(--explorer-toast-right) !important;
+    transform: none !important;
+    width: var(--explorer-toast-col) !important;
+    max-width: var(--explorer-toast-col);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    z-index: 10040;
+}
+
+body.login-selectchar-active .rpg-toast-container--olympia .rpg-toast {
+    position: relative !important;
+    margin: 0 !important;
+    transform: none !important;
+}
+
 .rpg-toast-container--olympia .rpg-toast {
     pointer-events: auto;
     justify-content: center;
@@ -6464,6 +6495,27 @@ body.arena-slim-mode .bag-glass-toggle-btn {
     pointer-events: none;
 }
 
+/* Real idle-south paper-doll, outside the cream title box so the name stays uncut.
+   Pin to the banner's top: centering a 96px figure on the 8px-from-top title clips the head. */
+#selectchar-kindgem-avatar,
+.selectchar-kindgem-avatar {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 10px);
+    left: auto;
+    bottom: auto;
+    transform: none;
+    height: 96px;
+    width: auto;
+    max-width: 96px;
+    object-fit: contain;
+    object-position: center top;
+    image-rendering: pixelated;
+    pointer-events: none;
+    background: transparent;
+    z-index: 1;
+}
+
 .selectchar-react-occupied__slot {
     position: absolute;
     min-width: 140px;
@@ -11688,12 +11740,13 @@ body.game-world-active .bi-online-strip {
     display: none;
 }
 
-/* Explorer character hub — flow layout, not the 800×600 absolute desk. */
+/* Explorer character hub — flow layout, not the 800×600 absolute desk.
+   Top clears the cream title + paper-doll. Right clears the toast gutter. */
 .explorer-hub-gate.login-desk-gate {
     align-items: flex-start;
     justify-content: center;
     overflow: auto;
-    padding: 76px 72px 28px 28px;
+    padding: 132px calc(88px + var(--explorer-toast-col, 0px)) 28px 28px;
 }
 
 .explorer-hub {
@@ -11905,14 +11958,31 @@ body.game-world-active .bi-online-strip {
     bottom: auto;
     top: auto;
     transform: none;
-    z-index: 1;
+    /* Above hub toasts (10040) so a scroll cannot leave the card under a notice. */
+    z-index: 100080;
     width: 100%;
     margin-top: 16px;
+    background: #1a120c;
 }
 
 @media (max-width: 800px) {
+    body.login-selectchar-active {
+        --explorer-toast-col: 0px;
+        --explorer-toast-right: 12px;
+    }
+
+    body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+        top: 112px !important;
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: none;
+        max-height: 72px;
+        overflow: auto;
+    }
+
     .explorer-hub-gate.login-desk-gate {
-        padding: 76px 16px 24px;
+        padding: 200px 16px 24px;
     }
 
     .explorer-hub-grid,

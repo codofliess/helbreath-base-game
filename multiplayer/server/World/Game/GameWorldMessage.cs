@@ -1,5 +1,6 @@
 using Server;
 using Mmorpg.Network;
+using Server.Helpers;
 
 namespace Server.World.Game;
 
@@ -193,7 +194,11 @@ public sealed record CharacterListEntry(
     int UnderwearColorIndex = 0,
     IReadOnlyList<CharacterListEquipPreview>? Equipped = null,
     /// <summary>aresden | elvine | traveler (from state_json CitizenshipSide).</summary>
-    string CitizenshipSide = "");
+    string CitizenshipSide = "",
+    /// <summary>Kill-based specialty level of each monster group. Empty until the catalog is loaded.</summary>
+    IReadOnlyList<MobSpecialty.CharacterGroupTier>? MonsterGroupTiers = null,
+    /// <summary>floor(persisted StakedHell / 100_000). Does not include wallet-pending balance.</summary>
+    int MonsterStakeBonus = 0);
 
 /// <summary>State carried across worlds during a transfer: session identity plus the player settings snapshot to reapply in the target world.</summary>
 public sealed record TransferredPlayerState(

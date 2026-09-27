@@ -31,6 +31,18 @@ export interface CharacterSlotSummary {
     equipped?: CharacterEquipPreview[];
     /** aresden | elvine | traveler */
     citizenshipSide?: string;
+    /** Kill-based specialty level of each monster group. Omitted by older servers. */
+    monsterGroupTiers?: CharacterMonsterGroupTier[];
+    /** floor(persisted character stake / 100_000). Omitted when the server did not send it. */
+    monsterStakeBonus?: number;
+}
+
+/** One monster-group specialty row on the character cover. */
+export interface CharacterMonsterGroupTier {
+    segment: string;
+    label: string;
+    level: number;
+    leadName: string;
 }
 
 /** Wallet-level referral info from CharacterListResponse. */
@@ -220,6 +232,13 @@ export function mapCharacterListResponse(body: {
         underwearColorIndex?: number;
         equipped?: Array<{ slot?: string; itemId?: number } | undefined>;
         citizenshipSide?: string;
+        monsterGroupTiers?: Array<{
+            segment?: string;
+            label?: string;
+            level?: number;
+            leadName?: string;
+        } | undefined>;
+        monsterStakeBonus?: number;
     }>;
     referralCode?: string;
     referralShareUrl?: string;
@@ -254,6 +273,18 @@ export function mapCharacterListResponse(body: {
                 .filter((e): e is { slot: string; itemId: number } => !!e && (e.itemId ?? 0) > 0 && !!e.slot)
                 .map((e) => ({ slot: e.slot, itemId: e.itemId })),
             citizenshipSide: normalizeCitizenshipSide(c.citizenshipSide),
+            monsterGroupTiers: (c.monsterGroupTiers ?? [])
+                .filter((tier): tier is NonNullable<typeof tier> => !!tier && !!(tier.segment || tier.label))
+                .map((tier) => ({
+                    segment: (tier.segment ?? '').trim(),
+                    label: (tier.label ?? tier.segment ?? '').trim(),
+                    level: Number.isFinite(Number(tier.level)) ? Math.max(0, Number(tier.level)) : 0,
+                    leadName: (tier.leadName ?? '').trim(),
+                })),
+            monsterStakeBonus:
+                c.monsterStakeBonus === undefined || c.monsterStakeBonus === null
+                    ? undefined
+                    : Math.max(0, Number(c.monsterStakeBonus) || 0),
         });
     }
     slots.sort((a, b) => a.slotIndex - b.slotIndex);

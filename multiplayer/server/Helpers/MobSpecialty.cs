@@ -25,8 +25,13 @@ public static class MobSpecialty {
     public sealed class SpecialtyDef {
         public int MonsterId { get; init; }
         public int BaseKills { get; init; } = DefaultBaseKills;
+        public string Segment { get; init; } = "";
+        public string Name { get; init; } = "";
         public string[] Bonuses { get; init; } = ["damage", "damage_reduction", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate"];
     }
+
+    /// <summary>Kill-based specialty level of one monster group for the character cover.</summary>
+    public readonly record struct CharacterGroupTier(string Segment, string Label, int Level, string LeadName);
 
     public readonly record struct SpecialtySnapshot(
         int SpecialtyLevel,
@@ -59,12 +64,16 @@ public static class MobSpecialty {
                     }
                     var id = idEl.GetInt32();
                     var baseKills = el.TryGetProperty("base_kills", out var bk) ? bk.GetInt32() : DefaultBaseKills;
+                    var segment = el.TryGetProperty("segment", out var segEl) ? segEl.GetString() ?? "" : "";
+                    var name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
                     string[] bonuses = el.TryGetProperty("bonuses", out var bonEl) && bonEl.ValueKind == JsonValueKind.Array
                         ? [.. bonEl.EnumerateArray().Select(x => x.GetString() ?? "drop_rate")]
                         : ["damage", "damage_reduction", "drop_rate"];
                     byMonsterId[id] = new SpecialtyDef {
                         MonsterId = id,
                         BaseKills = Math.Max(1, baseKills),
+                        Segment = segment.Trim(),
+                        Name = name.Trim(),
                         Bonuses = bonuses.Length > 0 ? bonuses : ["damage", "damage_reduction", "drop_rate"],
                     };
                 }
@@ -268,6 +277,86 @@ public static class MobSpecialty {
             dmg = (int)Math.Round(dmg * (1.0 - Math.Min(90.0, snap.DamageReductionPct) / 100.0));
         }
         return Math.Max(0, dmg);
+    }
+
+    /// <summary>
+    /// Cover rows for every catalog monster group. Level is the highest kill-based specialty
+    /// in that segment. Stake bonus uses only the character's persisted StakedHell.
+    /// </summary>
+    public static (int StakeBonusLevels, IReadOnlyList<CharacterGroupTier> Groups) BuildCharacterGroupCover(
+        IEnumerable<PersistedMonsterKill>? kills,
+        long stakedHell) {
+        var killById = new Dictionary<int, long>();
+        if (kills is not null) {
+            foreach (var row in kills) {
+                if (row is null || row.MonsterId < 0 || row.Kills <= 0) {
+                    continue;
+                }
+                killById[row.MonsterId] = row.Kills;
+            }
+        }
+
+        var grouped = new Dictionary<string, List<(string Name, int Level, long Kills)>>(StringComparer.Ordinal);
+        lock (Gate) {
+            foreach (var def in byMonsterId.Values) {
+                var segment = string.IsNullOrWhiteSpace(def.Segment) ? "other" : def.Segment;
+                killById.TryGetValue(def.MonsterId, out var speciesKills);
+                var level = SpecialtyLevelFromKills(speciesKills, def.BaseKills);
+                var name = string.IsNullOrWhiteSpace(def.Name) ? $"Monster {def.MonsterId}" : def.Name;
+                if (!grouped.TryGetValue(segment, out var list)) {
+                    list = new List<(string Name, int Level, long Kills)>();
+                    grouped[segment] = list;
+                }
+                list.Add((name, level, speciesKills));
+            }
+        }
+
+        var rows = new List<CharacterGroupTier>(GroupOrder.Length);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (segment, label) in GroupOrder) {
+            seen.Add(segment);
+            rows.Add(PickGroupTier(segment, label, grouped));
+        }
+        foreach (var segment in grouped.Keys.OrderBy(s => s, StringComparer.Ordinal)) {
+            if (seen.Contains(segment)) {
+                continue;
+            }
+            rows.Add(PickGroupTier(segment, segment, grouped));
+        }
+
+        return (StakeBonusLevels(stakedHell), rows);
+    }
+
+    static readonly (string Segment, string Label)[] GroupOrder = [
+        ("early", "Early"),
+        ("low", "Low"),
+        ("mid_ww", "Mid — Werewolf"),
+        ("mid_frost", "Mid — Frost"),
+        ("high_demon", "High"),
+        ("apex_hc", "Apex — Hellclaw"),
+        ("apex_tw", "Apex — Tigerworm"),
+    ];
+
+    static CharacterGroupTier PickGroupTier(
+        string segment,
+        string label,
+        Dictionary<string, List<(string Name, int Level, long Kills)>> grouped) {
+        if (!grouped.TryGetValue(segment, out var list) || list.Count == 0) {
+            return new CharacterGroupTier(segment, label, 0, "");
+        }
+
+        var bestLevel = 0;
+        var bestKills = 0L;
+        var bestName = "";
+        foreach (var (name, level, speciesKills) in list) {
+            if (level > bestLevel || (level == bestLevel && level > 0 && speciesKills > bestKills)) {
+                bestLevel = level;
+                bestKills = speciesKills;
+                bestName = name;
+            }
+        }
+
+        return new CharacterGroupTier(segment, label, bestLevel, bestLevel > 0 ? bestName : "");
     }
 
     /// <summary>Hit chance points from specialty hit_ratio / hit_ratio_pct steps.</summary>

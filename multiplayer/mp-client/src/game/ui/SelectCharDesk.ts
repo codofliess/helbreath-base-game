@@ -678,7 +678,7 @@ export class SelectCharDesk {
             vaultY,
             vaultW,
             vaultH,
-            'Wallet / reward',
+            'Wallet / rewards',
             () => this.openWalletPanel(),
             true,
         );
@@ -732,7 +732,7 @@ export class SelectCharDesk {
             { headers },
         );
         if (!res.ok) {
-            throw new Error(`Reward status failed (${res.status})`);
+            throw new Error(`Rewards status failed (${res.status})`);
         }
         const body = (await res.json()) as {
             pendingHell?: number | null;
@@ -861,7 +861,7 @@ export class SelectCharDesk {
         add(px + 28, y, `Seal  ${shortW}`, clBodyStyle({ fontSize: '15px', color: CL_MUTED }));
         y += 28;
 
-        add(px + 28, y, 'REWARD', clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
+        add(px + 28, y, 'REWARDS', clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
         y += 22;
         const pending = hell.pendingHell ?? 0;
         const claimed = hell.claimedHell ?? 0;
@@ -874,11 +874,11 @@ export class SelectCharDesk {
             [
                 `Active mint: ${mintShort}`,
                 `Mining vault: ${hell.miningConfigured ? 'ready' : 'offline'}`,
-                `Credits / pending reward:  ${pending}`,
-                `Claimed / stacked reward:  ${claimed}`,
+                `Credits / pending rewards:  ${pending}`,
+                `Claimed / stacked rewards:  ${claimed}`,
                 '',
                 'Earned by mode (play-mine):',
-                '  · Monster kills → credits  (500 kills/day → a reward)',
+                '  · Monster kills → credits  (500 kills/day → rewards)',
                 '  · Legendary EK / top ranks → bonus credits',
                 '  · Timed Challenge clear → daily bonus',
                 '  · Stake: does not mint (policy C1)',
@@ -922,7 +922,7 @@ export class SelectCharDesk {
                 `Rare:  ${rare.length}`,
                 rareLine,
                 '',
-                playerTokenCopy(hell.note || 'Pending a reward is utility mining — not ROI.'),
+                playerTokenCopy(hell.note || 'Pending rewards are utility mining, not ROI.'),
             ].join('\n'),
             clBodyStyle({
                 fontSize: '15px',

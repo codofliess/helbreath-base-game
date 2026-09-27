@@ -274,15 +274,15 @@ export function TestnetHud({ phaserRef }: TestnetHudProps) {
                 }
             >
                 {creditsCollapsed
-                    ? '▸ Reward / créditos'
-                    : '▾ Reward / créditos'}
+                    ? '▸ Rewards / créditos'
+                    : '▾ Rewards / créditos'}
             </button>
 
             {!creditsCollapsed ? (
                 <>
                     <div className="testnet-hud-sep" />
 
-                    <div className="testnet-hud-section-title">Testnet · Reward</div>
+                    <div className="testnet-hud-section-title">Testnet · Rewards</div>
                     <div className="testnet-hud-row" title="Pending + already claimed play-mine balance">
                         <span className="testnet-hud-k wide">Rewards accumulated</span>
                         <span className="testnet-hud-v mono gold">{totalTokens.toLocaleString()}</span>

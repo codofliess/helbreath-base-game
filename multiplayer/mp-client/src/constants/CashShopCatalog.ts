@@ -52,6 +52,29 @@ export function skuAcceptsHell(sku: Pick<CashShopSku, 'priceHell'>): boolean {
     return sku.priceHell > 0;
 }
 
+/**
+ * Reward Market stays off the shop until it is announced. Announcing it is
+ * not enough: the tab only lists rows with a token price, and none of those
+ * can be bought without the token, so the tab stays hidden.
+ */
+export const REWARD_MARKET_ANNOUNCED = false;
+
+/** Token amounts stay off stablecoin rows and the buy status. */
+export const SHOW_TOKEN_PRICE = false;
+
+export function shouldShowRewardMarketTab(
+    skus: readonly Pick<CashShopSku, 'priceHell'>[] = CASH_SHOP_SKUS,
+    announced: boolean = REWARD_MARKET_ANNOUNCED,
+): boolean {
+    if (!announced) {
+        return false;
+    }
+    // The tab lists token-priced rows only. A token-free row would need
+    // priceHell <= 0 and still be listed, which this catalog does not have.
+    const listed = skus.filter((sku) => sku.priceHell > 0);
+    return listed.some((sku) => sku.priceHell <= 0);
+}
+
 /** Catalog — keep in sync with server Config/CashShop.json. */
 export const CASH_SHOP_SKUS: readonly CashShopSku[] = [
     // Gear (bound)

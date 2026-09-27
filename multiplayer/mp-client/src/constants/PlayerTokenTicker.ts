@@ -12,8 +12,13 @@ const PLAYER_FACING_TOKEN_NAME =
 
 /**
  * Strips a token name from copy that reaches the player (server notes, toasts).
- * Identifiers such as HELL_MINT stay. The replacement is the words "a reward".
+ * Identifiers such as HELL_MINT stay. The replacement is the noun "rewards"
+ * with no article, so a number is not followed by "a reward" and a label is
+ * not "a reward:". "rewards is" becomes "rewards are".
  */
 export function playerTokenCopy(text: string): string {
-    return text.replace(PLAYER_FACING_TOKEN_NAME, 'a reward');
+    return text.replace(PLAYER_FACING_TOKEN_NAME, 'rewards').replace(/\brewards is\b/gi, (match) => {
+        const noun = match[0] === 'R' ? 'Rewards' : 'rewards';
+        return `${noun} are`;
+    });
 }

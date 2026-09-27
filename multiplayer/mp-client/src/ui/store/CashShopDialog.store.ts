@@ -38,7 +38,7 @@ export function openCashShopDialog(npcId: string, npcName: string): void {
         isOpen: true,
         npcId,
         npcName: npcName || 'Cash Shop',
-        statusMessage: 'Prices in USDT. Reward market when listed.',
+        statusMessage: 'Prices in USDT.',
         market: 'stablecoin',
         category: 'gear',
     }));

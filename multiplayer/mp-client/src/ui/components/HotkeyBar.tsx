@@ -530,7 +530,7 @@ export function HotkeyBar({ phaserRef }: { phaserRef?: RefObject<IRefPhaserGame 
                         type="button"
                         data-tutorial-id="cash-shop"
                         className="cl-dock-btn cl-dock-btn--cash"
-                        title="Cash Shop (USDT / a reward)"
+                        title="Cash Shop (USDT)"
                         aria-label="Cash Shop"
                         onClick={openCashShopRemote}
                     >

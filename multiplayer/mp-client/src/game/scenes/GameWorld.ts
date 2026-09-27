@@ -3884,7 +3884,7 @@ export class GameWorld extends Scene {
                     npcId: npc.getNPCId(),
                     npcName: npc.getDisplayName(),
                 });
-                greeting = 'USDC/USDT for boosts & seals; a reward for combos & stones.';
+                greeting = 'USDC/USDT for boosts, seals, combos, and stones.';
                 break;
             case 'blacksmith':
                 EventBus.emit(OUT_UI_OPEN_BLACKSMITH, {

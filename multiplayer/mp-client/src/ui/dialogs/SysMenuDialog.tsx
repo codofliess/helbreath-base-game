@@ -314,7 +314,7 @@ export function SysMenuDialog({
 
                 <div className="sys-menu-hell-mining" title={hellMining.note || undefined}>
                     <div className="sys-menu-row">
-                        <span className="sys-menu-label">Reward pending</span>
+                        <span className="sys-menu-label">Rewards pending</span>
                         <span className="sys-menu-hell-value">{hellMining.pendingHell.toLocaleString()}</span>
                     </div>
                     <div className="sys-menu-row">

@@ -600,7 +600,7 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
                 Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                 {' · '}
                 Stake: <strong>{progression.stakedHell.toLocaleString()}</strong>
-                {stakeBonus > 0 ? ` (+${stakeBonus} final)` : ' · 100k a reward = +1 final tier'}
+                {stakeBonus > 0 ? ` (+${stakeBonus} final)` : ''}
             </p>
             {top ? (
                 <p className="character-subpanel-body" style={{ marginBottom: 6, fontSize: 12 }}>

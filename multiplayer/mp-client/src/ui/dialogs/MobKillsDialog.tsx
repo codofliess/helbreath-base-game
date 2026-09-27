@@ -169,7 +169,7 @@ export function MobKillsDialog({
                 <p className="mob-kills-total">
                     Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                     {' · '}
-                    Staked a reward: <strong>{progression.stakedHell.toLocaleString()}</strong>
+                    Staked rewards: <strong>{progression.stakedHell.toLocaleString()}</strong>
                     {stakeBonus > 0 ? ` (+${stakeBonus} final all mobs)` : ''}
                 </p>
 

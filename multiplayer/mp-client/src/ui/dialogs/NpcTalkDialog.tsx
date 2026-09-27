@@ -143,7 +143,7 @@ export function NpcTalkDialog({
                         <p className="shop-dialog-intro">
                             This is the Garden (hostile wild) — not city streets. Return to city puts you on the
                             plaza; Gandalf is in the Wizard Tower. Quests: Unicorns (50) or Trolls (500). Reward: +50
-                            contribution + 1000 pending a reward.
+                            contribution + 1000 pending rewards.
                         </p>
                         {cityServicesSummary ? (
                             <p className="shop-dialog-hint">{cityServicesSummary}</p>

@@ -842,6 +842,18 @@ message CharacterEquipPreview {
   int32 item_id = 2;
 }
 
+/**
+ * Specialty level of one monster group (MobSpecialties.json segment) for a character cover.
+ * Level is from credited kills only. Stake bonus is a separate field on the slot.
+ */
+message CharacterMonsterGroupTier {
+  string segment = 1;
+  string label = 2;
+  int32 level = 3;
+  // Species in this group with the highest kill-based level. Empty when level is 0.
+  string lead_name = 4;
+}
+
 /** One occupied SELECTCHAR desk slot (empty slots are omitted; client fills 0–3). */
 message CharacterSlotSummary {
   int32 slot_index = 1;
@@ -865,6 +877,10 @@ message CharacterSlotSummary {
   repeated CharacterEquipPreview equipped = 17;
   // Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler).
   string citizenship_side = 18;
+  // Kill-based specialty level of each monster group. Empty on older servers.
+  repeated CharacterMonsterGroupTier monster_group_tiers = 19;
+  // floor(character StakedHell / 100_000). Not wallet-pending and not a displayed token amount.
+  int32 monster_stake_bonus = 20;
 }
 
 message CharacterListResponse {

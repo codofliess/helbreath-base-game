@@ -206,11 +206,13 @@ public sealed class GamePersistenceService : IAsyncDisposable {
             var underwearColorIndex = 0;
             List<CharacterListEquipPreview>? equipped = null;
             var citizenshipSide = "traveler";
+            PlayerPersistenceState? parsedState = null;
 
             if (!string.IsNullOrWhiteSpace(json)) {
                 try {
                     var state = JsonSerializer.Deserialize<PlayerPersistenceState>(json);
                     if (state is not null) {
+                        parsedState = state;
                         level = Math.Max(1, state.Level);
                         exp = Math.Max(0, state.Exp);
                         rebirth = Math.Max(0, state.Rebirth);
@@ -263,9 +265,11 @@ public sealed class GamePersistenceService : IAsyncDisposable {
             }
 
             usedSlots.Add(slotIndex);
+            var cover = MobSpecialty.BuildCharacterGroupCover(parsedState?.MonsterKills, parsedState?.StakedHell ?? 0);
             results.Add(new CharacterListEntry(
                 slotIndex, name, level, exp, rebirth, hoursPlayed, str, vit, dex, intel, mag, chr,
-                genderValue, skinColorValue, hairStyleIndex, underwearColorIndex, equipped, citizenshipSide));
+                genderValue, skinColorValue, hairStyleIndex, underwearColorIndex, equipped, citizenshipSide,
+                cover.Groups, cover.StakeBonusLevels));
         }
 
         results.Sort((a, b) => a.SlotIndex.CompareTo(b.SlotIndex));
@@ -895,6 +899,7 @@ public static class GamePersistence {
         string name,
         int slotIndex,
         double hoursPlayed) {
+        var cover = MobSpecialty.BuildCharacterGroupCover(state.MonsterKills, state.StakedHell);
         return new CharacterListEntry(
             slotIndex,
             name,
@@ -913,7 +918,9 @@ public static class GamePersistence {
             Math.Clamp(state.HairStyleIndex, 0, 7),
             Math.Clamp(state.UnderwearColorIndex, 0, 7),
             ExtractEquipPreview(state),
-            NormalizeCitizenshipSide(state.CitizenshipSide));
+            NormalizeCitizenshipSide(state.CitizenshipSide),
+            cover.Groups,
+            cover.StakeBonusLevels);
     }
 
     /// <summary>aresden | elvine | traveler for SELECTCHAR city seals.</summary>

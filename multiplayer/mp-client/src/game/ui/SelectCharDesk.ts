@@ -29,7 +29,6 @@ import {
     SLOT_GLYPH_W,
 } from './selectCharSlotGlyphs';
 import { Gender, SkinColor } from '../../Types';
-import { heroItemToSide, resolveHeroKitSide } from '../../utils/heroFactionKit';
 import {
     applyLoginDeskCanvasPresentation,
     holdLoginDeskCanvasPresentation,
@@ -47,9 +46,10 @@ import { Direction } from '../../utils/CoordinateUtils';
 import { getStoredWalletPubkey, getStoredWalletToken } from '../../utils/walletAuth';
 import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CHAIN_LORDS_BRAND } from './charUiMode';
+import { heroItemToSide, resolveHeroKitSide } from '../../utils/heroFactionKit';
 import { getItemById } from '../../constants/Items';
 import { PLAYER_TOKEN_DISPLAY, playerTokenCopy } from '../../constants/PlayerTokenTicker';
-import { OLYMPIA_SUPER_RARE_ITEM_IDS } from '../../utils/olympiaDropRules';
+import { classifyEquippedCover, formatMonsterGroupLine } from './selectCharCover';
 import { fetchUnclaimedDrops, type UnclaimedDrop } from '../../utils/dropLedger';
 import {
     CL,
@@ -528,7 +528,7 @@ export class SelectCharDesk {
             return;
         }
 
-        const { legendary, rare } = this.classifyEquipped(occupied);
+        const { legendary, rare } = classifyEquippedCover(occupied);
         let yy = y + 48;
 
         add(x + 18, yy, 'LEGENDARY ITEMS', clKickerStyle({ fontSize: '12px', color: '#e8c060' }));
@@ -566,6 +566,11 @@ export class SelectCharDesk {
         const city = normalizeCitizenshipSide(occupied.citizenshipSide);
         const cityLabel =
             city === 'aresden' ? 'Aresden (War)' : city === 'elvine' ? 'Elvine (Grace)' : 'Traveler';
+        const tiers = occupied.monsterGroupTiers ?? [];
+        const huntLines =
+            tiers.length > 0
+                ? tiers.map((tier) => formatMonsterGroupLine(tier))
+                : ['Monster group levels are not in this character list.'];
         const statusBlock = [
             `City seal: ${cityLabel}`,
             `Level ${occupied.level}${rebirth}`,
@@ -576,8 +581,7 @@ export class SelectCharDesk {
             `INT ${occupied.intel}   MAG ${occupied.mag}   CHR ${occupied.chr}`,
             '',
             'Hunt profile',
-            'Highest monster tiers: — (play to fill)',
-            'Recent hunt zones: —',
+            ...huntLines,
         ].join('\n');
 
         add(x + 18, yy, statusBlock, clBodyStyle({
@@ -588,28 +592,6 @@ export class SelectCharDesk {
         }));
 
         void h;
-    }
-
-    private classifyEquipped(slot: CharacterSlotSummary): { legendary: string[]; rare: string[] } {
-        const legendary: string[] = [];
-        const rare: string[] = [];
-        const rawIds = (slot.equipped ?? []).map((eq) => eq?.itemId ?? 0).filter((id) => id > 0);
-        const kitSide = resolveHeroKitSide(slot.citizenshipSide, rawIds);
-        for (const eq of slot.equipped ?? []) {
-            if (!eq?.itemId) {
-                continue;
-            }
-            const itemId = kitSide ? heroItemToSide(eq.itemId, kitSide) : eq.itemId;
-            const def = getItemById(itemId);
-            const name = def?.name?.trim() || `Item ${itemId}`;
-            if (OLYMPIA_SUPER_RARE_ITEM_IDS.has(itemId)) {
-                legendary.push(name);
-            } else {
-                // Equipped non-legendary shown as rare candidates (list has no magic-roll attr yet).
-                rare.push(name);
-            }
-        }
-        return { legendary, rare };
     }
 
     /** Classic buttons, horizontal row ~1cm above wallet line. */

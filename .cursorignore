@@ -1,0 +1,35 @@
+# Cursor Desktop OOM mitigation for this Helbreath / ChainLords monorepo.
+# Official docs: https://cursor.com/docs/reference/ignore-file
+# Cursor already honors .gitignore plus a default media/lockfile list.
+# Current official docs do not use .cursorindexingignore -- this file is enough.
+#
+# Goal: skip huge git-tracked binaries Cursor does not edit, so Windows
+# indexing / Agent discovery does not blow the Electron renderer (reason: oom).
+#
+# Do NOT ignore hand-edited source: *.cs *.ts *.tsx Server.cs rpg-ui.css
+# or Config/*.json (Items, Monsters, GameWorlds, etc.).
+
+# Duplicated client runtime assets (~278MB each): .spr sprites, .amd maps, images, audio
+multiplayer/mp-client/public/assets/
+sp-client/public/assets/
+
+# Server map binaries (same .amd set as public/assets/maps, ~33MB)
+multiplayer/server/Config/maps/
+
+# Local build outputs (also in .gitignore; keep leftover Windows/Linux copies out of the indexer)
+**/node_modules/
+**/bin/
+**/obj/
+**/dist/
+**/dist-ssr/
+**/.pnpm-store/
+**/publish-*/
+middleware/target/
+
+# Tracked Playwright / critique screenshot dumps (~77MB of PNGs)
+multiplayer/mp-client/scripts/*-out/
+
+# Game binary extensions if they appear outside the trees above
+*.spr
+*.amd
+*.pak

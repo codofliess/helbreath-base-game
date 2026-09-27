@@ -9,6 +9,11 @@ import {
     resolveSelectCharSlotsForPaint,
 } from '../../game/ui/selectCharDeskSync';
 import {
+    SELECTCHAR_LINE_NAME_Y,
+    SELECTCHAR_SLOT_NAME_X,
+    SELECTCHAR_SLOT_PITCH,
+} from '../../game/ui/selectCharSlotLayout';
+import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
     SELECTCHAR_OCCUPIED_SLOT_LABEL,
@@ -17,6 +22,7 @@ import {
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
+    projectDeskPointToCss,
     selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
@@ -35,9 +41,9 @@ interface SelectCharOccupiedReactOverlayProps {
  * child of `document.body` (not under #root / React overflow:hidden) so KindGem
  * can screenshot unclipped `OCCUPIED Elon Lev.150`.
  *
- * Slot cards are not painted here. Absolute chips (`data-react-slot`) stacked
- * on the Explorer roster and on each other. The roster in SelectCharReactDesk
- * is the only card row.
+ * The cream title is the selected character only. Absolute slot chips stay in
+ * the DOM for the KindGem path; `body.login-selectchar-active` hides them so
+ * they do not sit on the Explorer roster.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
@@ -119,6 +125,25 @@ export function SelectCharOccupiedReactOverlay({
             const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
             selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
+        const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
+        const rect = canvas?.getBoundingClientRect();
+        if (!root || !rect || rect.width < 2 || rect.height < 2) {
+            return;
+        }
+        const gameW = 800;
+        const gameH = 600;
+        root.querySelectorAll<HTMLElement>('[data-react-slot]').forEach((node) => {
+            const index = Number(node.dataset.reactSlot);
+            const pos = projectDeskPointToCss(
+                { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                gameW,
+                gameH,
+                SELECTCHAR_SLOT_NAME_X + index * SELECTCHAR_SLOT_PITCH,
+                SELECTCHAR_LINE_NAME_Y,
+            );
+            node.style.left = `${Math.round(pos.left)}px`;
+            node.style.top = `${Math.round(pos.top)}px`;
+        });
     }, [banner, loading, occupiedNames, selectedLev, selectedName]);
 
     useLayoutEffect(() => {
@@ -141,10 +166,22 @@ export function SelectCharOccupiedReactOverlay({
             data-selectchar-react-occupied="1"
             data-occupied-count={occupied.length}
             data-occupied-names={occupiedNames}
-            data-occupied-label={SELECTCHAR_OCCUPIED_SLOT_LABEL}
             style={{ zIndex: Math.max(zIndex + 22, 2147483000) }}
             aria-hidden="true"
-        />,
+        >
+            {occupied.map(({ row, slotIndex }) => (
+                <div
+                    key={`${slotIndex}-${row.name}`}
+                    className="selectchar-react-occupied__slot"
+                    data-react-slot={slotIndex}
+                    data-occupied="1"
+                >
+                    <div className="selectchar-react-occupied__status">{SELECTCHAR_OCCUPIED_SLOT_LABEL}</div>
+                    <div className="selectchar-react-occupied__name">{row.name}</div>
+                    <div className="selectchar-react-occupied__lev">{row.lev}</div>
+                </div>
+            ))}
+        </div>,
         document.body,
     );
 }

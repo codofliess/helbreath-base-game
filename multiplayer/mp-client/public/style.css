@@ -278,10 +278,6 @@ body.login-charui-active #game-container canvas.login-charui-canvas,
 .selectchar-react-occupied__slot[data-react-slot="1"] { left: calc(3.5cm + 20%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="2"] { left: calc(3.5cm + 33%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="3"] { left: calc(3.5cm + 46%); top: calc(2cm + 26%); }
-/* Explorer roster owns the cards. These absolute chips stacked on the desk. */
-body.login-selectchar-active .selectchar-react-occupied__slot {
-    display: none !important;
-}
 .selectchar-react-occupied__status {
     font-size: 12px;
     font-weight: 700;

@@ -85,6 +85,37 @@
     bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 72px) + 10px) !important;
 }
 
+/*
+ * Explorer hub: toasts used to sit on the referral card (bottom-center).
+ * Stack them in the right gutter, under the cream title and left of the Arena tab,
+ * so the referral card is never underneath.
+ */
+body.login-selectchar-active {
+    --explorer-toast-col: 280px;
+    --explorer-toast-right: 72px;
+}
+
+body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+    top: 132px !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: var(--explorer-toast-right) !important;
+    transform: none !important;
+    width: var(--explorer-toast-col) !important;
+    max-width: var(--explorer-toast-col);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    z-index: 10040;
+}
+
+body.login-selectchar-active .rpg-toast-container--olympia .rpg-toast {
+    position: relative !important;
+    margin: 0 !important;
+    transform: none !important;
+}
+
 .rpg-toast-container--olympia .rpg-toast {
     pointer-events: auto;
     justify-content: center;
@@ -11688,20 +11719,30 @@ body.game-world-active .bi-online-strip {
     display: none;
 }
 
-/* Explorer character hub — flow layout, not the 800×600 absolute desk. */
+/* Explorer character hub — flow layout, not the 800×600 absolute desk.
+   The gate does not scroll: its top padding stays under the fixed cream title.
+   The panel's body scrolls inside that inset, so its border never meets the title.
+   The Helbreath / Explorer / seal header stays outside that scroll.
+   Right padding clears the toast gutter. */
 .explorer-hub-gate.login-desk-gate {
-    align-items: flex-start;
-    justify-content: center;
-    overflow: auto;
-    padding: 76px 72px 28px 28px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: hidden;
+    padding: var(--explorer-title-clearance, 96px) calc(88px + var(--explorer-toast-col, 0px)) 16px 28px;
 }
 
 .explorer-hub {
     pointer-events: auto;
-    width: min(1080px, 100%);
+    display: flex;
+    flex-direction: column;
+    width: min(1120px, 100%);
     margin: 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
     box-sizing: border-box;
-    padding: 20px 22px 16px;
     border: 1px solid rgba(196, 154, 72, 0.55);
     border-radius: 12px;
     background: #1a120c;
@@ -11710,12 +11751,23 @@ body.game-world-active .bi-online-strip {
     font-family: 'Spectral', Georgia, serif;
 }
 
+/* Brand and seal stay fully visible. Only the body below them scrolls. */
 .explorer-hub-header {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 8px 16px;
-    margin-bottom: 16px;
+    margin: 0;
+    padding: 20px 22px 12px;
+    background: #1a120c;
+}
+
+.explorer-hub-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 4px 22px 16px;
 }
 
 .explorer-hub-title {
@@ -11740,9 +11792,37 @@ body.game-world-active .bi-online-strip {
 
 .explorer-hub-grid {
     display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-    gap: 18px;
-    align-items: start;
+    grid-template-columns: minmax(200px, 230px) minmax(240px, 280px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+.explorer-hub-doll {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: visible;
+}
+
+.explorer-hub-doll-sprite {
+    display: block;
+    flex: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+    background: transparent;
+}
+
+.explorer-hub-doll-sprite[data-doll-scale="0"],
+.explorer-hub-doll-sprite:not([data-doll-scale]) {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
 }
 
 .explorer-hub-kicker,
@@ -11905,14 +11985,35 @@ body.game-world-active .bi-online-strip {
     bottom: auto;
     top: auto;
     transform: none;
-    z-index: 1;
+    /* Above hub toasts (10040) so a scroll cannot leave the card under a notice. */
+    z-index: 100080;
     width: 100%;
     margin-top: 16px;
+    background: #1a120c;
 }
 
 @media (max-width: 800px) {
+    body.login-selectchar-active {
+        --explorer-toast-col: 0px;
+        --explorer-toast-right: 12px;
+    }
+
+    body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+        top: 112px !important;
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: none;
+        max-height: 72px;
+        overflow: auto;
+    }
+
     .explorer-hub-gate.login-desk-gate {
-        padding: 76px 16px 24px;
+        padding: var(--explorer-title-clearance, 96px) 16px 24px;
+    }
+
+    .explorer-hub-doll {
+        height: 280px;
     }
 
     .explorer-hub-grid,

@@ -916,19 +916,28 @@ public static class Casting {
         return Location.GetDistance(cellX, cellY, targetX, targetY) <= aoeRadius;
     }
 
-    /// <summary>Places one ground-effect instance on each covered cell and broadcasts only the successfully created effects.</summary>
-    private static void ApplyGroundEffectSpell(GameWorldRef wr, GameWorldPlayer caster, int targetX, int targetY, SpellConfig spell) {
+    /// <summary>
+    /// Places one ground-effect instance on each covered cell and broadcasts only the successfully created effects.
+    /// Each cell takes its own <see cref="PlayerDerivedStats.RollMagicDamage"/> roll, then
+    /// <see cref="CapGroundEffectTickDamage"/>. Direct spells do not use this path.
+    /// </summary>
+    /// <param name="damageRandom">Dice source for those per-cell rolls. Null uses <see cref="Random.Shared"/>.</param>
+    public static void ApplyGroundEffectSpell(
+        GameWorldRef wr,
+        GameWorldPlayer caster,
+        int targetX,
+        int targetY,
+        SpellConfig spell,
+        Random? damageRandom = null) {
         if (spell.Group is not int group || spell.Duration is not int durationMs) {
             return;
         }
 
+        var maxPerTick = wr.Settings.GroundEffectMaxDamagePerTick;
+        var rng = damageRandom ?? Random.Shared;
         var aoeRadius = Math.Max(0, spell.AoeRadius ?? 0);
         var tickRateMs = spell.TickRate;
         var resolvedAttackType = ResolveSpellAttackType(spell);
-        // Snapshot Olympia magic damage once at cast (not melee STR / caster.Damage), then scale ticks.
-        var groundDamage = ScaleGroundEffectDamage(
-            PlayerDerivedStats.RollMagicDamage(caster, spell),
-            wr.Settings.GroundEffectDamageFactor);
         var createdEffects = new List<GroundEffectState>();
         var minX = Math.Max(0, targetX - aoeRadius);
         var minY = Math.Max(0, targetY - aoeRadius);
@@ -940,6 +949,9 @@ public static class Casting {
                     continue;
                 }
 
+                // One Olympia magic roll per cell (not one roll reused across the field).
+                var fullRoll = PlayerDerivedStats.RollMagicDamage(caster, spell, rng);
+                var groundDamage = CapGroundEffectTickDamage(fullRoll, maxPerTick);
                 if (!wr.GroundStateTracker.TryAddEffect(
                         spell.Id,
                         ResolveGroundEffectType(spell),
@@ -966,20 +978,21 @@ public static class Casting {
     }
 
     /// <summary>
-    /// Scales Olympia magic damage for ground-effect ticks and step-on hits.
-    /// Direct spells keep using unscaled <see cref="PlayerDerivedStats.RollMagicDamage"/>.
+    /// Ground-effect tick after the full magic roll: <c>min(fullRoll, maxPerTick)</c>.
+    /// Direct spells keep the uncapped roll.
     /// </summary>
-    private static int ScaleGroundEffectDamage(int fullDamage, double factor) {
-        if (fullDamage <= 0) {
+    public static int CapGroundEffectTickDamage(int fullRoll, int maxPerTick) {
+        if (maxPerTick < 1) {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxPerTick),
+                "Ground-effect max damage per tick must be at least 1.");
+        }
+
+        if (fullRoll < 1) {
             return 1;
         }
 
-        var scaled = (long)Math.Round(fullDamage * factor, MidpointRounding.AwayFromZero);
-        if (scaled < 1) {
-            return 1;
-        }
-
-        return scaled > int.MaxValue ? int.MaxValue : (int)scaled;
+        return Math.Min(fullRoll, maxPerTick);
     }
 
     /// <summary>Resolves the visual/gameplay ground-effect kind created by this spell.</summary>

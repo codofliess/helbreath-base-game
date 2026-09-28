@@ -938,6 +938,18 @@ export interface CharacterEquipPreview {
   itemId: number;
 }
 
+/**
+ * Specialty level of one monster group (MobSpecialties.json segment) for a character cover.
+ * Level is from credited kills only. Stake bonus is a separate field on the slot.
+ */
+export interface CharacterMonsterGroupTier {
+  segment: string;
+  label: string;
+  level: number;
+  /** Species in this group with the highest kill-based level. Empty when level is 0. */
+  leadName: string;
+}
+
 /** One occupied SELECTCHAR desk slot (empty slots are omitted; client fills 0–3). */
 export interface CharacterSlotSummary {
   slotIndex: number;
@@ -961,6 +973,10 @@ export interface CharacterSlotSummary {
   equipped: CharacterEquipPreview[];
   /** Citizenship side stamp: "aresden" | "elvine" | "traveler" (empty = traveler). */
   citizenshipSide: string;
+  /** Kill-based specialty level of each monster group. Empty on older servers. */
+  monsterGroupTiers: CharacterMonsterGroupTier[];
+  /** floor(character StakedHell / 100_000). Not wallet-pending and not a displayed token amount. */
+  monsterStakeBonus: number;
 }
 
 export interface CharacterListResponse {
@@ -11107,6 +11123,88 @@ export const CharacterEquipPreview: MessageFns<CharacterEquipPreview> = {
   },
 };
 
+function createBaseCharacterMonsterGroupTier(): CharacterMonsterGroupTier {
+  return { segment: "", label: "", level: 0, leadName: "" };
+}
+
+export const CharacterMonsterGroupTier: MessageFns<CharacterMonsterGroupTier> = {
+  encode(message: CharacterMonsterGroupTier, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.segment !== "") {
+      writer.uint32(10).string(message.segment);
+    }
+    if (message.label !== "") {
+      writer.uint32(18).string(message.label);
+    }
+    if (message.level !== 0) {
+      writer.uint32(24).int32(message.level);
+    }
+    if (message.leadName !== "") {
+      writer.uint32(34).string(message.leadName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterMonsterGroupTier {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCharacterMonsterGroupTier();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.segment = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.label = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.level = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.leadName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<CharacterMonsterGroupTier>, I>>(base?: I): CharacterMonsterGroupTier {
+    return CharacterMonsterGroupTier.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterMonsterGroupTier>, I>>(object: I): CharacterMonsterGroupTier {
+    const message = createBaseCharacterMonsterGroupTier();
+    message.segment = object.segment ?? "";
+    message.label = object.label ?? "";
+    message.level = object.level ?? 0;
+    message.leadName = object.leadName ?? "";
+    return message;
+  },
+};
+
 function createBaseCharacterSlotSummary(): CharacterSlotSummary {
   return {
     slotIndex: 0,
@@ -11127,6 +11225,8 @@ function createBaseCharacterSlotSummary(): CharacterSlotSummary {
     underwearColorIndex: 0,
     equipped: [],
     citizenshipSide: "",
+    monsterGroupTiers: [],
+    monsterStakeBonus: 0,
   };
 }
 
@@ -11188,6 +11288,12 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
     }
     if (message.citizenshipSide !== "") {
       writer.uint32(146).string(message.citizenshipSide);
+    }
+    for (const v of message.monsterGroupTiers ?? []) {
+      CharacterMonsterGroupTier.encode(v!, writer.uint32(154).fork()).join();
+    }
+    if ((message.monsterStakeBonus ?? 0) !== 0) {
+      writer.uint32(160).int32(message.monsterStakeBonus);
     }
     return writer;
   },
@@ -11343,6 +11449,22 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
           message.citizenshipSide = reader.string();
           continue;
         }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.monsterGroupTiers.push(CharacterMonsterGroupTier.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.monsterStakeBonus = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11375,6 +11497,8 @@ export const CharacterSlotSummary: MessageFns<CharacterSlotSummary> = {
     message.underwearColorIndex = object.underwearColorIndex ?? 0;
     message.equipped = object.equipped?.map((e) => CharacterEquipPreview.fromPartial(e)) || [];
     message.citizenshipSide = object.citizenshipSide ?? "";
+    message.monsterGroupTiers = object.monsterGroupTiers?.map((e) => CharacterMonsterGroupTier.fromPartial(e)) || [];
+    message.monsterStakeBonus = object.monsterStakeBonus ?? 0;
     return message;
   },
 };

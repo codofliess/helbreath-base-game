@@ -559,7 +559,18 @@ app.Map("/ws", async context => {
                             CitizenshipSide = string.IsNullOrWhiteSpace(entry.CitizenshipSide)
                                 ? "traveler"
                                 : entry.CitizenshipSide.Trim().ToLowerInvariant(),
+                            MonsterStakeBonus = Math.Max(0, entry.MonsterStakeBonus),
                         };
+                        if (entry.MonsterGroupTiers is { Count: > 0 }) {
+                            foreach (var tier in entry.MonsterGroupTiers) {
+                                summary.MonsterGroupTiers.Add(new Mmorpg.Network.CharacterMonsterGroupTier {
+                                    Segment = tier.Segment ?? string.Empty,
+                                    Label = string.IsNullOrWhiteSpace(tier.Label) ? tier.Segment ?? string.Empty : tier.Label,
+                                    Level = Math.Max(0, tier.Level),
+                                    LeadName = tier.LeadName ?? string.Empty,
+                                });
+                            }
+                        }
                         // Olympia DrawObject_OnMove_ForMenu: walk/rotate with equipped gear.
                         if (entry.Equipped is { Count: > 0 }) {
                             foreach (var eq in entry.Equipped) {

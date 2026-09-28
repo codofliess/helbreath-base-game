@@ -9,13 +9,15 @@ import {
 } from '../../utils/referral';
 import { EventBus } from '../../game/EventBus';
 import { TOAST_REQUESTED } from '../../constants/EventNames';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
-
 /**
  * Overlay on Character List (play-world desk): copy your NAME-XXXX link + paste a friend's code.
  * Lifetime once per wallet is enforced server-side; client first-touch stores the code for auth.
  */
-export function ReferralCharListPanel() {
+export function ReferralCharListPanel({
+    placement = 'overlay',
+}: {
+    placement?: 'overlay' | 'embedded';
+} = {}) {
     const phase = useStore(connectDialogStore, (s) => s.phase);
     const isOpen = useStore(connectDialogStore, (s) => s.isOpen);
     const referralInfo = useStore(connectDialogStore, (s) => s.referralInfo);
@@ -31,7 +33,8 @@ export function ReferralCharListPanel() {
     const already = referralInfo?.alreadyAttributed ?? false;
     const stored = getStoredReferralCode();
 
-    if (!show) {
+    // The character hub embeds this panel. The old fixed overlay covered the slots.
+    if (!show || placement !== 'embedded') {
         return null;
     }
 
@@ -63,15 +66,15 @@ export function ReferralCharListPanel() {
     };
 
     return (
-        <div className="cl-ref-panel" role="region" aria-label="Referral">
+        <div className="cl-ref-panel cl-ref-panel--embedded" role="region" aria-label="Referral">
             <div className="cl-ref-panel__glow" aria-hidden />
             <div className="cl-ref-panel__inner">
                 <div className="cl-ref-panel__brand">
                     <span className="cl-ref-panel__kicker">Recruitment</span>
                     <h3 className="cl-ref-panel__title">Referral link</h3>
                     <p className="cl-ref-panel__hint">
-                        One benefit per wallet, lifetime. Friend gets starter gold + tablets; you earn locked{' '}
-                        {PLAYER_TOKEN_DISPLAY} when they hit 150.
+                        One benefit per wallet, lifetime. Friend gets starter gold + tablets. You earn a
+                        reward when they hit 150.
                     </p>
                 </div>
 

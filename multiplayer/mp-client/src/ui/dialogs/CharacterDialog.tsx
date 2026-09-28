@@ -33,7 +33,6 @@ import {
 } from '../store/CharacterDialog.store';
 import { inventoryDialogStore } from '../store/InventoryDialog.store';
 import { beginnerPathStore } from '../store/BeginnerPath.store';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
 import {
     CHARACTER_DIALOG_BG,
     DIALOG_BTN_QUEST,
@@ -601,7 +600,7 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
                 Total kills: <strong>{progression.totalKills.toLocaleString()}</strong>
                 {' · '}
                 Stake: <strong>{progression.stakedHell.toLocaleString()}</strong>
-                {stakeBonus > 0 ? ` (+${stakeBonus} final)` : ` · 100k ${PLAYER_TOKEN_DISPLAY} = +1 final tier`}
+                {stakeBonus > 0 ? ` (+${stakeBonus} final)` : ''}
             </p>
             {top ? (
                 <p className="character-subpanel-body" style={{ marginBottom: 6, fontSize: 12 }}>

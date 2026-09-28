@@ -80,20 +80,24 @@ export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
 
 /**
  * Inline fail-closed paint: last child of document.body, not under #root / #app clip.
- * KindGem viewport must see OCCUPIED Elon Lev.150 unclipped (top>=0, width>100).
+ * KindGem viewport must see OCCUPIED Elon Lev.150 unclipped (top>=0, left>=0, width>100).
+ *
+ * Do not append `inset:auto`. That shorthand resets `left`/`top` after they are set,
+ * and `translateX(-50%)` then slides the label off the left edge of the viewport.
+ * `max-width` keeps a long "Lev.150 · …" line inside the window; text may wrap.
  */
 export const SELECTCHAR_KINDGEM_BANNER_CSS_TEXT =
     'display:block!important;visibility:visible!important;opacity:1!important;' +
-    'position:fixed!important;top:12px!important;left:50%!important;right:auto!important;bottom:auto!important;' +
-    'inset:auto!important;transform:translateX(-50%)!important;margin:0!important;' +
+    'position:fixed!important;top:8px!important;left:50%!important;right:auto!important;bottom:auto!important;' +
+    'transform:translateX(-50%)!important;margin:0!important;' +
     'z-index:2147483646!important;pointer-events:none!important;overflow:visible!important;' +
     'clip:auto!important;clip-path:none!important;contain:none!important;filter:none!important;' +
     'color:#1a0a12!important;background:#f4ead5!important;background-color:#f4ead5!important;' +
     'font-size:28px!important;font-weight:700!important;line-height:1.2!important;' +
-    'font-family:Georgia,serif!important;max-width:90vw!important;min-width:280px!important;' +
+    'font-family:Georgia,serif!important;max-width:calc(100vw - 16px)!important;min-width:280px!important;' +
     'min-height:44px!important;width:max-content!important;height:auto!important;' +
     'padding:12px 20px!important;text-align:center!important;border:2px solid #3a2810!important;' +
-    'box-sizing:border-box!important;white-space:nowrap!important;';
+    'box-sizing:border-box!important;white-space:normal!important;overflow-wrap:anywhere!important;';
 
 /** Last named banner — a late empty portal must not restore «waiting». */
 let stickyNamedOccupiedBanner = '';
@@ -125,35 +129,91 @@ function levelFromPaintRow(row: SlotGlyphRow): unknown {
     return digits ? Number(digits[0]) : 0;
 }
 
+interface BannerStoreSlot {
+    name?: string;
+    level?: unknown;
+    slotIndex?: number;
+}
+
+/** One name per desk index. A repeated or invalid slotIndex takes the next free 0–3. */
+function uniqueNamedBannerSlots(storeSlots: BannerStoreSlot[] | undefined): BannerStoreSlot[] {
+    const used = new Set<number>();
+    const out: BannerStoreSlot[] = [];
+    for (const row of storeSlots ?? []) {
+        const name = (row?.name ?? '').trim();
+        if (!name) {
+            continue;
+        }
+        const raw = Number(row.slotIndex);
+        let slotIndex = 0;
+        if (Number.isInteger(raw) && raw >= 0 && raw <= 3 && !used.has(raw)) {
+            slotIndex = raw;
+        } else {
+            for (let i = 0; i < 4; i++) {
+                if (!used.has(i)) {
+                    slotIndex = i;
+                    break;
+                }
+            }
+        }
+        used.add(slotIndex);
+        out.push({ name, level: row.level, slotIndex });
+    }
+    out.sort((a, b) => Number(a.slotIndex) - Number(b.slotIndex));
+    return out;
+}
+
+function bannerFromPaintRow(row: SlotGlyphRow): string {
+    return `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${formatSelectCharKindGemNameLev(
+        row.name,
+        levelFromPaintRow(row),
+    )}`;
+}
+
 /**
  * Banner KindGem can read without Phaser Text.
- * Named store slots win over paint-row `occupied` so a live Elon list cannot
- * stay on «waiting» after CharacterList (empty paint rows / missing level).
- * Occupied paint is `OCCUPIED Elon Lev.150` — never a «waiting» substring.
+ * The line is the selected character only (`OCCUPIED Elon Lev.150`).
+ * Joining every occupied name mixed Co2 and BebaMaster into one title.
+ * Named store slots still win over an empty paint so a live list cannot stay on «waiting».
  */
 export function buildSelectCharReactOccupiedBanner(
     rows: SlotGlyphRow[],
-    storeSlots?: Array<{ name?: string; level?: unknown; rebirth?: unknown }>,
+    storeSlots?: BannerStoreSlot[],
+    selectedSlotIndex?: number,
 ): string {
-    const fromStore = (storeSlots ?? []).filter((row) => (row?.name ?? '').trim().length > 0);
-    if (fromStore.length > 0) {
-        const names = fromStore
-            .map((row) => formatSelectCharKindGemNameLev(row.name ?? '', row.level))
-            .join(' · ');
-        stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
+    const selected =
+        selectedSlotIndex === undefined || !Number.isFinite(Number(selectedSlotIndex))
+            ? undefined
+            : Math.max(0, Math.min(3, Math.trunc(Number(selectedSlotIndex))));
+    if (selected !== undefined && paintRowLooksOccupied(rows[selected])) {
+        stickyNamedOccupiedBanner = bannerFromPaintRow(rows[selected]);
         return stickyNamedOccupiedBanner;
     }
-    const occupied = rows.filter(paintRowLooksOccupied);
+    const fromStore = uniqueNamedBannerSlots(storeSlots);
+    if (fromStore.length > 0) {
+        const picked =
+            (selected !== undefined
+                ? fromStore.find((row) => Number(row.slotIndex) === selected)
+                : undefined) ?? fromStore[0];
+        stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${formatSelectCharKindGemNameLev(
+            picked.name ?? '',
+            picked.level,
+        )}`;
+        return stickyNamedOccupiedBanner;
+    }
+    const occupied = rows
+        .map((row, slotIndex) => ({ row, slotIndex }))
+        .filter((entry) => paintRowLooksOccupied(entry.row));
     if (occupied.length === 0) {
         if (stickyNamedOccupiedBanner) {
             return stickyNamedOccupiedBanner;
         }
         return `${REACT_OCCUPIED_BANNER_PREFIX} — waiting`;
     }
-    const names = occupied
-        .map((row) => formatSelectCharKindGemNameLev(row.name, levelFromPaintRow(row)))
-        .join(' · ');
-    stickyNamedOccupiedBanner = `${SELECTCHAR_KINDGEM_OCCUPIED_PREFIX} ${names}`;
+    const picked =
+        (selected !== undefined ? occupied.find((entry) => entry.slotIndex === selected) : undefined) ??
+        occupied[0];
+    stickyNamedOccupiedBanner = bannerFromPaintRow(picked.row);
     return stickyNamedOccupiedBanner;
 }
 
@@ -191,11 +251,13 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.opacity = '1';
     node.style.zIndex = '2147483646';
     node.style.position = 'fixed';
-    node.style.top = '12px';
+    node.style.top = '8px';
     node.style.left = '50%';
+    node.style.right = 'auto';
+    node.style.bottom = 'auto';
     node.style.transform = 'translateX(-50%)';
     node.style.overflow = 'visible';
-    node.style.maxWidth = '90vw';
+    node.style.maxWidth = 'calc(100vw - 16px)';
     node.style.color = '#1a0a12';
     node.style.background = '#f4ead5';
     node.style.fontSize = '28px';
@@ -203,7 +265,7 @@ export function revealSelectCharReactOccupiedBannerNode(node: SelectCharBannerPa
     node.style.padding = '12px 20px';
     node.style.minWidth = '280px';
     node.style.minHeight = '44px';
-    node.style.whiteSpace = 'nowrap';
+    node.style.whiteSpace = 'normal';
     node.style.pointerEvents = 'none';
     const css = node.style as { cssText?: string };
     if (typeof css.cssText === 'string') {

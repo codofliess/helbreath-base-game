@@ -85,6 +85,37 @@
     bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 72px) + 10px) !important;
 }
 
+/*
+ * Explorer hub: toasts used to sit on the referral card (bottom-center).
+ * Stack them in the right gutter, under the cream title and left of the Arena tab,
+ * so the referral card is never underneath.
+ */
+body.login-selectchar-active {
+    --explorer-toast-col: 280px;
+    --explorer-toast-right: 72px;
+}
+
+body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+    top: 132px !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: var(--explorer-toast-right) !important;
+    transform: none !important;
+    width: var(--explorer-toast-col) !important;
+    max-width: var(--explorer-toast-col);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    z-index: 10040;
+}
+
+body.login-selectchar-active .rpg-toast-container--olympia .rpg-toast {
+    position: relative !important;
+    margin: 0 !important;
+    transform: none !important;
+}
+
 .rpg-toast-container--olympia .rpg-toast {
     pointer-events: auto;
     justify-content: center;
@@ -6431,16 +6462,16 @@ body.arena-slim-mode .bag-glass-toggle-btn {
 .selectchar-react-occupied__banner {
     position: fixed;
     left: 50%;
-    top: 12px;
+    top: 8px;
     right: auto;
     bottom: auto;
-    inset: auto;
     transform: translateX(-50%);
-    min-width: 280px;
+    min-width: min(280px, calc(100vw - 16px));
     min-height: 44px;
-    max-width: 90vw;
+    max-width: calc(100vw - 16px);
     width: max-content;
     padding: 12px 20px;
+    box-sizing: border-box;
     background: #f4ead5 !important;
     background-color: #f4ead5 !important;
     border: 2px solid #3a2810;
@@ -6451,7 +6482,8 @@ body.arena-slim-mode .bag-glass-toggle-btn {
     line-height: 1.2;
     text-align: center;
     text-shadow: none;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     overflow: visible;
     clip: auto;
     clip-path: none;
@@ -6479,6 +6511,11 @@ body.arena-slim-mode .bag-glass-toggle-btn {
 .selectchar-react-occupied__slot[data-react-slot="1"] { left: calc(3.5cm + 20%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="2"] { left: calc(3.5cm + 33%); top: calc(2cm + 26%); }
 .selectchar-react-occupied__slot[data-react-slot="3"] { left: calc(3.5cm + 46%); top: calc(2cm + 26%); }
+/* The character hub paints its own roster. These absolute chips stacked on the fallback desk. */
+body.login-selectchar-active .selectchar-react-occupied__slot {
+    display: none !important;
+}
+
 .selectchar-react-occupied__status {
     font-size: 12px;
     font-weight: 700;
@@ -11680,4 +11717,319 @@ body.game-world-active .cl-desk-mode-tab {
 }
 body.game-world-active .bi-online-strip {
     display: none;
+}
+
+/* Explorer character hub — flow layout, not the 800×600 absolute desk.
+   The gate does not scroll: its top padding stays under the fixed cream title.
+   The panel's body scrolls inside that inset, so its border never meets the title.
+   The Helbreath / Explorer / seal header stays outside that scroll.
+   Right padding clears the toast gutter. */
+.explorer-hub-gate.login-desk-gate {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: hidden;
+    padding: var(--explorer-title-clearance, 96px) calc(88px + var(--explorer-toast-col, 0px)) 16px 28px;
+}
+
+.explorer-hub {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    width: min(1120px, 100%);
+    margin: 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    border: 1px solid rgba(196, 154, 72, 0.55);
+    border-radius: 12px;
+    background: #1a120c;
+    color: #e6d7c3;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    font-family: 'Spectral', Georgia, serif;
+}
+
+/* Brand and seal stay fully visible. Only the body below them scrolls. */
+.explorer-hub-header {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 16px;
+    margin: 0;
+    padding: 20px 22px 12px;
+    background: #1a120c;
+}
+
+.explorer-hub-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 4px 22px 16px;
+}
+
+.explorer-hub-title {
+    margin: 0;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #f4e4b0;
+}
+
+.explorer-hub-seal {
+    margin: 0 0 0 auto;
+    padding: 4px 10px;
+    border: 1px solid rgba(196, 154, 72, 0.45);
+    border-radius: 999px;
+    color: #e6d7c3;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+
+.explorer-hub-grid {
+    display: grid;
+    grid-template-columns: minmax(200px, 230px) minmax(240px, 280px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+.explorer-hub-doll {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: visible;
+}
+
+.explorer-hub-doll-sprite {
+    display: block;
+    flex: none;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+    background: transparent;
+}
+
+.explorer-hub-doll-sprite[data-doll-scale="0"],
+.explorer-hub-doll-sprite:not([data-doll-scale]) {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+
+.explorer-hub-kicker,
+.explorer-hub-section {
+    margin: 0 0 8px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #e0c878;
+}
+
+.explorer-hub-section {
+    margin-top: 16px;
+}
+
+.explorer-hub-slots {
+    display: grid;
+    gap: 8px;
+}
+
+.explorer-hub-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    width: 100%;
+    min-height: 72px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(196, 154, 72, 0.35);
+    border-radius: 8px;
+    background: #140f0c;
+    color: #e6d7c3;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.explorer-hub-slot:hover,
+.explorer-hub-slot.is-selected {
+    border-color: #e0c878;
+    background: #24180f;
+}
+
+.explorer-hub-slot:focus-visible,
+.explorer-hub-actions button:focus-visible,
+.cl-ref-panel--embedded button:focus-visible,
+.cl-ref-panel--embedded input:focus-visible {
+    outline: 2px solid #e0c878;
+    outline-offset: 2px;
+}
+
+.explorer-hub-slot.is-empty {
+    color: #d4c4a8;
+}
+
+.explorer-hub-slot-kicker,
+.explorer-hub-slot-empty {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #e0c878;
+}
+
+.explorer-hub-slot-name {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: #f4e4b0;
+}
+
+.explorer-hub-slot-line {
+    font-size: 14px;
+    color: #e6d7c3;
+}
+
+.explorer-hub-status,
+.explorer-hub-note,
+.explorer-hub-empty,
+.explorer-hub-meta {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #e6d7c3;
+}
+
+.explorer-hub-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.explorer-hub-actions .login-gate-primary-btn,
+.explorer-hub-actions .login-gate-secondary-btn {
+    width: 100%;
+}
+
+.explorer-hub-cover {
+    min-width: 0;
+    padding: 14px 16px 16px;
+    border: 1px solid rgba(196, 154, 72, 0.35);
+    border-radius: 10px;
+    background: #140f0c;
+}
+
+.explorer-hub-cover-name {
+    margin: 0;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 26px;
+    line-height: 1.2;
+    color: #f4e4b0;
+}
+
+.explorer-hub-stats {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0 0;
+}
+
+.explorer-hub-stats div {
+    padding: 6px 4px;
+    border-radius: 6px;
+    background: #1a120c;
+    text-align: center;
+}
+
+.explorer-hub-stats dt {
+    margin: 0;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: #e0c878;
+}
+
+.explorer-hub-stats dd {
+    margin: 2px 0 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #f4e4b0;
+}
+
+.explorer-hub-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: #e6d7c3;
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+.explorer-hub .cl-ref-panel.cl-ref-panel--embedded {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    top: auto;
+    transform: none;
+    /* Above hub toasts (10040) so a scroll cannot leave the card under a notice. */
+    z-index: 100080;
+    width: 100%;
+    margin-top: 16px;
+    background: #1a120c;
+}
+
+@media (max-width: 800px) {
+    body.login-selectchar-active {
+        --explorer-toast-col: 0px;
+        --explorer-toast-right: 12px;
+    }
+
+    body.login-selectchar-active .Toastify__toast-container.rpg-toast-container.rpg-toast-container--olympia {
+        top: 112px !important;
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: none;
+        max-height: 72px;
+        overflow: auto;
+    }
+
+    .explorer-hub-gate.login-desk-gate {
+        padding: var(--explorer-title-clearance, 96px) 16px 24px;
+    }
+
+    .explorer-hub-doll {
+        height: 280px;
+    }
+
+    .explorer-hub-grid,
+    .explorer-hub-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .explorer-hub-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .explorer-hub-seal {
+        margin-left: 0;
+    }
+
+    .explorer-hub-title {
+        font-size: 24px;
+    }
 }

@@ -29,7 +29,6 @@ import {
     SLOT_GLYPH_W,
 } from './selectCharSlotGlyphs';
 import { Gender, SkinColor } from '../../Types';
-import { heroItemToSide, resolveHeroKitSide } from '../../utils/heroFactionKit';
 import {
     applyLoginDeskCanvasPresentation,
     holdLoginDeskCanvasPresentation,
@@ -47,9 +46,10 @@ import { Direction } from '../../utils/CoordinateUtils';
 import { getStoredWalletPubkey, getStoredWalletToken } from '../../utils/walletAuth';
 import { selectCharWarn } from '../../utils/selectCharTrace';
 import { CHAIN_LORDS_BRAND } from './charUiMode';
+import { heroItemToSide, resolveHeroKitSide } from '../../utils/heroFactionKit';
 import { getItemById } from '../../constants/Items';
-import { PLAYER_TOKEN_DISPLAY, playerTokenCopy } from '../../constants/PlayerTokenTicker';
-import { OLYMPIA_SUPER_RARE_ITEM_IDS } from '../../utils/olympiaDropRules';
+import { playerTokenCopy } from '../../constants/PlayerTokenTicker';
+import { classifyEquippedCover, formatMonsterGroupLine } from './selectCharCover';
 import { fetchUnclaimedDrops, type UnclaimedDrop } from '../../utils/dropLedger';
 import {
     CL,
@@ -528,7 +528,7 @@ export class SelectCharDesk {
             return;
         }
 
-        const { legendary, rare } = this.classifyEquipped(occupied);
+        const { legendary, rare } = classifyEquippedCover(occupied);
         let yy = y + 48;
 
         add(x + 18, yy, 'LEGENDARY ITEMS', clKickerStyle({ fontSize: '12px', color: '#e8c060' }));
@@ -566,6 +566,11 @@ export class SelectCharDesk {
         const city = normalizeCitizenshipSide(occupied.citizenshipSide);
         const cityLabel =
             city === 'aresden' ? 'Aresden (War)' : city === 'elvine' ? 'Elvine (Grace)' : 'Traveler';
+        const tiers = occupied.monsterGroupTiers ?? [];
+        const huntLines =
+            tiers.length > 0
+                ? tiers.map((tier) => formatMonsterGroupLine(tier))
+                : ['Monster group levels are not in this character list.'];
         const statusBlock = [
             `City seal: ${cityLabel}`,
             `Level ${occupied.level}${rebirth}`,
@@ -576,8 +581,7 @@ export class SelectCharDesk {
             `INT ${occupied.intel}   MAG ${occupied.mag}   CHR ${occupied.chr}`,
             '',
             'Hunt profile',
-            'Highest monster tiers: — (play to fill)',
-            'Recent hunt zones: —',
+            ...huntLines,
         ].join('\n');
 
         add(x + 18, yy, statusBlock, clBodyStyle({
@@ -588,28 +592,6 @@ export class SelectCharDesk {
         }));
 
         void h;
-    }
-
-    private classifyEquipped(slot: CharacterSlotSummary): { legendary: string[]; rare: string[] } {
-        const legendary: string[] = [];
-        const rare: string[] = [];
-        const rawIds = (slot.equipped ?? []).map((eq) => eq?.itemId ?? 0).filter((id) => id > 0);
-        const kitSide = resolveHeroKitSide(slot.citizenshipSide, rawIds);
-        for (const eq of slot.equipped ?? []) {
-            if (!eq?.itemId) {
-                continue;
-            }
-            const itemId = kitSide ? heroItemToSide(eq.itemId, kitSide) : eq.itemId;
-            const def = getItemById(itemId);
-            const name = def?.name?.trim() || `Item ${itemId}`;
-            if (OLYMPIA_SUPER_RARE_ITEM_IDS.has(itemId)) {
-                legendary.push(name);
-            } else {
-                // Equipped non-legendary shown as rare candidates (list has no magic-roll attr yet).
-                rare.push(name);
-            }
-        }
-        return { legendary, rare };
     }
 
     /** Classic buttons, horizontal row ~1cm above wallet line. */
@@ -696,7 +678,7 @@ export class SelectCharDesk {
             vaultY,
             vaultW,
             vaultH,
-            `Wallet / ${PLAYER_TOKEN_DISPLAY}`,
+            'Wallet / rewards',
             () => this.openWalletPanel(),
             true,
         );
@@ -750,7 +732,7 @@ export class SelectCharDesk {
             { headers },
         );
         if (!res.ok) {
-            throw new Error(`${PLAYER_TOKEN_DISPLAY} status failed (${res.status})`);
+            throw new Error(`Rewards status failed (${res.status})`);
         }
         const body = (await res.json()) as {
             pendingHell?: number | null;
@@ -799,7 +781,7 @@ export class SelectCharDesk {
         );
         panel.add(
             this.scene.add
-                .text(px + pw / 2, py + 48, `Helbreath - Chain Lords · ${PLAYER_TOKEN_DISPLAY} & NFTs`, clTitleStyle({
+                .text(px + pw / 2, py + 48, 'Helbreath - Chain Lords · Rewards & NFTs', clTitleStyle({
                     fontSize: '22px',
                 }))
                 .setOrigin(0.5, 0),
@@ -879,7 +861,7 @@ export class SelectCharDesk {
         add(px + 28, y, `Seal  ${shortW}`, clBodyStyle({ fontSize: '15px', color: CL_MUTED }));
         y += 28;
 
-        add(px + 28, y, `${PLAYER_TOKEN_DISPLAY} TOKEN`, clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
+        add(px + 28, y, 'REWARDS', clKickerStyle({ fontSize: '12px', color: CL_GOLD }));
         y += 22;
         const pending = hell.pendingHell ?? 0;
         const claimed = hell.claimedHell ?? 0;
@@ -892,11 +874,11 @@ export class SelectCharDesk {
             [
                 `Active mint: ${mintShort}`,
                 `Mining vault: ${hell.miningConfigured ? 'ready' : 'offline'}`,
-                `Credits / pending ${PLAYER_TOKEN_DISPLAY}:  ${pending}`,
-                `Claimed / stacked ${PLAYER_TOKEN_DISPLAY}:  ${claimed}`,
+                `Credits / pending rewards:  ${pending}`,
+                `Claimed / stacked rewards:  ${claimed}`,
                 '',
                 'Earned by mode (play-mine):',
-                '  · Monster kills → credits  (500 kills/day → tokens)',
+                '  · Monster kills → credits  (500 kills/day → rewards)',
                 '  · Legendary EK / top ranks → bonus credits',
                 '  · Timed Challenge clear → daily bonus',
                 '  · Stake: does not mint (policy C1)',
@@ -940,7 +922,7 @@ export class SelectCharDesk {
                 `Rare:  ${rare.length}`,
                 rareLine,
                 '',
-                playerTokenCopy(hell.note || `Pending ${PLAYER_TOKEN_DISPLAY} is utility mining — not ROI.`),
+                playerTokenCopy(hell.note || 'Pending rewards are utility mining, not ROI.'),
             ].join('\n'),
             clBodyStyle({
                 fontSize: '15px',

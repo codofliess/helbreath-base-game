@@ -39,6 +39,13 @@ function encodeListFrame(partial: Parameters<typeof mapCharacterListResponse>[0]
                     underwearColorIndex: c.underwearColorIndex ?? 0,
                     equipped: [],
                     citizenshipSide: c.citizenshipSide ?? '',
+                    monsterGroupTiers: (c.monsterGroupTiers ?? []).map((tier) => ({
+                        segment: tier?.segment ?? '',
+                        label: tier?.label ?? '',
+                        level: tier?.level ?? 0,
+                        leadName: tier?.leadName ?? '',
+                    })),
+                    monsterStakeBonus: c.monsterStakeBonus ?? 0,
                 })),
                 referralCode: partial.referralCode,
                 referralShareUrl: partial.referralShareUrl,
@@ -66,6 +73,31 @@ describe('character list parse / paint mapping', () => {
         assert.equal(parsed.slots[0].level, 150);
         assert.equal(parsed.slots[0].slotIndex, 0);
         assert.equal(parsed.slots[0].citizenshipSide, 'elvine');
+    });
+
+    it('keeps kill-based monster group tiers on the slot', () => {
+        const bytes = encodeListFrame({
+            characters: [
+                {
+                    slotIndex: 1,
+                    name: 'BebaMaster',
+                    level: 1,
+                    monsterGroupTiers: [
+                        { segment: 'early', label: 'Early', level: 2, leadName: 'Slime' },
+                        { segment: 'low', label: 'Low', level: 0, leadName: '' },
+                    ],
+                    monsterStakeBonus: 0,
+                },
+            ],
+        });
+        const parsed = tryParseCharacterListMessage(bytes);
+        assert.equal(parsed?.slots[0]?.name, 'BebaMaster');
+        assert.equal(parsed?.slots[0]?.monsterGroupTiers?.length, 2);
+        assert.equal(parsed?.slots[0]?.monsterGroupTiers?.[0]?.label, 'Early');
+        assert.equal(parsed?.slots[0]?.monsterGroupTiers?.[0]?.level, 2);
+        assert.equal(parsed?.slots[0]?.monsterGroupTiers?.[0]?.leadName, 'Slime');
+        assert.equal(parsed?.slots[0]?.monsterGroupTiers?.[1]?.level, 0);
+        assert.equal(parsed?.slots[0]?.monsterStakeBonus, 0);
     });
 
     it('clamps out-of-range slotIndex onto desk 0–3 so the row is visible', () => {

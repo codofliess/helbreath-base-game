@@ -5,6 +5,7 @@ import { selectCharWarn } from '../../utils/selectCharTrace';
 import {
     namedOccupiedCharacterSlots,
     paintSelectCharSlotRows,
+    resolveSelectCharSelectedIndex,
     resolveSelectCharSlotsForPaint,
 } from '../../game/ui/selectCharDeskSync';
 import {
@@ -27,6 +28,7 @@ import {
 } from '../../game/ui/selectCharSlotGlyphs';
 import { peekCachedOccupiedCharacterList, type CharacterSlotSummary } from '../../utils/characterListApi';
 import { connectDialogStore } from '../store/ConnectDialog.store';
+import { cashShopDialogStore } from '../store/CashShopDialog.store';
 
 interface SelectCharOccupiedReactOverlayProps {
     zIndex: number;
@@ -35,11 +37,33 @@ interface SelectCharOccupiedReactOverlayProps {
 }
 
 /**
- * KindGem-visible occupied SELECTCHAR labels from the live React store.
- * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` as the last
+ * KindGem-visible occupied SELECTCHAR banner from the live React store.
+ * Named paint recreates `#selectchar-kindgem-occupied-banner` as the last
  * child of `document.body` (not under #root / React overflow:hidden) so KindGem
  * can screenshot unclipped `OCCUPIED Elon Lev.150`.
+ *
+ * The cream title is the selected character only. Absolute slot chips stay in
+ * the DOM for the KindGem path; `body.login-selectchar-active` hides them so
+ * they do not sit on the Explorer roster.
+ *
+ * The paper-doll lives in the Explorer panel's middle column, not on this title.
+ * While Cash Shop is open the cream title is hidden so it cannot cover the shop
+ * header or the referral card. Otherwise the hub reserves the title's height so
+ * the panel border never scrolls underneath it.
  */
+function syncKindGemBannerWithHub(kindgem: HTMLElement, cashShopOpen: boolean): void {
+    kindgem.querySelector('#selectchar-kindgem-avatar')?.remove();
+    kindgem.removeAttribute('data-selectchar-avatar');
+    if (cashShopOpen) {
+        kindgem.style.setProperty('display', 'none', 'important');
+        document.documentElement.style.setProperty('--explorer-title-clearance', '16px');
+        return;
+    }
+    const bottom = Math.ceil(kindgem.getBoundingClientRect().bottom);
+    const clearance = Math.max(84, bottom + 20);
+    document.documentElement.style.setProperty('--explorer-title-clearance', `${clearance}px`);
+}
+
 export function SelectCharOccupiedReactOverlay({
     zIndex,
     characterSlots,
@@ -47,6 +71,7 @@ export function SelectCharOccupiedReactOverlay({
 }: SelectCharOccupiedReactOverlayProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
+    const selectedSlotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(
         connectDialogStore,
@@ -67,10 +92,15 @@ export function SelectCharOccupiedReactOverlay({
 
     const loading = storeLoading || characterListLoading;
     const rows = paintSelectCharSlotRows(liveSlots);
-    const banner = buildSelectCharReactOccupiedBanner(rows, liveSlots);
+    const selected = resolveSelectCharSelectedIndex(liveSlots, selectedSlotIndex);
+    const banner = buildSelectCharReactOccupiedBanner(rows, liveSlots, selected);
     const occupied = rows
         .map((row, slotIndex) => ({ row, slotIndex }))
         .filter((entry) => entry.row.occupied || (entry.row.name !== 'Empty' && entry.row.name.trim()));
+    const selectedEntry = occupied.find((entry) => entry.slotIndex === selected);
+    const selectedName = selectedEntry?.row.name ?? '';
+    const selectedLev = selectedEntry?.row.lev ?? '';
+    const cashShopOpen = useStore(cashShopDialogStore, (s) => s.isOpen);
 
     const occupiedNames = occupied.map((entry) => entry.row.name).join(',');
 
@@ -89,9 +119,14 @@ export function SelectCharOccupiedReactOverlay({
         const kindgem = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
         if (kindgem) {
             document.body.appendChild(kindgem);
+            syncKindGemBannerWithHub(kindgem, cashShopOpen);
         }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
-        if (occupiedNames.includes('Elon') && banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
+        if (
+            selectedName === 'Elon' &&
+            selectedLev === 'Lev. 150' &&
+            banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT
+        ) {
             selectCharWarn(
                 'ConnectDialog React SELECTCHAR KindGem Elon string mismatch have=%s want=%s',
                 banner,
@@ -99,16 +134,20 @@ export function SelectCharOccupiedReactOverlay({
             );
         }
         if (
-            occupiedNames &&
-            occupiedNames !== '(none)' &&
-            !selectCharOccupiedNamesRequireVisibleBanner(occupiedNames, painted.joined)
+            selectedName &&
+            selectedName !== '(none)' &&
+            !selectCharOccupiedNamesRequireVisibleBanner(selectedName, painted.joined)
         ) {
             selectCharWarn(
                 'ConnectDialog React SELECTCHAR banner DOM mismatch names=%s text=%s',
-                occupiedNames,
+                selectedName,
                 painted.joined,
             );
             const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
+            const retried = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+            if (retried) {
+                syncKindGemBannerWithHub(retried, cashShopOpen);
+            }
             selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, retry.joined || '(empty)');
         }
         const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement | null;
@@ -130,7 +169,7 @@ export function SelectCharOccupiedReactOverlay({
             node.style.left = `${Math.round(pos.left)}px`;
             node.style.top = `${Math.round(pos.top)}px`;
         });
-    }, [banner, loading, occupiedNames]);
+    }, [banner, cashShopOpen, loading, occupiedNames, selectedLev, selectedName]);
 
     useLayoutEffect(() => {
         return () => {

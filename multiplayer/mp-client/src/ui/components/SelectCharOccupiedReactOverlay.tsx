@@ -5,6 +5,7 @@ import { selectCharWarn } from '../../utils/selectCharTrace';
 import {
     namedOccupiedCharacterSlots,
     paintSelectCharSlotRows,
+    resolveSelectCharSelectedIndex,
     resolveSelectCharSlotsForPaint,
 } from '../../game/ui/selectCharDeskSync';
 import {
@@ -35,10 +36,14 @@ interface SelectCharOccupiedReactOverlayProps {
 }
 
 /**
- * KindGem-visible occupied SELECTCHAR labels from the live React store.
- * Named Elon paint recreates `#selectchar-kindgem-occupied-banner` as the last
+ * KindGem-visible occupied SELECTCHAR banner from the live React store.
+ * Named paint recreates `#selectchar-kindgem-occupied-banner` as the last
  * child of `document.body` (not under #root / React overflow:hidden) so KindGem
  * can screenshot unclipped `OCCUPIED Elon Lev.150`.
+ *
+ * The cream title is the selected character only. Absolute slot chips stay in
+ * the DOM for the KindGem path; `body.login-selectchar-active` hides them so
+ * they do not sit on the Explorer roster.
  */
 export function SelectCharOccupiedReactOverlay({
     zIndex,
@@ -47,6 +52,7 @@ export function SelectCharOccupiedReactOverlay({
 }: SelectCharOccupiedReactOverlayProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const storeSlots = useStore(connectDialogStore, (s) => s.characterSlots);
+    const selectedSlotIndex = useStore(connectDialogStore, (s) => s.selectedSlotIndex);
     const storeLoading = useStore(connectDialogStore, (s) => s.characterListLoading);
     const wallet = useStore(
         connectDialogStore,
@@ -67,10 +73,14 @@ export function SelectCharOccupiedReactOverlay({
 
     const loading = storeLoading || characterListLoading;
     const rows = paintSelectCharSlotRows(liveSlots);
-    const banner = buildSelectCharReactOccupiedBanner(rows, liveSlots);
+    const selected = resolveSelectCharSelectedIndex(liveSlots, selectedSlotIndex);
+    const banner = buildSelectCharReactOccupiedBanner(rows, liveSlots, selected);
     const occupied = rows
         .map((row, slotIndex) => ({ row, slotIndex }))
         .filter((entry) => entry.row.occupied || (entry.row.name !== 'Empty' && entry.row.name.trim()));
+    const selectedEntry = occupied.find((entry) => entry.slotIndex === selected);
+    const selectedName = selectedEntry?.row.name ?? '';
+    const selectedLev = selectedEntry?.row.lev ?? '';
 
     const occupiedNames = occupied.map((entry) => entry.row.name).join(',');
 
@@ -91,7 +101,11 @@ export function SelectCharOccupiedReactOverlay({
             document.body.appendChild(kindgem);
         }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
-        if (occupiedNames.includes('Elon') && banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT) {
+        if (
+            selectedName === 'Elon' &&
+            selectedLev === 'Lev. 150' &&
+            banner !== SELECTCHAR_KINDGEM_ELON_LV150_TEXT
+        ) {
             selectCharWarn(
                 'ConnectDialog React SELECTCHAR KindGem Elon string mismatch have=%s want=%s',
                 banner,
@@ -99,13 +113,13 @@ export function SelectCharOccupiedReactOverlay({
             );
         }
         if (
-            occupiedNames &&
-            occupiedNames !== '(none)' &&
-            !selectCharOccupiedNamesRequireVisibleBanner(occupiedNames, painted.joined)
+            selectedName &&
+            selectedName !== '(none)' &&
+            !selectCharOccupiedNamesRequireVisibleBanner(selectedName, painted.joined)
         ) {
             selectCharWarn(
                 'ConnectDialog React SELECTCHAR banner DOM mismatch names=%s text=%s',
-                occupiedNames,
+                selectedName,
                 painted.joined,
             );
             const retry = syncSelectCharReactOccupiedBannerDom(banner, root);
@@ -130,7 +144,7 @@ export function SelectCharOccupiedReactOverlay({
             node.style.left = `${Math.round(pos.left)}px`;
             node.style.top = `${Math.round(pos.top)}px`;
         });
-    }, [banner, loading, occupiedNames]);
+    }, [banner, loading, occupiedNames, selectedLev, selectedName]);
 
     useLayoutEffect(() => {
         return () => {

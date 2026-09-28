@@ -6,6 +6,8 @@ import {
     CASH_SHOP_CATEGORIES,
     CASH_SHOP_SKUS,
     formatStablePrice,
+    SHOW_TOKEN_PRICE,
+    shouldShowRewardMarketTab,
     skuAcceptsHell,
     type CashShopSku,
     GENUINE_STABLECOIN_MINTS,
@@ -25,8 +27,6 @@ import { appStore } from '../store/App.store';
 import { getItemById, getItemInventorySpriteKeyWithOverrides } from '../../constants/Items';
 import { Gender } from '../../Types';
 import { inventoryDialogStore } from '../store/InventoryDialog.store';
-import { PLAYER_TOKEN_DISPLAY } from '../../constants/PlayerTokenTicker';
-
 interface CashShopDialogProps {
     position: { x: number; y: number };
     zIndex?: number;
@@ -59,13 +59,16 @@ export function CashShopDialog({
     const playerGender = useStore(inventoryDialogStore, (s) => s.playerGender) ?? Gender.MALE;
     const [qty, setQty] = useState(1);
 
+    const showRewardMarket = shouldShowRewardMarketTab();
+    const activeMarket = showRewardMarket && market === 'hell' ? 'hell' : 'stablecoin';
+
     const rows = useMemo(() => {
         const inCat = CASH_SHOP_SKUS.filter((s) => s.category === category);
-        if (market === 'hell') {
+        if (activeMarket === 'hell') {
             return inCat.filter(skuAcceptsHell);
         }
         return inCat;
-    }, [category, market]);
+    }, [activeMarket, category]);
 
     const skuIconUrl = (sku: CashShopSku): string | undefined => {
         const item = getItemById(sku.itemId);
@@ -91,24 +94,23 @@ export function CashShopDialog({
             setCashShopStatusMessage('Join a world first.');
             return;
         }
-        if (market === 'hell' && !skuAcceptsHell(sku)) {
-            setCashShopStatusMessage(
-                `Stablecoin only (USDC/USDT) — this product does not accept ${PLAYER_TOKEN_DISPLAY}.`,
-            );
+        if (activeMarket === 'hell' && !skuAcceptsHell(sku)) {
+            setCashShopStatusMessage('Stablecoin only (USDC/USDT).');
             return;
         }
-        const currency = cashCurrencyFromMarket(market);
+        const currency = cashCurrencyFromMarket(activeMarket);
+        const stableLabel = `${formatStablePrice(sku.priceStableUsdCents * qty)} stable`;
         const priceLabel =
-            market === 'hell'
-                ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
-                : `${formatStablePrice(sku.priceStableUsdCents * qty)} stable`;
-        setCashShopStatusMessage(`Buying ${sku.name} for ${priceLabel}…`);
+            activeMarket === 'hell' && SHOW_TOKEN_PRICE ? null : stableLabel;
+        setCashShopStatusMessage(
+            priceLabel ? `Buying ${sku.name} for ${priceLabel}…` : `Buying ${sku.name}…`,
+        );
         nm.requestBuyCashShopItem({
             npcId,
             skuId: sku.skuId,
             quantity: qty,
             currency,
-            stablecoinMint: market === 'stablecoin' ? stablecoinMint : '',
+            stablecoinMint: activeMarket === 'stablecoin' ? stablecoinMint : '',
             paymentTxSignature: '', // Dev: server may grant without chain tx when AllowDevGrantWithoutChainTx
         });
     };
@@ -140,8 +142,8 @@ export function CashShopDialog({
                         }}
                         style={{
                             flex: 1,
-                            fontWeight: market === 'stablecoin' ? 700 : 400,
-                            background: market === 'stablecoin' ? '#2a5a2a' : '#333',
+                            fontWeight: activeMarket === 'stablecoin' ? 700 : 400,
+                            background: activeMarket === 'stablecoin' ? '#2a5a2a' : '#333',
                             color: '#eee',
                             border: '1px solid #888',
                             padding: '6px',
@@ -150,34 +152,36 @@ export function CashShopDialog({
                     >
                         USDT / USDC
                     </button>
-                    <button
-                        type="button"
-                        onPointerDown={stopBubble}
-                        onClick={(e) => {
-                            stopBubble(e);
-                            setCashShopMarket('hell');
-                        }}
-                        style={{
-                            flex: 1,
-                            fontWeight: market === 'hell' ? 700 : 400,
-                            background: market === 'hell' ? '#5a2a2a' : '#333',
-                            color: '#eee',
-                            border: '1px solid #888',
-                            padding: '6px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        {PLAYER_TOKEN_DISPLAY} Market
-                    </button>
+                    {showRewardMarket ? (
+                        <button
+                            type="button"
+                            onPointerDown={stopBubble}
+                            onClick={(e) => {
+                                stopBubble(e);
+                                setCashShopMarket('hell');
+                            }}
+                            style={{
+                                flex: 1,
+                                fontWeight: activeMarket === 'hell' ? 700 : 400,
+                                background: activeMarket === 'hell' ? '#5a2a2a' : '#333',
+                                color: '#eee',
+                                border: '1px solid #888',
+                                padding: '6px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Reward Market
+                        </button>
+                    ) : null}
                 </div>
 
                 <p style={{ margin: '0 0 8px', color: '#ccc', fontSize: 12 }}>
-                    {market === 'stablecoin'
+                    {activeMarket === 'stablecoin'
                         ? 'List prices in USDT (or USDC). Bound gear is stablecoin-only.'
-                        : `${PLAYER_TOKEN_DISPLAY} market (design FDV +20%). Gear may be stable-only.`}
+                        : 'Reward market (design FDV +20%). Gear may be stable-only.'}
                 </p>
 
-                {market === 'stablecoin' && (
+                {activeMarket === 'stablecoin' && (
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                         <button
                             type="button"
@@ -272,21 +276,19 @@ export function CashShopDialog({
                 >
                     {rows.length === 0 ? (
                         <div style={{ padding: 12, color: '#aaa', fontSize: 12 }}>
-                            No products in this tab for {PLAYER_TOKEN_DISPLAY}. Switch to Stablecoin Market for
-                            shoes / boots / capes / seals.
+                            No products in this category.
                         </div>
                     ) : (
                         rows.map((sku) => {
-                            const hellOk = skuAcceptsHell(sku);
                             const price =
-                                market === 'hell'
-                                    ? `${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY}`
-                                    : `${formatStablePrice(sku.priceStableUsdCents * qty)}`;
+                                activeMarket === 'hell' && SHOW_TOKEN_PRICE
+                                    ? null
+                                    : formatStablePrice(sku.priceStableUsdCents * qty);
                             const alt =
-                                market === 'hell'
+                                activeMarket === 'hell'
                                     ? `(vs ${formatStablePrice(sku.priceStableUsdCents * qty)} stable)`
-                                    : hellOk
-                                      ? `(or ${sku.priceHell * qty} ${PLAYER_TOKEN_DISPLAY})`
+                                    : skuAcceptsHell(sku)
+                                      ? ''
                                       : '(stablecoin only)';
                             const icon = skuIconUrl(sku);
                             return (
@@ -359,9 +361,8 @@ export function CashShopDialog({
                     {statusMessage}
                 </div>
                 <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
-                    Right-click closes. Fake mints rejected. Boosts soulbound. Seals &amp; single
-                    boosts = USDC/USDT only; combos, stones &amp; utility (Zem, greens, balls) also
-                    {PLAYER_TOKEN_DISPLAY}.
+                    Right-click closes. Fake mints rejected. Boosts soulbound. Prices are USDC or
+                    USDT.
                 </p>
             </div>
         </OlympiaDialogShell>

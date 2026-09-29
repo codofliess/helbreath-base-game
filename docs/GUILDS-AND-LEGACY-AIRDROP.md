@@ -96,9 +96,11 @@ Detalle canónico en [`MASTERPLAN.md`](./MASTERPLAN.md) **§ 1.4**. Resumen:
 |---------|--------|
 | **GM fee share** | % de fees generados por **su** guild → **consumibles** (potions, repair kits, scrolls), **no cash** |
 | **Bonus de egreso** | Extra al GM/guild cuando un miembro **maxed** “egresa” / se gradúa — incentiva entrenar y soltar, no solo hoardear |
-| **Partner de largo plazo** | Guilds estables = socios minoritarios del negocio ($$$$ dividends) — **programa/rewards TBD con counsel**; no vender como inversión/security |
+| **Partner de largo plazo** | Guilds estables = socios minoritarios del negocio. **Sin dividendos (PO 2026-09-29)** hasta que los reguladores cambien las reglas de staking; mientras tanto los premios son **consumibles**. No vender como inversión/security |
+| **Crear guild** | Cuesta **100 000 $HELL**, que se **queman** (PO 2026-09-29) |
+| **Upgrade de guild** | Los $HELL de cada upgrade también se **queman** (tabla de upgrades = Fase H, no built) |
 
-**Meta:** server con **1000+ online** + dividends a guilds grandes > incentivo a armar “fruta” / private shady. Cautela legal: MASTERPLAN § 0.5.
+**Meta:** server con **1000+ online** + premios en consumibles a guilds grandes > incentivo a armar “fruta” / private shady. Cautela legal: MASTERPLAN § 0.5.
 
 ### 4.4 Qué no es (límites)
 

@@ -1,5 +1,18 @@
 # Bitácora de sesión — Helbreath Chain Lord
 
+## 2026-09-29 — Decisiones PO economía $HELL (post crítica del masterplan)
+
+- **Un solo token `$HELL`** (launch 2026-09-30 tarde); `$HELBREATH` RH/Pons deprecated (ADR-001 enmendado, headers en `ops/tge`).
+- **Mining:** pool 300M, 500k/día, **tope 50k/wallet/día**, reparto proporcional con re-reparto del sobrante (`HellMiningStore`).
+- **Arena:** 7k ganador / 3k perdedor dentro del pool diario; 1 duelo pagado por par de rivales/día; sin bonus stream Discord (`ArenaIncentives`). Premios extra = **treasury**, sin bolsa de jugadores (`ArenaPrizeWhitelist.json`).
+- **Stream X ≥15 min** con link en cartelera → completa 50k ese día (`StreamRewards`).
+- **Maestría:** +1 nivel por 50k staked; todos los bonos suben parejo; L40 = Olympia L40 (`MobSpecialty`).
+- **Cash Shop:** precios de config; $HELL re-peg solo con drift de mercado >20% (`HellPriceAnchor`). Combo viejo borrado del masterplan; reputación se mantiene.
+- **Tokenomics devnet:** `init-hell-token.js` 30/30/10–20/10/resto.
+- Guilds: crear = 100k quemados, upgrades quemados (diseño; no built). Sin dividendos; premios en consumibles.
+- Drop tree Olympia en PR aparte; rebirth L79 ya estaba en código.
+- Pendiente ops: mint `$HELL` real en `HELL_MINT` + whitelist Arena; landing hero sigue con el CA RH hasta tener el mint.
+
 ## 2026-08-27 — Cursor Origin: full git mirror
 
 - PO: cloned/synced **all git** into Cursor Origin (`cursor.com/codebase`).

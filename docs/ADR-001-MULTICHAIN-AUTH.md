@@ -7,6 +7,9 @@
 | **Product** | Helbreath ChainLords (one game world) |
 | **Deciders** | Product + Cruchi fail-closed auth |
 | **Supersedes** | Solana-only SIWS as the *only* login path (still the Sol verifier) |
+| **Amended** | 2026-09-29 (PO) — token rails: **`$HELL` is the only token**; `$HELBREATH` (RH / Pons) and any other ticker are **deprecated**. Auth / wallets / actor flag unchanged. |
+
+> **2026-09-29 amendment (token rails).** `$HELL` (Solana) is the single game token, launching **2026-09-30 afternoon**. The RH `$HELBREATH` contract below is kept only as a historical record and **must not** be promoted, staked, or used for consumibles. The `$HELL` mint for the launch is set by ops at launch time (env `HELL_MINT`); this ADR does not invent it. Wallet binds on `rh` / `base` stay valid for identity and NFTs.
 
 Related: [`SECURITY-HARDENING-PRELAUNCH.md`](./SECURITY-HARDENING-PRELAUNCH.md) · [`NFT-OPS-RUNBOOK.md`](./NFT-OPS-RUNBOOK.md) · sketch [`SKETCH-ADAPTER-MULTICHAIN.md`](./SKETCH-ADAPTER-MULTICHAIN.md)
 
@@ -25,7 +28,7 @@ Players already sign in on Solana (Phantom `signMessage` / SIWS-style challenge 
 - forging `human|bot` from a signature
 - impersonation (a bot wallet claiming a human player id by signing alone)
 
-Copy constraint for all product/comms that mention the primary token: say **“RH Chain / Pons”**, never **“listed on Robinhood”**.
+Copy constraint for any product/comms that still mention the (now deprecated) RH token: say **“RH Chain / Pons”**, never **“listed on Robinhood”**.
 
 ---
 
@@ -61,12 +64,16 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 ### 4. Token rails (economy identity; auth does not mint)
 
-**PRIMARY stake / consumibles:** RH Chain `$HELBREATH`
+**Only token (2026-09-29):** Solana `$HELL` — stake, consumibles, mining, Arena, guild burns.
 
-- Contract: `0xb603D6b2e5472beb338CE079a63FEb8663171529` (Pons launchpad).
-- Copy: **RH Chain / Pons** only.
+- Launch mint: set by ops at launch (`HELL_MINT`). Earlier Path B mint below is history until ops confirms which mint is live.
 
-**Solana listing (secondary):** `$HELL`
+**DEPRECATED (2026-09-29):** RH Chain `$HELBREATH`
+
+- Contract: `0xb603D6b2e5472beb338CE079a63FEb8663171529` (Pons launchpad). Do not promote, stake, or price consumibles in it.
+- If it is ever mentioned: **RH Chain / Pons** only, never “listed on Robinhood”.
+
+**Solana `$HELL` Path B (pre-2026-09-29 record):**
 
 - Mint: `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq`
 - Pool: `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx`
@@ -91,8 +98,8 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 - One character / economy identity across Sol, RH, and Base.
 - Bots are explicit and matchable later without polluting human ladders.
-- Primary stake / consumibles rail is RH `$HELBREATH` (`0xb603…`) without implying a Robinhood listing.
-- Sol `$HELL` remains listing / liquidity **secondary** with a single canonical mint/pool.
+- ~~Primary stake / consumibles rail is RH `$HELBREATH` (`0xb603…`)~~ — deprecated 2026-09-29.
+- Sol `$HELL` is the **only** token (stake, consumibles, mining, listing) with a single canonical mint set at launch.
 
 **Martín cut — mining / rewards not locked**
 
@@ -118,15 +125,16 @@ This is **not** impersonation of another player. Impersonation is forbidden: fai
 
 | Rail | Chain | Asset | Address / id | Notes |
 |------|-------|--------|----------------|-------|
-| **Primary** stake / consumibles | RH (`rh`) | `$HELBREATH` | `0xb603D6b2e5472beb338CE079a63FEb8663171529` | Pons launchpad. Copy: **RH Chain / Pons**. Never “listed on Robinhood”. |
-| **Secondary** listing | Solana (`sol`) | `$HELL` | mint `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq` | Pool `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx`. |
+| **Only token** (2026-09-29) | Solana (`sol`) | `$HELL` | launch mint = `HELL_MINT` (ops) | Stake, consumibles, mining, Arena, guild burns. |
+| **Deprecated** (2026-09-29) | RH (`rh`) | `$HELBREATH` | `0xb603D6b2e5472beb338CE079a63FEb8663171529` | Pons launchpad. Do not promote. If mentioned: **RH Chain / Pons**, never “listed on Robinhood”. |
+| Path B record | Solana (`sol`) | `$HELL` | mint `4Sk2HzsvES8eSRinSc2gjDSDJ8qyji3iddoZvWN12Qjq` | Pool `ADHCfYcCC2h5RM44aQhjTrRBLESJPmPnepy6bV8pkNx`. Pre-launch record; ops confirms the live mint. |
 | **Do not promote** | Solana | (legacy mint) | `A8fNV2qVhVV35jh33yy4NcGNowkzKU7kA8uPKkcnFwZJ` | Retired Path mint. Do not use in UI, posts, or auth examples. |
 | NFT collection | `sol` | Helbreath collection | (existing Sol collection mints / trees — ops runbook) | Bound via Sol wallet on `playerId`. |
 | NFT collection | `rh` | Helbreath collection | (RH collection contract when deployed) | Same player; no double-mint vs Sol/Base. |
 | NFT collection | `base` | Helbreath collection | (Base collection contract when deployed) | Bound via Base wallet on `playerId`. |
 | **Mining rewards mechanism** | — | — | — | **OPEN** / deferred. Not a rail. Not ExactOut buyback. Not a fixed `$HELL` mining-vault settle. |
 
-Checksum for the RH primary CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63FEb8663171529` (see sketch). Token **registry** (stake vs listing contracts) is locked; mining-settle is not.
+Checksum for the (deprecated) RH CA is the EIP-55 form `0xb603D6b2e5472beb338CE079a63FEb8663171529` (see sketch). Token **registry** (stake vs listing contracts) is locked; mining-settle is not.
 
 ---
 

@@ -1,5 +1,7 @@
 # PATH PONS — launch HELBREATH like RH gainers
 
+> **DEPRECATED (PO 2026-09-29).** `$HELL` (Solana) is the only Chain Lords token; it launches 2026-09-30 in the afternoon. The RH / Pons `HELBREATH` path in this file is kept as a record only: do not deploy, promote, or post it. See `docs/ADR-001-MULTICHAIN-AUTH.md` (2026-09-29 amendment).
+
 Pons **V2** factory `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e` is the live public launch (V1 `0xA5aA…` has `launchEnabled=false`). One tx deploys the ERC-20 onto a **bonding curve** (ETH quote, 1B supply, 1% curve fee, graduate at 4.2 ETH into locked Uni V4). Metadata is on-chain. Terminals read `logo()` + `socials()`.
 
 **This repo does not send the create tx.** Martín signs on [ponsfamily.com](https://ponsfamily.com) with a RH wallet. Metadata below is locked at create — typo = new token.

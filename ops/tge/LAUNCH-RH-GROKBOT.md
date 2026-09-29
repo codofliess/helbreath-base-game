@@ -1,5 +1,7 @@
 # PATH RH — grokbot kill-switches
 
+> **DEPRECATED (PO 2026-09-29).** `$HELL` (Solana) is the only Chain Lords token; it launches 2026-09-30 in the afternoon. The RH / Pons `HELBREATH` path in this file is kept as a record only: do not deploy, promote, or post it. See `docs/ADR-001-MULTICHAIN-AUTH.md` (2026-09-29 amendment).
+
 **Read before any RH deploy, listing, or landing edit.**  
 `assert-create-rh.cjs` fails if these NEVER lines are dropped from the plan.
 

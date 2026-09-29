@@ -6,20 +6,20 @@ using Server.World.Game;
 namespace Server.Helpers;
 
 /// <summary>
-/// Arena daily $HELL incentives (UTC day):
-/// - AFK ≥2h on Bleeding Island → 5k pending $HELL once/day
-/// - Completed duel (win or lose) → 10k, or 20k if Discord stream on landing ≥15m
-/// - Max 5 duel claims/day; combined AFK+duels hard cap 100k $HELL/day
+/// Arena daily $HELL incentives (UTC day), paid out of the shared mining day budget
+/// (<see cref="HellMiningStore.DailyTokenCap"/>) and capped per wallet by <see cref="HellMiningStore.WalletDailyCap"/>:
+/// - AFK ≥2h on Bleeding Island → 5k once/day
+/// - Completed duel → 7k winner / 3k loser (3k each when time runs out with no winner)
+/// - One paid duel per rival pair per day, max 5 paid duels per wallet per day
 /// Anti-AFK never kicks players on <see cref="ArenaBleeding.WorldId"/>.
 /// </summary>
 public static class ArenaIncentives {
     public const long AfkDailyHell = 5_000L;
     public const int AfkMinutesRequired = 120;
-    public const long DuelBaseHell = 10_000L;
-    public const long DuelStreamedHell = 20_000L;
+    public const long DuelWinnerHell = 7_000L;
+    public const long DuelLoserHell = 3_000L;
+    public const long DuelDrawHell = 3_000L;
     public const int MaxDuelClaimsPerDay = 5;
-    public const long DailyCapHell = 100_000L;
-    public const int StreamMinutesRequired = 15;
 
     static readonly object Gate = new();
     static ArenaIncentivesFile file = new();
@@ -43,8 +43,9 @@ public static class ArenaIncentives {
         }
         Console.WriteLine(
             $"[ArenaIncentives] AFK {AfkDailyHell} @ {AfkMinutesRequired}m BI · " +
-            $"duel {DuelBaseHell}/{DuelStreamedHell} (stream {StreamMinutesRequired}m Discord) · " +
-            $"max {MaxDuelClaimsPerDay} duels · day cap {DailyCapHell} $HELL.");
+            $"duel {DuelWinnerHell} win / {DuelLoserHell} loss / {DuelDrawHell} draw · " +
+            $"1 paid duel per rival pair · max {MaxDuelClaimsPerDay} duels · inside mining day budget " +
+            $"(wallet cap {HellMiningStore.WalletDailyCap}).");
     }
 
     public static bool IsAntiAfkExemptWorld(string? worldId) =>
@@ -65,7 +66,7 @@ public static class ArenaIncentives {
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var result = RecordAfkMinute(player.AccountWallet, player.CharacterName, nowMs);
         if (result.Granted > 0) {
-            NotifyGrant(player, result.Granted, result.Message);
+            NotifyGrant(player, result.Message);
         } else if (result.Applied &&
                    result.AfkMinutes is int m &&
                    m > 0 &&
@@ -80,39 +81,38 @@ public static class ArenaIncentives {
     }
 
     /// <summary>
-    /// Called when a pact duel finishes after going live (win, lose, time, DC forfeit).
-    /// Both fighters receive the participation reward (subject to caps).
+    /// Called when a pact duel finishes after going live (sign loss, DC forfeit, or time).
+    /// <paramref name="winnerTeam"/> is null when time ran out with no winner.
     /// </summary>
     public static void OnDuelCompleted(
-        IEnumerable<(string? Wallet, string? CharacterName, GameWorldPlayer? Player)> fighters,
-        bool discordStreamQualified,
+        IReadOnlyList<ArenaDuelFighter> fighters,
+        int? winnerTeam,
         string matchId) {
         ArgumentNullException.ThrowIfNull(fighters);
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var amountPer = discordStreamQualified ? DuelStreamedHell : DuelBaseHell;
-        var label = discordStreamQualified
-            ? $"streamed duel (+{DuelStreamedHell} $HELL)"
-            : $"duel (+{DuelBaseHell} $HELL)";
 
         foreach (var f in fighters) {
             if (string.IsNullOrWhiteSpace(f.Wallet)) {
                 continue;
             }
-            var result = TryGrantDuel(f.Wallet, f.CharacterName, amountPer, discordStreamQualified, matchId, nowMs);
-            if (result.Granted > 0 && f.Player is not null && !f.Player.Disconnected) {
-                NotifyGrant(f.Player, result.Granted, result.Message);
-            } else if (!string.IsNullOrWhiteSpace(result.Message) && f.Player is not null && !f.Player.Disconnected) {
-                NetworkManager.SendToPlayer(
-                    f.Player,
-                    NetworkManager.CreateChatMessageReceived("System", nowMs, $"[Arena] {result.Message}"));
+            var opponents = fighters.Where(o => o.Team != f.Team).ToList();
+            var (amount, outcome) = winnerTeam is null
+                ? (DuelDrawHell, "ended on time")
+                : f.Team == winnerTeam ? (DuelWinnerHell, "won") : (DuelLoserHell, "lost");
+            var result = TryGrantDuel(f, opponents, amount, outcome, matchId, nowMs);
+            if (f.Player is not null && !f.Player.Disconnected && !string.IsNullOrWhiteSpace(result.Message)) {
+                if (result.Granted > 0) {
+                    NotifyGrant(f.Player, result.Message);
+                } else {
+                    NetworkManager.SendToPlayer(
+                        f.Player,
+                        NetworkManager.CreateChatMessageReceived("System", nowMs, $"[Arena] {result.Message}"));
+                }
             }
             Console.WriteLine(
-                $"[ArenaIncentives] Duel match={matchId} wallet={Mask(f.Wallet)} granted={result.Granted} ({label}): {result.Message}");
+                $"[ArenaIncentives] Duel match={matchId} wallet={Mask(f.Wallet)} team={f.Team} winner={winnerTeam?.ToString() ?? "none"} granted={result.Granted}: {result.Message}");
         }
     }
-
-    public static bool IsDiscordStreamPlatform(string? platform) =>
-        string.Equals(platform?.Trim(), "discord", StringComparison.OrdinalIgnoreCase);
 
     static ArenaIncentiveResult RecordAfkMinute(string accountWallet, string? characterName, long nowMs) {
         var wallet = NormalizeWallet(accountWallet);
@@ -140,56 +140,61 @@ public static class ArenaIncentives {
                     $"BI AFK progress {row.AfkMinutes}/{AfkMinutesRequired}m → {AfkDailyHell} $HELL.");
             }
 
-            var room = RemainingDailyCapLocked(row);
-            if (room <= 0) {
-                row.AfkRewardGranted = true; // don't re-check forever
-                SchedulePersistLocked(nowMs);
-                return ArenaIncentiveResult.Ignored(
-                    $"Daily Arena incentive cap reached ({DailyCapHell} $HELL). Resets UTC midnight.");
-            }
-
-            var grant = Math.Min(AfkDailyHell, room);
             row.AfkRewardGranted = true;
+            var grant = HellMiningStore.AwardDailyDirect(wallet, characterName, AfkDailyHell, nowMs);
             row.AfkHellGranted = grant;
             row.TotalHellGranted = SaturateAddLong(row.TotalHellGranted, grant);
-            HellMiningStore.GrantPendingHell(wallet, grant);
             PersistLocked();
             lastPersistMs = nowMs;
+            if (grant <= 0) {
+                return ArenaIncentiveResult.Ignored(
+                    "Daily mining cap reached (wallet or server day budget). Resets UTC midnight.");
+            }
             return new ArenaIncentiveResult(
                 true,
                 grant,
                 row.AfkMinutes,
-                $"AFK 2h on Bleeding Island: +{grant} pending $HELL (day total {row.TotalHellGranted}/{DailyCapHell}).");
+                $"AFK 2h on Bleeding Island: +{grant} pending $HELL.");
         }
     }
 
     static ArenaIncentiveResult TryGrantDuel(
-        string accountWallet,
-        string? characterName,
-        long requestedAmount,
-        bool streamed,
+        ArenaDuelFighter fighter,
+        IReadOnlyList<ArenaDuelFighter> opponents,
+        long amount,
+        string outcome,
         string matchId,
         long nowMs) {
-        var wallet = NormalizeWallet(accountWallet);
+        var wallet = NormalizeWallet(fighter.Wallet);
         if (string.IsNullOrEmpty(wallet)) {
             return ArenaIncentiveResult.Ignored("No wallet.");
         }
-        if (requestedAmount <= 0) {
-            return ArenaIncentiveResult.Ignored("Bad amount.");
+        var opponentWallets = opponents.Select(o => NormalizeWallet(o.Wallet)).ToList();
+        if (opponentWallets.Count == 0 ||
+            opponentWallets.Any(w => w.Length == 0 || string.Equals(w, wallet, StringComparison.OrdinalIgnoreCase))) {
+            return ArenaIncentiveResult.Ignored("Duel reward needs an opponent with their own linked wallet.");
         }
 
         lock (Gate) {
-            var dayKey = UtcDayKey(nowMs);
-            var day = EnsureDayLocked(dayKey);
+            var day = EnsureDayLocked(UtcDayKey(nowMs));
             var row = EnsureRowLocked(day, wallet);
-            if (!string.IsNullOrWhiteSpace(characterName)) {
-                row.CharacterName = characterName.Trim();
+            if (!string.IsNullOrWhiteSpace(fighter.CharacterName)) {
+                row.CharacterName = fighter.CharacterName.Trim();
             }
 
-            // Idempotent per match per wallet
             row.GrantedMatchIds ??= new List<string>();
             if (row.GrantedMatchIds.Any(id => string.Equals(id, matchId, StringComparison.OrdinalIgnoreCase))) {
                 return ArenaIncentiveResult.Ignored("Duel already rewarded for this match.");
+            }
+
+            row.PaidOpponentWallets ??= new List<string>();
+            var repeat = opponentWallets.FirstOrDefault(w =>
+                row.PaidOpponentWallets.Contains(w, StringComparer.OrdinalIgnoreCase));
+            if (repeat is not null) {
+                var name = opponents.FirstOrDefault(o =>
+                    string.Equals(NormalizeWallet(o.Wallet), repeat, StringComparison.OrdinalIgnoreCase)).CharacterName;
+                return ArenaIncentiveResult.Ignored(
+                    $"Already had a paid duel vs {name ?? "this opponent"} today — one per rival per day.");
             }
 
             if (row.DuelClaims >= MaxDuelClaimsPerDay) {
@@ -197,42 +202,32 @@ public static class ArenaIncentives {
                     $"Duel claim cap ({MaxDuelClaimsPerDay}/day) reached. Resets UTC midnight.");
             }
 
-            var room = RemainingDailyCapLocked(row);
-            if (room <= 0) {
-                return ArenaIncentiveResult.Ignored(
-                    $"Daily Arena incentive cap reached ({DailyCapHell} $HELL). Resets UTC midnight.");
-            }
-
-            var grant = Math.Min(requestedAmount, room);
             row.DuelClaims += 1;
-            row.DuelHellGranted = SaturateAddLong(row.DuelHellGranted, grant);
-            if (streamed) {
-                row.StreamedDuelClaims += 1;
-            }
-            row.TotalHellGranted = SaturateAddLong(row.TotalHellGranted, grant);
+            row.PaidOpponentWallets.AddRange(opponentWallets);
             row.GrantedMatchIds.Add(matchId);
             if (row.GrantedMatchIds.Count > 40) {
                 row.GrantedMatchIds.RemoveRange(0, row.GrantedMatchIds.Count - 40);
             }
 
-            HellMiningStore.GrantPendingHell(wallet, grant);
+            var grant = HellMiningStore.AwardDailyDirect(wallet, fighter.CharacterName, amount, nowMs);
+            row.DuelHellGranted = SaturateAddLong(row.DuelHellGranted, grant);
+            row.TotalHellGranted = SaturateAddLong(row.TotalHellGranted, grant);
             PersistLocked();
             lastPersistMs = nowMs;
 
-            var streamNote = streamed ? " (Discord stream ≥15m on landing)" : "";
+            if (grant <= 0) {
+                return ArenaIncentiveResult.Ignored(
+                    "Duel counted, but today's mining cap is reached (wallet or server day budget).");
+            }
             return new ArenaIncentiveResult(
                 true,
                 grant,
                 row.AfkMinutes,
-                $"Duel complete{streamNote}: +{grant} pending $HELL " +
-                $"(duels {row.DuelClaims}/{MaxDuelClaimsPerDay}, day total {row.TotalHellGranted}/{DailyCapHell}).");
+                $"Duel {outcome}: +{grant} pending $HELL (paid duels {row.DuelClaims}/{MaxDuelClaimsPerDay} today).");
         }
     }
 
-    static long RemainingDailyCapLocked(ArenaIncentiveDayRow row) =>
-        Math.Max(0, DailyCapHell - row.TotalHellGranted);
-
-    static void NotifyGrant(GameWorldPlayer player, long amount, string message) {
+    static void NotifyGrant(GameWorldPlayer player, string message) {
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         NetworkManager.SendToPlayer(
             player,
@@ -242,7 +237,6 @@ public static class ArenaIncentives {
         } catch {
             // status packet optional
         }
-        _ = amount;
     }
 
     static string UtcDayKey(long nowMs) =>
@@ -346,6 +340,9 @@ public static class ArenaIncentives {
     }
 }
 
+/// <summary>One side of a finished pact duel, as seen by <see cref="ArenaIncentives.OnDuelCompleted"/>.</summary>
+public readonly record struct ArenaDuelFighter(string? Wallet, string? CharacterName, int Team, GameWorldPlayer? Player);
+
 public sealed class ArenaIncentivesFile {
     public Dictionary<string, ArenaIncentiveDay> Days { get; set; } = new(StringComparer.Ordinal);
 }
@@ -362,10 +359,13 @@ public sealed class ArenaIncentiveDayRow {
     public bool AfkRewardGranted { get; set; }
     public long AfkHellGranted { get; set; }
     public int DuelClaims { get; set; }
+    /// <summary>Legacy: Discord-streamed duels under the old 20k rule. No longer incremented.</summary>
     public int StreamedDuelClaims { get; set; }
     public long DuelHellGranted { get; set; }
     public long TotalHellGranted { get; set; }
     public List<string>? GrantedMatchIds { get; set; }
+    /// <summary>Opponent wallets already faced in a paid duel today (one paid duel per rival pair).</summary>
+    public List<string>? PaidOpponentWallets { get; set; }
 }
 
 public readonly record struct ArenaIncentiveResult(bool Applied, long Granted, int? AfkMinutes, string Message) {

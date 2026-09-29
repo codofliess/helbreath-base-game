@@ -105,8 +105,6 @@ public static class ArenaPact {
         public bool LiveDiscordNotified { get; set; }
         /// <summary>UTC ms when match entered live (for incentives).</summary>
         public long LiveStartedAtMs { get; set; }
-        /// <summary>Earliest UTC ms a Discord stream URL was set (landing cartelera).</summary>
-        public long DiscordStreamSinceMs { get; set; }
         /// <summary>Arena $HELL participation already paid for this match.</summary>
         public bool IncentiveGranted { get; set; }
         public List<PactFighter> Fighters { get; } = new();
@@ -259,7 +257,6 @@ public static class ArenaPact {
             StreamUrl = hostStream,
             StreamPlatform = DetectStreamPlatform(hostStream),
         });
-        NoteDiscordStreamLocked(match, hostStream, globalStream, now);
 
         Matches[id] = match;
         MatchIdBySession[player.SessionId] = id;
@@ -297,9 +294,6 @@ public static class ArenaPact {
                 match.Message = url is null
                     ? "Global cam cleared."
                     : $"Global cam set ({match.GlobalStreamPlatform}).";
-                if (url is not null) {
-                    NoteDiscordStreamLocked(match, null, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
             } else {
                 var fighter = match.Fighters.FirstOrDefault(f =>
                     f.SessionId == player.SessionId ||
@@ -308,16 +302,12 @@ public static class ArenaPact {
                     SendStateTo(player, match, "Not on this duel roster.");
                     return;
                 }
-                fighter.StreamUrl = url;
-                fighter.StreamPlatform = DetectStreamPlatform(url);
+                SetFighterStreamLocked(fighter, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 fighter.Player = player;
                 fighter.SessionId = player.SessionId;
                 match.Message = url is null
                     ? $"{player.CharacterName} cleared POV stream."
                     : $"{player.CharacterName} set POV stream ({fighter.StreamPlatform}).";
-                if (url is not null) {
-                    NoteDiscordStreamLocked(match, url, null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
             }
         }
         Broadcast(match);
@@ -470,12 +460,10 @@ public static class ArenaPact {
                 fighter.KitJson = req.ArenaKitJson;
             }
             if (req.HasStreamUrl) {
-                var sUrl = NormalizeStreamUrl(req.StreamUrl);
-                fighter.StreamUrl = sUrl;
-                fighter.StreamPlatform = DetectStreamPlatform(sUrl);
-                if (sUrl is not null) {
-                    NoteDiscordStreamLocked(match, sUrl, null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
+                SetFighterStreamLocked(
+                    fighter,
+                    NormalizeStreamUrl(req.StreamUrl),
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             }
             fighter.Player = player;
             fighter.SessionId = player.SessionId;
@@ -986,7 +974,7 @@ public static class ArenaPact {
             match.Status = "done";
             match.Message = $"{player.CharacterName} signed LOSS — prize bag → {winnerCap}.";
             _ = ArenaPrizeEscrow.CompressTickLog(match.Combat);
-            TryGrantDuelIncentivesLocked(match);
+            TryGrantDuelIncentivesLocked(match, winnerTeam);
             Broadcast(match);
             ClearSessions(match);
         }
@@ -1135,7 +1123,7 @@ public static class ArenaPact {
                     if (now >= match.LiveEndsAtMs) {
                         match.Status = "done";
                         match.Message = "Time! Match ended (no elimination — prize held; ops/admin).";
-                        TryGrantDuelIncentivesLocked(match);
+                        TryGrantDuelIncentivesLocked(match, winnerTeam: null);
                         Broadcast(match);
                         ClearSessions(match);
                     }
@@ -1336,29 +1324,23 @@ public static class ArenaPact {
         match.Message =
             $"DC timeout (120m) — {match.Combat.DcCharacterName} forfeited. Prize bag → {winnerCap}.";
         _ = ArenaPrizeEscrow.CompressTickLog(match.Combat);
-        TryGrantDuelIncentivesLocked(match);
+        TryGrantDuelIncentivesLocked(match, winnerTeam);
         Broadcast(match);
         ClearSessions(match);
         Console.WriteLine($"[ArenaPact] DC forfeit settle match={match.MatchId} winner={winnerCap}");
     }
 
-    /// <summary>Mark earliest Discord stream URL (landing / cartelera) for 15m stream bonus.</summary>
-    private static void NoteDiscordStreamLocked(PactMatch match, string? povUrl, string? globalUrl, long nowMs) {
-        var platformPov = DetectStreamPlatform(povUrl);
-        var platformGlobal = DetectStreamPlatform(globalUrl);
-        if (ArenaIncentives.IsDiscordStreamPlatform(platformPov) ||
-            ArenaIncentives.IsDiscordStreamPlatform(platformGlobal)) {
-            if (match.DiscordStreamSinceMs <= 0) {
-                match.DiscordStreamSinceMs = nowMs;
-            }
-        }
+    private static void SetFighterStreamLocked(PactFighter fighter, string? url, long nowMs) {
+        _ = nowMs;
+        fighter.StreamUrl = url;
+        fighter.StreamPlatform = DetectStreamPlatform(url);
     }
 
     /// <summary>
-    /// Pay both fighters Arena duel incentives once the match has been live.
-    /// Stream bonus when Discord share was up ≥15 minutes (landing).
+    /// Pay both fighters Arena duel incentives once the match has been live
+    /// (7k winner / 3k loser; 3k each when <paramref name="winnerTeam"/> is null).
     /// </summary>
-    private static void TryGrantDuelIncentivesLocked(PactMatch match) {
+    private static void TryGrantDuelIncentivesLocked(PactMatch match, int? winnerTeam) {
         if (match.IncentiveGranted) {
             return;
         }
@@ -1366,22 +1348,12 @@ public static class ArenaPact {
             return; // never went live — no participation pay
         }
         match.IncentiveGranted = true;
-        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        // Re-scan active URLs in case platform was set without NoteDiscordStreamLocked race.
-        if (match.DiscordStreamSinceMs <= 0) {
-            if (ArenaIncentives.IsDiscordStreamPlatform(match.GlobalStreamPlatform) ||
-                match.Fighters.Any(f => ArenaIncentives.IsDiscordStreamPlatform(f.StreamPlatform))) {
-                match.DiscordStreamSinceMs = match.LiveStartedAtMs > 0 ? match.LiveStartedAtMs : nowMs;
-            }
-        }
-        var streamMs = match.DiscordStreamSinceMs > 0 ? nowMs - match.DiscordStreamSinceMs : 0;
-        var streamed = streamMs >= ArenaIncentives.StreamMinutesRequired * 60_000L;
-
         var roster = match.Fighters
-            .Select(f => (Wallet: (string?)f.Wallet, CharacterName: (string?)f.CharacterName, Player: f.Player))
+            .Where(f => !f.InvitePending)
+            .Select(f => new ArenaDuelFighter(f.Wallet, f.CharacterName, f.Team, f.Player))
             .ToList();
         try {
-            ArenaIncentives.OnDuelCompleted(roster, streamed, match.MatchId);
+            ArenaIncentives.OnDuelCompleted(roster, winnerTeam, match.MatchId);
         } catch (Exception ex) {
             Console.WriteLine($"[ArenaPact] Incentive grant failed match={match.MatchId}: {ex.Message}");
         }

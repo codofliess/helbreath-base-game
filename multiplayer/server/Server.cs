@@ -63,6 +63,7 @@ Console.WriteLine(
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
     $"dailyCap={HellMiningStore.DailyTokenCap:N0} walletCap={HellMiningStore.WalletDailyCap:N0}.");
 Server.Helpers.CashShop.EnsureLoaded();
+HellPriceAnchor.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"), Server.Helpers.CashShop.DesignUsdPerHell);
 var gcMonitor = settings.Debug.EnableGcLogs ? new GarbageCollectorMonitor() : null;
 var worldRegistry = new WorldRegistry(settings, workerCount: settings.Threads.GameWorldWorkers, tickInterval: TimeSpan.FromMilliseconds(settings.GameWorld.TickInterval));
 var sessionsByNetworkId = new ConcurrentDictionary<string, PlayerSession>(StringComparer.Ordinal);
@@ -368,6 +369,9 @@ ArenaPactDiscord.EnsureLoaded();
 _ = Task.Run(() => RealmStats.RunPushLoopAsync(
     () => SnapshotRealmSessions(sessionsByServerId),
     disconnectedPlayerCleanupCts.Token));
+
+// Cash Shop $HELL prices re-peg to the market only on >20% drift; the token price itself is never set here.
+_ = Task.Run(() => HellPriceAnchor.RunFeedLoopAsync(disconnectedPlayerCleanupCts.Token));
 
 // Priority-queue telemetry (combat vs meta outbound) — JSON under Chars/reports/net-priority-*.json
 _ = Task.Run(async () => {

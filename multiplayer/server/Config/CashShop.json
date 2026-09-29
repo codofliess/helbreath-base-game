@@ -8,7 +8,7 @@
     "totalSupply": 1000000000,
     "designUsdPerHell": 0.001,
     "hellPremiumBps": 2000,
-    "note": "HELL ≈ usd * 1200 (FDV $1M +20%). priceHell=0 rejects CurrencyHell."
+    "note": "HELL ≈ usd * 1200 (FDV $1M +20%). priceHell=0 rejects CurrencyHell. Charged price = ceil(priceHell * designUsdPerHell / anchorUsdPerHell); the anchor (Chars/hell-price-anchor.json) follows the market median only when it drifts >20% (HellPriceAnchor)."
   },
   "genuineStablecoinMints": {
     "mainnet-beta": {

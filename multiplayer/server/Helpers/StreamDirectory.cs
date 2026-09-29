@@ -100,7 +100,11 @@ public static class StreamDirectory {
             ById.TryGetValue(existingId, out var existing)) {
             existing.Title = title;
             if (!string.Equals(existing.StreamUrl, url, StringComparison.Ordinal)) {
+                StreamLinks.RememberXLiveUrlSwap(existing.StreamUrl, url);
                 existing.XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? now : 0;
+            }
+            if (!string.IsNullOrWhiteSpace(player.AccountWallet)) {
+                existing.Wallet = player.AccountWallet;
             }
             existing.StreamUrl = url;
             existing.StreamPlatform = DetectPlatform(url);
@@ -145,23 +149,22 @@ public static class StreamDirectory {
         ById.TryRemove(id, out _);
     }
 
-    /// <summary>Earliest X live link <paramref name="wallet"/> has up on the cartelera right now, if any.</summary>
-    public static (string Url, long SinceMs)? GetXLiveForWallet(string? wallet) {
+    /// <summary>X live links <paramref name="wallet"/> has up on the cartelera right now, oldest first.</summary>
+    public static IReadOnlyList<(string Url, long SinceMs)> GetXLivesForWallet(string? wallet) {
         if (string.IsNullOrWhiteSpace(wallet)) {
-            return null;
+            return [];
         }
         PurgeExpired();
-        (string Url, long SinceMs)? best = null;
+        var list = new List<(string Url, long SinceMs)>();
         foreach (var b in ById.Values) {
             if (!b.Active || b.XLiveSinceMs <= 0 || b.StreamUrl is null ||
                 !string.Equals(b.Wallet, wallet.Trim(), StringComparison.OrdinalIgnoreCase)) {
                 continue;
             }
-            if (best is null || b.XLiveSinceMs < best.Value.SinceMs) {
-                best = (b.StreamUrl, b.XLiveSinceMs);
-            }
+            list.Add((b.StreamUrl, b.XLiveSinceMs));
         }
-        return best;
+        list.Sort((a, b) => a.SinceMs.CompareTo(b.SinceMs));
+        return list;
     }
 
     public static IReadOnlyList<BroadcastDto> ListLive(string? kindFilter = null) {

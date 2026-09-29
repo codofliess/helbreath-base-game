@@ -296,6 +296,7 @@ public static class ArenaPact {
                     return;
                 }
                 if (!string.Equals(match.GlobalStreamUrl, url, StringComparison.Ordinal)) {
+                    StreamLinks.RememberXLiveUrlSwap(match.GlobalStreamUrl, url);
                     match.GlobalXLiveSinceMs = StreamLinks.IsXLiveUrl(url)
                         ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                         : 0;
@@ -1343,6 +1344,7 @@ public static class ArenaPact {
 
     private static void SetFighterStreamLocked(PactFighter fighter, string? url, long nowMs) {
         if (!string.Equals(fighter.StreamUrl, url, StringComparison.Ordinal)) {
+            StreamLinks.RememberXLiveUrlSwap(fighter.StreamUrl, url);
             fighter.XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? nowMs : 0;
         }
         fighter.StreamUrl = url;
@@ -1350,18 +1352,18 @@ public static class ArenaPact {
     }
 
     /// <summary>
-    /// Earliest X live link <paramref name="wallet"/> has on a public (cartelera-listed) duel right now:
-    /// the fighter's POV stream, or the global cam when the wallet is the host.
+    /// X live links <paramref name="wallet"/> has on a public (cartelera-listed) duel right now:
+    /// the fighter's POV stream, and the global cam when the wallet is the host. Oldest first.
     /// </summary>
-    public static (string Url, long SinceMs)? GetPublicXLiveForWallet(string? wallet) {
+    public static IReadOnlyList<(string Url, long SinceMs)> GetPublicXLivesForWallet(string? wallet) {
         if (string.IsNullOrWhiteSpace(wallet)) {
-            return null;
+            return [];
         }
         var w = wallet.Trim();
-        (string Url, long SinceMs)? best = null;
+        var list = new List<(string Url, long SinceMs)>();
         void Consider(string? url, long since) {
-            if (url is not null && since > 0 && (best is null || since < best.Value.SinceMs)) {
-                best = (url, since);
+            if (url is not null && since > 0) {
+                list.Add((url, since));
             }
         }
         foreach (var m in Matches.Values) {
@@ -1381,7 +1383,8 @@ public static class ArenaPact {
                 }
             }
         }
-        return best;
+        list.Sort((a, b) => a.SinceMs.CompareTo(b.SinceMs));
+        return list;
     }
 
     /// <summary>

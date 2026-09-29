@@ -18,6 +18,8 @@ public static class HellMiningStore {
     public const long DailyTokenCap = 500_000L;
     /// <summary>Most one wallet can mine in a UTC day (direct awards + credit share). Unshared tokens stay in the pool.</summary>
     public const long WalletDailyCap = 50_000L;
+    /// <summary>Returned by <see cref="AwardXStreamDay"/> when this X live already paid a different wallet today.</summary>
+    public const string XStreamAlreadyPaidMessage = "This X live already paid another wallet today.";
 
     // ── Testing-week credit rules (see landing #news + Discord) ─────────────
     /// <summary>+1 credit on first presence of the UTC day (login / join).</summary>
@@ -680,8 +682,9 @@ public static class HellMiningStore {
                 return HellMiningCreditResult.Ignored(null);
             }
             day.PaidXStreams ??= new List<string>();
-            if (day.PaidXStreams.Contains(streamKey, StringComparer.Ordinal)) {
-                return HellMiningCreditResult.Ignored("This X live already paid another wallet today.");
+            var family = StreamLinks.AllPaymentKeys(streamKey);
+            if (family.Any(k => day.PaidXStreams.Contains(k, StringComparer.Ordinal))) {
+                return HellMiningCreditResult.Ignored(XStreamAlreadyPaidMessage);
             }
             if (!string.IsNullOrWhiteSpace(characterName)) {
                 row.CharacterName = characterName.Trim();
@@ -689,7 +692,11 @@ public static class HellMiningStore {
             var granted = TryAwardDirectLocked(day, row, WalletDailyCap);
             row.XStreamRewardGranted = true;
             row.XStreamDirectTokens = granted;
-            day.PaidXStreams.Add(streamKey);
+            foreach (var key in family) {
+                if (!day.PaidXStreams.Contains(key, StringComparer.Ordinal)) {
+                    day.PaidXStreams.Add(key);
+                }
+            }
             PersistLocked();
             lastPersistMs = nowMs;
             var message = granted > 0

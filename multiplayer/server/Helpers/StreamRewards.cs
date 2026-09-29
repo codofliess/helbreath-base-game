@@ -20,20 +20,32 @@ public static class StreamRewards {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var live = EarliestXLive(player.AccountWallet);
-        if (live is null || nowMs - live.Value.SinceMs < XLiveMinutesRequired * 60_000L) {
+        var minAgeMs = XLiveMinutesRequired * 60_000L;
+        HellMiningCreditResult? chosen = null;
+        (string Url, long SinceMs)? chosenLive = null;
+        foreach (var live in EligibleXLives(player.AccountWallet)) {
+            if (nowMs - live.SinceMs < minAgeMs) {
+                continue;
+            }
+            var result = HellMiningStore.AwardXStreamDay(
+                player.AccountWallet,
+                player.CharacterName,
+                StreamLinks.CanonicalXKey(live.Url),
+                nowMs);
+            if (!result.Applied &&
+                string.Equals(result.Message, HellMiningStore.XStreamAlreadyPaidMessage, StringComparison.Ordinal)) {
+                chosen ??= result;
+                chosenLive ??= live;
+                continue;
+            }
+            chosen = result;
+            chosenLive = live;
+            break;
+        }
+        if (chosen is not { } settled || string.IsNullOrWhiteSpace(settled.Message)) {
             return;
         }
-
-        var result = HellMiningStore.AwardXStreamDay(
-            player.AccountWallet,
-            player.CharacterName,
-            StreamLinks.CanonicalXKey(live.Value.Url),
-            nowMs);
-        if (string.IsNullOrWhiteSpace(result.Message)) {
-            return;
-        }
-        var noticeKey = $"{HellMiningStore.UtcDayKey(nowMs)}|{result.Message}";
+        var noticeKey = $"{HellMiningStore.UtcDayKey(nowMs)}|{settled.Message}";
         if (LastNoticeByWallet.TryGetValue(player.AccountWallet, out var last) &&
             string.Equals(last, noticeKey, StringComparison.Ordinal)) {
             return;
@@ -41,24 +53,21 @@ public static class StreamRewards {
         LastNoticeByWallet[player.AccountWallet] = noticeKey;
         NetworkManager.SendToPlayer(
             player,
-            NetworkManager.CreateChatMessageReceived("System", nowMs, $"[Stream] {result.Message}"));
-        if (result.Applied) {
-            HellMining.SendStatus(player, nowMs, result.Message);
+            NetworkManager.CreateChatMessageReceived("System", nowMs, $"[Stream] {settled.Message}"));
+        if (settled.Applied && chosenLive is { } grantedLive) {
+            HellMining.SendStatus(player, nowMs, settled.Message);
             Console.WriteLine(
-                $"[StreamRewards] X live verified wallet={Mask(player.AccountWallet)} granted={result.TokensAdded} since={live.Value.SinceMs}");
+                $"[StreamRewards] X live verified wallet={Mask(player.AccountWallet)} granted={settled.TokensAdded} since={grantedLive.SinceMs}");
         }
     }
 
-    static (string Url, long SinceMs)? EarliestXLive(string wallet) {
-        var world = StreamDirectory.GetXLiveForWallet(wallet);
-        var duel = ArenaPact.GetPublicXLiveForWallet(wallet);
-        if (world is null) {
-            return duel;
-        }
-        if (duel is null) {
-            return world;
-        }
-        return world.Value.SinceMs <= duel.Value.SinceMs ? world : duel;
+    /// <summary>World Go Live and public-duel X links for this wallet, oldest first.</summary>
+    static List<(string Url, long SinceMs)> EligibleXLives(string wallet) {
+        var list = new List<(string Url, long SinceMs)>();
+        list.AddRange(StreamDirectory.GetXLivesForWallet(wallet));
+        list.AddRange(ArenaPact.GetPublicXLivesForWallet(wallet));
+        list.Sort((a, b) => a.SinceMs.CompareTo(b.SinceMs));
+        return list;
     }
 
     static string Mask(string wallet) =>

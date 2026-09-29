@@ -124,7 +124,7 @@ public sealed record PlayerPersistenceState(
     int HungerStatus = 100,
     /// <summary>Skill masteries 0–100 (SKILLCFG order). Null = all zeros.</summary>
     int[]? SkillLevels = null,
-    /// <summary>Mock / ledger $HELL staked for specialty utility (floor/100k → +10 levels). Not yield.</summary>
+    /// <summary>Mock / ledger $HELL staked for specialty utility (floor/50k → +1 level). Not yield.</summary>
     long StakedHell = 0,
     /// <summary>Olympia shards/fragments inventory (disenchant materials). Null = empty.</summary>
     PersistedEnchantMaterial[]? EnchantMaterials = null,
@@ -197,7 +197,7 @@ public sealed record CharacterListEntry(
     string CitizenshipSide = "",
     /// <summary>Kill-based specialty level of each monster group. Empty until the catalog is loaded.</summary>
     IReadOnlyList<MobSpecialty.CharacterGroupTier>? MonsterGroupTiers = null,
-    /// <summary>floor(persisted StakedHell / 100_000). Does not include wallet-pending balance.</summary>
+    /// <summary>floor(persisted StakedHell / 50_000). Does not include wallet-pending balance.</summary>
     int MonsterStakeBonus = 0);
 
 /// <summary>State carried across worlds during a transfer: session identity plus the player settings snapshot to reapply in the target world.</summary>

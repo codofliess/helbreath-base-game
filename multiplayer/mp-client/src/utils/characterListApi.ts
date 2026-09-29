@@ -33,7 +33,7 @@ export interface CharacterSlotSummary {
     citizenshipSide?: string;
     /** Kill-based specialty level of each monster group. Omitted by older servers. */
     monsterGroupTiers?: CharacterMonsterGroupTier[];
-    /** floor(persisted character stake / 100_000). Omitted when the server did not send it. */
+    /** floor(persisted character stake / 50_000). Omitted when the server did not send it. */
     monsterStakeBonus?: number;
 }
 

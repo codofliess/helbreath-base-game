@@ -587,7 +587,7 @@ function StatisticsPanel({ onBack }: { onBack: () => void }) {
     const top = killRows[0];
     const stakeBonus =
         killRows.find((r) => r.stakeBonusLevels > 0)?.stakeBonusLevels ??
-        Math.floor(Math.max(0, progression.stakedHell) / 100_000);
+        Math.floor(Math.max(0, progression.stakedHell) / 50_000);
 
     return (
         <CharacterSubPanelShell

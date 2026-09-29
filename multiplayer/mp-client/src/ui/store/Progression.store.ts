@@ -32,7 +32,7 @@ export interface MonsterKillRow {
     effectiveLevel: number;
     /** Kills required for next real specialty level. */
     nextKills: number;
-    /** floor(staked/100k)*10 applied to every species. */
+    /** floor(staked/50k) applied to every species. */
     stakeBonusLevels: number;
     /** Compact bonus summary at effective level. */
     bonusSummary: string;

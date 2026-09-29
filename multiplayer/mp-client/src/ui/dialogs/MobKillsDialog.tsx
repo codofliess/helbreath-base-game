@@ -139,10 +139,10 @@ export function MobKillsDialog({
         killRows[0] ??
         null;
 
-    // 100k $HELL = +1 final tier (server authoritative via stakeBonusLevels).
+    // 50k $HELL = +1 final tier (server authoritative via stakeBonusLevels).
     const stakeBonus =
         killRows.find((r) => r.stakeBonusLevels > 0)?.stakeBonusLevels ??
-        Math.floor(Math.max(0, progression.stakedHell) / 100_000);
+        Math.floor(Math.max(0, progression.stakedHell) / 50_000);
 
     if (!isOpen) {
         return null;

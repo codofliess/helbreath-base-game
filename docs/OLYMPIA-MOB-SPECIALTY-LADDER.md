@@ -174,21 +174,22 @@ Progress in tooltip: `currentKills / killsRequired(nextLevel)`.
 |---------|-------------|
 | Specialty Level | `killBaseLevel` from kills via `150*L²` (or species base) |
 | +1 dmg / −1 taken / drop % steps | Bonus table by level |
-| Stake personal | `+ floor(staked/100k)*10` **effective levels** on top of specialty level |
+| Stake personal | `+ floor(staked/50k)` **effective levels** on top of specialty level (5M = +100) |
 | F11 | Show kills, level, current bonuses, next unlocks |
 
 ### Effective level with stake
 
 ```
 specialtyLevel = max L such that kills >= 150 * L²   // L>=1; else 0
-stakeLevels    = floor(stakedHell / 100_000)   // 100k = +1 tier; 5M = +50
+stakeLevels    = floor(stakedHell / 50_000)    // 50k = +1 tier; 5M = +100
 effectiveLevel = specialtyLevel + stakeLevels
 ```
 
-Bonuses = sum of ladder steps from 1..effectiveLevel (same table as Olympia).
+Bonuses (PO 2026-09-29): every level raises every bonus evenly, anchored so that L40 equals the sum of this
+ladder's steps 1..40 — `bonus(L) = ladderTotal(40) × L / 40`. See [`MOB-MASTERY-STAKE-STACKING.md`](./MOB-MASTERY-STAKE-STACKING.md) § 0.
 
-**Example:** organic L7 + 300k pending → +3 → effective **10**.  
-Organic L7 + 500k → +5 → **12**. Organic L7 + 5M → +50 → **57**.
+**Example:** organic L7 + 300k pending → +6 → effective **13**.  
+Organic L7 + 500k → +10 → **17**. Organic L7 + 5M → +100 → **107**.
 
 ---
 
@@ -203,8 +204,8 @@ Formula (all species):
 ```
 killsRequired(L) = base_kills * L²
 specialtyLevel   = max L with kills >= base_kills * L²
-stakeLevels      = floor(stakedHell / 100_000)         // 100k→+1; 5M→+50; reversible if balance drops
-effectiveLevel   = specialtyLevel + stakeLevels        // e.g. L7 + 300k = 10; L7 + 5M = 57
+stakeLevels      = floor(stakedHell / 50_000)          // 50k→+1; 5M→+100; reversible if balance drops
+effectiveLevel   = specialtyLevel + stakeLevels        // e.g. L7 + 300k = 13; L7 + 5M = 107
 ```
 
 Stake amount for specialty = `max(StakedHell, mining PendingHell)` (daily credit-share fills pending).
@@ -254,8 +255,8 @@ Bonus type meanings (CL `MobSpecialty.AggregateBonuses`):
 
 **Not every open-world farm mob is in this file** (e.g. Orc/Snake/Slug from the UI screenshot may use default base 150 + default ladder: dmg, −taken, then drop_rate). Unlisted species in CL use that default.
 
-**Stake rule (product):** real kill tier stays; balance only adds effective levels.  
-`floor(tokens/100k)` tiers — **5M tokens = +50**. L7 + 300k → **10**; L7 + 5M → **57**.
+**Stake rule (product, 2026-09-29):** real kill tier stays; balance only adds effective levels.  
+`floor(tokens/50k)` tiers — **5M tokens = +100**. L7 + 300k → **13**; L7 + 5M → **107**.
 
 ## 7. Open / follow-ups
 

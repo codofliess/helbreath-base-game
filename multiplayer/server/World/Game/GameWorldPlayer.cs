@@ -126,7 +126,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     private PersistedRebirthRollbackSnapshot? rebirthRollback;
     /// <summary>Lifetime credited monster kills keyed by catalog monster id (survives rebirth). Persisted.</summary>
     private readonly Dictionary<int, long> monsterKills = new();
-    /// <summary>Mock / ledger $HELL staked for specialty level offset (floor/100k → +10 levels). Persisted.</summary>
+    /// <summary>Mock / ledger $HELL staked for specialty level offset (floor/50k → +1 level). Persisted.</summary>
     private long stakedHell;
     /// <summary>Olympia shards/fragments: key = (isShard, type, level) → count. Persisted.</summary>
     private readonly Dictionary<(bool IsShard, int Type, int Level), int> enchantMaterials = new();
@@ -514,7 +514,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     public bool LevelBlocked => levelBlocked;
     /// <summary>True when a pre-rebirth snapshot exists (can cancel last rebirth).</summary>
     public bool HasRebirthRollback => rebirthRollback is not null;
-    /// <summary>Mock / ledger $HELL staked for specialty utility (no yield). floor(staked/100k)*10 effective levels.</summary>
+    /// <summary>Mock / ledger $HELL staked for specialty utility (no yield). floor(staked/50k) effective levels.</summary>
     public long StakedHell => stakedHell;
     /// <summary>Classic STR (create-char / SELECTCHAR).</summary>
     public int Str => str;

@@ -1,8 +1,9 @@
 /**
  * Devnet $HELL SPL mint + allocation vault ATAs (MASTERPLAN §1.7).
  *
- * Allocations (1B total, 9 decimals):
- *   team 100M · liquidity 300M · DAO 100M · growth 100M · play-mine escrow 400M
+ * Allocations (1B total, 9 decimals) — PO 2026-09-29:
+ *   play-mine 30% (300M, 500k/day) · bonding curve 30% (300M)
+ *   graduation liquidity 10–20% (HELL_GRADUATION_LIQUIDITY_PCT, default 15) · team 10% · airdrops = rest
  *
  * Usage (from middleware-node/):
  *   npm install
@@ -36,13 +37,27 @@ const { loadOrCreateGameAuthority } = require('../authority');
 
 const DECIMALS = 9;
 const TOTAL_SUPPLY = 1_000_000_000n;
-const ALLOCATIONS = [
-    { key: 'team', label: 'Team', tokens: 100_000_000n },
-    { key: 'liquidity', label: 'Liquidity / market', tokens: 300_000_000n },
-    { key: 'dao', label: 'DAO / guilds', tokens: 100_000_000n },
-    { key: 'growth', label: 'Growth & partnerships', tokens: 100_000_000n },
-    { key: 'mining', label: 'Play-mine escrow', tokens: 400_000_000n },
-];
+const ALLOCATIONS = buildAllocations(process.env.HELL_GRADUATION_LIQUIDITY_PCT);
+
+function buildAllocations(liquidityPctRaw) {
+    const liquidityPct = liquidityPctRaw === undefined || liquidityPctRaw === '' ? 15 : Number(liquidityPctRaw);
+    if (!Number.isInteger(liquidityPct) || liquidityPct < 10 || liquidityPct > 20) {
+        throw new Error(`HELL_GRADUATION_LIQUIDITY_PCT must be an integer 10..20 (got ${liquidityPctRaw})`);
+    }
+    const pct = (p) => (TOTAL_SUPPLY * BigInt(p)) / 100n;
+    const mining = pct(30);
+    const bondingCurve = pct(30);
+    const liquidity = pct(liquidityPct);
+    const team = pct(10);
+    const airdrops = TOTAL_SUPPLY - mining - bondingCurve - liquidity - team;
+    return [
+        { key: 'mining', label: 'Play-mine escrow (500k/day)', tokens: mining },
+        { key: 'bondingCurve', label: 'Bonding curve', tokens: bondingCurve },
+        { key: 'liquidity', label: 'Graduation liquidity (other DEX pools)', tokens: liquidity },
+        { key: 'team', label: 'Team', tokens: team },
+        { key: 'airdrops', label: 'Airdrops', tokens: airdrops },
+    ];
+}
 
 function tokensToRaw(tokens) {
     return tokens * 10n ** BigInt(DECIMALS);
@@ -156,22 +171,28 @@ async function main() {
     printEnv(result);
 }
 
+function vaultEnvKey(key) {
+    return `HELL_${key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()}_TOKEN_ACCOUNT`;
+}
+
 function printEnv(result) {
     console.log('\nAdd to middleware-node/.env (and set HELL_MINT on the game server for claim UI):\n');
     console.log(`HELL_MINT=${result.mint}`);
     console.log(`HELL_DECIMALS=${result.decimals ?? DECIMALS}`);
-    console.log(`HELL_MINING_VAULT_OWNER_SECRET=${result.vaults.mining.ownerSecretKeyBase58}`);
-    console.log(`HELL_MINING_TOKEN_ACCOUNT=${result.vaults.mining.tokenAccount}`);
-    console.log(`HELL_TEAM_TOKEN_ACCOUNT=${result.vaults.team.tokenAccount}`);
-    console.log(`HELL_LIQUIDITY_TOKEN_ACCOUNT=${result.vaults.liquidity.tokenAccount}`);
-    console.log(`HELL_DAO_TOKEN_ACCOUNT=${result.vaults.dao.tokenAccount}`);
-    console.log(`HELL_GROWTH_TOKEN_ACCOUNT=${result.vaults.growth.tokenAccount}`);
+    console.log('# HELL_MINING_VAULT_OWNER_SECRET: run `node scripts/sync-hell-env-from-token.js` (not printed)');
+    for (const [key, vault] of Object.entries(result.vaults)) {
+        console.log(`${vaultEnvKey(key)}=${vault.tokenAccount}`);
+    }
     console.log('# Optional: shared ledger path for claim (same host as game server)');
     console.log('# HELL_MINING_LEDGER_PATH=../multiplayer/server/Chars/hell-mining.json');
     console.log(`SOLANA_RPC_URL=${result.rpcUrl}`);
 }
 
-main().catch((error) => {
-    console.error('init-hell-token failed:', error);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((error) => {
+        console.error('init-hell-token failed:', error);
+        process.exit(1);
+    });
+}
+
+module.exports = { buildAllocations, vaultEnvKey, TOTAL_SUPPLY };

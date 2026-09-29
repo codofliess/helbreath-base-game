@@ -38,16 +38,19 @@ if (!env.includes('PORT=')) {
     env += 'PORT=3001\n';
 }
 
+// Vault set differs between mints (pre-2026-09-29: team/liquidity/dao/growth/mining;
+// now: mining/bondingCurve/liquidity/team/airdrops).
+const vaultKey = (key) => `HELL_${key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()}_TOKEN_ACCOUNT`;
+const vaultPairs = Object.fromEntries(
+    Object.entries(j.vaults || {}).map(([key, vault]) => [vaultKey(key), vault.tokenAccount]),
+);
+
 const pairs = {
     SOLANA_RPC_URL: j.rpcUrl || 'https://api.devnet.solana.com',
     HELL_MINT: j.mint,
     HELL_DECIMALS: String(j.decimals ?? 9),
     HELL_MINING_VAULT_OWNER_SECRET: j.vaults.mining.ownerSecretKeyBase58,
-    HELL_MINING_TOKEN_ACCOUNT: j.vaults.mining.tokenAccount,
-    HELL_TEAM_TOKEN_ACCOUNT: j.vaults.team.tokenAccount,
-    HELL_LIQUIDITY_TOKEN_ACCOUNT: j.vaults.liquidity.tokenAccount,
-    HELL_DAO_TOKEN_ACCOUNT: j.vaults.dao.tokenAccount,
-    HELL_GROWTH_TOKEN_ACCOUNT: j.vaults.growth.tokenAccount,
+    ...vaultPairs,
     HELL_MINING_LEDGER_PATH: '../multiplayer/server/Chars/hell-mining.json',
 };
 
@@ -61,9 +64,7 @@ console.log('Wrote middleware-node/.env (secrets not printed)');
 console.log('HELL_MINT=' + j.mint);
 console.log('HELL_DECIMALS=' + (j.decimals ?? 9));
 console.log('mintAuthority=' + j.mintAuthority);
-console.log('HELL_TEAM_TOKEN_ACCOUNT=' + j.vaults.team.tokenAccount);
-console.log('HELL_LIQUIDITY_TOKEN_ACCOUNT=' + j.vaults.liquidity.tokenAccount);
-console.log('HELL_DAO_TOKEN_ACCOUNT=' + j.vaults.dao.tokenAccount);
-console.log('HELL_GROWTH_TOKEN_ACCOUNT=' + j.vaults.growth.tokenAccount);
-console.log('HELL_MINING_TOKEN_ACCOUNT=' + j.vaults.mining.tokenAccount);
+for (const [k, v] of Object.entries(vaultPairs)) {
+    console.log(`${k}=${v}`);
+}
 console.log('Also set HELL_MINT on the C# game server process for SysMenu claimAvailable.');

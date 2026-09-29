@@ -61,7 +61,7 @@ Referral.Initialize(Path.Combine(Directory.GetCurrentDirectory(), "Chars"));
 Console.WriteLine(
     $"[HellMining] TestingWeek={HellMiningStore.IsTestingWeekActive()} " +
     $"rules=login+1 / AFK+10 per 4h (max6) / 100mobs+10 (cap50 farm) / 10 classes=2x / EK+10 (cap10, no ladder) " +
-    $"dailyCap={HellMiningStore.DailyTokenCap:N0} fullPoolToActive={HellMiningStore.FullDailyPoolToActivePlayers}.");
+    $"dailyCap={HellMiningStore.DailyTokenCap:N0} walletCap={HellMiningStore.WalletDailyCap:N0}.");
 Server.Helpers.CashShop.EnsureLoaded();
 var gcMonitor = settings.Debug.EnableGcLogs ? new GarbageCollectorMonitor() : null;
 var worldRegistry = new WorldRegistry(settings, workerCount: settings.Threads.GameWorldWorkers, tickInterval: TimeSpan.FromMilliseconds(settings.GameWorld.TickInterval));

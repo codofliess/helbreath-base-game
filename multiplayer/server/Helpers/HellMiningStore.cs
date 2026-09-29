@@ -9,11 +9,15 @@ namespace Server.Helpers;
 
 /// <summary>
 /// Durable play-mine ledger for $HELL (C1). JSON under Chars/ so traveler mode works without Postgres.
-/// Tracks daily credits, direct token awards, pending balances, and the remaining 400M mining pool.
+/// Tracks daily credits, direct token awards, pending balances, and the remaining 300M mining pool (30% of supply).
 /// </summary>
 public static class HellMiningStore {
-    public const long TotalMiningPool = 400_000_000L;
+    public const long TotalMiningPool = 300_000_000L;
+    /// <summary>Pool size ledgers were created with before the 30% allocation; used to re-base old files.</summary>
+    public const long LegacyTotalMiningPool = 400_000_000L;
     public const long DailyTokenCap = 500_000L;
+    /// <summary>Most one wallet can mine in a UTC day (direct awards + credit share). Unshared tokens stay in the pool.</summary>
+    public const long WalletDailyCap = 50_000L;
 
     // ── Testing-week credit rules (see landing #news + Discord) ─────────────
     /// <summary>+1 credit on first presence of the UTC day (login / join).</summary>
@@ -56,8 +60,6 @@ public static class HellMiningStore {
     public const long Top100EkTokens = 300L;
     public const int EventCredits = 5;
     public const long EventTokens = 100L;
-    /// <summary>When true, daily token budget is fully shared among wallets that showed any activity that day.</summary>
-    public static bool FullDailyPoolToActivePlayers => true;
 
     static readonly object Gate = new();
     static HellMiningFile file = new();
@@ -71,21 +73,35 @@ public static class HellMiningStore {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    /// <summary>Loads JSON state from the server Chars directory (or creates empty with full 400M pool).</summary>
+    /// <summary>Loads JSON state from the server Chars directory (or creates empty with the full mining pool).</summary>
     public static void Initialize(string charsDirectory) {
         ArgumentException.ThrowIfNullOrWhiteSpace(charsDirectory);
         Directory.CreateDirectory(charsDirectory);
         persistDirectory = charsDirectory;
         lock (Gate) {
             file = new HellMiningFile();
-            TryLoadLocked();
-            if (file.RemainingPool <= 0 && file.Wallets.Count == 0 && file.Days.Count == 0) {
+            var loaded = TryLoadLocked();
+            if (!loaded || (file.Wallets.Count == 0 && file.Days.Count == 0)) {
                 file.RemainingPool = TotalMiningPool;
+                file.PoolTotal = TotalMiningPool;
+            } else if (file.PoolTotal != TotalMiningPool) {
+                ResizePoolLocked();
             }
             PersistLocked();
         }
         Console.WriteLine(
-            $"[HellMining] Initialized (pool remaining {file.RemainingPool:N0}, {file.Wallets.Count} wallet row(s)). Play-mine only — stake does not mint (C1).");
+            $"[HellMining] Initialized (pool remaining {file.RemainingPool:N0} of {TotalMiningPool:N0}, {file.Wallets.Count} wallet row(s)). Play-mine only — stake does not mint (C1).");
+    }
+
+    /// <summary>Re-bases the remaining pool on <see cref="TotalMiningPool"/>, keeping what was already emitted.</summary>
+    static void ResizePoolLocked() {
+        var previousTotal = file.PoolTotal > 0 ? file.PoolTotal : LegacyTotalMiningPool;
+        var emitted = Math.Max(0, previousTotal - file.RemainingPool);
+        var before = file.RemainingPool;
+        file.RemainingPool = Math.Max(0, TotalMiningPool - emitted);
+        file.PoolTotal = TotalMiningPool;
+        Console.WriteLine(
+            $"[HellMining] Pool re-based {previousTotal:N0} → {TotalMiningPool:N0} (emitted {emitted:N0}; remaining {before:N0} → {file.RemainingPool:N0}).");
     }
 
     /// <summary>Periodic UTC-day settle + flush. Safe to call from any world tick.</summary>
@@ -611,7 +627,51 @@ public static class HellMiningStore {
         }
     }
 
-    /// <summary>Grant pending $HELL (Garden quests, events). Does not touch daily credit pool.</summary>
+    /// <summary>
+    /// Direct award paid out of today's <see cref="DailyTokenCap"/> budget (Arena duels / AFK / verified streams).
+    /// Clamped to the wallet's room under <see cref="WalletDailyCap"/>, the day budget, and the pool.
+    /// Returns the amount moved to pending (0 when any cap is already reached).
+    /// </summary>
+    public static long AwardDailyDirect(string? accountWallet, string? characterName, long amount, long nowMs) {
+        var wallet = NormalizeWallet(accountWallet);
+        if (string.IsNullOrEmpty(wallet) || amount <= 0) {
+            return 0;
+        }
+        lock (Gate) {
+            SettlePastDaysLocked(nowMs);
+            var day = EnsureDayLocked(UtcDayKey(nowMs));
+            if (day.Settled) {
+                return 0;
+            }
+            var row = EnsureDayWalletLocked(day, wallet);
+            if (!string.IsNullOrWhiteSpace(characterName)) {
+                row.CharacterName = characterName.Trim();
+            }
+            var granted = TryAwardDirectLocked(day, row, amount);
+            if (granted > 0) {
+                PersistLocked();
+                lastPersistMs = nowMs;
+            }
+            return granted;
+        }
+    }
+
+    /// <summary>How much more <paramref name="accountWallet"/> can mine today before <see cref="WalletDailyCap"/>.</summary>
+    public static long GetWalletRoomToday(string? accountWallet, long nowMs) {
+        var wallet = NormalizeWallet(accountWallet);
+        if (string.IsNullOrEmpty(wallet)) {
+            return 0;
+        }
+        lock (Gate) {
+            if (!file.Days.TryGetValue(UtcDayKey(nowMs), out var day) ||
+                !day.Wallets.TryGetValue(wallet, out var row)) {
+                return WalletDailyCap;
+            }
+            return Math.Max(0, WalletDailyCap - row.DirectTokens);
+        }
+    }
+
+    /// <summary>Grant pending $HELL (Garden quests, referrals). Does not touch daily credit pool.</summary>
     public static void GrantPendingHell(string? accountWallet, long amount) {
         var wallet = NormalizeWallet(accountWallet);
         if (string.IsNullOrEmpty(wallet) || amount <= 0) {
@@ -735,13 +795,11 @@ public static class HellMiningStore {
             return 0;
         }
         var dayRoom = DailyTokenCap - day.DirectSpent;
-        if (dayRoom <= 0 || file.RemainingPool <= 0) {
+        var walletRoom = WalletDailyCap - dayRow.DirectTokens;
+        if (dayRoom <= 0 || walletRoom <= 0 || file.RemainingPool <= 0) {
             return 0;
         }
-        var grant = requested;
-        if (grant > dayRoom) {
-            grant = dayRoom;
-        }
+        var grant = Math.Min(requested, Math.Min(dayRoom, walletRoom));
         if (grant > file.RemainingPool) {
             grant = file.RemainingPool;
         }
@@ -782,7 +840,6 @@ public static class HellMiningStore {
         }
 
         // Active = any play signal that day (credits, minutes, kills, EKs).
-        // If only a few chars show up, they still share the full remaining daily budget.
         var active = day.Wallets.Values
             .Where(IsActiveDayWallet)
             .ToList();
@@ -792,37 +849,11 @@ public static class HellMiningStore {
             // Prefer credit-weighted split when anyone earned credits; else activity-weighted
             // (minutes + kills + EKs) so "acciones mínimas" still divide the day pool.
             var useCredits = day.TotalCredits > 0 && active.Any(r => r.Credits > 0);
-            long weightSum = 0;
-            foreach (var row in active) {
-                weightSum += useCredits ? Math.Max(0, row.Credits) : ActivityWeight(row);
-            }
-            if (weightSum <= 0) {
-                weightSum = active.Count;
-                useCredits = false;
-            }
-
-            // Integer shares + remainder to highest weight so the full daily budget is spent.
-            var ordered = active
-                .OrderByDescending(r => useCredits ? r.Credits : ActivityWeight(r))
-                .ThenBy(r => r.Wallet, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            long assigned = 0;
-            for (var i = 0; i < ordered.Count; i++) {
-                var row = ordered[i];
-                long w = useCredits ? Math.Max(0, row.Credits) : ActivityWeight(row);
-                if (w <= 0) {
-                    w = 1;
-                }
-                long share;
-                if (i == ordered.Count - 1) {
-                    share = creditPool - assigned;
-                } else {
-                    share = creditPool * w / weightSum;
-                    assigned += share;
-                }
-                if (share <= 0) {
-                    continue;
-                }
+            var shares = SplitCappedLocked(
+                active,
+                creditPool,
+                row => useCredits ? Math.Max(0, row.Credits) : ActivityWeight(row));
+            foreach (var (row, share) in shares) {
                 var walletRow = EnsureWalletLocked(row.Wallet);
                 walletRow.PendingHell = SaturateAddLong(walletRow.PendingHell, share);
                 row.SettledShare = SaturateAddLong(row.SettledShare, share);
@@ -836,6 +867,63 @@ public static class HellMiningStore {
         day.SettledAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         Console.WriteLine(
             $"[HellMining] Settled {dayKey}: active={active.Count}, credits={day.TotalCredits}, direct={day.DirectSpent}, creditShare={day.CreditPoolDistributed}, poolLeft={file.RemainingPool}.");
+    }
+
+    /// <summary>
+    /// Splits <paramref name="pool"/> by weight; no wallet ends the day above <see cref="WalletDailyCap"/>
+    /// (direct awards count). What a capped wallet cannot take is re-split among the others, and what
+    /// nobody can take stays in the mining pool — one player alone mines at most the wallet cap.
+    /// </summary>
+    static List<(HellMiningDayWallet Row, long Share)> SplitCappedLocked(
+        List<HellMiningDayWallet> rows,
+        long pool,
+        Func<HellMiningDayWallet, long> weightOf) {
+        var shares = new Dictionary<HellMiningDayWallet, long>();
+        var open = rows
+            .Select(r => (Row: r, Weight: weightOf(r), Room: Math.Max(0, WalletDailyCap - r.DirectTokens)))
+            .Where(x => x.Weight > 0 && x.Room > 0)
+            .ToList();
+        var remaining = pool;
+        while (remaining > 0 && open.Count > 0) {
+            long weightSum = 0;
+            foreach (var x in open) {
+                weightSum = SaturateAddLong(weightSum, x.Weight);
+            }
+            var capped = open.Where(x => (decimal)remaining * x.Weight / weightSum >= x.Room).ToList();
+            if (capped.Count > 0) {
+                foreach (var x in capped) {
+                    shares[x.Row] = x.Room;
+                    remaining -= x.Room;
+                }
+                open = open.Except(capped).ToList();
+                continue;
+            }
+
+            long assigned = 0;
+            foreach (var x in open) {
+                var share = (long)((decimal)remaining * x.Weight / weightSum);
+                shares[x.Row] = share;
+                assigned += share;
+            }
+            // Rounding remainder (< open.Count tokens): one each, heaviest first.
+            var leftover = remaining - assigned;
+            foreach (var x in open
+                         .OrderByDescending(x => x.Weight)
+                         .ThenBy(x => x.Row.Wallet, StringComparer.OrdinalIgnoreCase)) {
+                if (leftover <= 0) {
+                    break;
+                }
+                if (shares[x.Row] < x.Room) {
+                    shares[x.Row]++;
+                    leftover--;
+                }
+            }
+            break;
+        }
+        return shares
+            .Where(kv => kv.Value > 0)
+            .Select(kv => (kv.Key, kv.Value))
+            .ToList();
     }
 
     static bool IsActiveDayWallet(HellMiningDayWallet row) =>
@@ -1012,24 +1100,27 @@ public static class HellMiningStore {
         }
     }
 
-    static void TryLoadLocked() {
+    static bool TryLoadLocked() {
         if (persistDirectory is null) {
-            return;
+            return false;
         }
         var path = Path.Combine(persistDirectory, "hell-mining.json");
         if (!File.Exists(path)) {
-            return;
+            return false;
         }
         try {
             var json = File.ReadAllText(path);
             var loaded = JsonSerializer.Deserialize<HellMiningFile>(json, JsonOptions);
-            if (loaded is not null) {
-                file = loaded;
-                file.Days ??= new Dictionary<string, HellMiningDay>(StringComparer.Ordinal);
-                file.Wallets ??= new Dictionary<string, HellMiningWallet>(StringComparer.OrdinalIgnoreCase);
+            if (loaded is null) {
+                return false;
             }
+            file = loaded;
+            file.Days ??= new Dictionary<string, HellMiningDay>(StringComparer.Ordinal);
+            file.Wallets ??= new Dictionary<string, HellMiningWallet>(StringComparer.OrdinalIgnoreCase);
+            return true;
         } catch (Exception ex) {
             Console.Error.WriteLine($"[HellMining] Failed to load ledger: {ex.Message}");
+            return false;
         }
     }
 
@@ -1165,6 +1256,8 @@ public sealed class HellMiningDay {
 /// <summary>Root ledger file shape.</summary>
 public sealed class HellMiningFile {
     public long RemainingPool { get; set; } = HellMiningStore.TotalMiningPool;
+    /// <summary>Pool size <see cref="RemainingPool"/> is measured against; 0 on ledgers written before the field existed.</summary>
+    public long PoolTotal { get; set; }
     public Dictionary<string, HellMiningWallet> Wallets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, HellMiningDay> Days { get; set; } = new(StringComparer.Ordinal);
 }

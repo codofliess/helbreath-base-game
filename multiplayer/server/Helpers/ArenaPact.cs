@@ -228,8 +228,8 @@ public static class ArenaPact {
             MapId = mapId,
             HostName = player.CharacterName,
             HostSessionId = player.SessionId,
-            StakeAssetId = req.HasStakeAssetId ? req.StakeAssetId : null,
-            StakeAmount = req.HasStakeAmount ? req.StakeAmount : 0,
+            StakeAssetId = ArenaPrizeEscrow.PlayerPledgesAllowed && req.HasStakeAssetId ? req.StakeAssetId : null,
+            StakeAmount = ArenaPrizeEscrow.PlayerPledgesAllowed && req.HasStakeAmount ? req.StakeAmount : 0,
             CreatedAtMs = now,
             ExpiresAtMs = Math.Max(opensAt, now) + InviteTtlHours * 3600_000L,
             OpensAtMs = opensAt,
@@ -893,12 +893,19 @@ public static class ArenaPact {
         }
     }
 
-    /// <summary>Captain pledges whitelist asset into the prize bag (drafting/editing only).</summary>
+    /// <summary>
+    /// Captain pledges whitelist asset into the prize bag (drafting/editing only). Off while prizes are
+    /// treasury-only (<see cref="ArenaPrizeEscrow.PlayerPledgesAllowed"/>).
+    /// </summary>
     public static void HandlePrizePledge(GameWorldPlayer player, ArenaPactPrizePledgeRequest req) {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(req);
         if (!Matches.TryGetValue(req.MatchId ?? "", out var match)) {
             SendStateTo(player, null, "Duel not found.");
+            return;
+        }
+        if (!ArenaPrizeEscrow.PlayerPledgesAllowed) {
+            SendStateTo(player, match, ArenaPrizeEscrow.TreasuryOnlyMessage);
             return;
         }
         lock (match.Gate) {

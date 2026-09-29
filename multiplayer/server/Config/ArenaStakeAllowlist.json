@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "note": "Only these assets may be used in pact-duel escrow. Ops-controlled — no free-form mints in UI.",
+  "note": "Only these assets may be used in pact-duel escrow. Ops-controlled — no free-form mints in UI. PO 2026-09-29: player stakes are off; Arena prizes are paid by the treasury (ArenaPrizeWhitelist.json houseSponsor).",
   "chain": "solana",
-  "status": "coming_soon",
+  "status": "disabled",
   "tokens": [
     {
       "symbol": "USDT",
       "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
       "decimals": 6,
-      "enabled": true
+      "enabled": false
     },
     {
       "symbol": "HELL",
@@ -20,7 +20,7 @@
   ],
   "nftCollections": [],
   "ui": {
-    "stakeButtonLabel": "Stake (coming soon)",
+    "stakeButtonLabel": "",
     "rejectUnknownMintMessage": "Only whitelisted USDT / HELL / NFT collections can be staked."
   }
 }

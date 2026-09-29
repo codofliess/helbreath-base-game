@@ -397,8 +397,6 @@ export function ArenaPactDialog({
     const [minute, setMinute] = useState(() => Math.min(59, new Date().getMinutes() + 5));
     const [readyWindowMin, setReadyWindowMin] = useState(15);
     const [inviteName, setInviteName] = useState('');
-    /** Bolsa $ each fighter posts (0 = Honor). Escrow later — recorded on match for now. */
-    const [stakeAmount, setStakeAmount] = useState(0);
     /** Publish on cartelera + Discord Events. */
     const [isPublic, setIsPublic] = useState(true);
     const [duelTitle, setDuelTitle] = useState('');
@@ -573,12 +571,6 @@ export function ArenaPactDialog({
                 arenaKitJson: kitJson,
                 opensAtMs: pendingCreate.opensAtMs,
                 readyWindowSec: pendingCreate.readyWindowSec,
-                stakeAssetId: pendingCreate.stakeAmount && pendingCreate.stakeAmount > 0
-                    ? pendingCreate.stakeAssetId || 'USDT'
-                    : undefined,
-                stakeAmount: pendingCreate.stakeAmount && pendingCreate.stakeAmount > 0
-                    ? pendingCreate.stakeAmount
-                    : undefined,
                 isPublic: pendingCreate.isPublic,
                 title: pendingCreate.title,
                 hostStreamUrl: pendingCreate.hostStreamUrl,
@@ -784,7 +776,6 @@ export function ArenaPactDialog({
         const when = new Date(opensAtMs);
         const whenLabel = `${when.toLocaleDateString()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
 
-        const stake = Math.max(0, Math.floor(stakeAmount));
         const resolvedHostStream =
             buildStreamUrlFromGuide(streamGuide, twitchChannel, streamPaste) ||
             hostStreamUrl.trim() ||
@@ -797,8 +788,6 @@ export function ArenaPactDialog({
             opensAtMs,
             readyWindowSec,
             inviteName: inviteName.trim() || undefined,
-            stakeAssetId: stake > 0 ? 'USDT' : undefined,
-            stakeAmount: stake > 0 ? stake : undefined,
             isPublic,
             title: duelTitle.trim() || undefined,
             hostStreamUrl: resolvedHostStream,
@@ -817,8 +806,6 @@ export function ArenaPactDialog({
             arenaKitJson: kitJson,
             opensAtMs,
             readyWindowSec,
-            stakeAssetId: createPayload.stakeAssetId,
-            stakeAmount: createPayload.stakeAmount,
             isPublic: createPayload.isPublic,
             title: createPayload.title,
             hostStreamUrl: createPayload.hostStreamUrl,
@@ -827,7 +814,7 @@ export function ArenaPactDialog({
         // Invite is auto-sent when match state arrives (see effect on match.matchId + inviteName).
         setStatusHint(`Creating PVP duel — opens ${whenLabel}, then ${readyWindowMin} min Ready.`);
         EventBus.emit(TOAST_REQUESTED, {
-            message: `PVP duel scheduled for ${whenLabel}.${stake > 0 ? ` Bolsa ${stake} USDT each.` : ' For Honor.'}`,
+            message: `PVP duel scheduled for ${whenLabel}.`,
             severity: 'success',
         });
     };
@@ -1837,21 +1824,6 @@ export function ArenaPactDialog({
                         </span>
                     </label>
 
-                    <label style={{ display: 'block', marginBottom: 12 }}>
-                        Bolsa $ each (USDT){' '}
-                        <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={stakeAmount}
-                            onChange={(e) => setStakeAmount(Math.max(0, Number(e.target.value) || 0))}
-                            style={{ width: 80, marginLeft: 4 }}
-                        />
-                        <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>
-                            0 = for Honor (escrow later)
-                        </span>
-                    </label>
-
                     <label
                         style={{
                             display: 'flex',
@@ -1934,7 +1906,6 @@ export function ArenaPactDialog({
                                 });
                                 return;
                             }
-                            const stake = Math.max(0, Math.floor(stakeAmount));
                             const resolvedHostStream =
                                 buildStreamUrlFromGuide(streamGuide, twitchChannel, streamPaste) ||
                                 hostStreamUrl.trim() ||
@@ -1947,8 +1918,6 @@ export function ArenaPactDialog({
                                 opensAtMs: 0,
                                 readyWindowSec,
                                 inviteName: inviteName.trim() || undefined,
-                                stakeAssetId: stake > 0 ? 'USDT' : undefined,
-                                stakeAmount: stake > 0 ? stake : undefined,
                                 isPublic,
                                 title: duelTitle.trim() || undefined,
                                 hostStreamUrl: resolvedHostStream,
@@ -1965,8 +1934,6 @@ export function ArenaPactDialog({
                                 arenaKitJson: kitJson,
                                 opensAtMs: 0,
                                 readyWindowSec,
-                                stakeAssetId: payload.stakeAssetId,
-                                stakeAmount: payload.stakeAmount,
                                 isPublic: payload.isPublic,
                                 title: payload.title,
                                 hostStreamUrl: payload.hostStreamUrl,

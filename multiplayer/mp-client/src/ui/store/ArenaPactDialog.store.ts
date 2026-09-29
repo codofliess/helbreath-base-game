@@ -5,8 +5,6 @@ export interface PendingArenaPactCreate {
     opensAtMs: number;
     readyWindowSec: number;
     inviteName?: string;
-    stakeAssetId?: string;
-    stakeAmount?: number;
     isPublic?: boolean;
     title?: string;
     hostStreamUrl?: string;

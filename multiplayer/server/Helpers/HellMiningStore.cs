@@ -656,6 +656,51 @@ public static class HellMiningStore {
         }
     }
 
+    /// <summary>
+    /// Verified X live (≥15m on the cartelera): tops the wallet up to <see cref="WalletDailyCap"/> for the day,
+    /// out of the same day budget. Once per wallet per day, and one X stream pays only one wallet per day.
+    /// </summary>
+    public static HellMiningCreditResult AwardXStreamDay(
+        string? accountWallet,
+        string? characterName,
+        string streamKey,
+        long nowMs) {
+        var wallet = NormalizeWallet(accountWallet);
+        if (string.IsNullOrEmpty(wallet) || string.IsNullOrWhiteSpace(streamKey)) {
+            return HellMiningCreditResult.Ignored("No wallet.");
+        }
+        lock (Gate) {
+            SettlePastDaysLocked(nowMs);
+            var day = EnsureDayLocked(UtcDayKey(nowMs));
+            if (day.Settled) {
+                return HellMiningCreditResult.Ignored("Day already settled.");
+            }
+            var row = EnsureDayWalletLocked(day, wallet);
+            if (row.XStreamRewardGranted) {
+                return HellMiningCreditResult.Ignored(null);
+            }
+            day.PaidXStreams ??= new List<string>();
+            if (day.PaidXStreams.Contains(streamKey, StringComparer.Ordinal)) {
+                return HellMiningCreditResult.Ignored("This X live already paid another wallet today.");
+            }
+            if (!string.IsNullOrWhiteSpace(characterName)) {
+                row.CharacterName = characterName.Trim();
+            }
+            var granted = TryAwardDirectLocked(day, row, WalletDailyCap);
+            row.XStreamRewardGranted = true;
+            row.XStreamDirectTokens = granted;
+            day.PaidXStreams.Add(streamKey);
+            PersistLocked();
+            lastPersistMs = nowMs;
+            var message = granted > 0
+                ? $"X live verified on the cartelera: +{granted} pending $HELL (today's max reached)."
+                : row.DirectTokens >= WalletDailyCap
+                    ? "X live verified on the cartelera — you already hit today's max."
+                    : "X live verified, but today's server mining budget is used up. Resets UTC midnight.";
+            return new HellMiningCreditResult(true, 0, granted, message);
+        }
+    }
+
     /// <summary>How much more <paramref name="accountWallet"/> can mine today before <see cref="WalletDailyCap"/>.</summary>
     public static long GetWalletRoomToday(string? accountWallet, long nowMs) {
         var wallet = NormalizeWallet(accountWallet);
@@ -1208,6 +1253,9 @@ public sealed class HellMiningDayWallet {
     public long DirectTokens { get; set; }
     public bool EventParticipated { get; set; }
     public long SettledShare { get; set; }
+    /// <summary>True after today's verified X live top-up was paid (or found the wallet already at the cap).</summary>
+    public bool XStreamRewardGranted { get; set; }
+    public long XStreamDirectTokens { get; set; }
 }
 
 /// <summary>Ops / Sheets day report root.</summary>
@@ -1251,6 +1299,8 @@ public sealed class HellMiningDay {
     public bool Settled { get; set; }
     public long SettledAtMs { get; set; }
     public Dictionary<string, HellMiningDayWallet> Wallets { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Canonical X live keys (<see cref="StreamLinks.CanonicalXKey"/>) that already paid a wallet today.</summary>
+    public List<string>? PaidXStreams { get; set; }
 }
 
 /// <summary>Root ledger file shape.</summary>

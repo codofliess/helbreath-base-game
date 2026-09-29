@@ -47,9 +47,11 @@ public static class ArenaPact {
         public bool TechAccepted { get; set; }
         /// <summary>Invited but has not Accept / 4Honor / Decline yet.</summary>
         public bool InvitePending { get; set; }
-        /// <summary>First-person stream URL (Twitch / YT / Discord Go Live).</summary>
+        /// <summary>First-person stream URL (X live / Twitch / YT / Discord Go Live).</summary>
         public string? StreamUrl { get; set; }
         public string? StreamPlatform { get; set; }
+        /// <summary>UTC ms <see cref="StreamUrl"/> became an X live link; 0 otherwise.</summary>
+        public long XLiveSinceMs { get; set; }
         /// <summary>After DC reconnect — apply buffs when we have GameWorldRef (warp/tick).</summary>
         public ArenaPrizeEscrow.FighterCombatSnapshot? PendingBuffRestore { get; set; }
     }
@@ -105,6 +107,8 @@ public static class ArenaPact {
         public bool LiveDiscordNotified { get; set; }
         /// <summary>UTC ms when match entered live (for incentives).</summary>
         public long LiveStartedAtMs { get; set; }
+        /// <summary>UTC ms <see cref="GlobalStreamUrl"/> became an X live link (credited to the host); 0 otherwise.</summary>
+        public long GlobalXLiveSinceMs { get; set; }
         /// <summary>Arena $HELL participation already paid for this match.</summary>
         public bool IncentiveGranted { get; set; }
         public List<PactFighter> Fighters { get; } = new();
@@ -240,6 +244,7 @@ public static class ArenaPact {
             Title = title.Length > 80 ? title[..80] : title,
             GlobalStreamUrl = globalStream,
             GlobalStreamPlatform = DetectStreamPlatform(globalStream),
+            GlobalXLiveSinceMs = StreamLinks.IsXLiveUrl(globalStream) ? now : 0,
         };
         if (isImmediate) {
             match.ReadyEndsAtMs = now + readyWindowSec * 1000L;
@@ -256,6 +261,7 @@ public static class ArenaPact {
             InvitePending = false,
             StreamUrl = hostStream,
             StreamPlatform = DetectStreamPlatform(hostStream),
+            XLiveSinceMs = StreamLinks.IsXLiveUrl(hostStream) ? now : 0,
         });
 
         Matches[id] = match;
@@ -276,7 +282,7 @@ public static class ArenaPact {
         }
         var url = NormalizeStreamUrl(req.StreamUrl);
         if (url is null && !string.IsNullOrWhiteSpace(req.StreamUrl)) {
-            SendStateTo(player, match, "Invalid stream URL (use https:// twitch / youtube / discord).");
+            SendStateTo(player, match, "Invalid stream URL (use https:// x.com live / twitch / youtube / discord).");
             return;
         }
         lock (match.Gate) {
@@ -288,6 +294,11 @@ public static class ArenaPact {
                 if (player.SessionId != match.HostSessionId) {
                     SendStateTo(player, match, "Only the host can set the global cam.");
                     return;
+                }
+                if (!string.Equals(match.GlobalStreamUrl, url, StringComparison.Ordinal)) {
+                    match.GlobalXLiveSinceMs = StreamLinks.IsXLiveUrl(url)
+                        ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        : 0;
                 }
                 match.GlobalStreamUrl = url;
                 match.GlobalStreamPlatform = DetectStreamPlatform(url);
@@ -1331,9 +1342,46 @@ public static class ArenaPact {
     }
 
     private static void SetFighterStreamLocked(PactFighter fighter, string? url, long nowMs) {
-        _ = nowMs;
+        if (!string.Equals(fighter.StreamUrl, url, StringComparison.Ordinal)) {
+            fighter.XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? nowMs : 0;
+        }
         fighter.StreamUrl = url;
         fighter.StreamPlatform = DetectStreamPlatform(url);
+    }
+
+    /// <summary>
+    /// Earliest X live link <paramref name="wallet"/> has on a public (cartelera-listed) duel right now:
+    /// the fighter's POV stream, or the global cam when the wallet is the host.
+    /// </summary>
+    public static (string Url, long SinceMs)? GetPublicXLiveForWallet(string? wallet) {
+        if (string.IsNullOrWhiteSpace(wallet)) {
+            return null;
+        }
+        var w = wallet.Trim();
+        (string Url, long SinceMs)? best = null;
+        void Consider(string? url, long since) {
+            if (url is not null && since > 0 && (best is null || since < best.Value.SinceMs)) {
+                best = (url, since);
+            }
+        }
+        foreach (var m in Matches.Values) {
+            if (!m.IsPublic || m.Status is "done" or "cancelled" or "expired") {
+                continue;
+            }
+            lock (m.Gate) {
+                foreach (var f in m.Fighters) {
+                    if (f.InvitePending || !string.Equals(f.Wallet, w, StringComparison.OrdinalIgnoreCase)) {
+                        continue;
+                    }
+                    Consider(f.StreamUrl, f.XLiveSinceMs);
+                    if (f.Team == 0 &&
+                        string.Equals(f.CharacterName, m.HostName, StringComparison.OrdinalIgnoreCase)) {
+                        Consider(m.GlobalStreamUrl, m.GlobalXLiveSinceMs);
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     /// <summary>
@@ -1656,22 +1704,7 @@ public static class ArenaPact {
         return uri.ToString();
     }
 
-    private static string? DetectStreamPlatform(string? url) {
-        if (string.IsNullOrWhiteSpace(url)) {
-            return null;
-        }
-        var u = url.ToLowerInvariant();
-        if (u.Contains("twitch.tv") || u.Contains("twitch.com")) {
-            return "twitch";
-        }
-        if (u.Contains("youtube.com") || u.Contains("youtu.be")) {
-            return "youtube";
-        }
-        if (u.Contains("discord") || u.Contains("discordapp")) {
-            return "discord";
-        }
-        return "other";
-    }
+    private static string? DetectStreamPlatform(string? url) => StreamLinks.DetectPlatform(url);
 
     private static void WarpFightersLocked(PactMatch match, Action<GameWorldPlayer, string> requestWorldChange) {
         foreach (var f in match.Fighters) {

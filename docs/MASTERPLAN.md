@@ -210,6 +210,7 @@ Leyenda de estado: **Hecho** · **En curso** · **Diseño** · **Pendiente** · 
 | **D10** | **Premios a guilds = consumibles.** **Sin dividendos** a guilds hasta que los reguladores cambien las reglas de staking. | § 1.4 | Cerrado |
 | **D11** | **Cash Shop:** los precios son los de **config** (`CashShop.json`). La venta de **reputación se mantiene**. | `multiplayer/server/Config/CashShop.json` | Cerrado |
 | **D12** | **Árbol de drop Olympia** (gate → oro vs ítem → estándar vs valioso) y **rebirth directo a L79**. | `MonsterLoot` (PR aparte `cursor/olympia-drop-tree-ab66`) · `Progression.json` `rebirthResetLevel: 79` (ya en código) | Cerrado |
+| **D13** | **Team (10% = 100M) en 5 cuotas.** **Cuota 1 = 1% del supply (10M) en el TGE, sin lock.** Cuotas 2–5 = el 9% restante (22,5M cada una) a los **3, 6, 9 y 12 meses**. Reemplaza el unlock viejo de 3,33%/mes. | `init-hell-token.js` (`team` = cuota 1, `teamVesting` = cuotas 2–5). El split es dos vaults, **no** un timelock on-chain | Cerrado (cadencia 3 meses) |
 
 #### Mapa rápido — economía / capital ops / próximo slice
 
@@ -338,7 +339,7 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 
 **4. Estudio crítico — control / captura de fees del par DEX (parcialmente cerrado · C8–C12).** Path launch + política LP/fees = **C8–C12**. Sigue open: par exacto (SOL vs USDC/USDT), Creator Fees vs Cashback Coins, vaults/sharing_config, tax al claim. **Sin contratos DEX propios en este pass.** Detalle en canvas `helbreath-dex-liquidity-robinhood-base`. **Freeze C5:** el team **no** opera un “DEX floor” pensado para cash-out de stakers.
 
-**5. Contingencia burn de team tokens.** Si llegan fondos grandes vía fees DEX + ventas de consumibles, el PO contempla **quemar / eliminar todos los tokens del bucket team**. Óptica de buena fe vs unlock ya documentado (3.33%/mes sobre 100M) — reconciliar schedule si se activa burn (cliff cancelado, burn on-chain verificable, no “promesa de buyback”). Coherente con **C7**.
+**5. Contingencia burn de team tokens.** Si llegan fondos grandes vía fees DEX + ventas de consumibles, el PO contempla **quemar / eliminar todos los tokens del bucket team**. Óptica de buena fe vs el vesting D13 (1% libre en el TGE, 9% en cuotas 2–5) — si se activa el burn, quema lo que siga en el vault de vesting (cuotas no liberadas), verificable on-chain, no “promesa de buyback”. Coherente con **C7**.
 
 **6. Fee marketplace P2P (sketch) + postura custody (C6).** **~5%** sobre trades intermediados jugador-a-jugador (ítems). Preferir flujo **non-custodial**; engines con balances **bajos**; warning UX: no acumular $$$ en la app de auction; fondos viven en **wallets de jugadores**. Allowlist / tooling vs phishing skins = **intent, TBD implement**. Preocupación legal del owner: ¿puede meterse en problemas personales por **quedarse** con (a) fees DEX si las controla/cobra y (b) ese 5%? → **entity + counsel** (abajo); no operar como persona física.
 
@@ -388,10 +389,10 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 | **Mined by playing** | **300 000 000 (30%)** | De a **500k/día**; tope **50k/wallet/día**; Arena y stream X salen del mismo presupuesto diario — **única** emisión por jugar (**C1**) |
 | **Bonding curve** | **300 000 000 (30%)** | Venta inicial por curva |
 | **Liquidez de graduación** | **100–200M (10–20%)** | Al egresar de la curva se inyecta como liquidez inicial para armar pools en otros DEX |
-| **Team** | **100 000 000 (10%)** | Vesting = open (tabla anterior: unlock 3.33%/mes); custody Squads (C14) |
+| **Team** | **100 000 000 (10%)** | **D13:** cuota 1 = **10M (1% del supply) en el TGE, sin lock**. Cuotas 2–5 = **22,5M** a TGE+3 / +6 / +9 / +12 meses, en vault aparte. Custody Squads (C14). El 3,33%/mes queda solo en la tabla histórica |
 | **Airdrops** | **resto (20–10%)** | Créditos del mes de test, guilds legacy, campañas |
 
-Devnet: `npm run init-hell-token` (middleware-node) crea estos vaults; `HELL_GRADUATION_LIQUIDITY_PCT` (10–20, default 15) fija el split liquidez/airdrops.
+Devnet: `npm run init-hell-token` (middleware-node) crea estos vaults. El bucket team se parte en `team` (cuota 1, 10M, sin lock) y `teamVesting` (90M). `HELL_GRADUATION_LIQUIDITY_PCT` (10–20, default 15) fija el split liquidez/airdrops. El vault de vesting no es un timelock on-chain.
 
 <details><summary>Tabla 2026-07-13 (superseded)</summary>
 
@@ -1884,6 +1885,7 @@ Detalle: [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md). Objet
 | 2026-07-30 | **PvP / combate feel vs Olympia (PO):** objetivo = **igual o mejor** que Olympia en reglas y feel. **Única distancia aceptable:** límites técnicos de **browser game** (WebGL/JS/tab) y **ping / calidad de servidor pagado**. No usar “es browser” para justificar gaps de mecánica (DamageMove 50/80, stun, cast, spacing, bumps evitables). Capa A+B en `OLYMPIA-PVP-FEEL-GAP.md`; Capa C = videos Tola (top PvP Olympia). | Barra de calidad PvP; priorización post-clips. |
 | 2026-07-30 | **Combat feel vs Helbreath War (PO + live Ditizar):** referencia dens 100+ on (ToH). **A** = reglas (DamageMove 50/80, Cancel/Para, floats, quest UI, drops). **B** = snappiness (equip/cast optimistic, wall-slide, delay hit, sin rubber-band). **C** = techo browser (mitigar, no prometer nativo). Meta: acercarse decente; no 1:1 nativo. Código: DamageMove + wall-slide + hit delay; docs § **1.11** + `refs/HELBREATH-WAR-LIVE-NOTES.md`. | Dens PvP feel = prioridad de producto junto a Olympia parity. |
 | 2026-09-29 | **Economía $HELL (PO, D1–D12 en § 1.7):** único token **$HELL** (launch 2026-09-30 tarde; $HELBREATH/RH deprecated). Tokenomics 30% mining (500k/día) · 30% bonding curve · 10–20% liquidez de graduación · 10% team · resto airdrops. Precio = mercado; Cash Shop re-precia en $HELL solo con drift >20%. Mining tope **50k/wallet/día** proporcional; stream X ≥15 min (cartelera) = 50k ese día; Arena 7k/3k dentro del pool, 1 duelo pagado por par de rivales/día. Premios Arena = treasury (sin bolsa de jugadores). Maestría +1 nivel por 50k staked, todos los parámetros suben parejo, L40 = Olympia L40. Guild create 100k quemados + upgrades quemados; guilds cobran en consumibles, sin dividendos hasta cambio regulatorio. Cash Shop = precios de config (se borra el combo viejo); venta de reputación sigue. Drop tree Olympia + rebirth L79. | Cierra la crítica de economía 2026-09-29; código en PRs `cursor/hell-economy-decisions-ab66` y `cursor/olympia-drop-tree-ab66`. |
+| 2026-09-30 | **Team vesting (D13):** el 10% del team sale en 5 cuotas. **Cuota 1 = 1% del supply (10M) en el TGE, sin lock.** Cuotas 2–5 = 22,5M a TGE+3/6/9/12 meses, vault aparte (no timelock on-chain). Reemplaza el 3,33%/mes. | `init-hell-token.js` |
 
 <!-- APPEND nuevas decisiones debajo de esta línea, misma tabla o filas nuevas -->
 

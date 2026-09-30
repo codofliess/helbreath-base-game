@@ -378,10 +378,12 @@ public static class PlayerDerivedStats {
     /// Olympia <c>Effect_Damage_Spot</c> magic damage:
     /// <c>iDice(count, sides) + bonus</c>, then Mag% = base * (1 + Mag/3.3 / 100).
     /// Uses <see cref="SpellConfig"/> dice when present; otherwise a conservative mid-tier fallback.
+    /// <paramref name="damageRandom"/> supplies the dice when set; otherwise <see cref="Random.Shared"/>.
     /// </summary>
-    public static int RollMagicDamage(GameWorldPlayer caster, SpellConfig spell) {
+    public static int RollMagicDamage(GameWorldPlayer caster, SpellConfig spell, Random? damageRandom = null) {
         ArgumentNullException.ThrowIfNull(caster);
         ArgumentNullException.ThrowIfNull(spell);
+        var rng = damageRandom ?? Random.Shared;
 
         var count = spell.DamageDiceCount is int c && c > 0 ? c : 2;
         var sides = spell.DamageDiceSides is int s && s > 0 ? s : 6;
@@ -389,7 +391,7 @@ public static class PlayerDerivedStats {
 
         var damage = 0;
         for (var i = 0; i < count; i++) {
-            damage += Random.Shared.Next(1, sides + 1);
+            damage += rng.Next(1, sides + 1);
         }
         damage += bonus;
         if (damage < 0) {

@@ -7,6 +7,7 @@ import {
     getInventoryManager,
     getLoginScreenBgKey,
     setInitialGameWorldState,
+    getNetworkManager,
     setNetworkManager,
 } from '../../utils/RegistryUtils';
 import {
@@ -17,9 +18,14 @@ import {
     PLAYER_ITEM_APPEARANCE_PREFETCH_REQUESTED,
     SOCKET_DISCONNECTED,
 } from '../../constants/EventNames';
-import type { ConnectToServerPayload, PlayerItemAppearancePrefetchEventData } from '../../constants/EventNames';
+import type {
+    ConnectToServerPayload,
+    PlayerItemAppearancePrefetchEventData,
+    SocketDisconnectedPayload,
+} from '../../constants/EventNames';
 import { EventBus } from '../EventBus';
 import { NetworkManager } from '../../utils/NetworkManager';
+import { isGameSocketOpen } from '../../utils/gameConnectionGate';
 import type { InitialGameWorldStateEventData } from '../../Types';
 import { setConnectingDialogOpen } from '../../ui/store/ConnectingDialog.store';
 import {
@@ -117,7 +123,15 @@ export class LoginScreen extends Scene {
                 this.backgroundImage.setVisible(false);
             }
 
-            const handleSocketDisconnectedDuringLogin = () => {
+            let connectedManager: NetworkManager | undefined;
+            const handleSocketDisconnectedDuringLogin = (payload?: SocketDisconnectedPayload) => {
+                if (
+                    payload?.sessionId !== undefined &&
+                    connectedManager &&
+                    payload.sessionId !== connectedManager.getSessionId()
+                ) {
+                    return;
+                }
                 if (!this.pendingInitialGameWorldStateListener) {
                     return;
                 }
@@ -169,6 +183,17 @@ export class LoginScreen extends Scene {
                 }
                 getInventoryManager(this.game);
                 forceClearLoginDeskCanvasPresentation(this);
+                // Join packets can arrive and then the socket can die before Phaser boots
+                // GameWorld (LoginScreen drops SOCKET_DISCONNECTED here, GameWorld subscribes
+                // in init on a later step). Starting anyway paints a local avatar with no /ws
+                // and no feedback — server logs show zero connects for that attempt.
+                if (!connectedManager || !isGameSocketOpen(connectedManager.getSocket())) {
+                    console.warn('[LoginScreen] Not starting GameWorld: game WebSocket is not open');
+                    // Drop a half-open socket so it cannot authenticate after we leave this attempt.
+                    connectedManager?.releaseSocket();
+                    returnToReactSelectChar();
+                    return;
+                }
                 this.scene.start('GameWorld');
             };
 
@@ -183,7 +208,9 @@ export class LoginScreen extends Scene {
                 );
             }
 
+            getNetworkManager(this.game)?.releaseSocket();
             const networkManager = new NetworkManager(gsm.getNetworkId(), gsm.getAuthToken());
+            connectedManager = networkManager;
             setNetworkManager(this.game, networkManager);
 
             try {

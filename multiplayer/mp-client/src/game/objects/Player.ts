@@ -38,6 +38,7 @@ import {
     reassertWorldCanvasPresentationGuard,
     withWorldCanvasBoxGuard,
 } from '../../utils/worldCanvasPoolGuard';
+import { isLocalMovementFrozen } from '../../utils/gameConnectionGate';
 import { computeOtherPlayerSpatialConfig } from '../../utils/SpatialAudioUtils';
 import {
     EFFECT_RESURRECTION,
@@ -1515,6 +1516,22 @@ export class Player extends GameObject {
     }
 
     /**
+     * Snap a local step so a missing game socket cannot leave the avatar mid-tile.
+     * Input handlers also refuse new destinations while the reconnect overlay is up.
+     */
+    public freezeLocalMovement(): void {
+        if (!this.isLocalPlayer || this.dead) {
+            return;
+        }
+        const stepping = this.moving || this.offsetX !== 0 || this.offsetY !== 0 || this.destinationX >= 0;
+        if (!stepping) {
+            return;
+        }
+        this.hardStopForCast();
+        this.switchToIdle();
+    }
+
+    /**
      * Hard-stop pathing so cast never “finishes the walk” to the aim cell.
      * Snaps mid-tile offset to the current grid cell (Olympia: cast freezes feet).
      */
@@ -2850,6 +2867,9 @@ export class Player extends GameObject {
         if (this.dead) {
             return;
         }
+        if (this.isLocalPlayer && isLocalMovementFrozen()) {
+            return;
+        }
         if (this.isLocalPlayer && this.isParalyzed()) {
             return;
         }
@@ -3043,6 +3063,9 @@ export class Player extends GameObject {
         cursorPixelX?: number,
         cursorPixelY?: number
     ): void {
+        if (this.isLocalPlayer && isLocalMovementFrozen()) {
+            return;
+        }
         if (isMagiasRitualActive()) {
             const prepareLive = this.hasPendingSpell() || this.isCasting() || this.isCastReady();
             if (!prepareLive) {

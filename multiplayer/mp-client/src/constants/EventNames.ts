@@ -164,6 +164,12 @@ export interface ConnectToServerPayload {
 
 /** Emitted when the WebSocket connection is closed (server shutdown, network loss, etc.) */
 export const SOCKET_DISCONNECTED = 'socket-disconnected';
+/** `intentional` is a player logout. Unexpected closes stay in the world under the reconnect overlay. */
+export interface SocketDisconnectedPayload {
+    intentional?: boolean;
+    /** NetworkManager session that closed, so a replaced socket cannot abort the next login. */
+    sessionId?: number;
+}
 /**
  * InitialState: gender-resolved equipped item appearance basenames to prefetch lazily.
  * LoginScreen queues on `game.registry`; GameWorld drains after the map first frame

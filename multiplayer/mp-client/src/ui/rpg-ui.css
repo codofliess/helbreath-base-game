@@ -7546,6 +7546,49 @@ button.city-select-dialog-btn.olympia-text-btn {
     font-family: var(--olympia-ui-font);
 }
 
+/* Live game socket missing: blocks the world until Reconectar or Bind Phantom. */
+.server-connection-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 6, 4, 0.72);
+    pointer-events: auto;
+}
+
+.server-connection-overlay-card {
+    width: min(420px, 100%);
+    padding: 28px 24px 22px;
+    text-align: center;
+    background: linear-gradient(180deg, #3a2a1c 0%, #1c120c 100%);
+    border: 1px solid #c9a84c;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.server-connection-overlay-title {
+    margin: 0 0 10px;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #f5e6c0;
+}
+
+.server-connection-overlay-reason {
+    margin: 0 0 18px;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 14px;
+    color: #e7d7b0;
+}
+
+.server-connection-overlay-reconnect {
+    max-width: 240px;
+    margin: 0 auto;
+}
+
 /* Guild / Party menu rows (Olympia PutAlignedString hover: white vs dark purple) */
 .guild-menu-list {
     list-style: none;

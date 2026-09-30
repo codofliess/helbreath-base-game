@@ -9,7 +9,7 @@
 - **Maestría:** +1 nivel por 50k staked; todos los bonos suben parejo; L40 = Olympia L40 (`MobSpecialty`).
 - **Cash Shop:** precios de config; $HELL re-peg solo con drift de mercado >20% (`HellPriceAnchor`). Combo viejo borrado del masterplan; reputación se mantiene.
 - **Tokenomics devnet:** `init-hell-token.js` 30/30/10–20/10/resto.
-- **Team vesting (D13):** 5 cuotas. Cuota 1 = **1% del supply (10M) en el TGE, sin lock**. Cuotas 2–5 = 22,5M a los 3, 6, 9 y 12 meses, en el vault `teamVesting` (no es timelock on-chain).
+- **Team vesting (D13):** 100M en 5 cuotas iguales de 20M. Cuota 1 en el TGE (mes 0); cuotas 2–5 a TGE+3 / +6 / +9 / +12 meses (spacing de 3 meses = supuesto). Vault `team` = cuota 1; `teamVesting` = 80M. No es timelock on-chain. Reemplaza 3,33%/mes.
 - Guilds: crear = 100k quemados, upgrades quemados (diseño; no built). Sin dividendos; premios en consumibles.
 - Drop tree Olympia en PR aparte; rebirth L79 ya estaba en código.
 - Pendiente ops: mint `$HELL` real en `HELL_MINT` + whitelist Arena; landing hero sigue con el CA RH hasta tener el mint.

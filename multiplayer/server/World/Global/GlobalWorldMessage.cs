@@ -7,17 +7,19 @@ namespace Server.World.Global;
 /// <summary>Base type for messages delivered to the singleton <see cref="GlobalWorld"/> mailbox.</summary>
 public abstract record GlobalWorldMessage;
 
-/// <summary>First-time join into the global world: session id, current send callback, and authenticated character name.</summary>
+/// <summary>First-time join into the global world: session id, current send callback, authenticated character name, and persisted guild id when present.</summary>
 public sealed record GlobalPlayerConnectedMessage(
     Guid SessionId,
     Action<ServerMessage> SendMessage,
-    string CharacterName) : GlobalWorldMessage;
+    string CharacterName,
+    string GuildId = "") : GlobalWorldMessage;
 
 /// <summary>Existing global player reattached to a new socket during reconnect grace.</summary>
 public sealed record GlobalPlayerReconnectedMessage(
     Guid SessionId,
     Action<ServerMessage> SendMessage,
-    string CharacterName) : GlobalWorldMessage;
+    string CharacterName,
+    string GuildId = "") : GlobalWorldMessage;
 
 /// <summary>Socket closed; the player remains in the global world until cleanup removes the session.</summary>
 public sealed record GlobalPlayerDisconnectedMessage(Guid SessionId, bool SessionRemainsActive) : GlobalWorldMessage;

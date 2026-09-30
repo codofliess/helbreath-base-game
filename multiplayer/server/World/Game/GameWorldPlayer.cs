@@ -1190,7 +1190,7 @@ public class GameWorldPlayer : GameWorldActionableEntity {
         LoadWarehouseFromPersistence(state.WarehouseItems);
         guildInterestRegistered = state.GuildInterestRegistered;
         citizenshipSide = state.CitizenshipSide ?? string.Empty;
-        guildId = state.GuildId ?? string.Empty;
+        SetGuildId(state.GuildId ?? string.Empty);
         guildRank = Math.Clamp(state.GuildRank, 0, 3);
         reputation = Math.Max(0, state.Reputation);
         contribution = Math.Max(0, state.Contribution);
@@ -1226,8 +1226,11 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     /// <summary>Updates citizenship side used by auction city gates (persisted).</summary>
     public void SetCitizenshipSide(string side) => citizenshipSide = side?.Trim() ?? string.Empty;
 
-    /// <summary>Sets Fase H guild id stub for auction guild filters (persisted).</summary>
-    public void SetGuildId(string id) => guildId = id?.Trim() ?? string.Empty;
+    /// <summary>Sets Fase H guild id stub for auction guild filters (persisted) and global chat scoping.</summary>
+    public void SetGuildId(string id) {
+        guildId = id?.Trim() ?? string.Empty;
+        ChatMembership.SetGuild(SessionId, guildId);
+    }
 
     /// <summary>Sets guild rank stub (0–3). Captain/master may unbind guild-bound items.</summary>
     public void SetGuildRank(int rank) => guildRank = Math.Clamp(rank, 0, 3);
@@ -2295,11 +2298,17 @@ public class GameWorldPlayer : GameWorldActionableEntity {
         timedChallengeMonsterIds.Clear();
     }
 
-    /// <summary>Sets the session-local party code after create/join.</summary>
-    public void SetPartyCode(string code) => partyCode = string.IsNullOrWhiteSpace(code) ? null : code;
+    /// <summary>Sets the session-local party code after create/join and updates global chat scoping.</summary>
+    public void SetPartyCode(string code) {
+        partyCode = string.IsNullOrWhiteSpace(code) ? null : code;
+        ChatMembership.SetParty(SessionId, partyCode);
+    }
 
-    /// <summary>Clears party membership on leave / disconnect.</summary>
-    public void ClearPartyCode() => partyCode = null;
+    /// <summary>Clears party membership on leave / disconnect and drops party-chat scoping.</summary>
+    public void ClearPartyCode() {
+        partyCode = null;
+        ChatMembership.SetParty(SessionId, null);
+    }
 
     public bool IsNpcInRange(long npcId) {
         return npcsInRange.Contains(npcId);

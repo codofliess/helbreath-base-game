@@ -11766,27 +11766,32 @@ body.game-world-active .bi-online-strip {
    The gate does not scroll: its top padding stays under the fixed cream title.
    The panel's body scrolls inside that inset, so its border never meets the title.
    The Helbreath / Explorer / seal header stays outside that scroll.
-   Right padding clears the toast gutter. */
+   Right padding clears the toast gutter.
+   overflow:clip (not hidden): hidden is still a scrollport, so PageDown can move
+   the gate and the header leaves. Sticky cannot pin through that scrollport. */
 .explorer-hub-gate.login-desk-gate {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    overflow: hidden;
+    overflow: clip;
     padding: var(--explorer-title-clearance, 96px) calc(88px + var(--explorer-toast-col, 0px)) 16px 28px;
 }
 
 .explorer-hub {
     pointer-events: auto;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     width: min(1120px, 100%);
     margin: 0 auto;
-    /* Basis 0 so a tall detail card cannot grow the hub and carry the header away.
-       Flex-grow fills the gate; only .explorer-hub-scroll scrolls. */
-    flex: 1 1 0%;
+    /* 0px, not 0%. A percentage basis stays indefinite when the gate's height
+       is not a used percentage, so the hub grows with the detail card. PageDown
+       then scrolls the gate and the header leaves with it. The grid row is the
+       only scrollport: auto header, then minmax(0, 1fr) body. */
+    flex: 1 1 0px;
+    height: 0;
     min-height: 0;
     max-height: 100%;
-    overflow: hidden;
+    overflow: clip;
     box-sizing: border-box;
     border: 1px solid rgba(196, 154, 72, 0.55);
     border-radius: 12px;
@@ -11797,7 +11802,8 @@ body.game-world-active .bi-online-strip {
 }
 
 /* Brand and seal stay fully visible. Only the body below them scrolls.
-   Sticky covers the case where an ancestor becomes the scroller. */
+   Sticky is a backup if an ancestor outside this panel becomes the scroller.
+   It does not stick to .explorer-hub-scroll: that element is the next sibling. */
 .explorer-hub-header {
     display: flex;
     flex: none;
@@ -11813,9 +11819,10 @@ body.game-world-active .bi-online-strip {
 }
 
 .explorer-hub-scroll {
-    flex: 1 1 0%;
+    min-width: 0;
     min-height: 0;
     overflow: auto;
+    overscroll-behavior: contain;
     padding: 4px 22px 16px;
 }
 

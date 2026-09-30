@@ -4,6 +4,18 @@
  */
 
 import { selectCharWarn } from '../../utils/selectCharTrace';
+import {
+    SELECTCHAR_SCREEN_HOST_SELECTOR,
+    dismissSelectCharOccupiedBannerForWorld,
+    selectCharOccupiedBannerEpoch,
+    selectCharWorldHudIsActive,
+} from './selectCharBannerDismiss';
+
+export {
+    SELECTCHAR_SCREEN_HOST_SELECTOR,
+    dismissSelectCharOccupiedBannerForWorld,
+    selectCharWorldHudIsActive,
+} from './selectCharBannerDismiss';
 
 export interface SlotGlyphCanvas {
     clearRect(x: number, y: number, w: number, h: number): void;
@@ -51,7 +63,10 @@ export const SELECTCHAR_OCCUPIED_OVERLAY_ID = 'selectchar-occupied-labels';
 /** React ConnectDialog overlay — KindGem-visible even if Phaser applyPaintedSlotRows never runs. */
 export const SELECTCHAR_REACT_OCCUPIED_ID = 'selectchar-react-occupied';
 
-/** Singleton KindGem banner — last child of body, not owned by a stale React portal. */
+/**
+ * KindGem occupied banner. Lives in the character-select screen while that screen
+ * is mounted, and is removed when the player enters the world.
+ */
 export const SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID = 'selectchar-kindgem-occupied-banner';
 
 /** Visible KindGem occupied prefix — live string is `OCCUPIED Elon Lev.150`. */
@@ -79,8 +94,9 @@ export const SELECTCHAR_REACT_OCCUPIED_BANNER_SELECTOR =
     '[data-selectchar-react-banner="1"], .selectchar-react-occupied__banner, #selectchar-kindgem-occupied-banner';
 
 /**
- * Inline fail-closed paint: last child of document.body, not under #root / #app clip.
- * KindGem viewport must see OCCUPIED Elon Lev.150 unclipped (top>=0, left>=0, width>100).
+ * Inline fail-closed paint. KindGem viewport must see OCCUPIED Elon Lev.150 unclipped
+ * (top>=0, left>=0, width>100). The node hangs off the character-select screen when
+ * that screen is mounted, so it leaves with the screen instead of sticking to body.
  *
  * Do not append `inset:auto`. That shorthand resets `left`/`top` after they are set,
  * and `translateX(-50%)` then slides the label off the left edge of the viewport.
@@ -439,8 +455,43 @@ function parentLooksLikeBody(parent: { id?: string; tagName?: string } | null | 
     return (parent.tagName ?? '').toUpperCase() === 'BODY';
 }
 
+function findSelectCharScreenHost(doc: Document): HTMLElement | null {
+    const host = doc.querySelector(SELECTCHAR_SCREEN_HOST_SELECTOR);
+    if (!host || !isBannerElement(host)) {
+        return null;
+    }
+    return host;
+}
+
+/**
+ * Prefer the character-select screen so leaving that screen removes the banner.
+ * Body is only the KindGem fallback when no select screen is in the document.
+ * A banner that already lived on the screen is not parked on body after the screen closes,
+ * and the world HUD never receives a new one.
+ */
+export function mountSelectCharKindGemBanner(doc: Document, el: HTMLElement): HTMLElement | null {
+    if (selectCharWorldHudIsActive(doc)) {
+        el.remove();
+        return null;
+    }
+    const screen = findSelectCharScreenHost(doc);
+    if (screen) {
+        screen.appendChild(el);
+        el.setAttribute('data-selectchar-kindgem-host', 'selectchar-screen');
+        return el;
+    }
+    if (el.getAttribute('data-selectchar-kindgem-host') === 'selectchar-screen') {
+        el.remove();
+        return null;
+    }
+    el.setAttribute('data-selectchar-kindgem-host', 'document.body');
+    return mountSelectCharKindGemBannerOnBody(doc, el);
+}
+
 /**
  * Direct `document.body` last child — never under #root / React portal overflow:hidden.
+ * Used when character select is not mounted (KindGem paint tests). In-game dismissal
+ * goes through {@link dismissSelectCharOccupiedBannerForWorld}.
  */
 export function mountSelectCharKindGemBannerOnBody(doc: Document, el: HTMLElement): HTMLElement {
     const body = doc.body;
@@ -459,11 +510,12 @@ export function mountSelectCharKindGemBannerOnBody(doc: Document, el: HTMLElemen
 }
 
 /**
- * Body-level banner KindGem screenshots. Recreated on named paint so an a11y
+ * Occupied banner KindGem screenshots. Recreated on named paint so an a11y
  * snapshot of «waiting» cannot outlive textContent=Elon.
- * Always the last child of document.body so #root / canvas overflow cannot clip it.
+ * Mounted inside the character-select screen when that screen is up; otherwise
+ * the KindGem body fallback.
  */
-export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = false): HTMLElement {
+export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = false): HTMLElement | null {
     let el = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
     if (recreate && el) {
         el.remove();
@@ -477,7 +529,13 @@ export function ensureSelectCharKindGemOccupiedBanner(doc: Document, recreate = 
         el.setAttribute('data-selectchar-kindgem-banner', '1');
         el.setAttribute('data-selectchar-kindgem-host', 'document.body');
     }
-    return mountSelectCharKindGemBannerOnBody(doc, el);
+    return mountSelectCharKindGemBanner(doc, el);
+}
+
+/** Forget the last named banner and remove any node that would sit on the world HUD. */
+export function releaseSelectCharOccupiedBanner(doc?: Document): void {
+    clearSelectCharReactOccupiedBannerSticky();
+    dismissSelectCharOccupiedBannerForWorld(doc);
 }
 
 /** Drop extra banner nodes so only `#selectchar-kindgem-occupied-banner` remains visible. */
@@ -569,6 +627,10 @@ export function syncSelectCharReactOccupiedBannerDom(
     if (!d) {
         return { joined: banner, hasWaiting: banner.includes('waiting'), count: 0 };
     }
+    if (selectCharWorldHudIsActive(d)) {
+        dismissSelectCharOccupiedBannerForWorld(d);
+        return { joined: '', hasWaiting: false, count: 0 };
+    }
     const named = !banner.includes('waiting') && banner.includes(SELECTCHAR_KINDGEM_OCCUPIED_PREFIX);
     if (preferred) {
         collapseSelectCharReactOccupiedDuplicateRoots(preferred, d);
@@ -577,6 +639,9 @@ export function syncSelectCharReactOccupiedBannerDom(
         destroySelectCharWaitingBannerNodes(d);
     }
     const kindgem = ensureSelectCharKindGemOccupiedBanner(d, named);
+    if (!kindgem) {
+        return { joined: '', hasWaiting: false, count: 0 };
+    }
     if (named) {
         collapseSelectCharOccupiedBannersToKindGemSingleton(d, kindgem);
         destroySelectCharWaitingBannerNodes(d);
@@ -602,13 +667,22 @@ export function syncSelectCharReactOccupiedBannerDom(
     kindgem.setAttribute('aria-label', banner);
     kindgem.setAttribute('title', banner);
     kindgem.setAttribute('role', 'status');
-    kindgem.setAttribute('data-selectchar-kindgem-host', 'document.body');
-    mountSelectCharKindGemBannerOnBody(d, kindgem);
+    const mounted = mountSelectCharKindGemBanner(d, kindgem);
+    if (!mounted) {
+        return { joined: '', hasWaiting: false, count: 0 };
+    }
+    const epoch = selectCharOccupiedBannerEpoch();
     if (named) {
-        logSelectCharKindGemVisible(kindgem);
+        logSelectCharKindGemVisible(mounted);
         const afterPaint = () => {
-            mountSelectCharKindGemBannerOnBody(d, kindgem);
-            logSelectCharKindGemVisible(kindgem);
+            if (epoch !== selectCharOccupiedBannerEpoch() || selectCharWorldHudIsActive(d)) {
+                mounted.remove();
+                return;
+            }
+            const again = mountSelectCharKindGemBanner(d, mounted);
+            if (again) {
+                logSelectCharKindGemVisible(again);
+            }
         };
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => {

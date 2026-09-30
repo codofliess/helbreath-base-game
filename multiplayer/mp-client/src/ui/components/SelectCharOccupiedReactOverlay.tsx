@@ -13,6 +13,7 @@ import {
     SELECTCHAR_SLOT_NAME_X,
     SELECTCHAR_SLOT_PITCH,
 } from '../../game/ui/selectCharSlotLayout';
+import { SELECTCHAR_SCREEN_HOST_SELECTOR } from '../../game/ui/selectCharBannerDismiss';
 import {
     SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID,
     SELECTCHAR_KINDGEM_ELON_LV150_TEXT,
@@ -21,8 +22,8 @@ import {
     SELECTCHAR_REACT_OCCUPIED_ID,
     SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG,
     buildSelectCharReactOccupiedBanner,
-    clearSelectCharReactOccupiedBannerSticky,
     projectDeskPointToCss,
+    releaseSelectCharOccupiedBanner,
     selectCharOccupiedNamesRequireVisibleBanner,
     syncSelectCharReactOccupiedBannerDom,
 } from '../../game/ui/selectCharSlotGlyphs';
@@ -38,9 +39,9 @@ interface SelectCharOccupiedReactOverlayProps {
 
 /**
  * KindGem-visible occupied SELECTCHAR banner from the live React store.
- * Named paint recreates `#selectchar-kindgem-occupied-banner` as the last
- * child of `document.body` (not under #root / React overflow:hidden) so KindGem
- * can screenshot unclipped `OCCUPIED Elon Lev.150`.
+ * The banner is mounted inside the character-select screen (`[data-selectchar-screen]`)
+ * so leaving that screen removes `OCCUPIED Elon Lev.150`. It is not left on
+ * `document.body`, where it used to stay over the world HUD after ConnectDialog closed.
  *
  * The cream title is the selected character only. Absolute slot chips stay in
  * the DOM for the KindGem path; `body.login-selectchar-active` hides them so
@@ -112,13 +113,9 @@ export function SelectCharOccupiedReactOverlay({
         );
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_PAINTED_LOG, occupiedNames || '(none)');
         const root = rootRef.current;
-        if (root) {
-            document.body.appendChild(root);
-        }
         const painted = syncSelectCharReactOccupiedBannerDom(banner, root);
         const kindgem = document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
         if (kindgem) {
-            document.body.appendChild(kindgem);
             syncKindGemBannerWithHub(kindgem, cashShopOpen);
         }
         selectCharWarn('%s%s', SELECTCHAR_REACT_OCCUPIED_DOM_LOG, painted.joined || '(empty)');
@@ -173,17 +170,13 @@ export function SelectCharOccupiedReactOverlay({
 
     useLayoutEffect(() => {
         return () => {
-            requestAnimationFrame(() => {
-                if (document.querySelector('[data-selectchar-react-occupied="1"]')) {
-                    return;
-                }
-                clearSelectCharReactOccupiedBannerSticky();
-                document.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID)?.remove();
-            });
+            releaseSelectCharOccupiedBanner();
         };
     }, []);
 
-    return createPortal(
+    const screenHost =
+        typeof document !== 'undefined' ? document.querySelector(SELECTCHAR_SCREEN_HOST_SELECTOR) : null;
+    const tree = (
         <div
             ref={rootRef}
             id={SELECTCHAR_REACT_OCCUPIED_ID}
@@ -206,7 +199,10 @@ export function SelectCharOccupiedReactOverlay({
                     <div className="selectchar-react-occupied__lev">{row.lev}</div>
                 </div>
             ))}
-        </div>,
-        document.body,
+        </div>
     );
+    if (screenHost instanceof HTMLElement) {
+        return createPortal(tree, screenHost);
+    }
+    return tree;
 }

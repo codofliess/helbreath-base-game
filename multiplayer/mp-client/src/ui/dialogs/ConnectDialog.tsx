@@ -76,6 +76,7 @@ import {
     type ArenaSlotIndex,
 } from '../../utils/arenaKits';
 import { openArenaKitBuilder } from '../store/ArenaKitBuilder.store';
+import { SELECTCHAR_SCREEN_HOST_ATTR } from '../../game/ui/selectCharBannerDismiss';
 import { ARENA_CLOSED_MESSAGE, ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
 import { ARENA_BLEEDING_WORLD_ID } from '../../constants/ArenaKitCatalog';
 import { openDuelWatch } from '../store/DuelWatch.store';
@@ -909,12 +910,14 @@ export function ConnectDialog({ zIndex = 10018 }: ConnectDialogProps) {
     if (phase === 'play-world') {
         return (
             <Suspense fallback={null}>
-                <SelectCharReactDesk />
-                <SelectCharOccupiedReactOverlay
-                    zIndex={zIndex}
-                    characterSlots={characterSlots}
-                    characterListLoading={characterListLoading}
-                />
+                <div {...{ [SELECTCHAR_SCREEN_HOST_ATTR]: '1' }}>
+                    <SelectCharReactDesk />
+                    <SelectCharOccupiedReactOverlay
+                        zIndex={zIndex}
+                        characterSlots={characterSlots}
+                        characterListLoading={characterListLoading}
+                    />
+                </div>
             </Suspense>
         );
     }

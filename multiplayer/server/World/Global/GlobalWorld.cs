@@ -108,12 +108,30 @@ public sealed class GlobalWorld : IWorkerWorld {
                 case GlobalClientPacketMessage packetMessage:
                     HandleClientPacket(packetMessage);
                     break;
+                case RenameGlobalPlayerCharacterMessage renameMessage:
+                    HandleRenamePlayerCharacter(renameMessage);
+                    break;
                 default:
                     Console.WriteLine($"[GlobalWorld:{id}] Received unsupported message type '{message.GetType().Name}'.");
                     break;
             }
         } catch (Exception ex) {
             Console.Error.WriteLine($"[GlobalWorld:{id}] Error handling message type '{message.GetType().Name}': {ex}");
+        }
+    }
+
+    /// <summary>Updates the chat display name for an admin rename.</summary>
+    private void HandleRenamePlayerCharacter(RenameGlobalPlayerCharacterMessage message) {
+        try {
+            if (!playersBySessionId.TryGetValue(message.SessionId, out var player)) {
+                message.Completion.TrySetResult(false);
+                return;
+            }
+            player.SetCharacterName(message.NewName);
+            message.Completion.TrySetResult(true);
+        } catch (Exception ex) {
+            Console.Error.WriteLine($"[GlobalWorld:{id}] Rename failed for session {message.SessionId}: {ex.Message}");
+            message.Completion.TrySetResult(false);
         }
     }
 

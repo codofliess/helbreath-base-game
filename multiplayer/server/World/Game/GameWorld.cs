@@ -706,6 +706,9 @@ public sealed class GameWorld : IWorkerWorld {
                 case SavePlayerStateRequestMessage savePlayerStateRequestMessage:
                     HandleSavePlayerStateRequest(savePlayerStateRequestMessage);
                     break;
+                case RenamePlayerCharacterMessage renamePlayerCharacterMessage:
+                    HandleRenamePlayerCharacter(renamePlayerCharacterMessage);
+                    break;
                 case TransferPlayerOutMessage transferPlayerOutMessage:
                     HandleTransferPlayerOut(transferPlayerOutMessage);
                     break;
@@ -956,6 +959,21 @@ public sealed class GameWorld : IWorkerWorld {
         // Travelers also need learned unlocks re-pushed after map change.
         var includeSpells = player.InTournamentArena || player.TravelerMode;
         Spawn.CompletePlayerJoin(gameWorldRef, player, includeSpellsInInitialState: includeSpells);
+    }
+
+    /// <summary>Renames the live avatar on this world's thread and moves the online-player directory key.</summary>
+    private void HandleRenamePlayerCharacter(RenamePlayerCharacterMessage message) {
+        try {
+            if (!playersBySessionId.TryGetValue(message.SessionId, out var player)) {
+                message.Completion.TrySetResult(false);
+                return;
+            }
+            CharacterLiveRename.ApplyWorldPlayerRename(player, message.NewName);
+            message.Completion.TrySetResult(true);
+        } catch (Exception ex) {
+            Console.Error.WriteLine($"[GameWorld:{id}] Rename failed for session {message.SessionId}: {ex.Message}");
+            message.Completion.TrySetResult(false);
+        }
     }
 
     /// <summary>Returns the player's latest authoritative snapshot for immediate persistence in <c>Server.cs</c>.</summary>

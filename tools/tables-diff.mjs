@@ -348,21 +348,19 @@ export function parseMagicCfg(text) {
  * Nested dice switches stay inside the NPC case.
  */
 export function parseSignatureDrops(cppText) {
-    const start = cppText.indexOf('bGetItemNameWhenDeleteNpc');
+    const marker = 'bool CGame::bGetItemNameWhenDeleteNpc';
+    let start = cppText.indexOf(marker);
+    if (start < 0) start = cppText.lastIndexOf('bGetItemNameWhenDeleteNpc');
     if (start < 0) return new Map();
-    const fn = cppText.slice(start);
+    const open = cppText.indexOf('{', start);
+    if (open < 0) return new Map();
+    const fnBody = sliceBraces(cppText, open);
     const byType = new Map();
-    let search = 0;
-    while (search < fn.length) {
-        const at = fn.indexOf('switch (sNpcType)', search);
-        if (at < 0) break;
-        const open = fn.indexOf('{', at);
-        if (open < 0) break;
-        const body = sliceBraces(fn, open);
-        if (!body) break;
-        collectNpcCases(body, byType);
-        search = open + body.length + 2;
-        if (search > 80000) break;
+    const re = /switch\s*\(\s*sNpcType\s*\)/g;
+    for (const match of fnBody.matchAll(re)) {
+        const brace = fnBody.indexOf('{', match.index);
+        if (brace < 0) break;
+        collectNpcCases(sliceBraces(fnBody, brace), byType);
     }
     return byType;
 }
@@ -382,7 +380,12 @@ function sliceBraces(text, openIdx) {
 
 function collectNpcCases(body, byType) {
     let depth = 0;
-    let current = null;
+    let group = [];
+    let sawStatement = false;
+    const ensure = (type) => {
+        if (!byType.has(type)) byType.set(type, new Set());
+        return byType.get(type);
+    };
     let i = 0;
     while (i < body.length) {
         const ch = body[i];
@@ -396,22 +399,30 @@ function collectNpcCases(body, byType) {
             i++;
             continue;
         }
-        if (depth === 0 && body.startsWith('case', i) && (i === 0 || /\s/.test(body[i - 1]))) {
-            const match = /^case\s+(\d+)\s*:/.exec(body.slice(i));
-            if (match) {
-                current = Number(match[1]);
-                if (!byType.has(current)) byType.set(current, new Set());
-                i += match[0].length;
+        if (depth === 0 && (i === 0 || /[^A-Za-z0-9_]/.test(body[i - 1]))) {
+            const caseMatch = /^case\s+(\d+)\s*:/.exec(body.slice(i));
+            if (caseMatch) {
+                const type = Number(caseMatch[1]);
+                group = sawStatement ? [type] : [...group, type];
+                sawStatement = false;
+                ensure(type);
+                i += caseMatch[0].length;
                 continue;
             }
+            if (body.startsWith('default', i)) {
+                group = [];
+                sawStatement = true;
+            } else if (/^break\s*;/.test(body.slice(i))) {
+                group = [];
+                sawStatement = true;
+            }
         }
-        if (depth === 0 && body.startsWith('default', i)) {
-            current = null;
-        }
-        if (current != null) {
+        if (group.length > 0) {
             const idMatch = /^iItemID\s*=\s*(\d+)/.exec(body.slice(i));
             if (idMatch && (i === 0 || /[^A-Za-z0-9_]/.test(body[i - 1]))) {
-                byType.get(current).add(Number(idMatch[1]));
+                const itemId = Number(idMatch[1]);
+                for (const type of group) ensure(type).add(itemId);
+                sawStatement = true;
                 i += idMatch[0].length;
                 continue;
             }
@@ -476,7 +487,9 @@ export function diffMonster(monster, npc, defaults) {
             olympia: `HP ~${expected} (HitDice ${npc.hitDice})`,
             ours: hpDefault ? `HP ${hp} (monsterDefaults)` : `HP ${hp}`,
             ratio: fmtRatio(hpRatio),
-            detail: `${label} has about ${fmtRatio(hpRatio)} the Olympia hit-point roll (${npc.name}).`,
+            detail: hpDefault
+                ? `${label} does not set HP, so it uses monsterDefaults ${hp}, about ${fmtRatio(hpRatio)} the Olympia roll for ${npc.name} (~${expected}).`
+                : `${label} has about ${fmtRatio(hpRatio)} the Olympia hit-point roll for ${npc.name} (~${expected} from HitDice ${npc.hitDice}).`,
         });
     }
 
@@ -637,7 +650,7 @@ export function diffDrops(monster, npc, signatureIds, itemNames) {
                 olympia: `${signatureIds.size} signature ids on type ${npc.type}`,
                 ours: `missing ${missing.length}`,
                 ratio: '',
-                detail: `${label} is missing ${missing.length} Olympia signature drop${missing.length === 1 ? '' : 's'} from bGetItemNameWhenDeleteNpc (${names.join(', ')}${more}).${notInCatalog ? ` ${notInCatalog} of those ids are not in Items.json either.` : ''}`,
+                detail: `${label} is missing ${missing.length} Olympia signature drop${missing.length === 1 ? '' : 's'} from bGetItemNameWhenDeleteNpc (${names.join(', ')}${more}).${notInCatalog ? ` ${notInCatalog} of those ids ${notInCatalog === 1 ? 'is' : 'are'} not in Items.json either.` : ''}`,
             });
         }
     }
@@ -667,7 +680,7 @@ function spellDice(spell) {
 function magicTriples(magic) {
     const triples = [];
     for (const [count, sides, bonus] of [magic.diceA, magic.diceB]) {
-        if ((count ?? 0) > 0 || (sides ?? 0) > 0 || (bonus ?? 0) > 0) {
+        if ((sides ?? 0) > 0) {
             triples.push({ count, sides, bonus, avg: diceAverage(count, sides, bonus) });
         }
     }
@@ -904,14 +917,18 @@ export function run(options = {}) {
             counts.spellsUnmapped++;
             const damage = DAMAGE_MAGIC_TYPES.has(magicRow.type);
             const sold = magicRow.cost > 0;
+            const pretty = magicRow.name.replace(/-/g, ' ');
+            const alias = ourSpells.find((spell) => normName(spell.name) === normName(magicRow.name));
             pushFinding(findings, {
                 score: damage && sold ? 78 : damage ? 64 : sold ? 56 : 36,
                 category: 'spell-missing',
-                subject: `${magicRow.name.replace(/-/g, ' ')} (magic ${magicRow.id})`,
+                subject: `${pretty} (magic ${magicRow.id})`,
                 olympia: `type ${magicRow.type} mana ${magicRow.mana} cost ${magicRow.cost}`,
-                ours: 'no Spells.json id',
+                ours: alias ? `same name at spell ${alias.id}, not mapped` : 'no Spells.json id',
                 ratio: '',
-                detail: `${magicRow.name.replace(/-/g, ' ')} (Magic.cfg ${magicRow.id}) is not in the Olympia-to-server spell map, so it cannot be cast from Spells.json.`,
+                detail: alias
+                    ? `${pretty} (Magic.cfg ${magicRow.id}) is not in the Olympia-to-server spell map. Spells.json has "${alias.name}" at id ${alias.id}, and that row is not wired to this Magic.cfg id.`
+                    : `${pretty} (Magic.cfg ${magicRow.id}) is not in the Olympia-to-server spell map, so it cannot be cast from Spells.json.`,
             });
             continue;
         }
@@ -944,16 +961,27 @@ export function run(options = {}) {
         if (!resolved) {
             counts.monstersUnmatched++;
             unmatched.push(monster);
-            const fallback = Math.max(1, Math.floor((monster.hp ?? defaults.hp) / 4));
-            pushFinding(findings, {
-                score: 62,
-                category: 'monster-exp',
-                subject: `${monster.name} (#${monster.id})`,
-                olympia: 'no Npc.cfg row',
-                ours: `exp fallback ~HP/4 (${fallback})`,
-                ratio: '',
-                detail: `${monster.name} (#${monster.id}) does not match an Npc.cfg name, so kill exp falls back to about max HP / 4 instead of ExpDice.`,
-            });
+            let best = 0;
+            let bestName = '';
+            for (const row of npcs.byName.values()) {
+                const sim = nameSimilarity(monster.name, row.name);
+                if (sim > best) {
+                    best = sim;
+                    bestName = row.name;
+                }
+            }
+            if (best >= 0.72) {
+                const fallback = Math.max(1, Math.floor((monster.hp ?? defaults.hp) / 4));
+                pushFinding(findings, {
+                    score: 62,
+                    category: 'monster-exp',
+                    subject: `${monster.name} (#${monster.id})`,
+                    olympia: `nearest ${bestName}`,
+                    ours: `exp fallback ~HP/4 (${fallback})`,
+                    ratio: '',
+                    detail: `${monster.name} (#${monster.id}) looks like ${bestName} but does not match an Npc.cfg row, so kill exp falls back to about max HP / 4.`,
+                });
+            }
             continue;
         }
         counts.monstersMatched++;
@@ -970,22 +998,31 @@ export function run(options = {}) {
 
     defenseSamples.sort((a, b) => b.defense - a.defense);
     if (matchedWithDefenseField === 0 && defenseSamples.length > 0) {
-        const top = defenseSamples.slice(0, 6).map((row) => `${row.name} DR ${row.defense}`).join(', ');
-        const hardest = defenseSamples[0];
+        const uniqueNpc = [];
+        const seenNpc = new Set();
+        for (const row of defenseSamples) {
+            if (seenNpc.has(row.npc)) continue;
+            seenNpc.add(row.npc);
+            uniqueNpc.push(row);
+            if (uniqueNpc.length === 6) break;
+        }
+        const hardest = uniqueNpc[0];
+        const top = uniqueNpc.map((row) => `${row.npc} DR ${row.defense}`).join(', ');
         pushFinding(findings, {
             score: 88,
             category: 'monster-defense',
             subject: 'monster defense ratio',
-            olympia: `Npc.cfg DR, hardest ${hardest.name} ${hardest.defense}`,
+            olympia: `Npc.cfg DR, hardest ${hardest.npc} ${hardest.defense}`,
             ours: 'no defense field; hit rolls ignore DR',
             ratio: '',
-            detail: `Monsters.json does not store defense, and melee hit chance does not use Npc.cfg defense ratio. A slime (low DR) and ${hardest.name} (DR ${hardest.defense}) are separated only by a small HP-band penalty. Highest DR: ${top}.`,
+            detail: `Monsters.json does not store defense, and melee hit chance does not use Npc.cfg defense ratio. Hit chance only applies a small penalty from the HP band, so ${hardest.npc} (DR ${hardest.defense}) is struck about as easily as a slime. Highest DR: ${top}.`,
         });
     }
 
     gaps.push('Kill exp is not stored on Monsters.json. Matched monsters read Npc.cfg through NpcExpCatalog at runtime, then MonsterExpFactor. This diff only flags names that miss that lookup and fall back to max HP / 4.');
+    gaps.push('Middleland dragons have no Npc.cfg row of their own. They are compared through the exp name map: Earth and Lightning to Fire-Wyvern, Illusion and Poison to Wyvern, Black to Abaddon.');
     gaps.push('Weapon dice and armor defense ratio are read from Item.cfg at runtime when Items.json omits them (ItemAttackCatalog, ItemDefenseCatalog). Those omitted fields are not treated as drift.');
-    gaps.push('Spell mana, required INT, and Magic Tower gold are read from Magic.cfg, not Spells.json. Dice are compared when Spells.json stores a damage or heal triple.');
+    gaps.push('Spell mana, required INT, and Magic Tower gold are read from Magic.cfg, not Spells.json. Dice are compared when Spells.json stores a damage or heal triple. A Magic.cfg triple with side 0 (Ice Storm is 4/0/0; the server stores 4d4) is not treated as a dice.');
     gaps.push('Npc.cfg does not list item drop tables. Gold is the last column. Rare per-type items come from Server.cpp bGetItemNameWhenDeleteNpc. The gen-tier weapon/armor switch in NpcDeadItemGenerator is not re-simulated, so a present potion or gold row is not a claim that every weight matches.');
     gaps.push(`Npc.cfg layout used: ${npcs.layout}. This tree's header is one ExpDice, then ADT/ADR, and a single Gold column (not Server.cpp ExpDiceMin/Max and GoldDiceMin/Max).`);
     if (counts.itemsExtra > 0) {
@@ -1074,6 +1111,11 @@ function buildReport(result) {
     }
     lines.push('');
     lines.push('Ranking is gameplay impact. A monster whose swing averages about twice Olympia `iDice(ADT, ADR)` is first. Missing signature drops, missing sold spells, and defense ratio that never reaches the hit roll come next. HP, speed, gold quantity, and item effect/price outliers follow.');
+    const doubleHits = result.findings.filter((finding) => finding.category === 'monster-damage' && finding.score >= 90);
+    if (doubleHits.length === 0) {
+        lines.push('');
+        lines.push('No matched monster averages about twice the Olympia damage dice. Mobs with no damage row sit on the Npc.cfg ADT/ADR range (min = ADT, max = ADT × ADR). The damage rows below are the outliers that remain.');
+    }
     lines.push('');
     lines.push('## Ranked findings');
     lines.push('');

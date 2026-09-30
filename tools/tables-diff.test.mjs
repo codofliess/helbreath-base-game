@@ -77,6 +77,7 @@ bool CGame::bGetItemNameWhenDeleteNpc(int & iItemID, short sNpcType)
 	}
 	switch (sNpcType) {
 	case 11:
+	case 17:
 		switch (iDice(1,7)) {
 		case 1: iItemID = 334 ; break;
 		case 2: iItemID = 336 ; break;
@@ -88,6 +89,7 @@ bool CGame::bGetItemNameWhenDeleteNpc(int & iItemID, short sNpcType)
     const drops = parseSignatureDrops(cpp);
     assert.deepEqual([...drops.get(49)].sort((a, b) => a - b), [259, 308]);
     assert.deepEqual([...drops.get(11)].sort((a, b) => a - b), [334, 336]);
+    assert.deepEqual([...drops.get(17)].sort((a, b) => a - b), [334, 336]);
     assert.equal(drops.has(1), false);
 });
 

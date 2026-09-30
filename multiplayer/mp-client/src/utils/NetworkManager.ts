@@ -80,6 +80,15 @@ import { EventBus, type ToastRequestedEvent } from '../game/EventBus';
 import { LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND } from '../Config';
 import { buildGameWebSocketUrl } from './gameWebSocketUrl';
 import {
+    noteGameServerClosed,
+    noteGameServerConnecting,
+    noteGameServerError,
+    noteGameServerJoin,
+    noteGameServerOpen,
+    noteGameServerPacket,
+    noteIntentionalGameServerClose,
+} from './gameConnectionGate';
+import {
     nextPingSequenceUint32,
     pingResponseMatchesPending,
     shouldSendClientPing,
@@ -175,6 +184,7 @@ import {
     SERVER_CITY_NPC_SERVICE_RESULT,
     SERVER_MESSAGE_RECEIVED,
     SOCKET_DISCONNECTED,
+    type SocketDisconnectedPayload,
     SPELL_CAST_CANCELLED_RECEIVED,
     SPELL_CAST_FAILED_RECEIVED,
     SPELL_CAST_STARTED_RECEIVED,
@@ -535,6 +545,13 @@ declare global {
 
 export class NetworkManager {
     private socket: WebSocket | undefined;
+    private static nextSessionId = 1;
+    /** Identifies this manager on SOCKET_DISCONNECTED so a replaced instance cannot abort the next login. */
+    private readonly sessionId = NetworkManager.nextSessionId++;
+    /** Bumped on each connect() so a replaced socket cannot wipe the new session. */
+    private socketGeneration = 0;
+    /** Set by logout `disconnect()` so the close handler leaves the world instead of the overlay. */
+    private intentionalClose = false;
     private pingIntervalId: number | undefined;
     private pingIntervalMs = 1000;
     private pingSentAt: number | undefined;
@@ -655,6 +672,19 @@ export class NetworkManager {
         arenaKitJson?: string,
     ): Promise<void> {
         return new Promise((resolve, reject) => {
+            const previous = this.socket;
+            this.socketGeneration += 1;
+            const generation = this.socketGeneration;
+            this.intentionalClose = false;
+            noteGameServerConnecting();
+            if (previous && previous.readyState < 2) {
+                try {
+                    previous.close();
+                } catch (closeError) {
+                    console.warn('[NetworkManager] Failed to close the previous game socket.', closeError);
+                }
+            }
+            const isCurrentSocket = () => generation === this.socketGeneration;
             try {
                 this.authenticateCharacterName = characterName.trim();
                 this.preferredInitialWorldId = preferredInitialWorldId?.trim() || undefined;
@@ -710,6 +740,10 @@ export class NetworkManager {
 
                 socket.addEventListener('open', () => {
                     runSafeSync('NetworkManager:open', () => {
+                        if (!isCurrentSocket()) {
+                            return;
+                        }
+                        noteGameServerOpen();
                         console.log(`[NetworkManager] Connected to ${websocketUrl}`);
                         this.sendAuthentication();
                         resolve();
@@ -717,6 +751,9 @@ export class NetworkManager {
                 }, { once: true });
 
                 socket.addEventListener('message', (event: MessageEvent) => {
+                    if (!isCurrentSocket()) {
+                        return;
+                    }
                     try {
                         const latency = serverDialogStore.state.incomingLatency;
                         const fluctuation = serverDialogStore.state.incomingFluctuation;
@@ -743,6 +780,16 @@ export class NetworkManager {
 
                 socket.addEventListener('close', (event: CloseEvent) => {
                     runSafeSync('NetworkManager:close', () => {
+                        if (!isCurrentSocket()) {
+                            return;
+                        }
+                        const intentional = this.intentionalClose;
+                        this.intentionalClose = false;
+                        if (intentional) {
+                            noteIntentionalGameServerClose();
+                        } else {
+                            noteGameServerClosed();
+                        }
                         console.log('[NetworkManager] WebSocket connection closed.');
                         this.clearPingInterval();
                         this.clearInFlightPing();
@@ -794,12 +841,20 @@ export class NetworkManager {
                         EventBus.emit(OUT_UI_SET_GAME_WORLDS, []);
                         EventBus.emit(OUT_UI_SET_MONSTERS, []);
                         EventBus.emit(OUT_UI_SET_SPELLS, []);
-                        EventBus.emit(SOCKET_DISCONNECTED);
+                        const disconnected: SocketDisconnectedPayload = {
+                            intentional,
+                            sessionId: this.sessionId,
+                        };
+                        EventBus.emit(SOCKET_DISCONNECTED, disconnected);
                     });
                 });
 
                 socket.addEventListener('error', (event) => {
                     runSafeSync('NetworkManager:error', () => {
+                        if (!isCurrentSocket()) {
+                            return;
+                        }
+                        noteGameServerError();
                         console.warn(`[NetworkManager] Failed to connect to ${websocketUrl}`, event);
                         if (this.socket === socket) {
                             this.socket = undefined;
@@ -815,6 +870,7 @@ export class NetworkManager {
                 }, { once: true });
             } catch (error) {
                 console.warn('[NetworkManager] Failed to create WebSocket connection.', error);
+                noteGameServerError();
                 this.socket = undefined;
                 EventBus.emit(SERVER_MESSAGE_RECEIVED, {
                     message: `Failed to connect to the server at ${ip}:${port}.`,
@@ -826,6 +882,29 @@ export class NetworkManager {
 
     public getSocket(): WebSocket | undefined {
         return this.socket;
+    }
+
+    public getSessionId(): number {
+        return this.sessionId;
+    }
+
+    /**
+     * Drop this manager's socket without treating the close as logout or as a lost session.
+     * LoginScreen calls this before opening the next `/ws` so two game sockets are not left up.
+     */
+    public releaseSocket(): void {
+        this.socketGeneration += 1;
+        this.intentionalClose = false;
+        const socket = this.socket;
+        this.socket = undefined;
+        if (!socket || socket.readyState >= 2) {
+            return;
+        }
+        try {
+            socket.close();
+        } catch (error) {
+            console.warn('[NetworkManager] Failed to release the game socket.', error);
+        }
     }
 
     public getLatestPing(): number | undefined {
@@ -1416,6 +1495,7 @@ export class NetworkManager {
             if (!this.socket) {
                 return;
             }
+            this.intentionalClose = true;
 
             this.clearPingInterval();
             this.clearInFlightPing();
@@ -1822,6 +1902,7 @@ export class NetworkManager {
 
         try {
             const message = ServerMessage.decode(new Uint8Array(event.data));
+            noteGameServerPacket();
             switch (message.payload?.$case) {
                 case 'pingResponse':
                     this.handlePingResponse(message.payload.value);
@@ -2534,6 +2615,7 @@ export class NetworkManager {
             underwearColorIndex: base.underwearColorIndex,
         };
         this.pendingInitialGameWorldState = initialGameWorldStateEventData;
+        noteGameServerJoin();
         EventBus.emit(INITIAL_GAME_WORLD_STATE_RECEIVED, initialGameWorldStateEventData);
     }
 

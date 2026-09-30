@@ -163,6 +163,7 @@ import {
     MONSTER_DEAD,
     IN_UI_REQUEST_PLAYER_LOGOUT,
     SOCKET_DISCONNECTED,
+    type SocketDisconnectedPayload,
     IN_UI_PLAYER_RESURRECT,
     IN_UI_REQUEST_SERVER_RESURRECT,
     IN_UI_CLAIM_KILL_MILESTONE,
@@ -349,6 +350,11 @@ import { scheduleEkScreenshot } from '../systems/EkScreenshotCapture';
 import { mapDialogStore, syncWeather, type WeatherMode } from '../../ui/store/MapDialog.store';
 import { serverDialogStore } from '../../ui/store/ServerDialog.store';
 import { performLogoutCleanup } from '../../utils/LogoutUtils';
+import {
+    isLocalMovementFrozen,
+    refreshGameConnectionOverlay,
+    setGameConnectionViewActive,
+} from '../../utils/gameConnectionGate';
 import { LoadingOverlayController } from '../../utils/LoadingOverlayController';
 import {
     applyGameWorldCanvasPresentation,
@@ -630,6 +636,7 @@ export class GameWorld extends Scene {
             this.clearResidualLoginDeskChrome();
             installWorldCanvasPoolGuard(this.game);
             document.body.classList.add(GAME_WORLD_ACTIVE_CLASS, HELBREATH_GAME_ACTIVE_CLASS);
+            setGameConnectionViewActive(true);
             applyGameWorldCanvasPresentation(this);
             rearmKeyboardWalkAfterResume();
             this.cameras.main.setBackgroundColor('#000');
@@ -1020,9 +1027,12 @@ export class GameWorld extends Scene {
             this.scene.start('LoginScreen');
         });
 
-        // Listen for socket disconnection (server shutdown, network loss, etc.) - same behavior as Log out button
-        subscribeSafe('GameWorld', SOCKET_DISCONNECTED, () => {
-            performLogoutCleanup(this.game);
+        // Intentional logout still leaves the world. An unexpected close stays here so the
+        // reconnect overlay can explain it — the scene may already be up with no live socket.
+        subscribeSafe('GameWorld', SOCKET_DISCONNECTED, (payload?: SocketDisconnectedPayload) => {
+            if (payload?.intentional) {
+                performLogoutCleanup(this.game);
+            }
         });
     }
 
@@ -2977,6 +2987,7 @@ export class GameWorld extends Scene {
                 }
             }
             this.handleOverlayUpdate();
+            refreshGameConnectionOverlay();
 
             // Defer initialization to first update() call so overlay is visible first frame
             if (!this.initializationStarted) {
@@ -2986,6 +2997,8 @@ export class GameWorld extends Scene {
                 return; // Return early to let overlay render
             }
 
+            const movementFrozen = isLocalMovementFrozen();
+
             // Update player movement
             if (this.player) {
                 // Process pending course corrections before player update to avoid snapping to blocked cell
@@ -2994,10 +3007,15 @@ export class GameWorld extends Scene {
                 }
                 this.pendingCourseCorrections = [];
 
+                if (movementFrozen) {
+                    this.player.freezeLocalMovement();
+                }
                 this.player.update(delta);
-                this.handleLeftMouseButton();
-                this.handleKeyboardMovement();
-                this.handleRightMouseButton();
+                if (!movementFrozen) {
+                    this.handleLeftMouseButton();
+                    this.handleKeyboardMovement();
+                    this.handleRightMouseButton();
+                }
                 this.cameraManager?.update();
                 // Camera fillRect(#000) is the WASD-mid-prepare wipe after #72.
                 // Write transparent only while the painted freeze is armed —
@@ -3015,7 +3033,12 @@ export class GameWorld extends Scene {
                 }
                 this.handleMapObjectCollisions();
 
-                if (!this.pendingPredictedWorldTransfer && !this.awaitingTransferredWorldState && !this.loadingMap) {
+                if (
+                    !movementFrozen &&
+                    !this.pendingPredictedWorldTransfer &&
+                    !this.awaitingTransferredWorldState &&
+                    !this.loadingMap
+                ) {
                     this.tryPlayerWarp();
                 }
             }
@@ -5497,6 +5520,7 @@ export class GameWorld extends Scene {
 
     public shutdown() {
         runSafeSync('GameWorld:shutdown', () => {
+            setGameConnectionViewActive(false);
             clearGameWorldCanvasPresentation(this);
             document.body.classList.remove(GAME_WORLD_ACTIVE_CLASS, HELBREATH_GAME_ACTIVE_CLASS);
             EventBus.emit(OUT_UI_HOVER_GROUND_ITEM, false);

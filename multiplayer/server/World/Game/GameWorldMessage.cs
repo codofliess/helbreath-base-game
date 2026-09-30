@@ -140,7 +140,14 @@ public sealed record PlayerPersistenceState(
     /// Ops grant convenience only. F7 / Gandalf spend <b>bag item 90 Quantity</b>, not this scalar.
     /// On load, if bag gold is 0 and this is &gt; 0, a gold stack is created. Do not double-count.
     /// </summary>
-    int Gold = 0);
+    int Gold = 0,
+    /// <summary>PostgreSQL <c>characters.id</c>. Saves update this row instead of inserting by display name.</summary>
+    Guid? CharacterDbId = null,
+    /// <summary>
+    /// True only for the placeholder row inserted when the name is reserved, before the first real save.
+    /// Login treats that row as an unfinished create so starter gear still applies.
+    /// </summary>
+    bool NameReservationOnly = false);
 
 /// <summary>Full character progression snapshot taken immediately before a successful rebirth.</summary>
 public sealed record PersistedRebirthRollbackSnapshot(
@@ -271,6 +278,12 @@ public sealed record ClientPacketMessage(Guid SessionId, ClientMessage Message) 
 public sealed record SavePlayerStateRequestMessage(
     Guid SessionId,
     TaskCompletionSource<PlayerPersistenceState?> Completion) : GameWorldMessage;
+
+/// <summary>Admin rename: update the in-world avatar on the world thread that owns it.</summary>
+public sealed record RenamePlayerCharacterMessage(
+    Guid SessionId,
+    string NewName,
+    TaskCompletionSource<bool> Completion) : GameWorldMessage;
 
 /// <summary>Ask source world to remove the player and signal <see cref="Completion"/> with transfer payload.</summary>
 public sealed record TransferPlayerOutMessage(

@@ -237,6 +237,8 @@ app.Lifetime.ApplicationStopping.Register(() => {
     gcMonitor?.Dispose();
 });
 
+MapCharacterRenameEndpoint(app, worldRegistry, sessionsByNetworkId, charsDirectory);
+
 app.UseWebSockets();
 
 // Public realm snapshot for landing (local + nginx on play.chainlords.net) + CORS.
@@ -768,6 +770,15 @@ app.Map("/ws", async context => {
                         session.NetworkId,
                         session.CharacterName,
                         travelerMode);
+                    // A name reservation is not a finished character. Keep its row id and run create defaults.
+                    if (loadedPlayerState?.NameReservationOnly == true) {
+                        if (loadedPlayerState.CharacterDbId is Guid reservedId) {
+                            lock (session.SyncRoot) {
+                                session.CharacterDbId = reservedId;
+                            }
+                        }
+                        loadedPlayerState = null;
+                    }
                     // Brand-new create: only via Create Character desk (name + looks + stats).
                     if (loadedPlayerState is null) {
                         if (!authReq.HasGender || !authReq.HasStr) {
@@ -787,12 +798,63 @@ app.Map("/ws", async context => {
                                 : nameMessage);
                             return;
                         }
+                        if (GamePersistence.Current is not null) {
+                            var seed = CharacterIdentityBook.CreateReservationSeed(
+                                initialGameWorldId,
+                                session.CharacterName,
+                                authSlotIndex,
+                                authGender ?? 0,
+                                authSkin ?? 0,
+                                authHair ?? 0,
+                                authUnderwear ?? 0,
+                                authStr ?? 10,
+                                authVit ?? 10,
+                                authDex ?? 10,
+                                authInt ?? 10,
+                                authMag ?? 10,
+                                authChr ?? 10);
+                            var reserved = await GamePersistence.Current.TryReserveCharacterAsync(
+                                session.NetworkId,
+                                session.CharacterName,
+                                seed,
+                                receiveCts.Token);
+                            if (!CharacterNameClash.IsNewCharacterReserveAccepted(reserved)) {
+                                RequestDisconnect(string.IsNullOrWhiteSpace(reserved.Message)
+                                    ? "That name is already taken."
+                                    : reserved.Message);
+                                return;
+                            }
+                            if (reserved.CharacterId is Guid createdId) {
+                                lock (session.SyncRoot) {
+                                    session.CharacterDbId = createdId;
+                                }
+                            }
+                        }
                     } else if (!GamePersistence.IsValidCharacterNameFormat(session.CharacterName, out var invalidNameMsg)) {
                         // Incomplete auto-stubs (e.g. HB_wallet…) cannot be entered — Create Character again.
                         RequestDisconnect(string.IsNullOrWhiteSpace(invalidNameMsg)
                             ? "This character is incomplete. Create a character with a proper name first."
                             : "This character is incomplete. Create a character with a proper name first.");
                         return;
+                    } else if (GamePersistence.Current is not null) {
+                        // JSON-only logins must be checked against the database. A clash does not enter or save.
+                        var reconciled = await GamePersistence.Current.ReconcileLoadedCharacterAsync(
+                            session.NetworkId,
+                            session.CharacterName,
+                            loadedPlayerState,
+                            receiveCts.Token);
+                        if (reconciled.Status != CharacterLoginStatus.Ok) {
+                            RequestDisconnect(string.IsNullOrWhiteSpace(reconciled.Message)
+                                ? CharacterNameClash.JsonLoginTakenMessage
+                                : reconciled.Message);
+                            return;
+                        }
+                        if (reconciled.CharacterId is Guid loadedId) {
+                            lock (session.SyncRoot) {
+                                session.CharacterDbId = loadedId;
+                            }
+                            loadedPlayerState = loadedPlayerState with { CharacterDbId = loadedId };
+                        }
                     }
                     // Arena kit entry: always honor preferred tournament/pact map (never restore city WH).
                     var forceArenaWorld = authReq.HasArenaKitJson &&
@@ -1213,26 +1275,183 @@ static List<RealmStats.PlayerSessionView> SnapshotRealmSessions(
     return list;
 }
 
+static void MapCharacterRenameEndpoint(
+    WebApplication app,
+    WorldRegistry worldRegistry,
+    ConcurrentDictionary<string, PlayerSession> sessionsByNetworkId,
+    string charsDirectory) {
+    app.MapPost("/api/admin/characters/rename", async (HttpContext http) => {
+        if (!CharacterAdminAuth.IsConfigured) {
+            return Results.NotFound();
+        }
+        if (!http.Request.Headers.TryGetValue("X-Admin-Key", out var provided) ||
+            !CharacterAdminAuth.IsAuthorized(provided.ToString())) {
+            return Results.Json(new { ok = false, error = "Admin key required or invalid" }, statusCode: 401);
+        }
+        if (GamePersistence.Current is null) {
+            return Results.Json(new { ok = false, error = "PostgreSQL is not configured." }, statusCode: 503);
+        }
+
+        RenameCharacterBody? body;
+        try {
+            body = await http.Request.ReadFromJsonAsync<RenameCharacterBody>(http.RequestAborted);
+        } catch (JsonException) {
+            return Results.Json(new { ok = false, error = "Invalid JSON body." }, statusCode: 400);
+        }
+
+        var wallet = body?.Wallet?.Trim() ?? string.Empty;
+        var currentName = body?.CurrentName?.Trim() ?? string.Empty;
+        var newName = body?.NewName?.Trim() ?? string.Empty;
+        if (wallet.Length == 0 || currentName.Length == 0 || newName.Length == 0) {
+            return Results.Json(
+                new { ok = false, error = "wallet, currentName, and newName are required." },
+                statusCode: 400);
+        }
+
+        var session = FindCharacterSession(sessionsByNetworkId, wallet, currentName);
+        PlayerPersistenceState? snapshot = null;
+        if (session is not null) {
+            string worldId;
+            Guid sessionId;
+            lock (session.SyncRoot) {
+                worldId = session.CurrentGameWorldId;
+                sessionId = session.SessionId;
+            }
+            if (!string.IsNullOrWhiteSpace(worldId)) {
+                try {
+                    snapshot = await CapturePlayerPersistenceStateAsync(
+                        worldRegistry,
+                        worldId,
+                        sessionId,
+                        http.RequestAborted);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    Console.Error.WriteLine($"[Persistence] Rename snapshot failed: {ex.Message}");
+                }
+            }
+        }
+
+        var gate = session?.PersistenceGate;
+        if (gate is not null) {
+            await gate.WaitAsync(http.RequestAborted);
+        }
+        try {
+            var outcome = await GamePersistence.Current.RenameCharacterAsync(
+                charsDirectory,
+                wallet,
+                currentName,
+                newName,
+                session is not null,
+                snapshot,
+                async id => {
+                    if (session is null) {
+                        return false;
+                    }
+                    var updated = CharacterLiveRename.TryUpdateSession(session, wallet, currentName, newName, id);
+                    var actors = await CharacterLiveRename.TryRenameWorldActorsAsync(
+                        worldRegistry,
+                        session,
+                        newName,
+                        http.RequestAborted);
+                    return updated || actors;
+                },
+                http.RequestAborted);
+
+            var statusCode = outcome.Status switch {
+                CharacterRenameStatus.Renamed => StatusCodes.Status200OK,
+                CharacterRenameStatus.Taken => StatusCodes.Status409Conflict,
+                CharacterRenameStatus.NotFound => StatusCodes.Status404NotFound,
+                CharacterRenameStatus.InvalidName => StatusCodes.Status400BadRequest,
+                _ => StatusCodes.Status503ServiceUnavailable,
+            };
+            return Results.Json(new {
+                ok = outcome.Status == CharacterRenameStatus.Renamed,
+                status = outcome.Status.ToString(),
+                message = outcome.Message,
+                characterId = outcome.CharacterId,
+                name = outcome.Status == CharacterRenameStatus.Renamed ? newName : currentName,
+                jsonUpdated = outcome.JsonUpdated,
+                liveUpdated = outcome.LiveUpdated,
+            }, statusCode: statusCode);
+        } finally {
+            gate?.Release();
+        }
+    });
+}
+
+static PlayerSession? FindCharacterSession(
+    ConcurrentDictionary<string, PlayerSession> sessions,
+    string wallet,
+    string currentName) {
+    if (sessions.TryGetValue(wallet, out var direct)) {
+        lock (direct.SyncRoot) {
+            if (CharacterNameClash.SameName(direct.CharacterName, currentName)) {
+                return direct;
+            }
+        }
+    }
+
+    foreach (var candidate in sessions.Values) {
+        lock (candidate.SyncRoot) {
+            if (CharacterNameClash.SameWallet(candidate.NetworkId, wallet) &&
+                CharacterNameClash.SameName(candidate.CharacterName, currentName)) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
+
 static async Task SavePlayerPersistenceStateAsync(
     string charsDirectory,
     PlayerSession session,
     PlayerPersistenceState state) {
-    string networkId;
-    string characterName;
-    bool travelerMode;
-    lock (session.SyncRoot) {
-        networkId = session.NetworkId;
-        characterName = session.CharacterName;
-        travelerMode = session.TravelerMode;
-    }
+    await session.PersistenceGate.WaitAsync().ConfigureAwait(false);
+    try {
+        string networkId;
+        string characterName;
+        bool travelerMode;
+        Guid? characterId;
+        DateTimeOffset? clashRetryAt;
+        lock (session.SyncRoot) {
+            networkId = session.NetworkId;
+            characterName = session.CharacterName;
+            travelerMode = session.TravelerMode;
+            characterId = session.CharacterDbId;
+            clashRetryAt = session.NameClashRetryAtUtc;
+        }
 
-    await GamePersistence.SaveCharacterDualAsync(
-        GamePersistence.Current,
-        charsDirectory,
-        networkId,
-        characterName,
-        state,
-        travelerMode);
+        if (CharacterNameClash.IsSaveSuppressed(clashRetryAt, DateTimeOffset.UtcNow)) {
+            return;
+        }
+
+        if (characterId is Guid id) {
+            state = state with { CharacterDbId = id };
+        }
+        if (!string.IsNullOrWhiteSpace(characterName)) {
+            state = state with { CharacterName = characterName.Trim() };
+        }
+
+        var saved = await GamePersistence.SaveCharacterDualAsync(
+            GamePersistence.Current,
+            charsDirectory,
+            networkId,
+            characterName,
+            state,
+            travelerMode).ConfigureAwait(false);
+
+        lock (session.SyncRoot) {
+            if (saved.CharacterId is Guid savedId && savedId != Guid.Empty) {
+                session.CharacterDbId = savedId;
+            }
+            if (saved.Status == CharacterSaveStatus.NameClash) {
+                session.NameClashRetryAtUtc = DateTimeOffset.UtcNow.AddMilliseconds(CharacterNameClashLog.IntervalMs);
+            } else if (saved.Status == CharacterSaveStatus.Saved) {
+                session.NameClashRetryAtUtc = null;
+            }
+        }
+    } finally {
+        session.PersistenceGate.Release();
+    }
 }
 
 /// <summary>True when the client announced real-player / traveler mode on authenticate or character list.</summary>
@@ -1979,6 +2198,12 @@ public sealed class PlayerSession {
     public string NetworkId { get; }
     /// <summary>Display name from the client authenticate payload.</summary>
     public string CharacterName { get; set; }
+    /// <summary>PostgreSQL <c>characters.id</c> once the name has been reserved or loaded. Saves update this row.</summary>
+    public Guid? CharacterDbId { get; set; }
+    /// <summary>When set and still in the future, autosave skips PostgreSQL and JSON after a name clash.</summary>
+    public DateTimeOffset? NameClashRetryAtUtc { get; set; }
+    /// <summary>Serializes snapshot writes with admin rename so a stale save cannot put the old name back.</summary>
+    public SemaphoreSlim PersistenceGate { get; } = new(1, 1);
     /// <summary>Server-generated id used in world messages and dictionaries.</summary>
     public Guid SessionId { get; }
     /// <summary>Logical world the player is joined to; updated after successful transfer-in.</summary>

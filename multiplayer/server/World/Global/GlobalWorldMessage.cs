@@ -27,3 +27,9 @@ public sealed record GlobalRemoveDisconnectedPlayerMessage(Guid SessionId) : Glo
 
 /// <summary>Client packet already classified as globally routed by the network edge.</summary>
 public sealed record GlobalClientPacketMessage(Guid SessionId, ClientMessage Message) : GlobalWorldMessage;
+
+/// <summary>Admin rename: update the global chat identity on the global world thread.</summary>
+public sealed record RenameGlobalPlayerCharacterMessage(
+    Guid SessionId,
+    string NewName,
+    TaskCompletionSource<bool> Completion) : GlobalWorldMessage;

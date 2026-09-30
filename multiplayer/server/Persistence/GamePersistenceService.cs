@@ -8,16 +8,18 @@ using Server.World.Game;
 namespace Server.Persistence;
 
 /// <summary>Optional PostgreSQL persistence for wallet accounts, character snapshots, and NFT drop ledger rows.</summary>
-public sealed class GamePersistenceService : IAsyncDisposable {
+public sealed class GamePersistenceService : ICharacterSaver, ICharacterNameProbe, IAsyncDisposable {
     private static readonly JsonSerializerOptions JsonOptions = new() {
         WriteIndented = false,
         PropertyNameCaseInsensitive = true,
     };
 
     private readonly NpgsqlDataSource dataSource;
+    private readonly CharacterIdentityBook identity;
 
     private GamePersistenceService(NpgsqlDataSource dataSource) {
         this.dataSource = dataSource;
+        identity = new CharacterIdentityBook(new NpgsqlCharacterRepository(dataSource));
     }
 
     public static GamePersistenceService? TryCreateFromEnvironment() {
@@ -96,9 +98,9 @@ public sealed class GamePersistenceService : IAsyncDisposable {
         string characterName,
         CancellationToken cancellationToken = default) {
         const string sql = """
-            SELECT state_json, slot_index, hours_played
+            SELECT state_json, slot_index, hours_played, id
             FROM characters
-            WHERE account_wallet = @wallet AND name = @name
+            WHERE account_wallet = @wallet AND LOWER(name) = LOWER(@name)
             LIMIT 1
             """;
 
@@ -123,13 +125,17 @@ public sealed class GamePersistenceService : IAsyncDisposable {
             }
 
             // Prefer dedicated columns when present (schema migration); fall back to JSON fields.
+            // The row id is authoritative — JSON inside the row must not point saves at a different character.
             var slotIndex = reader.IsDBNull(1) ? state.SlotIndex : reader.GetInt32(1);
             var hoursPlayed = reader.IsDBNull(2) ? state.HoursPlayed : reader.GetDouble(2);
-            if (slotIndex == state.SlotIndex && Math.Abs(hoursPlayed - state.HoursPlayed) < 0.0001) {
+            var characterId = reader.GetGuid(3);
+            if (slotIndex == state.SlotIndex &&
+                Math.Abs(hoursPlayed - state.HoursPlayed) < 0.0001 &&
+                state.CharacterDbId == characterId) {
                 return state;
             }
 
-            return state with { SlotIndex = slotIndex, HoursPlayed = hoursPlayed };
+            return state with { SlotIndex = slotIndex, HoursPlayed = hoursPlayed, CharacterDbId = characterId };
         } catch (JsonException ex) {
             Console.Error.WriteLine($"[Persistence] Failed to deserialize character '{characterName}' for '{accountWallet}': {ex.Message}");
             return null;
@@ -212,6 +218,9 @@ public sealed class GamePersistenceService : IAsyncDisposable {
                 try {
                     var state = JsonSerializer.Deserialize<PlayerPersistenceState>(json);
                     if (state is not null) {
+                        if (CharacterNameClash.ShouldHideFromCharacterList(state.NameReservationOnly)) {
+                            continue;
+                        }
                         parsedState = state;
                         level = Math.Max(1, state.Level);
                         exp = Math.Max(0, state.Exp);
@@ -295,49 +304,62 @@ public sealed class GamePersistenceService : IAsyncDisposable {
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SaveCharacterAsync(
+    public async Task<CharacterSaveResult> SaveCharacterAsync(
         string accountWallet,
         string characterName,
         PlayerPersistenceState state,
         CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(state);
-        var hoursPlayed = Math.Max(0, state.HoursPlayed);
-
         // Never let two names on the same wallet share a slot forever — claim a free index if taken by another char.
+        // The unique slot is written on the column; state_json keeps the client's slot.
         var slotIndex = await ResolveUniqueSlotIndexAsync(
                 accountWallet,
                 characterName,
                 Math.Clamp(state.SlotIndex, 0, 3),
                 cancellationToken)
             .ConfigureAwait(false);
-        // PlayerPersistenceState.SlotIndex is init-only — write unique slot only on the DB row.
-        var json = JsonSerializer.Serialize(state, JsonOptions);
-
-        const string sql = """
-            INSERT INTO characters (account_wallet, name, world_id, pos_x, pos_y, state_json, slot_index, hours_played, updated_at)
-            VALUES (@wallet, @name, @worldId, @x, @y, @stateJson::jsonb, @slotIndex, @hoursPlayed, NOW())
-            ON CONFLICT (account_wallet, name) DO UPDATE SET
-                world_id = EXCLUDED.world_id,
-                pos_x = EXCLUDED.pos_x,
-                pos_y = EXCLUDED.pos_y,
-                state_json = EXCLUDED.state_json,
-                slot_index = EXCLUDED.slot_index,
-                hours_played = EXCLUDED.hours_played,
-                updated_at = NOW()
-            """;
-
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("wallet", accountWallet);
-        command.Parameters.AddWithValue("name", characterName);
-        command.Parameters.AddWithValue("worldId", state.GameWorldId);
-        command.Parameters.AddWithValue("x", state.X);
-        command.Parameters.AddWithValue("y", state.Y);
-        command.Parameters.AddWithValue("stateJson", json);
-        command.Parameters.AddWithValue("slotIndex", slotIndex);
-        command.Parameters.AddWithValue("hoursPlayed", hoursPlayed);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return await identity.SaveAsync(accountWallet, characterName, state, slotIndex, cancellationToken)
+            .ConfigureAwait(false);
     }
+
+    /// <summary>Claims the display name in PostgreSQL before the new character enters the world.</summary>
+    public Task<CharacterReserveResult> TryReserveCharacterAsync(
+        string accountWallet,
+        string characterName,
+        PlayerPersistenceState seed,
+        CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(seed);
+        var slotIndex = Math.Clamp(seed.SlotIndex, 0, 3);
+        return identity.ReserveAsync(accountWallet, characterName, seed, slotIndex, cancellationToken);
+    }
+
+    /// <summary>Re-checks a JSON (or unverified) login against the lowercase unique index before play.</summary>
+    public Task<CharacterLoginResult> ReconcileLoadedCharacterAsync(
+        string accountWallet,
+        string characterName,
+        PlayerPersistenceState loaded,
+        CancellationToken cancellationToken = default) =>
+        identity.ReconcileAsync(accountWallet, characterName, loaded, cancellationToken);
+
+    /// <summary>Renames the database row, JSON mirror, and live session together.</summary>
+    public Task<CharacterRenameOutcome> RenameCharacterAsync(
+        string charsDirectory,
+        string accountWallet,
+        string currentName,
+        string newName,
+        bool liveSessionPresent,
+        PlayerPersistenceState? liveSnapshot,
+        Func<Guid, Task<bool>>? applyLive,
+        CancellationToken cancellationToken = default) =>
+        identity.RenameAsync(
+            charsDirectory,
+            accountWallet,
+            currentName,
+            newName,
+            liveSessionPresent,
+            liveSnapshot,
+            applyLive,
+            cancellationToken);
 
     /// <summary>
     /// Ensures this character's slot is free of other names on the same wallet.
@@ -592,8 +614,8 @@ public static class GamePersistence {
             || string.Equals(value, "production", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static async Task SaveCharacterDualAsync(
-        GamePersistenceService? persistence,
+    public static async Task<CharacterSaveResult> SaveCharacterDualAsync(
+        ICharacterSaver? persistence,
         string charsDirectory,
         string accountWallet,
         string characterName,
@@ -602,19 +624,48 @@ public static class GamePersistence {
         state = HeroFactionKit.RewritePersistence(state);
         // Always dual-write PostgreSQL when available (including traveler). JSON remains the traveler
         // load primary / GM sandbox namespace so OP kits never mix across modes.
+        CharacterSaveResult? databaseResult = null;
         if (persistence is not null) {
             try {
                 await persistence.UpsertAccountLoginAsync(accountWallet).ConfigureAwait(false);
-                await persistence.SaveCharacterAsync(accountWallet, characterName, state).ConfigureAwait(false);
+                var saved = await persistence.SaveCharacterAsync(accountWallet, characterName, state).ConfigureAwait(false);
+                if (saved.Status == CharacterSaveStatus.NameClash ||
+                    !CharacterNameClash.ShouldWriteJsonMirror(saved.Status)) {
+                    LogNameClashOnce(accountWallet, characterName);
+                    return saved.Status == CharacterSaveStatus.NameClash ? saved : CharacterSaveResult.NameClash();
+                }
+                if (saved.Status == CharacterSaveStatus.Failed) {
+                    Console.Error.WriteLine($"[Persistence] PostgreSQL save failed for '{accountWallet}': {saved.Error}");
+                } else {
+                    databaseResult = saved;
+                    if (saved.CharacterId is Guid id) {
+                        state = state with { CharacterDbId = id };
+                    }
+                }
+            } catch (Exception ex) when (CharacterNameClash.IsUniqueViolation(ex)) {
+                LogNameClashOnce(accountWallet, characterName);
+                return CharacterSaveResult.NameClash();
             } catch (Exception ex) {
                 Console.Error.WriteLine($"[Persistence] PostgreSQL save failed for '{accountWallet}': {ex.Message}");
             }
         }
 
         // Traveler sessions use a separate JSON namespace so GM sandbox OP kits are never overwritten or reloaded on :8081.
+        // Name clashes return above and do not refresh this file.
         SavePlayerJson(charsDirectory, accountWallet, state, travelerMode);
         Console.WriteLine(
             $"[Persistence] Saved {(travelerMode ? "traveler" : "character")} '{characterName}' wallet={accountWallet[..Math.Min(8, accountWallet.Length)]}… world={state.GameWorldId} L{state.Level} exp={state.Exp} ({state.X},{state.Y})");
+        return databaseResult ?? CharacterSaveResult.JsonOnly(state.CharacterDbId);
+    }
+
+    static void LogNameClashOnce(string accountWallet, string characterName) {
+        if (!CharacterNameClashLog.ShouldEmitNow(accountWallet, characterName)) {
+            return;
+        }
+        var preview = accountWallet.Length <= 8 ? accountWallet : accountWallet[..8];
+        Console.Error.WriteLine(
+            $"[Persistence] Character name clash (23505 {CharacterNameClash.GlobalNameIndex}) for '{characterName}' wallet={preview}…. " +
+            "PostgreSQL save skipped and JSON was not updated. Rename the character; autosave will not retry until the backoff elapses.");
     }
 
     public static async Task<PlayerPersistenceState?> LoadCharacterDualAsync(
@@ -648,7 +699,7 @@ public static class GamePersistence {
             // do not roll the player back (common when JSON lagged behind PG or vice versa).
             var preferred = PreferFresherPersistenceState(fromDb, fromJson);
             if (preferred is not null) {
-                return preferred;
+                return AttachDatabaseCharacterId(preferred, fromDb?.CharacterDbId);
             }
 
             // Do not fall through to the GM sandbox save — traveler must not inherit OP kits.
@@ -679,6 +730,14 @@ public static class GamePersistence {
         }
 
         return fromJsonGm;
+    }
+
+    /// <summary>Keeps the PostgreSQL row id on whichever snapshot login prefers.</summary>
+    static PlayerPersistenceState AttachDatabaseCharacterId(PlayerPersistenceState state, Guid? characterId) {
+        if (characterId is not Guid id || id == Guid.Empty || state.CharacterDbId == id) {
+            return state;
+        }
+        return state with { CharacterDbId = id };
     }
 
     /// <summary>
@@ -799,7 +858,7 @@ public static class GamePersistence {
     /// Same wallet re-using its own name is allowed (login/reconnect path).
     /// </summary>
     public static async Task<(bool Available, string Message)> CheckCharacterNameAvailabilityAsync(
-        GamePersistenceService? persistence,
+        ICharacterNameProbe? persistence,
         string charsDirectory,
         string accountWallet,
         string characterName,
@@ -812,11 +871,14 @@ public static class GamePersistence {
 
         if (persistence is not null) {
             try {
-                if (await persistence.IsCharacterNameTakenByOtherWalletAsync(wallet, name).ConfigureAwait(false)) {
-                    return (false, "That name is already taken.");
+                var taken = await persistence.IsCharacterNameTakenByOtherWalletAsync(wallet, name).ConfigureAwait(false);
+                var probe = CharacterNameClash.FromDbProbe(probeCompleted: true, taken);
+                if (!probe.Available) {
+                    return probe;
                 }
             } catch (Exception ex) {
                 Console.Error.WriteLine($"[Persistence] Name check failed for '{name}': {ex.Message}");
+                return CharacterNameClash.FromDbProbe(probeCompleted: false, takenByOther: false);
             }
         }
 
@@ -962,6 +1024,51 @@ public static class GamePersistence {
         }
 
         return equipped.Count > 0 ? equipped : null;
+    }
+
+    /// <summary>Reads the wallet JSON mirror when its saved display name matches <paramref name="currentName"/>.</summary>
+    public static PlayerPersistenceState? TryReadCharacterJsonForRename(
+        string charsDirectory,
+        string wallet,
+        string currentName) {
+        foreach (var travelerMode in new[] { false, true }) {
+            var state = LoadPlayerJson(charsDirectory, wallet, travelerMode);
+            if (state is null) {
+                continue;
+            }
+            var savedName = string.IsNullOrWhiteSpace(state.CharacterName) ? string.Empty : state.CharacterName.Trim();
+            if (CharacterNameClash.SameName(savedName, currentName)) {
+                return state;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Rewrites <c>CharacterName</c> in whichever wallet JSON files currently use <paramref name="currentName"/>.</summary>
+    public static bool TryRewriteCharacterNameInJson(
+        string charsDirectory,
+        string wallet,
+        string currentName,
+        string newName,
+        Guid characterId) {
+        var updated = false;
+        foreach (var travelerMode in new[] { false, true }) {
+            var state = LoadPlayerJson(charsDirectory, wallet, travelerMode);
+            if (state is null) {
+                continue;
+            }
+            var savedName = string.IsNullOrWhiteSpace(state.CharacterName) ? string.Empty : state.CharacterName.Trim();
+            if (!CharacterNameClash.SameName(savedName, currentName)) {
+                continue;
+            }
+            SavePlayerJson(charsDirectory, wallet, state with {
+                CharacterName = newName.Trim(),
+                CharacterDbId = characterId,
+                NameReservationOnly = false,
+            }, travelerMode);
+            updated = true;
+        }
+        return updated;
     }
 
     static PlayerPersistenceState? LoadPlayerJson(string charsDirectory, string networkId, bool travelerMode = false) {

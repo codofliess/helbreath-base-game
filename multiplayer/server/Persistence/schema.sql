@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE INDEX IF NOT EXISTS idx_characters_account ON characters(account_wallet);
 
 -- Global display-name uniqueness (case-insensitive) across wallets for Create Character.
+-- Saves update by characters.id. The name is inserted when the character is created.
+-- ON CONFLICT (account_wallet, name) does not cover this index.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_name_ci ON characters (LOWER(name));
 
 -- SELECTCHAR desk: slot 0–3 and cumulative hours played (defaults for existing rows).

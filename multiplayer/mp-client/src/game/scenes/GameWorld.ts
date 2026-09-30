@@ -60,12 +60,17 @@ import { MapManager } from '../../utils/MapManager';
 import { evictAllMapTileTextures, loadTileSpritePacksForMapRect, prepareMapForGameWorld, shouldLoadMapAssetsOnDemand } from '../../utils/MapAssets';
 import { catalogAmdFileName } from '../../utils/mapCatalogLookup';
 import {
+    cameraStreamTileRect,
     growMapTileRectToward,
     initialFocusStreamRect,
+    MAP_ENTER_RING_TILES,
     MAP_OBJECT_INSTANTIATE_BATCH,
+    MAP_STREAM_JUMP_COVER_MAX_MS,
     mapTileRectContains,
     mapTileRectsEqual,
     postPaintStreamRect,
+    shouldResetStreamedView,
+    streamedViewCoversCamera,
     waitForBrowserFrames,
     waitMs,
     type MapTileRect,
@@ -458,6 +463,9 @@ export class GameWorld extends Scene {
     private worldReadyForEntities = false;
     /** Viewport restream (walk cap + tree shadows) waits until first paint has settled. */
     private mapStreamWalkEnabled = false;
+    /** Cover is up until the streamed window contains the camera after a same-map jump. */
+    private streamJumpCoverArmed = false;
+    private streamJumpCoverTimer: Phaser.Time.TimerEvent | undefined = undefined;
     /** Tree-shadow sheets are decoded only after the post-stand object pass. */
     private mapStreamTreesEnabled = false;
     /** Plaza object packs exist; walk restream may include object sprites. */
@@ -588,6 +596,8 @@ export class GameWorld extends Scene {
             this.mapStreamWalkEnabled = false;
             this.mapStreamTreesEnabled = false;
             this.mapStreamObjectsEnabled = false;
+            this.streamJumpCoverArmed = false;
+            this.streamJumpCoverTimer = undefined;
             this.mapExpandAfterFirstPaint = undefined;
             this.mapPrepareInFlight = false;
             this.mapSetupRetryCount = 0;
@@ -1007,11 +1017,13 @@ export class GameWorld extends Scene {
             });
         });
         subscribeSafe('GameWorld', PLAYER_RESURRECTED_RECEIVED, (data: PlayerResurrectedEventData) => {
-            const p = this.playersById.get(data.playerId) ?? (data.playerId === this.selfPlayerId ? this.player : undefined);
+            const isSelf = data.playerId === this.selfPlayerId;
+            const p = this.playersById.get(data.playerId) ?? (isSelf ? this.player : undefined);
             p?.applyResurrect(data.x, data.y, data.hp, data.maxHp);
-            if (data.playerId === this.selfPlayerId) {
+            if (isSelf) {
                 setDeathDialogOpen(false);
                 EventBus.emit(IN_UI_PLAYER_RESURRECT);
+                this.presentLocalStreamJump();
             }
         });
 
@@ -1431,9 +1443,11 @@ export class GameWorld extends Scene {
         });
         subscribeSafe('GameWorld', RESET_POSITION_RECEIVED, (data: { x: number; y: number; remainingStunlockMs?: number }) => {
             this.player?.resetPosition(data.x, data.y, data.remainingStunlockMs);
+            this.presentLocalStreamJump();
         });
         subscribeSafe('GameWorld', PLAYER_TELEPORTED_RECEIVED, (data: { x: number; y: number }) => {
             this.player?.applyTeleport(data.x, data.y);
+            this.presentLocalStreamJump();
         });
         subscribeSafe('GameWorld', POSITION_CORRECTED_RECEIVED, (data: { curX: number; curY: number; destX: number; destY: number }) => {
             this.pendingCourseCorrections.push({ curX: data.curX, curY: data.curY, destX: data.destX, destY: data.destY });
@@ -1678,7 +1692,7 @@ export class GameWorld extends Scene {
         this.inputManager = new InputManager({
             scene: this,
             isEnabled: () => !this.loadingMap,
-            acceptLeftMouseDown: () => this.loadingOverlayController?.getOverlay() === undefined,
+            acceptLeftMouseDown: () => this.loadingOverlayController?.isBlockingPointer() !== true,
             onPointerMove: (worldPixelX, worldPixelY) => {
                 this.getCurrentMap().updateHoverCell(this, worldPixelX, worldPixelY);
             },
@@ -3031,6 +3045,7 @@ export class GameWorld extends Scene {
                         includeObjectSprites: this.mapStreamObjectsEnabled,
                     });
                 }
+                this.maybeDismissStreamJumpCover();
                 this.handleMapObjectCollisions();
 
                 if (
@@ -3229,6 +3244,97 @@ export class GameWorld extends Scene {
         }
     }
 
+    /**
+     * Same-map respawn or teleport: if the new camera does not overlap the painted
+     * window (or the jump is large), cover the view and rebuild that window in one
+     * shot. Walking stays on the per-frame grow path — this returns immediately when
+     * the paint already contains the camera.
+     */
+    private presentLocalStreamJump(): void {
+        const player = this.player;
+        const map = this.displayedMap;
+        const camera = this.cameras?.main;
+        if (!player || !map || !camera || !this.mapManager || this.loadingMap) {
+            return;
+        }
+        const standing = this.isStandingNearEnterFocus();
+        const actualZoom = camera.zoom > 0 && Number.isFinite(camera.zoom) ? camera.zoom : 1;
+        const pixelX = player.getAnimatedPixelX();
+        const pixelY = player.getAnimatedPixelY();
+        const scrollX = pixelX - camera.width / (2 * actualZoom);
+        const scrollY = pixelY - camera.height / (2 * actualZoom);
+        const needed = cameraStreamTileRect({
+            scrollX,
+            scrollY,
+            viewWidthPx: camera.width,
+            viewHeightPx: camera.height,
+            zoom: standing ? 1 : actualZoom,
+            mapSizeX: map.sizeX,
+            mapSizeY: map.sizeY,
+            ringTiles: standing ? MAP_ENTER_RING_TILES : undefined,
+        });
+        if (!shouldResetStreamedView(map.getStreamedRect(), needed)) {
+            return;
+        }
+        this.armStreamJumpCover();
+        camera.scrollX = scrollX;
+        camera.scrollY = scrollY;
+        void this.mapManager.syncStreamedView({
+            snapToFocus: true,
+            standingHold: standing,
+            includeTreeShadows: this.mapStreamTreesEnabled,
+            includeObjectSprites: this.mapStreamObjectsEnabled,
+        });
+    }
+
+    private armStreamJumpCover(): void {
+        this.streamJumpCoverArmed = true;
+        this.loadingOverlayController?.showJumpCover();
+        this.streamJumpCoverTimer?.remove(false);
+        this.streamJumpCoverTimer = this.time.delayedCall(MAP_STREAM_JUMP_COVER_MAX_MS, () => {
+            this.streamJumpCoverTimer = undefined;
+            this.dismissStreamJumpCover();
+        });
+    }
+
+    private dismissStreamJumpCover(): void {
+        if (!this.streamJumpCoverArmed) {
+            return;
+        }
+        this.streamJumpCoverArmed = false;
+        this.streamJumpCoverTimer?.remove(false);
+        this.streamJumpCoverTimer = undefined;
+        this.loadingOverlayController?.fadeJumpCover();
+    }
+
+    /** Lifts the cover once the painted window contains the visible camera. */
+    private maybeDismissStreamJumpCover(): void {
+        if (!this.streamJumpCoverArmed || !this.player || !this.displayedMap) {
+            return;
+        }
+        if (this.mapManager?.isStreamInFlight()) {
+            return;
+        }
+        const camera = this.cameras?.main;
+        const painted = this.displayedMap.getStreamedRect();
+        if (!camera || !painted) {
+            return;
+        }
+        const view = cameraStreamTileRect({
+            scrollX: camera.scrollX,
+            scrollY: camera.scrollY,
+            viewWidthPx: camera.width,
+            viewHeightPx: camera.height,
+            zoom: camera.zoom,
+            mapSizeX: this.displayedMap.sizeX,
+            mapSizeY: this.displayedMap.sizeY,
+            ringTiles: 0,
+        });
+        if (streamedViewCoversCamera(painted, view)) {
+            this.dismissStreamJumpCover();
+        }
+    }
+
     /** True when the local player has not walked off spawn — camera follow must not walk-cap restream. */
     private isStandingNearEnterFocus(): boolean {
         if (!this.player) {
@@ -3252,9 +3358,12 @@ export class GameWorld extends Scene {
             if (painted && mapTileRectContains(painted, target)) {
                 return;
             }
-            const next = painted
-                ? growMapTileRectToward(painted, target)
-                : target;
+            // A respawn or teleport already placed a new window. Leave it there
+            // instead of dragging this enter expand back to the old focus.
+            if (painted && shouldResetStreamedView(painted, target)) {
+                return;
+            }
+            const next = painted ? growMapTileRectToward(painted, target) : target;
             await loadTileSpritePacksForMapRect(
                 this,
                 map,
@@ -5580,6 +5689,9 @@ export class GameWorld extends Scene {
             }
             this.groundEffectsById.clear();
 
+            this.streamJumpCoverTimer?.remove(false);
+            this.streamJumpCoverTimer = undefined;
+            this.streamJumpCoverArmed = false;
             this.loadingOverlayController?.destroyImmediate();
             this.loadingOverlayController = undefined;
 

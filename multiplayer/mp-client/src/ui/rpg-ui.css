@@ -11781,7 +11781,9 @@ body.game-world-active .bi-online-strip {
     flex-direction: column;
     width: min(1120px, 100%);
     margin: 0 auto;
-    flex: 1 1 auto;
+    /* Basis 0 so a tall detail card cannot grow the hub and carry the header away.
+       Flex-grow fills the gate; only .explorer-hub-scroll scrolls. */
+    flex: 1 1 0%;
     min-height: 0;
     max-height: 100%;
     overflow: hidden;
@@ -11794,10 +11796,14 @@ body.game-world-active .bi-online-strip {
     font-family: 'Spectral', Georgia, serif;
 }
 
-/* Brand and seal stay fully visible. Only the body below them scrolls. */
+/* Brand and seal stay fully visible. Only the body below them scrolls.
+   Sticky covers the case where an ancestor becomes the scroller. */
 .explorer-hub-header {
     display: flex;
     flex: none;
+    position: sticky;
+    top: 0;
+    z-index: 3;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 8px 16px;
@@ -11807,7 +11813,7 @@ body.game-world-active .bi-online-strip {
 }
 
 .explorer-hub-scroll {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-height: 0;
     overflow: auto;
     padding: 4px 22px 16px;
@@ -11840,15 +11846,27 @@ body.game-world-active .bi-online-strip {
     align-items: stretch;
 }
 
+/* The grid row is as tall as the detail card. height:100% centered the sprite
+   in that row, below the scrollport, so the middle column looked empty.
+   Pin the portrait to the top of its cell and size it to the scrollport.
+   JS sets the exact height from clientHeight. It is not sticky: a sticky
+   box as tall as the scrollport is pushed out through the header once the
+   grid ends and the referral card continues the scroll. */
 .explorer-hub-doll {
-    position: relative;
+    align-self: start;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     min-width: 0;
-    min-height: 0;
-    height: 100%;
-    overflow: visible;
+    min-height: 240px;
+    height: min(560px, calc(100dvh - var(--explorer-title-clearance, 96px) - 160px));
+    max-height: calc(100dvh - var(--explorer-title-clearance, 96px) - 140px);
+    overflow: hidden;
+    box-sizing: border-box;
+    border: 1px solid rgba(196, 154, 72, 0.35);
+    border-radius: 10px;
+    background: #140f0c;
 }
 
 .explorer-hub-doll-sprite {
@@ -11860,12 +11878,22 @@ body.game-world-active .bi-online-strip {
     background: transparent;
 }
 
-.explorer-hub-doll-sprite[data-doll-scale="0"],
-.explorer-hub-doll-sprite:not([data-doll-scale]) {
-    position: absolute;
-    width: 0;
-    height: 0;
-    opacity: 0;
+.explorer-hub-doll-fallback {
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+    color: #e6d7c3;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.explorer-hub-doll-fallback strong {
+    display: block;
+    margin-bottom: 6px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f4e4b0;
 }
 
 .explorer-hub-kicker,
@@ -12057,6 +12085,8 @@ body.game-world-active .bi-online-strip {
 
     .explorer-hub-doll {
         height: 280px;
+        max-height: none;
+        min-height: 280px;
     }
 
     .explorer-hub-grid,

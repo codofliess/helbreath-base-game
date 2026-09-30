@@ -38,6 +38,12 @@ var antiBotToolsConfig = await Config.LoadAntiBotToolsConfig();
 AntiBotTools.Initialize(antiBotToolsConfig);
 TimedChallenge.Initialize();
 PvpAcademy.Initialize();
+var ekEconomyConfig = EkEconomyConfig.LoadOrDefault(
+    Path.Combine(Directory.GetCurrentDirectory(), "Config", "EkEconomy.json"));
+EkEconomyHost.Initialize(
+    Path.Combine(Directory.GetCurrentDirectory(), "Chars", "ek-economy.json"),
+    ekEconomyConfig,
+    PvpAcademy.ExportLifetimeEkCounts());
 
 // Launch security banners — ops must set these for a real soft test.
 WalletAuthValidator.EnsureProductionSecretOrThrow();

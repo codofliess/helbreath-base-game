@@ -65,14 +65,23 @@ public static class PvpAcademy {
         if (string.IsNullOrEmpty(wallet)) {
             return;
         }
+        var lifetime = 0;
         lock (Gate) {
             var row = GetOrCreateWalletUnlocked(wallet, killer.CharacterName);
             row.EkCount++;
             row.DisplayName = killer.CharacterName ?? row.DisplayName;
+            lifetime = row.EkCount;
             SaveUnlocked();
         }
+        // Lifetime gameplay counter only. Purchased NFT EKs are credited on EkEconomy, not here.
+        EkEconomyHost.CreditGameplayEk(wallet, 1, $"pvp-kill:{wallet}:{lifetime}");
     }
 
+    /// <summary>
+    /// Lifetime gameplay EKs for academy handicap and the EnemyKills packet.
+    /// Purchased EKs from a consumed NFT are not included.
+    /// Killer ranking of the spendable earned balance lives on <see cref="EkEconomyService.KillerRanking"/>.
+    /// </summary>
     public static int GetEkCount(GameWorldPlayer player) {
         var wallet = NormalizeWallet(player.AccountWallet);
         if (string.IsNullOrEmpty(wallet)) {
@@ -80,6 +89,17 @@ public static class PvpAcademy {
         }
         lock (Gate) {
             return ledger.Wallets.TryGetValue(wallet, out var row) ? row.EkCount : 0;
+        }
+    }
+
+    /// <summary>Snapshot of lifetime gameplay EKs. Startup migration copies these into the earned balance once.</summary>
+    public static IReadOnlyDictionary<string, long> ExportLifetimeEkCounts() {
+        lock (Gate) {
+            var copy = new Dictionary<string, long>(ledger.Wallets.Count, StringComparer.Ordinal);
+            foreach (var pair in ledger.Wallets) {
+                copy[pair.Key] = pair.Value.EkCount;
+            }
+            return copy;
         }
     }
 
@@ -204,6 +224,10 @@ public static class PvpAcademy {
             }
 
             SaveUnlocked();
+        }
+
+        if (ekGranted > 0) {
+            EkEconomyHost.CreditGameplayEk(wallet, ekGranted, $"academy-ek:{wallet}:{ek}");
         }
 
         if (rewarded && gold > 0) {

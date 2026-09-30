@@ -315,3 +315,32 @@ Prerrequisito: hardening claim/mint (Fase A) + frontera torneo stash intacta. **
 7. `[fable]` Guild leave / dissolve edge cases; anti-wash cooldowns; aislamiento torneo.
 
 MASTERPLAN § 5 · 2026-07-17 / 2026-07-17b.
+
+---
+
+## 13. Fee plano por pieza (servidor, draft)
+
+El unbind de hero set para vender cobra un fee **plano por pieza**, no un % ni un precio por stats. Vive en config, no en código:
+
+| Key | Default |
+|-----|---------|
+| `fees.hero_set_piece_unbind_usd` | **5** |
+| `fees.hero_set_guild_bound_piece_unbind_usd` | **5** (plano; no US$10) |
+| `fees.soul_bind_seal_usd` | **5** |
+| `fees.guild_bind_seal_usd` | **5** |
+| `fees.unbind_seal_usd` | **5** |
+
+| Operación | Fee de auditoría |
+|-----------|------------------|
+| Desbindear **una** pieza | 1 × unitario |
+| Vender el set **entero** | **N** × unitario (N = piezas de esa venta; no hay un N fijo) |
+
+Reglas del ledger (`EkEconomyService.UnbindHeroPiece` / `SellHeroSet`):
+
+- Solo ids de hero de ciudad (`HeroFactionKit`). Otra pieza se rechaza y **no** cobra.
+- Loadout de torneo (`tournamentLoadout`) no se desbindea y no cobra.
+- Vender el set es atómico: si una pieza no sirve, ninguna cambia de estado y no hay fee.
+- Misma idempotency key no cobra dos veces. Una segunda key sobre una pieza ya suelta se rechaza.
+- `collected=false`, `chainTx=null`, `emitir=false`. El número USD es registro, no un cargo.
+
+El packet `ItemBind` **sigue consumiendo** el seal (ids 960, 961 y 962, sin cambiar). Después registra el fee de config como stub (`collected=false`, sin mover EK). Una pieza hero guild-bound usa `fees.hero_set_guild_bound_piece_unbind_usd` (5). Si el unbind pasa a pago directo y deja el seal, es pregunta abierta.

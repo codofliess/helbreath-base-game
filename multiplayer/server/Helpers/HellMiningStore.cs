@@ -65,6 +65,12 @@ public static class HellMiningStore {
     static long lastPersistMs;
     static long lastTickMs;
 
+    /// <summary>
+    /// Observes entry to the EK mining hooks (<see cref="RecordEkCount"/>, <see cref="RecordLegendaryEk"/>, <see cref="RecordTop100Ek"/>).
+    /// Null in production. Purchased EK must never reach those hooks; there is no config switch.
+    /// </summary>
+    public static Action<string, string?>? EkHookObserver { get; set; }
+
     static readonly JsonSerializerOptions JsonOptions = new() {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -310,6 +316,7 @@ public static class HellMiningStore {
     /// Outside testing week: count only (legacy legendary/top100 paths handle awards).
     /// </summary>
     public static HellMiningCreditResult RecordEkCount(string? accountWallet, string? characterName, long nowMs) {
+        EkHookObserver?.Invoke(nameof(RecordEkCount), accountWallet);
         var wallet = NormalizeWallet(accountWallet);
         if (string.IsNullOrEmpty(wallet)) {
             return HellMiningCreditResult.Ignored("No wallet.");
@@ -488,6 +495,7 @@ public static class HellMiningStore {
     /// (testing EKs only give credits via <see cref="RecordEkCount"/>).
     /// </summary>
     public static HellMiningCreditResult RecordLegendaryEk(string? accountWallet, long nowMs) {
+        EkHookObserver?.Invoke(nameof(RecordLegendaryEk), accountWallet);
         if (IsTestingWeekActive(nowMs)) {
             return HellMiningCreditResult.Ignored("Testing week: EK ladder tokens disabled (credits via EK cap only).");
         }
@@ -502,6 +510,7 @@ public static class HellMiningStore {
 
     /// <summary>EK top-100 path — disabled during testing week.</summary>
     public static HellMiningCreditResult RecordTop100Ek(string? accountWallet, long nowMs) {
+        EkHookObserver?.Invoke(nameof(RecordTop100Ek), accountWallet);
         if (IsTestingWeekActive(nowMs)) {
             return HellMiningCreditResult.Ignored("Testing week: EK ladder tokens disabled (credits via EK cap only).");
         }

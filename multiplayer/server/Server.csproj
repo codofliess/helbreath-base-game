@@ -26,10 +26,13 @@
 
   <!-- Never ship player data / nested publish trees into the build output. -->
   <ItemGroup>
+    <Compile Remove="Server.Tests/**" />
     <Content Remove="Chars/**" />
+    <Content Remove="Server.Tests/**" />
     <Content Remove="**/publish*/**" />
     <Content Remove="_build_check_out/**" />
     <None Remove="Chars/**" />
+    <None Remove="Server.Tests/**" />
     <None Remove="**/publish*/**" />
     <None Remove="_build_check_out/**" />
   </ItemGroup>

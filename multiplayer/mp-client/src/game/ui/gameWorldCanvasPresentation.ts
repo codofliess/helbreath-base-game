@@ -1,4 +1,5 @@
 import { Scale, type Game, type Scene } from 'phaser';
+import { dismissSelectCharOccupiedBannerForWorld } from './selectCharBannerDismiss';
 import { EventBus } from '../EventBus';
 import { IN_UI_GAME_VIEWPORT_RESIZED } from '../../constants/EventNames';
 import { lockWorldCanvasPresentationSize } from '../../utils/worldCanvasPoolGuard';
@@ -195,6 +196,7 @@ function ensureWindowResizeListener(): void {
  * In-game: fixed 1024×576 FOV + Scale.ENVELOP (windowed or fullscreen).
  */
 export function applyGameWorldCanvasPresentation(scene: Scene): void {
+    dismissSelectCharOccupiedBannerForWorld();
     applyClassicFovPresentation(scene.game);
 }
 

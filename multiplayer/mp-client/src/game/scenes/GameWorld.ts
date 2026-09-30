@@ -13,6 +13,7 @@ import { SpikeFieldInstance } from '../spells/SpikeFieldInstance';
 import { createSpikeField } from '../spells/SpikeField';
 import { IceStorm } from '../spells/IceStorm';
 import { EventBus } from '../EventBus';
+import { dismissSelectCharOccupiedBannerForWorld } from '../ui/selectCharBannerDismiss';
 import { canvasToScreenPosition, convertWorldPosToPixelPos, convertPixelPosToWorldPos, getNextDirection, Direction, findApproachCellNearTarget, findMovableLocation, getDistance, isCellMovable, toDirection, worldCellCenterPixelX, worldCellCenterPixelY } from '../../utils/CoordinateUtils';
 import { resolveSafePlayerSpawn } from '../../../../../sp-client/src/utils/CoordinateUtils';
 import { normalizeMapId } from '../../../../../sp-client/src/constants/MapTeleportLocs';
@@ -661,6 +662,7 @@ export class GameWorld extends Scene {
     private clearResidualLoginDeskChrome(): void {
         forceClearLoginDeskCanvasPresentation(this);
         document.body.classList.remove('login-selectchar-active');
+        dismissSelectCharOccupiedBannerForWorld();
         const canvas = this.game.canvas;
         if (canvas) {
             canvas.classList.remove('login-selectchar-canvas');
@@ -2822,6 +2824,7 @@ export class GameWorld extends Scene {
      * Avoids painting traveler `default` tiles at city plaza coordinates.
      */
     private restartOntoTransferredWorld(initialGameWorldState: InitialGameWorldState, reason: string): void {
+        dismissSelectCharOccupiedBannerForWorld();
         console.log(
             `[GameWorld${this.gameWorldId ? `:${this.gameWorldId}` : ''}] Restarting onto '${initialGameWorldState.gameWorldId}' (${initialGameWorldState.mapName}) [${reason}]`,
         );
@@ -2839,6 +2842,7 @@ export class GameWorld extends Scene {
     }
 
     private applyTransferredWorldState(data: InitialGameWorldStateEventData): void {
+        dismissSelectCharOccupiedBannerForWorld();
         this.clearWorldTransferWatchdog();
         this.awaitingTransferredWorldState = false;
         this.pendingPredictedWorldTransfer = false;

@@ -15,6 +15,8 @@ import {
     SELECTCHAR_KINDGEM_OCCUPIED_PREFIX,
     buildSelectCharReactOccupiedBanner,
     clearSelectCharReactOccupiedBannerSticky,
+    dismissSelectCharOccupiedBannerForWorld,
+    mountSelectCharKindGemBanner,
     occupiedSlotOverlayInnerHtml,
     paintSelectCharReactOccupiedBannerNodes,
     paintSlotGlyphCanvas,
@@ -638,6 +640,46 @@ describe('syncSelectCharReactOccupiedBannerDom — fail-closed KindGem paint', (
         assert.match(kindgem?.textContent ?? '', /Elon/);
         assert.match(kindgem?.textContent ?? '', /150/);
         assert.equal((kindgem?.textContent ?? '').includes('waiting'), false);
+    });
+
+    it('mounts OCCUPIED Elon Lev.150 in character select and removes it for the world HUD', () => {
+        clearSelectCharReactOccupiedBannerSticky();
+        const { doc, FakeEl } = installFakeSelectCharDocument();
+        const screen = new FakeEl();
+        screen.setAttribute('data-selectchar-screen', '1');
+        doc.body.appendChild(screen);
+
+        const banner = buildSelectCharReactOccupiedBanner(paintSelectCharSlotRows([elon]), [elon]);
+        syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+
+        const kindgem = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+        assert.ok(kindgem);
+        assert.equal(kindgem?.textContent, 'OCCUPIED Elon Lev.150');
+        assert.equal(kindgem?.parentNode, screen);
+        assert.equal(doc.body.children.includes(kindgem!), false);
+
+        screen.remove();
+        assert.equal(
+            mountSelectCharKindGemBanner(doc as unknown as Document, kindgem!),
+            null,
+        );
+        assert.equal(kindgem?.parentNode, null);
+        assert.equal(doc.body.children.includes(kindgem!), false);
+
+        syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+        const orphan = doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID);
+        assert.equal(orphan?.parentNode, doc.body);
+        dismissSelectCharOccupiedBannerForWorld(doc as unknown as Document);
+        assert.equal(doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID), null);
+        assert.equal(
+            doc.body.querySelectorAll('#selectchar-kindgem-occupied-banner, .selectchar-react-occupied__banner').length,
+            0,
+        );
+
+        doc.body.className = 'game-world-active helbreath-game-active';
+        syncSelectCharReactOccupiedBannerDom(banner, null, doc as unknown as Document);
+        assert.equal(doc.getElementById(SELECTCHAR_KINDGEM_OCCUPIED_BANNER_ID), null);
+        assert.equal(doc.body.innerText.includes('OCCUPIED Elon Lev.150'), false);
     });
 });
 

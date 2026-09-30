@@ -875,6 +875,14 @@ export class Monster extends GameObject {
 
         for (const asset of this.assets) {
             asset.setSpriteName(config.spriteName);
+            // Boot skips every `.spr`, including `ghk`. A missing placeholder sheet binds the
+            // hidden 1×1 pending canvas and sets pendingLazyPlayerItemAppearance. Playback
+            // refuses to run while that flag is set, so the body stays invisible after `slm`
+            // (and every other late mob) has actually decoded. Promote drops the flag and
+            // binds `sprite-{name}-{sheet}` before switchMonsterState.
+            if (asset.isPendingLazyPlayerItemAppearance()) {
+                asset.promotePendingPlayerItemAppearance();
+            }
         }
 
         this.recreateShadowForCurrentSprite();

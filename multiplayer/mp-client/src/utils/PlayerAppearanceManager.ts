@@ -1,5 +1,6 @@
 import type { GameObjects, Scene } from 'phaser';
 import type { GameAssetConfig } from '../game/objects/GameAsset';
+import { SpriteType } from '../game/assets/HBSprite';
 import { AnimationType, GameAsset } from '../game/objects/GameAsset';
 import type { Direction } from './CoordinateUtils';
 import { Gender, SkinColor } from '../Types';
@@ -11,7 +12,7 @@ import {
     PLAYER_BODY_SCALE_X,
 } from '../Config';
 import { calculateFrameRateFromDuration } from './AnimationUtils';
-import { getItemEquippedAppearanceSpriteNames } from '../constants/Assets';
+import { ASSETS, AssetType, getItemEquippedAppearanceSpriteNames, type AssetData } from '../constants/Assets';
 import {
     getItemByEquippedSprite,
     getItemById,
@@ -34,6 +35,8 @@ import {
     isMagiasRitualActive,
     shouldSkipCastCanvasWorkOnState,
 } from './castPresentation';
+import { sheetsForBodyLayerMotion } from './playerBodyMotionSheets';
+import { loadSpriteAssetOnDemand } from './SpriteHttpLoader';
 import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
 
 export enum PlayerState {
@@ -333,6 +336,9 @@ export class PlayerAppearanceManager {
 
     /** Per-sprite fetch: one completion handler promotes every pending layer using that basename. */
     private readonly lazyItemAppearanceLoadsStarted = new Set<string>();
+
+    /** In-flight body/hair/underwear motion-sheet decodes (run/walk are not in the enter set). */
+    private readonly bodyLayerSheetLoadsStarted = new Set<string>();
 
     public constructor(
         assets: GameAsset[],
@@ -1103,6 +1109,12 @@ export class PlayerAppearanceManager {
 
             const { animationKey, animationDirection, animationType } = this.getAnimationConfigForAsset(spriteName, newState, direction, i);
             if (
+                (slot === 'human' || slot === 'hair' || slot === 'underwear')
+                && this.scheduleBodyLayerMotionSheetIfNeeded(spriteName, animationKey, slot, newState, direction)
+            ) {
+                continue;
+            }
+            if (
                 this.isLazyPlayerItemAppearanceSlot(slot)
                 && this.scheduleMissingAnimationSheetIfNeeded(spriteName, asset, animationKey, newState)
             ) {
@@ -1121,6 +1133,73 @@ export class PlayerAppearanceManager {
         this.applySaturateToEligibleAssets();
         this.applyDisconnectedToAllAssets();
         this.applyInvisibilityAlpha();
+    }
+
+    /**
+     * Enter loads idle body sheets only. Run (default) and walk-combat live on
+     * later indexes, so the first step must decode them or the idle pose slides
+     * with the cell interpolation. Same idea as monster move-sheet fetch.
+     * Returns true when this frame must keep the current pose (load in flight).
+     * Magias prepare still refuses the fetch — that decode is the black-canvas path.
+     */
+    private scheduleBodyLayerMotionSheetIfNeeded(
+        spriteName: string,
+        animationKey: string,
+        slot: 'human' | 'hair' | 'underwear',
+        state: PlayerState,
+        direction: Direction,
+    ): boolean {
+        if (this.scene.textures.exists(animationKey)) {
+            // Decoded already. Play it when the sheet is a real texture.
+            // A world-canvas alias must not be re-fetched or bound.
+            return !isSafeDrawableTexture(this.scene, animationKey);
+        }
+        if (this.shouldRefuseMagiasAppearanceFetch(state)) {
+            return false;
+        }
+        const match = /^sprite-(.+)-(\d+)$/.exec(animationKey);
+        if (!match) {
+            return false;
+        }
+        const sheet = Number(match[2]);
+        const sheets = sheetsForBodyLayerMotion(slot, sheet, direction);
+        if (sheets.length === 0) {
+            return false;
+        }
+        const loadKey = `${spriteName}:${sheets.join(',')}`;
+        if (!this.bodyLayerSheetLoadsStarted.has(loadKey)) {
+            this.bodyLayerSheetLoadsStarted.add(loadKey);
+            loadSpriteAssetOnDemand(this.scene, this.spriteAssetForName(spriteName), {
+                sheetIndices: new Set(sheets),
+            })
+                .then(() => {
+                    this.bodyLayerSheetLoadsStarted.delete(loadKey);
+                    this.onLazyItemAppearanceLoaded?.();
+                })
+                .catch((err) => {
+                    this.bodyLayerSheetLoadsStarted.delete(loadKey);
+                    console.error(
+                        `[PlayerAppearance] Failed to load '${spriteName}' motion sheets ${sheets.join(',')}`,
+                        err,
+                    );
+                });
+        }
+        return true;
+    }
+
+    /** Catalog row when present (hair is HairAndUndies, not a synthesized Human pack). */
+    private spriteAssetForName(spriteName: string): AssetData {
+        const key = `sprite-${spriteName}`;
+        const row = ASSETS.find((asset) => asset.key === key && asset.assetType === AssetType.SPRITE);
+        if (row) {
+            return row;
+        }
+        return {
+            key,
+            fileName: `${spriteName}.spr`,
+            assetType: AssetType.SPRITE,
+            spriteType: SpriteType.Human,
+        };
     }
 
     private applyEquipItem(

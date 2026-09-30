@@ -9,6 +9,7 @@ import {
     OUT_UI_SELECTCHAR_ACTION,
     type ConnectToServerPayload,
 } from '../../constants/EventNames';
+import { rememberWorldEnterPayload } from '../../utils/gameConnectionGate';
 import { getDefaultGameHost, getDefaultGamePort } from '../../utils/serverDefaults';
 import { getPreferredInitialWorldId } from '../../utils/playerMode';
 import { ARENA_ENTRY_ENABLED } from '../../constants/ArenaGate';
@@ -151,6 +152,7 @@ export function shouldConstructPhaserAfterSeal(
 
 /** Safe gate: boot Phaser, then LoginScreen connects with this payload. */
 export function beginEnteringWorld(payload: ConnectToServerPayload): void {
+    rememberWorldEnterPayload(payload);
     connectDialogStore.setState((state) => ({
         ...state,
         isOpen: false,

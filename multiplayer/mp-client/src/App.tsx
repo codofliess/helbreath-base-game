@@ -36,6 +36,7 @@ import { ChatWorldLog } from './ui/overlays/ChatWorldLog';
 import { CornerMinimapHud } from './ui/overlays/CornerMinimapHud';
 import { HudTutorialOverlay } from './ui/overlays/HudTutorialOverlay';
 import { TestnetHud } from './ui/overlays/TestnetHud';
+import { ServerConnectionOverlay } from './ui/overlays/ServerConnectionOverlay';
 import { tryStartHudTutorial } from './ui/store/HudTutorial.store';
 import { playerTokenCopy } from './constants/PlayerTokenTicker';
 import { progressionStore } from './ui/store/Progression.store';
@@ -1382,6 +1383,7 @@ function App()
                     phaserRef={phaserRef}
                 />
                 
+                {isInGameWorld && <ServerConnectionOverlay />}
                 {showWorldHud && (
                     <Suspense fallback={null}>
                         <HotkeyBar phaserRef={phaserRef} />

@@ -1,10 +1,12 @@
 /**
  * Devnet $HELL SPL mint + allocation vault ATAs (MASTERPLAN §1.7).
  *
- * Allocations (1B total, 9 decimals) — PO 2026-09-29:
+ * Allocations (1B total, 9 decimals) — PO 2026-09-29, team vesting D13:
  *   play-mine 30% (300M, 500k/day) · bonding curve 30% (300M)
- *   graduation liquidity 10–20% (HELL_GRADUATION_LIQUIDITY_PCT, default 15) · team 10%
- *   (1% of supply unlocked at TGE, the other 9% locked in four later cuotas) · airdrops = rest
+ *   graduation liquidity 10–20% (HELL_GRADUATION_LIQUIDITY_PCT, default 15)
+ *   team 10% (100M) in 5 equal cuotas of 20M: cuota 1 at TGE (month 0),
+ *     then every 3 months — cuota 2 at TGE+3, cuota 3 at +6, cuota 4 at +9, cuota 5 at +12
+ *   airdrops = rest
  *
  * Usage (from middleware-node/):
  *   npm install
@@ -13,8 +15,9 @@
  * Requires game authority (same as NFT mint) with SOL for fees.
  * Writes middleware-node/.hell-token.json and prints env lines to copy.
  *
- * Does NOT implement on-chain vesting unlocks, pump.fun, or stake yield.
- * The team split is two vaults: cuota 1 liquid at TGE, cuotas 2–5 held aside.
+ * The team bucket is two vaults (cuota 1 vs cuotas 2–5). That split is NOT an
+ * on-chain timelock. This script does NOT implement on-chain vesting unlocks,
+ * pump.fun, or stake yield.
  */
 const fs = require('fs');
 const path = require('path');
@@ -39,30 +42,42 @@ const { loadOrCreateGameAuthority } = require('../authority');
 
 const DECIMALS = 9;
 const TOTAL_SUPPLY = 1_000_000_000n;
-/** Months after TGE. Cuota 1 is month 0 and is the only unlocked slice. */
-const TEAM_VESTING_OFFSET_MONTHS = [0, 3, 6, 9, 12];
-/** Percent of total supply that leaves the team bucket unlocked at TGE. */
-const TEAM_TGE_UNLOCK_PCT = 1;
+const TEAM_VESTING_INSTALLMENTS = 5;
+/** Months between team cuotas. Cuota 1 is offset 0 (at the TGE). */
+const TEAM_VESTING_OFFSET_MONTHS = 3;
 const ALLOCATIONS = buildAllocations(process.env.HELL_GRADUATION_LIQUIDITY_PCT);
 
 /**
- * Five team cuotas. Cuota 1 is TEAM_TGE_UNLOCK_PCT of supply at TGE (no lock).
- * Cuotas 2–5 split the rest of the 10% team bucket in equal amounts.
+ * Five equal team cuotas. Cuota 1 unlocks at the TGE (offsetMonths 0).
+ * Cuotas 2–5 stay locked until TGE+3, +6, +9 and +12 months.
+ * Throws if `teamTokens` is not divisible by 5.
  */
-function teamVestingSchedule(totalSupply = TOTAL_SUPPLY) {
-    const unlocked = (totalSupply * BigInt(TEAM_TGE_UNLOCK_PCT)) / 100n;
-    const team = (totalSupply * 10n) / 100n;
-    const laterCount = TEAM_VESTING_OFFSET_MONTHS.length - 1;
-    const locked = team - unlocked;
-    if (locked <= 0n || locked % BigInt(laterCount) !== 0n) {
-        throw new Error(`Team vesting does not split evenly: unlocked ${unlocked}, locked ${locked}`);
+function teamVestingSchedule(teamTokens) {
+    const total = typeof teamTokens === 'bigint' ? teamTokens : BigInt(teamTokens);
+    const installments = BigInt(TEAM_VESTING_INSTALLMENTS);
+    if (total <= 0n || total % installments !== 0n) {
+        throw new Error(`Team bucket must be divisible by ${TEAM_VESTING_INSTALLMENTS} (got ${total})`);
     }
-    const eachLocked = locked / BigInt(laterCount);
-    return TEAM_VESTING_OFFSET_MONTHS.map((offsetMonths, i) => ({
-        cuota: i + 1,
-        offsetMonths,
-        tokens: i === 0 ? unlocked : eachLocked,
-        atTge: offsetMonths === 0,
+    const each = total / installments;
+    const schedule = [];
+    for (let i = 0; i < TEAM_VESTING_INSTALLMENTS; i++) {
+        const offsetMonths = i * TEAM_VESTING_OFFSET_MONTHS;
+        schedule.push({
+            cuota: i + 1,
+            offsetMonths,
+            tokens: each,
+            atTge: offsetMonths === 0,
+        });
+    }
+    return schedule;
+}
+
+function scheduleForJson(schedule) {
+    return schedule.map((row) => ({
+        cuota: row.cuota,
+        offsetMonths: row.offsetMonths,
+        tokens: Number(row.tokens),
+        atTge: row.atTge,
     }));
 }
 
@@ -75,16 +90,16 @@ function buildAllocations(liquidityPctRaw) {
     const mining = pct(30);
     const bondingCurve = pct(30);
     const liquidity = pct(liquidityPct);
-    const vesting = teamVestingSchedule(TOTAL_SUPPLY);
-    const teamTge = vesting[0].tokens;
-    const teamLocked = vesting.slice(1).reduce((sum, row) => sum + row.tokens, 0n);
-    const team = teamTge + teamLocked;
-    const airdrops = TOTAL_SUPPLY - mining - bondingCurve - liquidity - team;
+    const teamBucket = pct(10);
+    const teamSchedule = teamVestingSchedule(teamBucket);
+    const teamTge = teamSchedule[0].tokens;
+    const teamLocked = teamBucket - teamTge;
+    const airdrops = TOTAL_SUPPLY - mining - bondingCurve - liquidity - teamBucket;
     return [
         { key: 'mining', label: 'Play-mine escrow (500k/day)', tokens: mining },
         { key: 'bondingCurve', label: 'Bonding curve', tokens: bondingCurve },
         { key: 'liquidity', label: 'Graduation liquidity (other DEX pools)', tokens: liquidity },
-        { key: 'team', label: 'Team cuota 1 (TGE, sin lock)', tokens: teamTge },
+        { key: 'team', label: 'Team cuota 1 (TGE)', tokens: teamTge },
         { key: 'teamVesting', label: 'Team vesting cuotas 2-5 (locked)', tokens: teamLocked },
         { key: 'airdrops', label: 'Airdrops', tokens: airdrops },
     ];
@@ -193,13 +208,11 @@ async function main() {
         freezeAuthority: authority.publicKey.toBase58(),
         rpcUrl,
         createdAt: new Date().toISOString(),
-        note: 'Utility / play-mine token. Not an investment product. Stake does not mint (C1). Team cuota 1 is unlocked at TGE; cuotas 2-5 are a separate vault, not an on-chain timelock.',
-        teamVesting: teamVestingSchedule().map((row) => ({
-            cuota: row.cuota,
-            offsetMonths: row.offsetMonths,
-            tokens: Number(row.tokens),
-            atTge: row.atTge,
-        })),
+        note: 'Utility / play-mine token. Not an investment product. Stake does not mint (C1). Team cuotas 2-5 are a separate vault, not an on-chain timelock.',
+        teamVestingSchedule: scheduleForJson(teamVestingSchedule(
+            ALLOCATIONS.find((alloc) => alloc.key === 'team').tokens
+            + ALLOCATIONS.find((alloc) => alloc.key === 'teamVesting').tokens,
+        )),
         vaults,
     };
 
@@ -220,8 +233,7 @@ function printEnv(result) {
     for (const [key, vault] of Object.entries(result.vaults)) {
         console.log(`${vaultEnvKey(key)}=${vault.tokenAccount}`);
     }
-    console.log('# Team cuota 1 (1% supply, no lock) is HELL_TEAM_TOKEN_ACCOUNT.');
-    console.log('# Cuotas 2-5 stay in HELL_TEAM_VESTING_TOKEN_ACCOUNT (TGE+3/6/9/12 months). Not an on-chain timelock.');
+    console.log('# Team cuota 1 is HELL_TEAM_TOKEN_ACCOUNT; cuotas 2-5 sit in HELL_TEAM_VESTING_TOKEN_ACCOUNT. This split is NOT an on-chain timelock.');
     console.log('# Optional: shared ledger path for claim (same host as game server)');
     console.log('# HELL_MINING_LEDGER_PATH=../multiplayer/server/Chars/hell-mining.json');
     console.log(`SOLANA_RPC_URL=${result.rpcUrl}`);
@@ -237,8 +249,9 @@ if (require.main === module) {
 module.exports = {
     buildAllocations,
     teamVestingSchedule,
+    scheduleForJson,
     vaultEnvKey,
     TOTAL_SUPPLY,
     TEAM_VESTING_OFFSET_MONTHS,
-    TEAM_TGE_UNLOCK_PCT,
+    TEAM_VESTING_INSTALLMENTS,
 };

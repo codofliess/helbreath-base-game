@@ -39,7 +39,7 @@ if (!env.includes('PORT=')) {
 }
 
 // Vault set differs between mints (pre-2026-09-29: team/liquidity/dao/growth/mining;
-// now: mining/bondingCurve/liquidity/team/airdrops).
+// now: mining/bondingCurve/liquidity/team/teamVesting/airdrops).
 const vaultKey = (key) => `HELL_${key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()}_TOKEN_ACCOUNT`;
 const vaultPairs = Object.fromEntries(
     Object.entries(j.vaults || {}).map(([key, vault]) => [vaultKey(key), vault.tokenAccount]),

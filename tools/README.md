@@ -124,6 +124,29 @@ node extract-all-spr.js <folder-path>
 
 ---
 
+### map-diff.mjs
+
+Compares every checked-in `.amd` to a Helbreath Olympia reference, then writes a ranked report.
+
+Olympia `.amd` files are read from `reference/olympia-maps/` (or `--olympia`). Olympia MAPDATA text dumps are read from `reference/mapdata/`, `sp-client/reference/mapdata/`, or `tmp-mapdata/` (or `--mapdata`). Neither dump is in the repo today. The script still runs: it audits collision, teleport wiring, and spawn cells on `multiplayer/server/Config/maps`, and diffs those bytes against the mp-client and sp-client copies.
+
+```bash
+node tools/map-diff.mjs
+node tools/map-diff.mjs --olympia reference/olympia-maps --mapdata reference/mapdata
+node --test tools/map-diff.test.mjs
+```
+
+From `tools/` with pnpm 10 (pnpm 9 breaks on `allowBuilds`):
+
+```bash
+npx pnpm@10 run map-diff
+npx pnpm@10 run map-diff:test
+```
+
+`--strict` exits non-zero when an Olympia source directory is missing. Default output is `tools/map-diff-out/` (gitignored). A one-map sample image lives at `tools/map-diff/sample-side-by-side.png`.
+
+---
+
 ## PakToSprConverter
 
 .NET tool to convert legacy `.pak` sprite files to `.spr` format. See [PakToSprConverter/README.md](PakToSprConverter/README.md).

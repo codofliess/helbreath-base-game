@@ -51,6 +51,22 @@ export const MAP_POST_PAINT_MAX_HEIGHT_TILES = 12;
 export const MAP_OBJECT_INSTANTIATE_BATCH = 8;
 
 /**
+ * Chebyshev tile gap between the painted window and the new camera that rebuilds
+ * the stream in one shot. Walking shifts the camera about one tile per step and
+ * grows {@link MAP_EXPAND_STEP_TILES} per edge, so it stays under this.
+ * A respawn or teleport past it — or any camera window that does not overlap the
+ * painted rect — must not crawl four tiles per pack-load (that is the ~5s black
+ * plaza after Restart).
+ */
+export const MAP_STREAM_SNAP_JUMP_TILES = 12;
+
+/**
+ * Fail-soft for the respawn/teleport cover. The rebuild is one pack load, not a
+ * multi-pass crawl; lift the cover if that load never covers the camera.
+ */
+export const MAP_STREAM_JUMP_COVER_MAX_MS = 4000;
+
+/**
  * Maximum streamed window. A tiny camera zoom (or a full-map minimap snapshot) must not expand
  * this to the whole world.
  */
@@ -91,6 +107,24 @@ export function mapTileRectContains(outer: MapTileRect, inner: MapTileRect): boo
         inner.maxX <= outer.maxX &&
         inner.maxY <= outer.maxY
     );
+}
+
+/** Inclusive overlap. Touching edges count; a one-tile gap does not. */
+export function mapTileRectsOverlap(a: MapTileRect, b: MapTileRect): boolean {
+    return a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+}
+
+export function isDegenerateMapTileRect(rect: MapTileRect): boolean {
+    return rect.maxX < rect.minX || rect.maxY < rect.minY;
+}
+
+/** Chebyshev distance between rect centers, in tiles. */
+export function mapTileRectChebyshevCenterDelta(a: MapTileRect, b: MapTileRect): number {
+    const ax = (a.minX + a.maxX) / 2;
+    const ay = (a.minY + a.maxY) / 2;
+    const bx = (b.minX + b.maxX) / 2;
+    const by = (b.minY + b.maxY) / 2;
+    return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
 
 export function clampMapTileRect(rect: MapTileRect, mapSizeX: number, mapSizeY: number): MapTileRect {
@@ -271,6 +305,73 @@ export function growMapTileRectToward(
         maxX: Math.min(target.maxX, current.maxX + step),
         maxY: Math.min(target.maxY, current.maxY + step),
     };
+}
+
+/**
+ * True when growing {@link MAP_EXPAND_STEP_TILES} per edge would leave the new
+ * camera on empty ground for several pack loads.
+ *
+ * No painted rect yet: false (first enter still grows from the tiny window).
+ * The new camera already inside the paint: false (tiles are ready).
+ * Otherwise reset when the windows do not overlap, the paint is degenerate, or
+ * the centers jumped by at least {@link MAP_STREAM_SNAP_JUMP_TILES}.
+ */
+export function shouldResetStreamedView(
+    painted: MapTileRect | undefined,
+    needed: MapTileRect,
+    jumpTiles = MAP_STREAM_SNAP_JUMP_TILES,
+): boolean {
+    if (!painted) {
+        return false;
+    }
+    if (isDegenerateMapTileRect(painted)) {
+        return true;
+    }
+    if (mapTileRectContains(painted, needed)) {
+        return false;
+    }
+    if (!mapTileRectsOverlap(painted, needed)) {
+        return true;
+    }
+    return mapTileRectChebyshevCenterDelta(painted, needed) >= Math.max(1, jumpTiles);
+}
+
+export interface StreamedPaintResolution {
+    rect: MapTileRect;
+    /** True when the old window was discarded instead of grown toward `destination`. */
+    reset: boolean;
+}
+
+/**
+ * Next ground window. Walking grows `painted` toward `destination` by `stepTiles`.
+ * A respawn/teleport (or a grow that would invert the rect) recenters on `needed`.
+ * With no paint yet, still grows from `needed` so first enter does not jump to the walk cap.
+ */
+export function resolveStreamedPaintRect(
+    painted: MapTileRect | undefined,
+    needed: MapTileRect,
+    destination: MapTileRect,
+    stepTiles = MAP_EXPAND_STEP_TILES,
+): StreamedPaintResolution {
+    if (!painted) {
+        return { rect: growMapTileRectToward(needed, destination, stepTiles), reset: false };
+    }
+    if (shouldResetStreamedView(painted, needed)) {
+        return { rect: needed, reset: true };
+    }
+    const grown = growMapTileRectToward(painted, destination, stepTiles);
+    if (isDegenerateMapTileRect(grown)) {
+        return { rect: needed, reset: true };
+    }
+    return { rect: grown, reset: false };
+}
+
+/** True when `painted` already covers the visible camera, so a jump cover can lift. */
+export function streamedViewCoversCamera(painted: MapTileRect | undefined, camera: MapTileRect): boolean {
+    if (!painted || isDegenerateMapTileRect(painted) || isDegenerateMapTileRect(camera)) {
+        return false;
+    }
+    return mapTileRectContains(painted, camera);
 }
 
 /** Yields until `count` animation frames (or 16ms ticks when rAF is missing). */

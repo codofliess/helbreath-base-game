@@ -20,13 +20,14 @@ import { loadTileSpritePacksForMapRect, collectRequiredTileIndices, evictUnusedM
 import {
     cameraStreamTileRect,
     firstPaintStreamRect,
-    growMapTileRectToward,
     MAP_ENTER_RING_TILES,
     MAP_EXPAND_STEP_TILES,
     MAP_OBJECT_INSTANTIATE_BATCH,
     MAP_STAND_REFRESH_SLACK_TILES,
     paintStreamTileRect,
+    resolveStreamedPaintRect,
     shouldRefreshMapStream,
+    shouldResetStreamedView,
     waitForBrowserFrames,
     waitMs,
 } from './mapViewportStream';
@@ -66,6 +67,8 @@ export class MapManager {
     private initialFocusTileY: number;
     private streamInFlight = false;
     private streamRefreshQueued = false;
+    /** A respawn/teleport arrived while a walk restream was awaiting tile packs. */
+    private snapRefreshQueued = false;
     private onBeforeSnapshot?: () => void;
     private onAfterSnapshot?: () => void;
 
@@ -193,16 +196,28 @@ export class MapManager {
         }
     }
 
+    /** True while a viewport pack load is in flight, or a snap is waiting behind it. */
+    public isStreamInFlight(): boolean {
+        return this.streamInFlight || this.snapRefreshQueued;
+    }
+
     /**
-     * Loads tile packs for the camera window (if needed) and paints a grown stream rect.
+     * Loads tile packs for the camera window (if needed) and paints a stream rect.
      * Standing/focus never jumps to the 56×40 walk cap or rebuilds the full sheet in one tick.
      * Walking grows toward the cap in {@link MAP_EXPAND_STEP_TILES} steps.
+     * A respawn/teleport whose camera does not overlap the paint (or jumped past
+     * {@link MAP_STREAM_SNAP_JUMP_TILES}) replaces the rect with the new camera window.
      */
     public async syncStreamedView(options?: {
         standingHold?: boolean;
         includeTreeShadows?: boolean;
         includeObjectSprites?: boolean;
+        /** Rebuild around the camera even when a walk restream is already awaiting packs. */
+        snapToFocus?: boolean;
     }): Promise<void> {
+        if (options?.snapToFocus) {
+            this.snapRefreshQueued = true;
+        }
         if (this.streamInFlight) {
             this.streamRefreshQueued = true;
             return;
@@ -211,10 +226,12 @@ export class MapManager {
         if (!camera) {
             return;
         }
+        const forceSnap = this.snapRefreshQueued;
         // WASD / camera-follow during a painted Magias move-freeze: do not
         // destroy+rebuild the ground tileset. Idle / leftover-ritual walk
         // must still restream or the FOV goes black past the enter window.
-        if (isMagiasMoveDuringPrepareActive() && !canRebuildMapTilesetOnMagiasPrepare()) {
+        // A respawn/teleport snap still rebuilds — the player is no longer in that freeze.
+        if (!forceSnap && isMagiasMoveDuringPrepareActive() && !canRebuildMapTilesetOnMagiasPrepare()) {
             return;
         }
         let map: HBMap;
@@ -223,6 +240,7 @@ export class MapManager {
         } catch {
             return;
         }
+        this.snapRefreshQueued = false;
         const standingHold = options?.standingHold === true;
         const zoom = standingHold ? 1 : camera.zoom;
         const needed = cameraStreamTileRect({
@@ -242,7 +260,8 @@ export class MapManager {
         if (includeObjects) {
             map.setStreamObjectsEnabled(true);
         }
-        if (!shouldRefreshMapStream(current, needed, slack)) {
+        const reset = shouldResetStreamedView(current, needed);
+        if (!reset && !shouldRefreshMapStream(current, needed, slack)) {
             if (includeObjects && map.countUninstantiatedStreamObjects(includeTrees) > 0) {
                 map.renderMapObjects(this.scene, includeTrees, MAP_OBJECT_INSTANTIATE_BATCH);
             }
@@ -258,9 +277,7 @@ export class MapManager {
             mapSizeY: map.sizeY,
         });
         const target = standingHold ? needed : walkCap;
-        const paint = current
-            ? growMapTileRectToward(current, target, MAP_EXPAND_STEP_TILES)
-            : growMapTileRectToward(needed, target, MAP_EXPAND_STEP_TILES);
+        const paint = resolveStreamedPaintRect(current, needed, target, MAP_EXPAND_STEP_TILES).rect;
         this.streamInFlight = true;
         this.streamRefreshQueued = false;
         try {
@@ -274,11 +291,23 @@ export class MapManager {
         } finally {
             this.streamInFlight = false;
         }
-        if (this.streamRefreshQueued && !standingHold) {
+        const snapFollowUp = this.snapRefreshQueued;
+        const refreshFollowUp = this.streamRefreshQueued;
+        if (snapFollowUp || (refreshFollowUp && !standingHold)) {
             this.streamRefreshQueued = false;
-            await waitForBrowserFrames(2);
-            await waitMs(64);
-            await this.syncStreamedView(options);
+            if (snapFollowUp) {
+                await waitForBrowserFrames(1);
+                await this.syncStreamedView({
+                    ...options,
+                    snapToFocus: true,
+                });
+            } else {
+                await waitForBrowserFrames(2);
+                await waitMs(64);
+                await this.syncStreamedView(options);
+            }
+        } else {
+            this.streamRefreshQueued = false;
         }
     }
 

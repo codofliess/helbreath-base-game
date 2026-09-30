@@ -27,7 +27,7 @@ function isViteFlagOn(value: string | boolean | undefined): boolean {
  * `VITE_GENERATE_MINIMAP=1 pnpm dev` or `VITE_GENERATE_MINIMAP=1 pnpm build`.
  * See `sp-client/docs/GENERATING_MINIMAP_SNAPSHOTS.md`.
  */
-export const GENERATE_MINIMAP = isViteFlagOn(import.meta.env.VITE_GENERATE_MINIMAP);
+export const GENERATE_MINIMAP = isViteFlagOn(import.meta.env?.VITE_GENERATE_MINIMAP);
 
 /**
  * Player body horizontal scale vs height (height stays 1).
@@ -289,7 +289,8 @@ export const DEPTH_MULTIPLIER = 100;
 
 /**
  * Entities (players/mobs) sit above same-row map objects (carpets, pads, furniture).
- * Map objects use y * DEPTH_MULTIPLIER; next row is +100, so keep bias &lt; 100.
+ * In-tile map objects use y * DEPTH_MULTIPLIER; a sprite whose bottom hangs
+ * into southern rows sorts by that foot row instead. Next row is +100, so keep bias &lt; 100.
  * 50 = classic “+5” scaled; high enough that flat pads no longer cover feet.
  */
 /**

@@ -19,6 +19,7 @@ import { ensurePendingPlayerItemAppearanceTexture } from '../../utils/pendingApp
 import { isSafeDrawableTexture, removeWorldCanvasAliasedTexture, safeBindableTextureKey } from '../../utils/worldCanvasTextureSafety';
 import { getPivotData, isDebugModeEnabled } from '../../utils/RegistryUtils';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
+import { mapTileSpriteDepthBias } from '../assets/mapObjectDepth';
 import { IN_DEBUG_MODE_CHANGE, OUT_UI_HOVER_SPRITE_FRAME_DEBUG } from '../../constants/EventNames';
 import type { Effect } from '../../constants/Items';
 
@@ -1218,10 +1219,10 @@ export class GameAsset {
      * @param depth - The depth value to set
      */
     public setDepth(depth: number): void {
-        // map-tile-422 renders +1 on top of regular depth for proper layering
-        const actualDepth = this.isMapObject() && this.spriteName === 'map-tile-422'
-            ? depth + 100
-            : depth;
+        // Foot-row sorting does not move map-tile-422 (its bitmap ends on the
+        // anchor tile). The extra row still draws that walkable column over
+        // a character standing on the same tile.
+        const actualDepth = depth + (this.isMapObject() ? mapTileSpriteDepthBias(this.spriteName) : 0);
         this.sprite.setDepth(actualDepth);
 
         this.visualEffects.updateOverlayDepths(actualDepth);

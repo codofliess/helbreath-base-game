@@ -3,6 +3,7 @@ import type { Scene } from 'phaser';
 import { DEPTH_MULTIPLIER } from '../../Config';
 import { convertPixelPosToWorldPos } from '../../utils/CoordinateUtils';
 import { GameAsset } from '../objects/GameAsset';
+import { mapObjectSortDepth } from './mapObjectDepth';
 import { isTreeSpriteIndex } from '../../utils/SpriteUtils';
 import { SpatialGrid } from '../../utils/SpatialGrid';
 import {
@@ -763,7 +764,14 @@ export class HBMap {
                         mapObject: true,
                         frameIndex: tile.objectSpriteFrame,
                     });
-                    gameAsset.setDepth(y * DEPTH_MULTIPLIER);
+                    const frameHeight = gameAsset.sprite.displayHeight || gameAsset.sprite.frame?.height || 0;
+                    const spriteTopY = gameAsset.sprite.y - gameAsset.sprite.originY * frameHeight;
+                    gameAsset.setDepth(mapObjectSortDepth({
+                        anchorRow: y,
+                        pivotY: spriteTopY - y * TILE_SIZE,
+                        frameHeight,
+                        keepAnchorRow: isTree,
+                    }));
                     this.mapObjectsByCell.set(key, gameAsset);
                     created += 1;
                 } catch (error) {

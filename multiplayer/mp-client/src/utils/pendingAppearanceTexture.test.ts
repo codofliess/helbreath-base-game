@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
     createIndependentPendingAppearanceCanvas,
     ensurePendingPlayerItemAppearanceTexture,
     isWorldCanvasImageSource,
     PENDING_APPEARANCE_TEXTURE_KEY,
 } from './pendingAppearanceTexture';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
 
 describe('pendingAppearanceTexture', () => {
     it('treats the live game canvas as an unsafe paper-doll / blit source', () => {
@@ -91,5 +96,19 @@ describe('pendingAppearanceTexture', () => {
         assert.equal(isWorldCanvasImageSource(canvas, world), false);
         assert.equal(canvas.width, 1);
         assert.equal(canvas.height, 1);
+    });
+
+    it('monster reveal promotes the pending shell before playback (slime body)', () => {
+        const src = fs.readFileSync(path.join(root, '../game/objects/Monster.ts'), 'utf8');
+        const fn = src.slice(
+            src.indexOf('public applyLoadedMonsterAssets'),
+            src.indexOf('private hideWhileAssetsPending'),
+        );
+        assert.match(fn, /asset\.setSpriteName\(config\.spriteName\)/);
+        const setName = fn.indexOf('asset.setSpriteName(config.spriteName)');
+        const promote = fn.indexOf('asset.promotePendingPlayerItemAppearance()');
+        const play = fn.indexOf('this.switchMonsterState');
+        assert.ok(setName >= 0 && promote > setName && play > promote);
+        assert.match(fn, /isPendingLazyPlayerItemAppearance\(\)/);
     });
 });

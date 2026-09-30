@@ -21,6 +21,7 @@ import { fetchUnclaimedDrops, type UnclaimedDrop } from '../../utils/dropLedger'
 import { connectDialogStore, setSelectedSlotIndex } from '../store/ConnectDialog.store';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
 import {
+    explorerDollViewportHeight,
     renderSelectCharPaperDoll,
     selectCharPaperDollLookKey,
 } from '../../utils/selectCharPaperDoll';
@@ -298,17 +299,34 @@ function integerScaleNearRatio(fit: number, ratio: number): number {
     return target - lower <= upper - target ? lower : upper;
 }
 
+function scrollContentPadding(node: Element): { top: number; bottom: number } {
+    const style = getComputedStyle(node);
+    const top = Number.parseFloat(style.paddingTop);
+    const bottom = Number.parseFloat(style.paddingBottom);
+    return {
+        top: Number.isFinite(top) ? top : 0,
+        bottom: Number.isFinite(bottom) ? bottom : 0,
+    };
+}
+
+function desktopPortrait(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(min-width: 801px)').matches;
+}
+
 /**
- * Middle column: the selected character's idle-south paper-doll, centered,
- * at the integer scale nearest 70% of the size that fills this column.
+ * Middle column: the selected character's idle-south paper-doll.
+ * The column is the scrollport, not the detail-card row, so the figure stays
+ * beside the name and stats. Scale is the integer nearest 70% of that fit.
  */
 function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined }) {
     const frameRef = useRef<HTMLDivElement>(null);
     const slotRef = useRef(slot);
     slotRef.current = slot;
     const lookKey = slot ? selectCharPaperDollLookKey(slot) : '';
-    const [avatar, setAvatar] = useState<{ key: string; url: string } | undefined>();
-    const url = avatar?.key === lookKey ? avatar.url : undefined;
+    const [avatar, setAvatar] = useState<{ key: string; url?: string; reason?: string } | undefined>();
+    const painted = avatar?.key === lookKey ? avatar : undefined;
+    const url = painted?.url;
+    const reason = painted?.reason;
     const [natural, setNatural] = useState<{ w: number; h: number } | undefined>();
     const [box, setBox] = useState({ w: 0, h: 0 });
 
@@ -321,32 +339,83 @@ function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined })
         }
         let cancelled = false;
         const key = lookKey;
+        const name = current.name || 'character';
         setNatural(undefined);
+        setAvatar(undefined);
         void renderSelectCharPaperDoll(current).then((next) => {
-            if (!cancelled && next) {
-                setAvatar({ key, url: next });
+            if (cancelled) {
+                return;
             }
+            if (next.url) {
+                setAvatar({ key, url: next.url });
+                return;
+            }
+            const why = next.reason ?? 'compose returned no image';
+            console.warn(`[explorer-hub] paper-doll unavailable for ${name}: ${why}`);
+            setAvatar({ key, reason: why });
         });
         return () => {
             cancelled = true;
         };
     }, [lookKey]);
 
-    useLayoutEffect(() => {
-        const node = frameRef.current;
-        if (!node) {
+    useEffect(() => {
+        if (!url) {
+            setNatural(undefined);
             return;
         }
+        let cancelled = false;
+        const img = new Image();
+        img.onload = () => {
+            if (!cancelled && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+            }
+        };
+        img.onerror = () => {
+            if (cancelled) {
+                return;
+            }
+            const why = 'composed image failed to decode';
+            console.warn(`[explorer-hub] paper-doll unavailable for ${slotRef.current?.name || 'character'}: ${why}`);
+            setNatural(undefined);
+            setAvatar({ key: lookKey, reason: why });
+        };
+        img.src = url;
+        return () => {
+            cancelled = true;
+        };
+    }, [lookKey, url]);
+
+    useLayoutEffect(() => {
+        const frame = frameRef.current;
+        if (!frame) {
+            return;
+        }
+        const scroll = frame.closest('.explorer-hub-scroll');
         const measure = () => {
-            const rect = node.getBoundingClientRect();
-            setBox({ w: Math.floor(rect.width), h: Math.floor(rect.height) });
+            const width = Math.floor(frame.getBoundingClientRect().width);
+            const frameHeight = Math.floor(frame.getBoundingClientRect().height);
+            const port =
+                scroll instanceof HTMLElement
+                    ? explorerDollViewportHeight(
+                          scroll.clientHeight,
+                          scrollContentPadding(scroll).top,
+                          scrollContentPadding(scroll).bottom,
+                      )
+                    : frameHeight;
+            const height = desktopPortrait() ? port : frameHeight > 16 ? frameHeight : port;
+            setBox((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
         };
         measure();
         const observer = new ResizeObserver(measure);
-        observer.observe(node);
+        observer.observe(frame);
+        if (scroll) {
+            observer.observe(scroll);
+        }
         return () => observer.disconnect();
     }, []);
 
+    const viewportHeight = desktopPortrait() && box.h > 16 ? box.h : undefined;
     const fit =
         natural && box.w > 16 && box.h > 16
             ? Math.max(
@@ -360,29 +429,39 @@ function ExplorerPaperDoll({ slot }: { slot: CharacterSlotSummary | undefined })
     const scale = integerScaleNearRatio(fit, 0.7);
     const drawnW = natural && scale > 0 ? natural.w * scale : 0;
     const drawnH = natural && scale > 0 ? natural.h * scale : 0;
+    const showSprite = !!url && drawnW > 0 && drawnH > 0;
 
     return (
-        <section className="explorer-hub-doll" aria-label="Selected character" ref={frameRef}>
-            {url ? (
+        <section
+            className="explorer-hub-doll"
+            aria-label="Selected character"
+            ref={frameRef}
+            data-doll-state={showSprite ? 'ready' : slot ? (reason ? 'fallback' : 'loading') : 'empty'}
+            style={viewportHeight ? { height: viewportHeight, maxHeight: viewportHeight } : undefined}
+        >
+            {showSprite ? (
                 <img
                     className="explorer-hub-doll-sprite"
                     src={url}
                     alt=""
-                    width={drawnW > 0 ? drawnW : undefined}
-                    height={drawnH > 0 ? drawnH : undefined}
-                    style={drawnW > 0 ? { width: drawnW, height: drawnH } : undefined}
+                    width={drawnW}
+                    height={drawnH}
+                    style={{ width: drawnW, height: drawnH }}
                     draggable={false}
                     data-explorer-doll={slot?.name ?? ''}
-                    data-doll-fit={fit > 0 ? fit : undefined}
-                    data-doll-scale={scale > 0 ? scale : undefined}
-                    onLoad={(event) => {
-                        const img = event.currentTarget;
-                        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                            setNatural({ w: img.naturalWidth, h: img.naturalHeight });
-                        }
-                    }}
+                    data-doll-fit={fit}
+                    data-doll-scale={scale}
                 />
-            ) : null}
+            ) : (
+                <p className="explorer-hub-doll-fallback">
+                    <strong>{slot?.name || 'Empty slot'}</strong>
+                    {slot
+                        ? reason
+                            ? 'Portrait unavailable'
+                            : 'Painting portrait…'
+                        : 'Create a character to see a portrait here.'}
+                </p>
+            )}
         </section>
     );
 }

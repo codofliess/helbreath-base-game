@@ -239,33 +239,89 @@ interface DecodedSheet {
     frames: SprSheetFrameMeta[];
 }
 
-const sheetCache = new Map<string, Promise<DecodedSheet | undefined>>();
-const dollCache = new Map<string, Promise<string | undefined>>();
+interface SheetLoad {
+    sheet?: DecodedSheet;
+    error?: string;
+}
 
-async function loadSheet(spriteName: string, sheetIndex: number): Promise<DecodedSheet | undefined> {
+/** Browser canvas result. `reason` is set when no image could be produced. */
+export interface SelectCharPaperDollImage {
+    url?: string;
+    reason?: string;
+}
+
+const sheetCache = new Map<string, Promise<SheetLoad>>();
+const dollCache = new Map<string, Promise<SelectCharPaperDollImage>>();
+
+/**
+ * Portrait column height. The grid row matches the detail card, which is often
+ * taller than the scrollport; sizing the doll to that row centers the sprite
+ * below the fold. Use the scrollport's content box instead.
+ */
+export function explorerDollViewportHeight(
+    scrollClientHeight: number,
+    paddingTop: number,
+    paddingBottom: number,
+): number {
+    if (!Number.isFinite(scrollClientHeight) || scrollClientHeight <= 0) {
+        return 0;
+    }
+    const pad =
+        (Number.isFinite(paddingTop) ? paddingTop : 0) +
+        (Number.isFinite(paddingBottom) ? paddingBottom : 0);
+    return Math.max(0, Math.floor(scrollClientHeight - pad));
+}
+
+/** Fit a composite into the canvas cap. Oversized gear is scaled down, not dropped. */
+export function selectCharDollOutputSize(
+    width: number,
+    height: number,
+): { width: number; height: number } | undefined {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return undefined;
+    }
+    const cap = 1024;
+    if (width <= cap && height <= cap) {
+        return { width: Math.ceil(width), height: Math.ceil(height) };
+    }
+    const scale = Math.min(cap / width, cap / height);
+    return {
+        width: Math.max(1, Math.floor(width * scale)),
+        height: Math.max(1, Math.floor(height * scale)),
+    };
+}
+
+async function loadSheet(spriteName: string, sheetIndex: number): Promise<SheetLoad> {
     const key = `${spriteName}:${sheetIndex}`;
     const cached = sheetCache.get(key);
     if (cached) {
         return cached;
     }
-    const pending = (async () => {
+    const pending = (async (): Promise<SheetLoad> => {
         try {
             const buffer = await fetchGameAssetArrayBuffer('sprites', `${spriteName}.spr`);
             const slices = sliceSprSheets(buffer, new Set([sheetIndex]));
             const slice = slices.find((row) => row.sheetIndex === sheetIndex);
-            if (!slice || slice.frames.length === 0 || typeof document === 'undefined') {
-                return undefined;
+            if (!slice || slice.frames.length === 0) {
+                return { error: `${spriteName}.spr has no frames on sheet ${sheetIndex}` };
+            }
+            if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') {
+                return { error: 'browser image decode is unavailable' };
             }
             const blob = new Blob([slice.png], { type: 'image/png' });
             const image = await createImageBitmap(blob);
-            return { image, frames: slice.frames };
-        } catch {
-            return undefined;
+            if (image.width <= 0 || image.height <= 0) {
+                return { error: `${spriteName}.spr sheet ${sheetIndex} decoded empty` };
+            }
+            return { sheet: { image, frames: slice.frames } };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'sprite fetch failed';
+            return { error: `${spriteName}.spr sheet ${sheetIndex}: ${message}` };
         }
     })();
     sheetCache.set(key, pending);
     const decoded = await pending;
-    if (!decoded) {
+    if (!decoded.sheet) {
         sheetCache.delete(key);
     }
     return decoded;
@@ -306,30 +362,33 @@ function applyMultiplyTint(src: HTMLCanvasElement, tintRgb: number): HTMLCanvasE
     return out;
 }
 
-async function composeLook(look: SelectCharDollLook): Promise<string | undefined> {
+async function composeLook(look: SelectCharDollLook): Promise<SelectCharPaperDollImage> {
     if (typeof document === 'undefined') {
-        return undefined;
+        return { reason: 'no document (paper-doll needs a browser canvas)' };
     }
     type Placed = { canvas: HTMLCanvasElement; x: number; y: number };
     const placed: Placed[] = [];
+    const missed: string[] = [];
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const layer of selectCharPaperDollLayers(look)) {
         const idle = idleSheet(layer);
-        const sheet = await loadSheet(layer.spriteName, idle.sheetIndex);
-        if (!sheet) {
+        const loaded = await loadSheet(layer.spriteName, idle.sheetIndex);
+        if (!loaded.sheet) {
+            missed.push(loaded.error ?? `${layer.spriteName}#${idle.sheetIndex}`);
             continue;
         }
-        let canvas = frameCanvas(sheet, idle.frameIndex);
+        let canvas = frameCanvas(loaded.sheet, idle.frameIndex);
         if (!canvas) {
+            missed.push(`${layer.spriteName}#${idle.sheetIndex} frame ${idle.frameIndex} is empty`);
             continue;
         }
         if (layer.tint !== undefined) {
             canvas = applyMultiplyTint(canvas, layer.tint);
         }
-        const frame = sheet.frames[idle.frameIndex] ?? sheet.frames[0];
+        const frame = loaded.sheet.frames[idle.frameIndex] ?? loaded.sheet.frames[0];
         const x = frame?.pivotX ?? -canvas.width / 2;
         const y = frame?.pivotY ?? -canvas.height;
         placed.push({ canvas, x, y });
@@ -339,45 +398,58 @@ async function composeLook(look: SelectCharDollLook): Promise<string | undefined
         maxY = Math.max(maxY, y + canvas.height);
     }
     if (placed.length === 0 || !Number.isFinite(minX)) {
-        return undefined;
+        return { reason: `no sprite frames decoded (${missed.join(', ') || 'no layers'})` };
     }
     const pad = 2;
-    const width = Math.ceil(maxX - minX) + pad * 2;
-    const height = Math.ceil(maxY - minY) + pad * 2;
-    if (width <= 0 || height <= 0 || width > 1024 || height > 1024) {
-        return undefined;
+    const boundsW = Math.ceil(maxX - minX) + pad * 2;
+    const boundsH = Math.ceil(maxY - minY) + pad * 2;
+    const output = selectCharDollOutputSize(boundsW, boundsH);
+    if (!output) {
+        return { reason: `composite bounds ${boundsW}×${boundsH} are not drawable` };
     }
+    const fit = output.width / boundsW;
     const out = document.createElement('canvas');
-    out.width = width;
-    out.height = height;
+    out.width = output.width;
+    out.height = output.height;
     const ctx = out.getContext('2d');
     if (!ctx) {
-        return undefined;
+        return { reason: 'canvas 2d context is unavailable' };
     }
     ctx.imageSmoothingEnabled = false;
     for (const part of placed) {
-        ctx.drawImage(part.canvas, Math.round(part.x - minX + pad), Math.round(part.y - minY + pad));
+        const dx = Math.round((part.x - minX + pad) * fit);
+        const dy = Math.round((part.y - minY + pad) * fit);
+        const dw = Math.max(1, Math.round(part.canvas.width * fit));
+        const dh = Math.max(1, Math.round(part.canvas.height * fit));
+        ctx.drawImage(part.canvas, dx, dy, dw, dh);
     }
     try {
-        return out.toDataURL('image/png');
-    } catch {
-        return undefined;
+        return { url: out.toDataURL('image/png') };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'tainted or unsupported';
+        return { reason: `canvas export failed (${message})` };
     }
 }
 
 /** Composite the selected character. Cached per look so slot changes reuse the other figure. */
-export function renderSelectCharPaperDoll(slot: CharacterSlotSummary): Promise<string | undefined> {
+export function renderSelectCharPaperDoll(slot: CharacterSlotSummary): Promise<SelectCharPaperDollImage> {
     const key = selectCharPaperDollLookKey(slot);
     const cached = dollCache.get(key);
     if (cached) {
         return cached;
     }
-    const pending = composeLook(slot).then((url) => {
-        if (!url) {
+    const pending = composeLook(slot)
+        .then((image) => {
+            if (!image.url) {
+                dollCache.delete(key);
+            }
+            return image;
+        })
+        .catch((error: unknown) => {
             dollCache.delete(key);
-        }
-        return url;
-    });
+            const message = error instanceof Error ? error.message : 'paper-doll failed';
+            return { reason: message };
+        });
     dollCache.set(key, pending);
     return pending;
 }

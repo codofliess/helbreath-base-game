@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { closeSync, fsyncSync, mkdirSync, openSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { scorePlayerBotRun, type PlayerBotVerdict } from './player-bot-score.ts';
@@ -82,17 +82,46 @@ export function formatSpellTable(rows: readonly SpellTableRow[]): string {
     return lines.join('\n');
 }
 
+function isTransientFsError(error: unknown): boolean {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'EAGAIN' || code === 'EBUSY' || code === 'EINTR';
+}
+
+function pauseMs(ms: number): void {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+        // The log filesystem can return EAGAIN if every line opens the file again.
+    }
+}
+
 /**
  * JSONL run log. Every line is one event. The last line is the summary.
  * The log is written by the bot from its own actions and from packets it received.
+ * The file stays open so a burst of casts does not reopen it on every line.
  */
 export class PlayerBotLog {
+    private fd: number;
+
     constructor(private readonly filePath: string) {
         mkdirSync(dirname(filePath), { recursive: true });
+        this.fd = this.openAppend();
     }
 
     public get path(): string {
         return this.filePath;
+    }
+
+    public close(): void {
+        if (this.fd < 0) {
+            return;
+        }
+        try {
+            fsyncSync(this.fd);
+        } catch {
+            // The summary line is already written. A failed sync must not hide the verdict.
+        }
+        closeSync(this.fd);
+        this.fd = -1;
     }
 
     public event(kind: string, fields: Record<string, unknown> = {}): void {
@@ -101,7 +130,41 @@ export class PlayerBotLog {
             kind,
             ...fields,
         });
-        appendFileSync(this.filePath, `${line}\n`, 'utf8');
+        this.writeLine(`${line}\n`);
+    }
+
+    private openAppend(): number {
+        let last: unknown;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            try {
+                return openSync(this.filePath, 'a');
+            } catch (error) {
+                last = error;
+                if (!isTransientFsError(error) || attempt === 7) {
+                    throw error;
+                }
+                pauseMs(20 * (attempt + 1));
+            }
+        }
+        throw last;
+    }
+
+    private writeLine(text: string): void {
+        const buf = Buffer.from(text);
+        let offset = 0;
+        let attempt = 0;
+        while (offset < buf.length) {
+            try {
+                offset += writeSync(this.fd, buf, offset);
+                attempt = 0;
+            } catch (error) {
+                if (!isTransientFsError(error) || attempt >= 8) {
+                    throw error;
+                }
+                attempt += 1;
+                pauseMs(20 * attempt);
+            }
+        }
     }
 
     public summary(totals: PlayerBotRunTotals): PlayerBotVerdict {

@@ -2310,6 +2310,7 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
             `durationMs=${durationMs} world=${worldId} log=${log.path}`,
         );
         console.log(formatSpellTable(spellTable));
+        log.close();
         client?.stop();
         process.exit(verdict === 'PASS' ? 0 : 1);
     };

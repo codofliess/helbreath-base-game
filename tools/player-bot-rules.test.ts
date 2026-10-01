@@ -11,7 +11,10 @@ import {
 import {
     ARESDEN_FARM_GATE,
     CAST_RETRY_MS,
+    CONTROL_FIZZLE_CAP,
+    CROWD_MIN,
     FARM_SLIME_SOUTH,
+    MAGE_SPELL_BOOK,
     MELEE_HITS_BEFORE_RECAST,
     SLOW_CAST_BAR_MS,
     TRAVELER_SLIME_FIELD,
@@ -26,6 +29,7 @@ import {
     weaponBlocksCast,
     type PlayerBotView,
 } from './player-bot-rules.ts';
+import { summarizeSpellCasts } from './player-bot-log.ts';
 import { scorePlayerBotRun } from './player-bot-score.ts';
 
 function openGrid(blocked: ReadonlyArray<string> = []): (x: number, y: number) => boolean {
@@ -44,10 +48,20 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         dead: false,
         attackMode: true,
         attackRangeCells: 1,
+        attackDamage: 0,
         canMove: true,
         potionLocked: false,
         fireStrikeSpellId: 2,
+        healSpellId: null,
+        defenseShieldSpellId: null,
+        paralyzeSpellId: null,
+        blizzardSpellId: null,
+        invisibilitySpellId: null,
         recallSpellId: 50,
+        mp: 0,
+        maxMp: 0,
+        defenseShieldUp: false,
+        invisible: false,
         recallFailures: 0,
         potions: [{ uid: '7', quantity: 2 }],
         recallScrollUid: null,
@@ -55,6 +69,7 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         equippedWeaponBlocksCast: false,
         daggerUid: null,
         monsters: [],
+        players: [],
         worldId: '',
         teleports: [],
         teleportLocs: [],
@@ -119,6 +134,8 @@ test('mage casts Fire Strike on the nearest slime and walks when it is far', () 
     assert.equal(near.type, 'cast');
     if (near.type === 'cast') {
         assert.equal(near.spellId, 2);
+        assert.equal(near.spellName, 'Fire Strike');
+        assert.equal(near.reason, 'normal');
         assert.equal(near.monsterId, '2');
     }
 
@@ -480,6 +497,10 @@ test('a rejected cast retries Fire Strike after swings or a few seconds', () => 
     brain.noteMelee();
     const afterHits = brain.decide(near, nav, 2_000);
     assert.equal(afterHits.type, 'cast');
+    if (afterHits.type === 'cast') {
+        assert.equal(afterHits.spellId, 2);
+        assert.equal(afterHits.reason, 'normal');
+    }
 
     const timed = new PlayerBotBrain();
     timed.noteCastFinish('melee', 5_000);
@@ -543,6 +564,287 @@ test('PORT overrides the listen port and PLAYTEST still binds loopback', () => {
     const readme = readFileSync(new URL('./README.md', import.meta.url), 'utf8');
     assert.match(readme, /PORT/);
     assert.match(readme, /Settings\.json/);
+});
+
+function booked(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
+    return viewAt({
+        mp: 80,
+        maxMp: 80,
+        healSpellId: 29,
+        defenseShieldSpellId: 32,
+        paralyzeSpellId: 27,
+        blizzardSpellId: 21,
+        invisibilitySpellId: 24,
+        potions: [],
+        ...overrides,
+    });
+}
+
+test('spell book ids, names, mana, and delay match Spells.json and Magic.cfg', () => {
+    const spells = JSON.parse(
+        readFileSync(new URL('../multiplayer/server/Config/Spells.json', import.meta.url), 'utf8'),
+    ) as Array<{ id: number; name: string }>;
+    const cfg = readFileSync(new URL('../multiplayer/server/reference/Magic.cfg', import.meta.url), 'utf8');
+    const manaOf = (olympiaId: number): { mana: number; delay: number } => {
+        for (const raw of cfg.split('\n')) {
+            const line = raw.trim();
+            if (!line.toLowerCase().startsWith('magic')) {
+                continue;
+            }
+            const eq = line.indexOf('=');
+            const tokens = line.slice(eq + 1).trim().split(/\s+/);
+            if (Number(tokens[0]) !== olympiaId) {
+                continue;
+            }
+            return { delay: Number(tokens[3]), mana: Number(tokens[5]) };
+        }
+        throw new Error(`Magic.cfg has no id ${olympiaId}`);
+    };
+    assert.equal(MAGE_SPELL_BOOK.length, 6);
+    for (const row of MAGE_SPELL_BOOK) {
+        const spell = spells.find((entry) => entry.id === row.id);
+        assert.ok(spell, `server spell ${row.id}`);
+        assert.equal(spell.name, row.name);
+        const cfgRow = manaOf(row.olympiaId);
+        assert.equal(cfgRow.mana, row.mana, row.name);
+        assert.equal(cfgRow.delay, row.magicCfgDelay, row.name);
+        assert.equal(row.magicCfgDelay, 0);
+    }
+    const drain = manaOf(11);
+    assert.equal(drain.mana, 14);
+    assert.equal(drain.delay, 0);
+    const tower = readFileSync(new URL('../multiplayer/server/Helpers/MagicTower.cs', import.meta.url), 'utf8');
+    const mapStart = tower.indexOf('OlympiaToServerSpellId');
+    const mapBody = tower.slice(mapStart, tower.indexOf('};', mapStart));
+    assert.doesNotMatch(mapBody, /\[11\]\s*=/);
+    // PLAYTEST grants Olympia Magic.cfg id 30. The cast the client sends is Spells.json id 2.
+    assert.match(mapBody, /\[30\]\s*=\s*2/);
+    const kit = readFileSync(new URL('../multiplayer/server/Helpers/PlaytestQaKit.cs', import.meta.url), 'utf8');
+    for (const olympiaId of [30, 1, 13, 35, 91, 32]) {
+        assert.match(kit, new RegExp(`GrantedOlympiaSpellIds[\\s\\S]*${olympiaId}`));
+    }
+});
+
+test('low HP raises Defense Shield, then Heal', () => {
+    const nav = { isOpen: openGrid() };
+    const hurt = booked({ hp: 40, maxHp: 100, tookDamage: true });
+    const shield = new PlayerBotBrain().decide(hurt, nav);
+    assert.equal(shield.type, 'cast');
+    if (shield.type === 'cast') {
+        assert.equal(shield.spellId, 32);
+        assert.equal(shield.spellName, 'Defense Shield');
+        assert.equal(shield.reason, 'low-hp');
+        assert.equal(shield.monsterId, null);
+    }
+    const heal = new PlayerBotBrain().decide(booked({
+        hp: 40,
+        maxHp: 100,
+        tookDamage: true,
+        defenseShieldUp: true,
+    }), nav);
+    assert.equal(heal.type, 'cast');
+    if (heal.type === 'cast') {
+        assert.equal(heal.spellId, 29);
+        assert.equal(heal.spellName, 'Heal');
+        assert.equal(heal.reason, 'low-hp');
+    }
+});
+
+test('a pack of slimes is Fire Strike, not Paralyze', () => {
+    const nav = { isOpen: openGrid() };
+    const packed = Array.from({ length: 8 }, (_, index) => ({
+        id: String(index + 1),
+        name: 'Slime',
+        sprite: 'slm',
+        x: 10 + (index % 3) - 1,
+        y: 10 + Math.floor(index / 3) - 1,
+        dead: false,
+        hp: 7,
+        maxHp: 7,
+        attackDamage: 1,
+    }));
+    // Traveler InitialState.attack_damage is 8, above a slime's max HP of 7.
+    const strike = new PlayerBotBrain().decide(booked({
+        attackDamage: 8,
+        mp: 200,
+        maxMp: 200,
+        monsters: packed,
+    }), nav);
+    assert.equal(strike.type, 'cast');
+    if (strike.type === 'cast') {
+        assert.equal(strike.spellId, 2);
+        assert.equal(strike.spellName, 'Fire Strike');
+        assert.equal(strike.reason, 'normal');
+        assert.notEqual(strike.spellId, 30);
+    }
+});
+
+test('several mobs paralyze when the group is dangerous, and Blizzard only when mana can pay it', () => {
+    const nav = { isOpen: openGrid() };
+    // Each mob is under the single-target strong bars (40 HP, 8 damage). Together they are not.
+    const packed = Array.from({ length: CROWD_MIN }, (_, index) => ({
+        id: String(index + 1),
+        name: 'Orc',
+        sprite: 'orc',
+        x: 10 + (index === 0 ? 1 : 0),
+        y: 10 + (index === 2 ? 1 : index === 1 ? 1 : 0),
+        dead: false,
+        hp: 25,
+        maxHp: 25,
+        attackDamage: 3,
+    }));
+    const para = new PlayerBotBrain().decide(booked({ attackDamage: 8, monsters: packed }), nav);
+    assert.equal(para.type, 'cast');
+    if (para.type === 'cast') {
+        assert.equal(para.spellId, 27);
+        assert.equal(para.spellName, 'Paralyze');
+        assert.equal(para.reason, 'several-mobs');
+    }
+    const storm = new PlayerBotBrain().decide(booked({
+        attackDamage: 8,
+        mp: 200,
+        maxMp: 200,
+        monsters: packed,
+    }), nav);
+    assert.equal(storm.type, 'cast');
+    if (storm.type === 'cast') {
+        assert.equal(storm.spellId, 21);
+        assert.equal(storm.spellName, 'Blizzard');
+        assert.equal(storm.reason, 'several-mobs');
+    }
+});
+
+test('control fizzles in a row go back to Fire Strike', () => {
+    const nav = { isOpen: openGrid() };
+    const packed = Array.from({ length: CROWD_MIN }, (_, index) => ({
+        id: String(index + 1),
+        name: 'Orc',
+        sprite: 'orc',
+        x: 11,
+        y: 10,
+        dead: false,
+        hp: 25,
+        maxHp: 25,
+        attackDamage: 3,
+    }));
+    const view = booked({ attackDamage: 8, defenseShieldUp: true, monsters: packed });
+    const brain = new PlayerBotBrain();
+    const opening = brain.decide(view, nav);
+    assert.equal(opening.type, 'cast');
+    if (opening.type === 'cast') {
+        assert.equal(opening.spellName, 'Paralyze');
+    }
+    for (let fizzle = 0; fizzle < CONTROL_FIZZLE_CAP; fizzle += 1) {
+        brain.noteCastResult('melee', {
+            spellId: 27,
+            spellName: 'Paralyze',
+            reason: 'several-mobs',
+            x: 11,
+            y: 10,
+            monsterId: '1',
+        }, 1_000 + fizzle * 10_000, true);
+        for (let hit = 0; hit < MELEE_HITS_BEFORE_RECAST; hit += 1) {
+            brain.noteMelee();
+        }
+    }
+    const damage = brain.decide(view, nav, 1_000 + CONTROL_FIZZLE_CAP * 10_000);
+    assert.equal(damage.type, 'cast');
+    if (damage.type === 'cast') {
+        assert.equal(damage.spellId, 2);
+        assert.equal(damage.spellName, 'Fire Strike');
+        assert.equal(damage.reason, 'normal');
+    }
+});
+
+test('a strong mob is Paralyze after the shield is up', () => {
+    const nav = { isOpen: openGrid() };
+    const ogre = {
+        id: '8',
+        name: 'Ogre',
+        sprite: 'og',
+        x: 12,
+        y: 10,
+        dead: false,
+        hp: 100,
+        maxHp: 100,
+        attackDamage: 12,
+    };
+    const shield = new PlayerBotBrain().decide(booked({ monsters: [ogre] }), nav);
+    assert.equal(shield.type, 'cast');
+    if (shield.type === 'cast') {
+        assert.equal(shield.spellId, 32);
+        assert.equal(shield.reason, 'strong-mob');
+    }
+    const lock = new PlayerBotBrain().decide(booked({
+        monsters: [ogre],
+        defenseShieldUp: true,
+    }), nav);
+    assert.equal(lock.type, 'cast');
+    if (lock.type === 'cast') {
+        assert.equal(lock.spellId, 27);
+        assert.equal(lock.spellName, 'Paralyze');
+        assert.equal(lock.reason, 'strong-mob');
+        assert.equal(lock.monsterId, '8');
+    }
+});
+
+test('an enemy player gets a shield, then invisibility, then a slip; slimes do not', () => {
+    const nav = { isOpen: openGrid() };
+    const other = { id: '44', name: 'Other', x: 14, y: 10, dead: false };
+    const shield = new PlayerBotBrain().decide(booked({ players: [other] }), nav);
+    assert.equal(shield.type, 'cast');
+    if (shield.type === 'cast') {
+        assert.equal(shield.spellId, 32);
+        assert.equal(shield.reason, 'enemy-player');
+    }
+    const hide = new PlayerBotBrain().decide(booked({
+        players: [other],
+        defenseShieldUp: true,
+    }), nav);
+    assert.equal(hide.type, 'cast');
+    if (hide.type === 'cast') {
+        assert.equal(hide.spellId, 24);
+        assert.equal(hide.spellName, 'Invisibility');
+        assert.equal(hide.reason, 'enemy-player');
+        assert.equal(hide.monsterId, null);
+    }
+    const slip = new PlayerBotBrain().decide(booked({
+        players: [other],
+        invisible: true,
+        defenseShieldUp: true,
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 11, y: 10, dead: false, maxHp: 7, attackDamage: 1 }],
+    }), nav);
+    assert.equal(slip.type, 'move');
+
+    const hunting = new PlayerBotBrain().decide(booked({
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 11, y: 10, dead: false, maxHp: 7, attackDamage: 1 }],
+    }), nav);
+    assert.equal(hunting.type, 'cast');
+    if (hunting.type === 'cast') {
+        assert.equal(hunting.spellId, 2);
+        assert.equal(hunting.reason, 'normal');
+    }
+});
+
+test('spell table counts attempts, accepted, rejected, fizzled, and reasons', () => {
+    const rows = summarizeSpellCasts([
+        { spellId: 2, spellName: 'Fire Strike', result: 'accepted', reason: 'normal' },
+        { spellId: 2, spellName: 'Fire Strike', result: 'fizzled', reason: 'normal' },
+        { spellId: 2, spellName: 'Fire Strike', result: 'rejected', reason: 'normal' },
+        { spellId: 27, spellName: 'Paralyze', result: 'accepted', reason: 'several-mobs' },
+    ]);
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows[0], {
+        spellId: 2,
+        spellName: 'Fire Strike',
+        attempts: 3,
+        accepted: 1,
+        rejected: 1,
+        fizzled: 1,
+        reasons: { normal: 3 },
+    });
+    assert.equal(rows[1].attempts, 1);
+    assert.equal(rows[1].reasons['several-mobs'], 1);
 });
 
 test('bot sources do not import the post-run evaluator', () => {

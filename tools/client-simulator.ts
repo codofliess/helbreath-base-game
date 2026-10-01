@@ -2180,6 +2180,10 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
                 totals.deaths += 1;
                 log.event('death', { deaths: totals.deaths });
             } else if (signal === 'teleported' || signal === 'world' || signal === 'resurrected') {
+                if (signal === 'world') {
+                    const obs = client?.getObservation();
+                    log.event('world', { worldId: obs?.worldId ?? '', x: obs?.x, y: obs?.y, hp: obs?.hp, maxHp: obs?.maxHp });
+                }
                 const charges = client?.getObservation().hpPotions().reduce((sum, potion) => sum + potion.quantity, 0) ?? 0;
                 brain.noteTown(charges);
                 if (recalling || signal === 'resurrected') {
@@ -2199,23 +2203,24 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         x: number,
         y: number,
         monsterId: string | null,
-    ): Promise<'ok' | 'failed'> => {
+    ): Promise<'ok' | 'start-failed' | 'finish-failed'> => {
         const active = client;
         if (!active) {
-            return 'failed';
+            return 'start-failed';
         }
         observeSignals(active.drainSignals());
         active.sendCastStart(spellId);
         // The server fans SpellCastStarted out to other players and does not echo it to the caster.
-        // A normal client starts its own cast bar from InitialState.castSpeedMs and only aborts on SpellCastFailed.
+        // The bar is the castSpeedMs from the join snapshot (the duration that character is allowed).
+        // A short bar is lengthened after a rejected finish. The server check is not loosened.
         const castMs = Math.max(200, active.getObservation().castSpeedMs);
         const during = await waitForSignal(active, ['cast-failed'], castMs, observeSignals);
         if (during === 'cast-failed') {
-            return 'failed';
+            return 'start-failed';
         }
         active.sendCastFinish(x, y, monsterId);
         const after = await waitForSignal(active, ['cast-failed'], 400, observeSignals);
-        return after === 'cast-failed' ? 'failed' : 'ok';
+        return after === 'cast-failed' ? 'finish-failed' : 'ok';
     };
 
     const finish = (reason: string): void => {
@@ -2224,11 +2229,12 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         }
         finished = true;
         const durationMs = Date.now() - startedAt;
-        const verdict = log.summary({ ...totals, durationMs });
+        const worldId = client?.getObservation().worldId ?? '';
+        const verdict = log.summary({ ...totals, durationMs, worldId });
         console.log(
             `${reason} verdict=${verdict} slimeKills=${totals.slimeKills} deaths=${totals.deaths} ` +
             `disconnects=${totals.disconnects} potionsUsed=${totals.potionsUsed} casts=${totals.casts} ` +
-            `durationMs=${durationMs} log=${log.path}`,
+            `durationMs=${durationMs} world=${worldId} log=${log.path}`,
         );
         client?.stop();
         process.exit(verdict === 'PASS' ? 0 : 1);
@@ -2332,7 +2338,12 @@ async function applyRulesAction(
     log: PlayerBotLog,
     lockPotion: (ms: number) => void,
     markRecalling: () => void,
-    castSpell: (spellId: number, x: number, y: number, monsterId: string | null) => Promise<'ok' | 'failed'>,
+    castSpell: (
+        spellId: number,
+        x: number,
+        y: number,
+        monsterId: string | null,
+    ) => Promise<'ok' | 'start-failed' | 'finish-failed'>,
 ): Promise<void> {
     switch (action.type) {
         case 'wait':
@@ -2369,18 +2380,42 @@ async function applyRulesAction(
             return;
         case 'cast': {
             const result = await castSpell(action.spellId, action.x, action.y, action.monsterId);
+            const observation = client.getObservation();
             if (result === 'ok') {
+                brain.noteCastFinish('ok');
                 totals.casts += 1;
-                log.event('cast', { spellId: action.spellId, monsterId: action.monsterId, casts: totals.casts });
+                log.event('cast', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    casts: totals.casts,
+                    castSpeedMs: observation.castSpeedMs,
+                });
+            } else if (result === 'finish-failed') {
+                const next = observation.noteCastFinishRejected();
+                brain.noteCastFinish(next);
+                log.event('cast-failed', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    phase: 'finish',
+                    next,
+                    castSpeedMs: observation.castSpeedMs,
+                });
             } else {
-                log.event('cast-failed', { spellId: action.spellId, monsterId: action.monsterId });
+                brain.noteCastFinish('melee');
+                log.event('cast-failed', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    phase: 'start',
+                    next: 'melee',
+                    castSpeedMs: observation.castSpeedMs,
+                });
             }
             return;
         }
         case 'recall': {
             markRecalling();
             const result = await castSpell(action.spellId, client.getObservation().x, client.getObservation().y, null);
-            if (result === 'failed') {
+            if (result !== 'ok') {
                 brain.noteRecallFailed();
                 log.event('cast-failed', { spellId: action.spellId, recall: true });
             } else {

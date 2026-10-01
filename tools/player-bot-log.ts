@@ -10,6 +10,7 @@ export interface PlayerBotRunTotals {
     potionsUsed: number;
     casts: number;
     durationMs: number;
+    worldId?: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export class PlayerBotLog {
             potionsUsed: totals.potionsUsed,
             casts: totals.casts,
             durationMs: totals.durationMs,
+            worldId: totals.worldId ?? '',
             verdict,
         });
         return verdict;

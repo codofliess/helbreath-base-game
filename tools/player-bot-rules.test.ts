@@ -11,6 +11,8 @@ import {
 import {
     ARESDEN_FARM_GATE,
     FARM_SLIME_SOUTH,
+    SLOW_CAST_BAR_MS,
+    TRAVELER_SLIME_FIELD,
     PlayerBotBrain,
     PlayerBotObservation,
     buildPlayerBotView,
@@ -383,6 +385,102 @@ test('live wallet login is not weakened and eval stays outside the loop', () => 
     assert.match(validator, /Wallet binding required before entering the world/);
     assert.match(validator, /WALLET_AUTH_SECRET is required in production/);
     assert.match(validator, /actorKind bot does not skip this check/);
+});
+
+test('a short cast bar lengthens to the slow cast, and a slow bar melees', () => {
+    const shortBar = new PlayerBotObservation();
+    shortBar.castSpeedMs = 1200;
+    assert.equal(shortBar.noteCastFinishRejected(), 'retry');
+    assert.ok(shortBar.castSpeedMs >= SLOW_CAST_BAR_MS);
+    assert.ok(shortBar.castSpeedMs <= 2000);
+
+    const slowBar = new PlayerBotObservation();
+    slowBar.castSpeedMs = SLOW_CAST_BAR_MS;
+    assert.equal(slowBar.noteCastFinishRejected(), 'melee');
+    assert.equal(slowBar.castSpeedMs, SLOW_CAST_BAR_MS);
+
+    const spawn = readFileSync(new URL('../multiplayer/server/Helpers/Spawn.cs', import.meta.url), 'utf8');
+    const applyAt = spawn.indexOf('PlayerDerivedStats.ApplyAuthoritativeCastSpeed(player);');
+    const snapshotAt = spawn.indexOf('player.CastSpeedMs,');
+    assert.ok(applyAt > 0 && snapshotAt > applyAt);
+    const player = readFileSync(new URL('../multiplayer/server/World/Game/GameWorldPlayer.cs', import.meta.url), 'utf8');
+    assert.match(player, /baseMs - baseMs \* antiHackTimingLagFactor - GetCappedPingVariance\(\)/);
+    const simulator = readFileSync(new URL('./client-simulator.ts', import.meta.url), 'utf8');
+    assert.match(simulator, /const castMs = Math\.max\(200, active\.getObservation\(\)\.castSpeedMs\)/);
+    assert.doesNotMatch(simulator, /const castMs = 1200/);
+});
+
+test('traveler hub walks to the slime field and a rejected cast melees', () => {
+    assert.deepEqual(
+        huntRouteGoal(viewAt({ x: 90, y: 80, worldId: 'traveler' })),
+        TRAVELER_SLIME_FIELD,
+    );
+    assert.equal(
+        huntRouteGoal(viewAt({
+            x: TRAVELER_SLIME_FIELD.x,
+            y: TRAVELER_SLIME_FIELD.y,
+            worldId: 'traveler',
+        })),
+        null,
+    );
+    const brain = new PlayerBotBrain();
+    const nav = { isOpen: openGrid() };
+    const walking = brain.decide(viewAt({
+        x: 90,
+        y: 80,
+        worldId: 'traveler',
+        monsters: [],
+        potions: [],
+    }), nav);
+    assert.equal(walking.type, 'move');
+    if (walking.type === 'move') {
+        assert.ok(walking.x > 90 || walking.y > 80);
+    }
+
+    const fighter = new PlayerBotBrain();
+    fighter.noteCastFinish('melee');
+    const adjacent = fighter.decide(viewAt({
+        x: 90,
+        y: 80,
+        worldId: 'traveler',
+        fireStrikeSpellId: 2,
+        attackRangeCells: 1,
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 91, y: 80, dead: false }],
+    }), nav);
+    assert.deepEqual(adjacent, { type: 'melee', monsterId: '2' });
+    const outOfReach = fighter.decide(viewAt({
+        x: 90,
+        y: 80,
+        worldId: 'traveler',
+        fireStrikeSpellId: 2,
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 95, y: 80, dead: false }],
+    }), nav);
+    assert.equal(outOfReach.type, 'move');
+});
+
+test('PLAYTEST allows wallet-less login without weakening the live wallet check', () => {
+    const validator = readFileSync(new URL('../multiplayer/server/Auth/WalletAuthValidator.cs', import.meta.url), 'utf8');
+    const insecureAt = validator.indexOf('PlaytestQaKit.IsEnabled');
+    const outsideDevAt = validator.indexOf('WALLET_AUTH_SECRET is required outside Development');
+    assert.ok(insecureAt > 0 && outsideDevAt > insecureAt);
+    assert.match(validator, /Wallet binding required before entering the world/);
+    assert.match(validator, /WALLET_AUTH_SECRET is required in production/);
+    assert.match(validator, /actorKind bot does not skip this check/);
+    const readme = readFileSync(new URL('./README.md', import.meta.url), 'utf8');
+    assert.match(readme, /ASPNETCORE_ENVIRONMENT=Development/);
+    assert.match(readme, /traveler/);
+});
+
+test('PORT overrides the listen port and PLAYTEST still binds loopback', () => {
+    const server = readFileSync(new URL('../multiplayer/server/Server.cs', import.meta.url), 'utf8');
+    assert.match(server, /Environment\.GetEnvironmentVariable\("PORT"\)/);
+    assert.match(server, /PORT must be an integer from 1 to 65535/);
+    assert.match(server, /settings with \{ Port = parsedPort \}/);
+    assert.match(server, /127\.0\.0\.1/);
+    assert.match(server, /PlaytestQaKit\.IsEnabled/);
+    const readme = readFileSync(new URL('./README.md', import.meta.url), 'utf8');
+    assert.match(readme, /PORT/);
+    assert.match(readme, /Settings\.json/);
 });
 
 test('bot sources do not import the post-run evaluator', () => {

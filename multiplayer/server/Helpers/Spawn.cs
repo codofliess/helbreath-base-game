@@ -121,6 +121,9 @@ public static class Spawn {
 
     /// <summary>Sends spell entries when <paramref name="includeSpells"/> is true, item directory on every send, plus session-scoped player tunables; called on every join (spells omitted on world transfer).</summary>
     public static void SendInitialState(GameWorldRef wr, GameWorldPlayer player, bool includeSpells) {
+        // The cast-start check floors this character at FastestAllowedCastSpeedMs (1800 when
+        // Mag < 50 and Magic skill < 100). Publish that duration in this snapshot. The check itself is unchanged.
+        PlayerDerivedStats.ApplyAuthoritativeCastSpeed(player);
         IEnumerable<SpellConfig> spells;
         if (!includeSpells) {
             spells = Array.Empty<SpellConfig>();

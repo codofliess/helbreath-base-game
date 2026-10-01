@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Server.Helpers;
 
 namespace Server.Auth;
 
@@ -58,6 +59,11 @@ public static class WalletAuthValidator {
                     "true",
                     StringComparison.OrdinalIgnoreCase);
             if (string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase) || allowInsecure) {
+                return true;
+            }
+            // Safe local PLAYTEST (not production, no live secrets) is the same wallet-less door.
+            // A set WALLET_AUTH_SECRET never reaches this branch. This does not open the GM sandbox.
+            if (PlaytestQaKit.IsEnabled) {
                 return true;
             }
             errorMessage =
@@ -147,7 +153,7 @@ public static class WalletAuthValidator {
         }
 
         // Live still requires a wallet (PR #33). actorKind bot does not skip this check.
-        // Wallet-less login exists only when WALLET_AUTH_SECRET is unset on a local Development host.
+        // Wallet-less login exists only when WALLET_AUTH_SECRET is unset (Development, or a safe local PLAYTEST).
         if (boundChains.Length == 0 || wallets.Length == 0) {
             errorMessage = "Wallet binding required before entering the world.";
             return false;

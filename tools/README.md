@@ -60,14 +60,19 @@ cd multiplayer/mp-client && npm ci --ignore-scripts
 
 Node 22+ has a global `WebSocket`. Node 20 does not, unless you start it with `NODE_OPTIONS=--experimental-websocket`. The simulator also loads the `ws` package when the global is missing.
 
-Start the local server with `PLAYTEST=1`. That flag binds `127.0.0.1` (not `0.0.0.0`) on the port in `multiplayer/server/Config/Settings.json` (1337 unless you change it). It refuses to start when a live secret is set (`WALLET_AUTH_SECRET`, `DATABASE_URL`, `HELL_MINT`, `MARKET_MIDDLEWARE_URL`, `SOLANA_RPC_URL`) or the host is production. Run the built DLL directly so a launch profile cannot inject those secrets. The PLAYTEST kit then grants item 164 (Big Red Potion) and Fire Strike to the bot seat. A mage with no Fire Strike in the spell list melees instead of waiting. Potions are used only after HP actually drops.
+Start the local server with `PLAYTEST=1`. That flag binds `127.0.0.1` (not `0.0.0.0`). Wallet-less login is allowed when `PLAYTEST=1` and the process is not production and has no live secrets. `ASPNETCORE_ENVIRONMENT=Development` is the other local door for the same login. Either one is enough. A set `WALLET_AUTH_SECRET` still requires a wallet, including for a bot, and `PLAYTEST=1` refuses to start when that secret (or `DATABASE_URL`, `HELL_MINT`, `MARKET_MIDDLEWARE_URL`, `SOLANA_RPC_URL`) is set. `PLAYTEST` does not open the GM sandbox, so a new seat stays a traveler. Run the built DLL directly so a launch profile cannot inject those secrets.
+
+The listen port is `PORT` when that variable is set (1–65535). Otherwise it is the port in `multiplayer/server/Config/Settings.json` (1337). You do not edit `Settings.json` when 1337 is taken. Pass the same port to the bot with `--port`.
+
+A fresh seat is level 1 on the `traveler` world at the inland hub (90, 80), not Aresden. The bot walks to the southeast slime field on that map. The cast bar is `castSpeedMs` from the join snapshot, which is the duration the server enforces for that character (1800 ms when magic is low). A rejected finish lengthens a shorter bar to that slow cast and tries once more. A rejection at the slow bar switches the mage to melee so a level-1 seat can still kill slimes. The server's too-quick check is unchanged. A mage with no Fire Strike in the spell list melees instead of waiting. The PLAYTEST kit grants item 164 (Big Red Potion) and Fire Strike. Potions are used only after HP actually drops.
 
 ```bash
-cd tools
-pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 1337 --seat elon --log ./player-bot.jsonl
-```
+# from multiplayer/server, after building the DLL
+PORT=1340 PLAYTEST=1 ASPNETCORE_ENVIRONMENT=Development dotnet bin/Release/net10.0/Server.dll
 
-Use `--port 31337` only when that is the port the local server is actually listening on.
+# from tools. --port must match PORT. Development is optional when PLAYTEST=1 is already set.
+pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 1340 --seat elon --log ./player-bot.jsonl
+```
 
 The JSONL log records kills, deaths, disconnects, potions, casts, and timestamps. The last line is a summary. **PASS** = at least 30 slime kills and 0 disconnects. **FAIL** = under 10 slime kills (treated as a game/network problem). Score it after the run:
 

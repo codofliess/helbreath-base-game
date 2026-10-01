@@ -33,6 +33,14 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 var settings = await Config.LoadSettings();
+var portOverride = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(portOverride)) {
+    if (!int.TryParse(portOverride.Trim(), out var parsedPort) || parsedPort is < 1 or > 65535) {
+        throw new InvalidOperationException("PORT must be an integer from 1 to 65535.");
+    }
+    settings = settings with { Port = parsedPort };
+    Console.WriteLine($"[Server] PORT override {parsedPort} (Settings.json unchanged).");
+}
 await GamePersistence.InitializeAsync();
 var antiBotToolsConfig = await Config.LoadAntiBotToolsConfig();
 AntiBotTools.Initialize(antiBotToolsConfig);

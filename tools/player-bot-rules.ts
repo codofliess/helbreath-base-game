@@ -69,6 +69,20 @@ export const FARM_SLIME_SOUTH: GridPoint = { x: 127, y: 91 };
 /** Aresden farm gate (the arefarm warp the city snapshot lists around x 279, y 203–210). */
 export const ARESDEN_FARM_GATE: GridPoint = { x: 279, y: 206 };
 
+/**
+ * Southeast slime field on the traveler hub (`default` map). A fresh PLAYTEST seat
+ * is level 1 on world `traveler` at the inland hub (90, 80), not Aresden.
+ * This anchor is a client waypoint, not a server-memory read.
+ */
+export const TRAVELER_SLIME_FIELD: GridPoint = { x: 105, y: 92 };
+
+/**
+ * Slow cast the server enforces when Mag is under 50 and Magic skill is under 100.
+ * A rejected finish at or above this bar is a fizzle. A shorter bar is lengthened
+ * toward it. The server's too-quick check is not changed here.
+ */
+export const SLOW_CAST_BAR_MS = 1800;
+
 export interface PlayerBotView {
     className: PlayerBotClassName;
     x: number;
@@ -312,11 +326,19 @@ export function hpRatio(view: Pick<PlayerBotView, 'hp' | 'maxHp'>): number {
 }
 
 /**
- * Next waypoint when no slime is in view. City → farm warp from the world snapshot.
- * Farm → the southern slime field. Other worlds keep the local explore step.
+ * Next waypoint when no slime is in view.
+ * `traveler` (fresh PLAYTEST seat) → the hub slime field.
+ * City → farm warp from the world snapshot. Farm → the southern slime field.
+ * Other worlds keep the local explore step.
  */
 export function huntRouteGoal(view: Pick<PlayerBotView, 'worldId' | 'x' | 'y' | 'teleports'>): GridPoint | null {
     const world = view.worldId.trim().toLowerCase();
+    if (world === 'traveler') {
+        if (chebyshev(view.x, view.y, TRAVELER_SLIME_FIELD.x, TRAVELER_SLIME_FIELD.y) <= 6) {
+            return null;
+        }
+        return TRAVELER_SLIME_FIELD;
+    }
     if (world === 'arefarm' || world === 'elvfarm') {
         if (chebyshev(view.x, view.y, FARM_SLIME_SOUTH.x, FARM_SLIME_SOUTH.y) <= 8) {
             return null;
@@ -455,6 +477,20 @@ export class PlayerBotObservation {
     public notePosition(x: number, y: number): void {
         this.x = x;
         this.y = y;
+    }
+
+    /**
+     * A finish was rejected. A bar shorter than the slow cast is raised to that cast
+     * so the next try matches the duration the server enforces. A bar already that long
+     * is a fizzle: swing instead of waiting out another rejected cast.
+     */
+    public noteCastFinishRejected(): 'retry' | 'melee' {
+        const before = Math.max(200, this.castSpeedMs);
+        if (before >= SLOW_CAST_BAR_MS) {
+            return 'melee';
+        }
+        this.castSpeedMs = Math.min(2000, Math.max(before + 630, SLOW_CAST_BAR_MS));
+        return 'retry';
     }
 
     /**
@@ -693,6 +729,12 @@ export class PlayerBotBrain {
     /** HP at which a potion failed to heal. Another drink waits for a further drop. */
     private healFailedAtHp: number | null = null;
     private readonly visits = new Map<string, number>();
+    /** True after a cast finish was rejected at the slow bar. Melee until a cast lands. */
+    private castMeleeFallback = false;
+
+    public noteCastFinish(result: 'ok' | 'retry' | 'melee'): void {
+        this.castMeleeFallback = result === 'melee';
+    }
 
     public noteDrink(hp: number): void {
         this.awaitingHeal = true;
@@ -795,7 +837,8 @@ export class PlayerBotBrain {
             return { type: 'move', x: step.x, y: step.y };
         }
 
-        const canCast = view.className === 'mage' && view.fireStrikeSpellId !== null;
+        const canCast =
+            view.className === 'mage' && view.fireStrikeSpellId !== null && !this.castMeleeFallback;
         const range = canCast ? MAGE_CAST_RANGE_CELLS : Math.max(1, view.attackRangeCells);
         const distance = chebyshev(view.x, view.y, slime.x, slime.y);
         if (distance <= range) {

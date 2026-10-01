@@ -322,6 +322,20 @@ test('aresden walks to the farm gate and the farm walks south to the slime field
     }
     assert.deepEqual(huntRouteGoal(viewAt({ x: 23, y: 27, worldId: 'arefarm' })), FARM_SLIME_SOUTH);
     assert.equal(huntRouteGoal(viewAt({ x: FARM_SLIME_SOUTH.x, y: FARM_SLIME_SOUTH.y, worldId: 'arefarm' })), null);
+
+    const pad = [{
+        sources: [{ x: 279, y: 206 }, { x: 279, y: 203 }],
+        targetWorldId: 'arefarm',
+    }];
+    const standing = brain.decide(viewAt({
+        x: 279,
+        y: 203,
+        worldId: 'aresden',
+        teleports: pad,
+        monsters: [],
+        potions: [],
+    }), nav);
+    assert.deepEqual(standing, { type: 'warp', worldId: 'arefarm', gameWorldId: 'aresden' });
 });
 
 test('mage without Fire Strike melees instead of waiting', () => {

@@ -988,6 +988,17 @@ class SimulatedGameClient {
         this.observation.attackMode = attackMode;
     }
 
+    public sendWorldChange(targetWorldId: string, gameWorldId: string): void {
+        this.sendClient({
+            $case: 'worldChangeRequest',
+            value: {
+                worldId: targetWorldId,
+                gameWorldId,
+                validateTeleport: true,
+            },
+        });
+    }
+
     public sendResurrect(): void {
         this.sendClient({
             $case: 'playerResurrectedRequest',
@@ -2382,6 +2393,10 @@ async function applyRulesAction(
             markRecalling();
             client.sendConsume(action.itemUid);
             log.event('potion', { itemUid: action.itemUid, recallScroll: true });
+            return;
+        case 'warp':
+            client.sendWorldChange(action.worldId, action.gameWorldId);
+            log.event('warp', { worldId: action.worldId, from: action.gameWorldId });
             return;
         default:
             return;

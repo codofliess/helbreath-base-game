@@ -111,7 +111,33 @@ export type PlayerBotAction =
     | { type: 'melee'; monsterId: string }
     | { type: 'cast'; spellId: number; x: number; y: number; monsterId: string }
     | { type: 'recall'; spellId: number }
-    | { type: 'recall-scroll'; itemUid: string };
+    | { type: 'recall-scroll'; itemUid: string }
+    | { type: 'warp'; worldId: string; gameWorldId: string };
+
+/**
+ * When the bot is standing on the route's warp pad, ask to change world the way the
+ * game client does (`WorldChangeRequest` with `validateTeleport`). Walking onto the cell
+ * does not transfer by itself.
+ */
+export function warpTarget(view: Pick<PlayerBotView, 'worldId' | 'x' | 'y' | 'teleports'>): string | null {
+    const goal = huntRouteGoal(view);
+    if (!goal) {
+        return null;
+    }
+    const here = view.worldId.trim().toLowerCase();
+    for (const pad of view.teleports) {
+        const target = pad.targetWorldId.trim();
+        if (!target || target.toLowerCase() === here) {
+            continue;
+        }
+        const onPad = pad.sources.some((source) => source.x === view.x && source.y === view.y);
+        const goalOnPad = pad.sources.some((source) => source.x === goal.x && source.y === goal.y);
+        if (onPad && goalOnPad) {
+            return target;
+        }
+    }
+    return null;
+}
 
 export function assertNoServerState(value: object): void {
     for (const key of Object.keys(value)) {
@@ -751,6 +777,10 @@ export class PlayerBotBrain {
 
         const slime = nearestSlime(view);
         if (!slime) {
+            const warpWorldId = warpTarget(view);
+            if (warpWorldId) {
+                return { type: 'warp', worldId: warpWorldId, gameWorldId: view.worldId };
+            }
             if (!view.canMove) {
                 return { type: 'wait' };
             }

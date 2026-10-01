@@ -52,11 +52,22 @@ Cruchi's conditions, in the code that applies them:
 
 (e) Server logs are only for post-run evaluation (`player-bot-eval.ts`). That file is not imported by the bot, it is not inside the decision loop, and its result is never fed back into the bot.
 
-Start the local PLAYTEST server yourself (`PLAYTEST=1`, loopback port 31337). Then, from `tools/`:
+The bot imports protobuf from `multiplayer/mp-client`. Install those stubs before the first run (the `ws` / wire package scripts are not required):
 
 ```bash
-pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 31337 --seat elon --log ./player-bot.jsonl
+cd multiplayer/mp-client && npm ci --ignore-scripts
 ```
+
+Node 22+ has a global `WebSocket`. Node 20 does not, unless you start it with `NODE_OPTIONS=--experimental-websocket`. The simulator also loads the `ws` package when the global is missing.
+
+Start the local server with `PLAYTEST=1`. That flag binds `127.0.0.1` (not `0.0.0.0`) on the port in `multiplayer/server/Config/Settings.json` (1337 unless you change it). It refuses to start when a live secret is set (`WALLET_AUTH_SECRET`, `DATABASE_URL`, `HELL_MINT`, `MARKET_MIDDLEWARE_URL`, `SOLANA_RPC_URL`) or the host is production. Run the built DLL directly so a launch profile cannot inject those secrets. The PLAYTEST kit then grants item 164 (Big Red Potion) and Fire Strike to the bot seat. A mage with no Fire Strike in the spell list melees instead of waiting. Potions are used only after HP actually drops.
+
+```bash
+cd tools
+pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 1337 --seat elon --log ./player-bot.jsonl
+```
+
+Use `--port 31337` only when that is the port the local server is actually listening on.
 
 The JSONL log records kills, deaths, disconnects, potions, casts, and timestamps. The last line is a summary. **PASS** = at least 30 slime kills and 0 disconnects. **FAIL** = under 10 slime kills (treated as a game/network problem). Score it after the run:
 

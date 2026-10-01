@@ -224,6 +224,8 @@ public static class Spawn {
         Inventory.UnequipItemsInvalidForStats(wr, player);
         // Equip Merien/Xelima/Ice SA from currently worn gear (silent on join).
         SpecialAbility.RecomputeFromEquipment(wr, player, notify: false);
+        // Local PLAYTEST bots: potion stack + Fire Strike, before the client snapshot.
+        PlaytestQaKit.Apply(player);
         SendInitialState(wr, player, includeSpellsInInitialState);
         SendInitialGameWorldState(wr, player);
         // Live F7 Circle reads Olympia ids from magic-shop learned= — not InitialState Spells.json ids.

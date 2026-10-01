@@ -54,12 +54,29 @@ export interface ItemNameEntry {
 
 export type PlayerBotClassName = 'mage' | 'melee';
 
+/** A warp pad from InitialGameWorldState. Source cells and the destination world are client packets. */
+export interface ClientTeleport {
+    sources: readonly GridPoint[];
+    targetWorldId: string;
+}
+
+/**
+ * Slime field south of the Aresden/Elvine farm entrance. The beginner quest says the slimes
+ * are south of the farm. This anchor is a waypoint on the client map, not a server-memory read.
+ */
+export const FARM_SLIME_SOUTH: GridPoint = { x: 127, y: 91 };
+
+/** Aresden farm gate (the arefarm warp the city snapshot lists around x 279, y 203–210). */
+export const ARESDEN_FARM_GATE: GridPoint = { x: 279, y: 206 };
+
 export interface PlayerBotView {
     className: PlayerBotClassName;
     x: number;
     y: number;
     hp: number;
     maxHp: number;
+    /** True after this session's HP fell, or after PlayerReceiveDamage for this character. */
+    tookDamage: boolean;
     dead: boolean;
     attackMode: boolean;
     attackRangeCells: number;
@@ -73,6 +90,8 @@ export interface PlayerBotView {
     equippedWeaponUid: string | null;
     equippedWeaponBlocksCast: boolean;
     monsters: readonly VisibleMonster[];
+    worldId: string;
+    teleports: readonly ClientTeleport[];
     teleportLocs: readonly GridPoint[];
     inTown: boolean;
     dryRetreatDone: boolean;
@@ -255,11 +274,51 @@ function firstPotionUid(view: PlayerBotView): string | null {
     return null;
 }
 
-function hpRatio(view: PlayerBotView): number {
-    if (view.maxHp <= 0) {
+/** HP / max HP from the packets. A missing or shorter max than the current HP is a full bar, not a wound. */
+export function hpRatio(view: Pick<PlayerBotView, 'hp' | 'maxHp'>): number {
+    if (view.maxHp <= 0 || view.hp >= view.maxHp) {
         return 1;
     }
+    if (view.hp <= 0) {
+        return 0;
+    }
     return view.hp / view.maxHp;
+}
+
+/**
+ * Next waypoint when no slime is in view. City → farm warp from the world snapshot.
+ * Farm → the southern slime field. Other worlds keep the local explore step.
+ */
+export function huntRouteGoal(view: Pick<PlayerBotView, 'worldId' | 'x' | 'y' | 'teleports'>): GridPoint | null {
+    const world = view.worldId.trim().toLowerCase();
+    if (world === 'arefarm' || world === 'elvfarm') {
+        if (chebyshev(view.x, view.y, FARM_SLIME_SOUTH.x, FARM_SLIME_SOUTH.y) <= 8) {
+            return null;
+        }
+        return FARM_SLIME_SOUTH;
+    }
+    if (world !== 'aresden' && world !== 'elvine') {
+        return null;
+    }
+    const farmId = world === 'elvine' ? 'elvfarm' : 'arefarm';
+    let best: GridPoint | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const pad of view.teleports) {
+        if (pad.targetWorldId.trim().toLowerCase() !== farmId) {
+            continue;
+        }
+        for (const source of pad.sources) {
+            const distance = chebyshev(view.x, view.y, source.x, source.y);
+            if (distance < bestDistance) {
+                best = source;
+                bestDistance = distance;
+            }
+        }
+    }
+    if (best) {
+        return best;
+    }
+    return world === 'aresden' ? ARESDEN_FARM_GATE : null;
 }
 
 function exploreStep(view: PlayerBotView, nav: PlayerBotNav, visits: Map<string, number>): GridPoint | null {
@@ -342,7 +401,12 @@ export class PlayerBotObservation {
     y = 0;
     hp = 0;
     maxHp = 0;
+    /** False until the first positive hp and maxHp pair. A rescale of a full bar is not damage. */
+    private vitalsReady = false;
+    tookDamage = false;
     dead = false;
+    worldId = '';
+    readonly teleports: ClientTeleport[] = [];
     attackMode = false;
     attackRangeCells = 1;
     castSpeedMs = 700;
@@ -367,14 +431,58 @@ export class PlayerBotObservation {
         this.y = y;
     }
 
+    /**
+     * Applies an HP packet. A full bar that changes scale (1000/1000 → 40/40) is not a hit.
+     * A 0–100 percent update is ignored once an absolute pool above 100 is already known.
+     * HP above the claimed max means the max field is short, so the bar is full.
+     */
     public noteVitals(hp: number, maxHp: number): void {
-        if (maxHp > 0) {
-            this.maxHp = maxHp;
+        let nextMax = maxHp > 0 ? maxHp : this.maxHp;
+        const nextHp = Math.max(0, hp);
+        // A 0–100 bar must not replace an absolute pool, including a full bar reported as 40/40.
+        if (this.vitalsReady && nextMax === 100 && this.maxHp !== 100 && this.hp >= this.maxHp && nextHp <= 100) {
+            return;
         }
-        this.hp = hp;
+        if (nextMax > 0 && nextHp > nextMax) {
+            nextMax = nextHp;
+        }
+        if (!this.vitalsReady) {
+            this.hp = nextHp;
+            if (nextMax > 0) {
+                this.maxHp = nextMax;
+            }
+            this.vitalsReady = this.maxHp > 0 && this.hp > 0;
+            this.tookDamage = false;
+            return;
+        }
+        const prevHp = this.hp;
+        const prevMax = this.maxHp;
+        const prevRatio = prevMax > 0 ? prevHp / prevMax : 1;
+        const nextRatio = nextMax > 0 ? nextHp / nextMax : 1;
+        const rescaled =
+            nextHp !== prevHp && nextMax !== prevMax && nextMax > 0 && Math.abs(prevRatio - nextRatio) <= 0.02;
+        if (!rescaled && nextHp < prevHp) {
+            this.tookDamage = true;
+        }
+        this.hp = nextHp;
+        if (nextMax > 0) {
+            this.maxHp = nextMax;
+        }
+        if (this.maxHp > 0 && this.hp >= this.maxHp) {
+            this.tookDamage = false;
+        }
+    }
+
+    /** PlayerReceiveDamage for this character. A hit counts even before the HP packet arrives. */
+    public noteDamageTaken(): void {
+        this.tookDamage = true;
     }
 
     public noteSpells(spells: ReadonlyArray<{ id: number; name: string }>): void {
+        // World transfer sends an empty spell directory on purpose. Keep the book the client already has.
+        if (spells.length === 0 && (this.fireStrikeSpellId !== null || this.recallSpellId !== null)) {
+            return;
+        }
         this.fireStrikeSpellId = null;
         this.recallSpellId = null;
         for (const spell of spells) {
@@ -462,6 +570,18 @@ export class PlayerBotObservation {
         this.teleportLocs.push(...locs);
     }
 
+    /** World id and warp pads from InitialGameWorldState. */
+    public noteWorld(worldId: string, teleports: readonly ClientTeleport[]): void {
+        this.worldId = worldId;
+        this.teleports.length = 0;
+        this.teleportLocs.length = 0;
+        for (const pad of teleports) {
+            const sources = pad.sources.map((source) => ({ x: source.x, y: source.y }));
+            this.teleports.push({ sources, targetWorldId: pad.targetWorldId });
+            this.teleportLocs.push(...sources);
+        }
+    }
+
     public noteKillBaseline(monsterId: number, kills: number): void {
         if (!this.slimeKillBaseline.has(monsterId)) {
             this.slimeKillBaseline.set(monsterId, kills);
@@ -541,7 +661,17 @@ export class PlayerBotBrain {
     inTown = false;
     dryRetreatDone = false;
     recallFailures = 0;
+    /** Set when a potion is used. Cleared once HP rises, or suppressed if it does not. */
+    private awaitingHeal = false;
+    private hpAtDrink = 0;
+    /** HP at which a potion failed to heal. Another drink waits for a further drop. */
+    private healFailedAtHp: number | null = null;
     private readonly visits = new Map<string, number>();
+
+    public noteDrink(hp: number): void {
+        this.awaitingHeal = true;
+        this.hpAtDrink = hp;
+    }
 
     public noteTown(potionCharges: number): void {
         this.inTown = true;
@@ -582,22 +712,38 @@ export class PlayerBotBrain {
         if (charges > 0) {
             this.dryRetreatDone = false;
         }
+        if (this.awaitingHeal && !view.potionLocked) {
+            if (view.hp > this.hpAtDrink) {
+                this.awaitingHeal = false;
+            } else {
+                this.awaitingHeal = false;
+                this.healFailedAtHp = view.hp;
+            }
+        }
+        const furtherDrop = this.healFailedAtHp === null || view.hp < this.healFailedAtHp;
         const potionUid = firstPotionUid(view);
-        if (ratio <= HP_LOW_RATIO && potionUid && !view.potionLocked) {
+        // Potions only after a real HP drop. A low ratio with no drop (wrong max, or a full bar) does not drink.
+        if (
+            view.tookDamage &&
+            furtherDrop &&
+            ratio <= HP_LOW_RATIO &&
+            potionUid &&
+            !view.potionLocked &&
+            !this.awaitingHeal
+        ) {
             return { type: 'drink', itemUid: potionUid };
         }
 
-        // Critical health always recalls. Empty potions recall only once health is already low,
-        // so a full-HP character whose potion stacks are unnamed in the item directory still hunts.
-        // After one town latch, dryRetreatDone lets the loop fight again.
-        const lowAndDry = ratio <= HP_LOW_RATIO && charges === 0 && !this.dryRetreatDone;
-        const mustRetreat = ratio <= HP_CRITICAL_RATIO || lowAndDry;
+        // Retreat only after real damage. An undamaged character with a bogus low ratio keeps hunting.
+        // Empty potions recall only once health is already low. After one town latch, dryRetreatDone lets it fight again.
+        const lowAndDry = view.tookDamage && ratio <= HP_LOW_RATIO && charges === 0 && !this.dryRetreatDone;
+        const mustRetreat = (view.tookDamage && ratio <= HP_CRITICAL_RATIO) || lowAndDry;
         if (mustRetreat) {
             return this.retreat(view, nav);
         }
 
         if (this.inTown) {
-            if (ratio <= HP_CRITICAL_RATIO) {
+            if (view.tookDamage && ratio <= HP_CRITICAL_RATIO) {
                 return { type: 'wait' };
             }
             this.inTown = false;
@@ -608,7 +754,10 @@ export class PlayerBotBrain {
             if (!view.canMove) {
                 return { type: 'wait' };
             }
-            const step = exploreStep(view, nav, this.visits);
+            const goal = huntRouteGoal(view);
+            const step = goal
+                ? stepToward({ x: view.x, y: view.y }, goal, 0, nav.isOpen, 64)
+                : exploreStep(view, nav, this.visits);
             if (!step) {
                 return { type: 'wait' };
             }
@@ -616,13 +765,11 @@ export class PlayerBotBrain {
             return { type: 'move', x: step.x, y: step.y };
         }
 
-        const range = view.className === 'mage' ? MAGE_CAST_RANGE_CELLS : Math.max(1, view.attackRangeCells);
+        const canCast = view.className === 'mage' && view.fireStrikeSpellId !== null;
+        const range = canCast ? MAGE_CAST_RANGE_CELLS : Math.max(1, view.attackRangeCells);
         const distance = chebyshev(view.x, view.y, slime.x, slime.y);
         if (distance <= range) {
-            if (view.className === 'mage') {
-                if (view.fireStrikeSpellId === null) {
-                    return { type: 'wait' };
-                }
+            if (canCast && view.fireStrikeSpellId !== null) {
                 return {
                     type: 'cast',
                     spellId: view.fireStrikeSpellId,
@@ -703,6 +850,7 @@ export function buildPlayerBotView(
         y: observation.y,
         hp: observation.hp,
         maxHp: observation.maxHp,
+        tookDamage: observation.tookDamage,
         dead: observation.dead,
         attackMode: observation.attackMode,
         attackRangeCells: observation.attackRangeCells,
@@ -716,6 +864,8 @@ export function buildPlayerBotView(
         equippedWeaponUid: observation.equippedWeaponUid,
         equippedWeaponBlocksCast: weaponBlocksCast(observation.equippedWeaponName),
         monsters: [...observation.monsters.values()],
+        worldId: observation.worldId,
+        teleports: observation.teleports,
         teleportLocs: observation.teleportLocs,
         inTown: false,
         dryRetreatDone: false,

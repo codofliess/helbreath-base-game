@@ -41,6 +41,7 @@ PvpAcademy.Initialize();
 
 // Launch security banners — ops must set these for a real soft test.
 WalletAuthValidator.EnsureProductionSecretOrThrow();
+PlaytestQaKit.ThrowIfUnsafe();
 if (!WalletAuthValidator.IsRequired) {
     Console.WriteLine(
         "[SECURITY] WARNING: WALLET_AUTH_SECRET is not set — any client can spoof any wallet id. " +
@@ -1076,7 +1077,9 @@ app.Map("/ws", async context => {
     }
 });
 
-await app.RunAsync($"http://0.0.0.0:{settings.Port}");
+var listenHost = PlaytestQaKit.IsEnabled ? "127.0.0.1" : "0.0.0.0";
+Console.WriteLine($"[Server] Listening on http://{listenHost}:{settings.Port}");
+await app.RunAsync($"http://{listenHost}:{settings.Port}");
 disconnectedPlayerCleanupCts.Cancel();
 worldTransferCts.Cancel();
 try {

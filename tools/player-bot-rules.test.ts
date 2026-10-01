@@ -9,9 +9,13 @@ import {
     resolvePlaytestSeat,
 } from './player-bot-guard.ts';
 import {
+    ARESDEN_FARM_GATE,
+    FARM_SLIME_SOUTH,
     PlayerBotBrain,
     PlayerBotObservation,
     buildPlayerBotView,
+    hpRatio,
+    huntRouteGoal,
     isHpPotionName,
     isSlimeIdentity,
     stepToward,
@@ -32,6 +36,7 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         y: 10,
         hp: 100,
         maxHp: 100,
+        tookDamage: false,
         dead: false,
         attackMode: true,
         attackRangeCells: 1,
@@ -45,6 +50,8 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         equippedWeaponUid: null,
         equippedWeaponBlocksCast: false,
         monsters: [],
+        worldId: '',
+        teleports: [],
         teleportLocs: [],
         inTown: false,
         dryRetreatDone: false,
@@ -130,12 +137,13 @@ test('melee swings in range and does not cast', () => {
 
 test('low HP drinks a potion; critical HP with no potions recalls', () => {
     const brain = new PlayerBotBrain();
-    const drink = brain.decide(viewAt({ hp: 40, maxHp: 100 }), { isOpen: openGrid() });
+    const drink = brain.decide(viewAt({ hp: 40, maxHp: 100, tookDamage: true }), { isOpen: openGrid() });
     assert.equal(drink.type, 'drink');
 
     const recall = brain.decide(viewAt({
         hp: 10,
         maxHp: 100,
+        tookDamage: true,
         potions: [],
     }), { isOpen: openGrid() });
     assert.equal(recall.type, 'recall');
@@ -154,6 +162,7 @@ test('full HP with no potions still hunts; low HP with no potions recalls once',
     const retreat = brain.decide(viewAt({
         hp: 40,
         maxHp: 100,
+        tookDamage: true,
         potions: [],
         monsters: slime,
     }), { isOpen: openGrid() });
@@ -162,6 +171,7 @@ test('full HP with no potions still hunts; low HP with no potions recalls once',
     const again = brain.decide(viewAt({
         hp: 40,
         maxHp: 100,
+        tookDamage: true,
         potions: [],
         monsters: slime,
     }), { isOpen: openGrid() });
@@ -212,9 +222,14 @@ test('playtest kit potion is in the client item directory and is drunk when HP i
     assert.equal(potion.name, 'Big Red Potion');
     assert.equal(potion.consumable, true);
     assert.equal(isHpPotionName(potion.name), true);
+    const consumable = readFileSync(new URL('../multiplayer/server/Helpers/ConsumableUse.cs', import.meta.url), 'utf8');
+    assert.match(consumable, /case 164:/);
+    assert.match(consumable, /player\.ApplyHeal\(amount\)/);
 
     const observation = new PlayerBotObservation();
+    observation.noteVitals(100, 100);
     observation.noteVitals(40, 100);
+    assert.equal(observation.tookDamage, true);
     observation.attackMode = true;
     observation.noteItems([{ id: potion.id, name: potion.name, consumable: potion.consumable === true }]);
     observation.noteBag([{ uid: '164-stack', itemId: potion.id, quantity: 5 }]);
@@ -224,6 +239,129 @@ test('playtest kit potion is in the client item directory and is drunk when HP i
     if (action.type === 'drink') {
         assert.equal(action.itemUid, '164-stack');
     }
+});
+
+test('potions are not used without real damage, and a drink that does not heal is not repeated', () => {
+    const undamaged = new PlayerBotObservation();
+    undamaged.noteVitals(40, 1000);
+    assert.equal(undamaged.tookDamage, false);
+    assert.ok(hpRatio(undamaged) < 0.5);
+    undamaged.attackMode = true;
+    undamaged.noteItems([{ id: 164, name: 'Big Red Potion', consumable: true }]);
+    undamaged.noteBag([{ uid: '164-stack', itemId: 164, quantity: 50 }]);
+    const brain = new PlayerBotBrain();
+    const nav = { isOpen: openGrid() };
+    const first = brain.decide(buildPlayerBotView(undamaged, 'mage', true, false), nav);
+    assert.notEqual(first.type, 'drink');
+    assert.notEqual(first.type, 'recall');
+
+    const scaled = new PlayerBotObservation();
+    scaled.noteVitals(1000, 1000);
+    scaled.noteVitals(40, 40);
+    assert.equal(scaled.tookDamage, false);
+    scaled.noteVitals(40, 100);
+    assert.equal(scaled.hp, 40);
+    assert.equal(scaled.maxHp, 40);
+
+    const hurt = new PlayerBotObservation();
+    hurt.noteVitals(40, 40);
+    hurt.noteVitals(16, 40);
+    assert.equal(hurt.tookDamage, true);
+    hurt.attackMode = true;
+    hurt.noteItems([{ id: 164, name: 'Big Red Potion', consumable: true }]);
+    hurt.noteBag([{ uid: '164-stack', itemId: 164, quantity: 50 }]);
+    const healer = new PlayerBotBrain();
+    const drink = healer.decide(buildPlayerBotView(hurt, 'mage', true, false), nav);
+    assert.equal(drink.type, 'drink');
+    healer.noteDrink(hurt.hp);
+    const locked = healer.decide(buildPlayerBotView(hurt, 'mage', true, true), nav);
+    assert.notEqual(locked.type, 'drink');
+    const stillLow = healer.decide(buildPlayerBotView(hurt, 'mage', true, false), nav);
+    assert.notEqual(stillLow.type, 'drink');
+    hurt.noteVitals(36, 40);
+    const healed = healer.decide(buildPlayerBotView(hurt, 'mage', true, false), nav);
+    assert.notEqual(healed.type, 'drink');
+});
+
+test('aresden walks to the farm gate and the farm walks south to the slime field', () => {
+    const brain = new PlayerBotBrain();
+    const nav = { isOpen: openGrid() };
+    const city = brain.decide(viewAt({
+        x: 100,
+        y: 40,
+        worldId: 'aresden',
+        teleports: [{
+            sources: [{ x: 279, y: 206 }, { x: 279, y: 205 }],
+            targetWorldId: 'arefarm',
+        }],
+        monsters: [],
+        potions: [],
+    }), nav);
+    assert.equal(city.type, 'move');
+    if (city.type === 'move') {
+        assert.ok(city.x > 100 || city.y > 40);
+    }
+    const goal = huntRouteGoal(viewAt({
+        x: 100,
+        y: 40,
+        worldId: 'aresden',
+        teleports: [],
+    }));
+    assert.deepEqual(goal, ARESDEN_FARM_GATE);
+
+    const farm = brain.decide(viewAt({
+        x: 23,
+        y: 27,
+        worldId: 'arefarm',
+        monsters: [],
+        potions: [],
+    }), nav);
+    assert.equal(farm.type, 'move');
+    if (farm.type === 'move') {
+        assert.ok(farm.x > 23 || farm.y > 27);
+    }
+    assert.deepEqual(huntRouteGoal(viewAt({ x: 23, y: 27, worldId: 'arefarm' })), FARM_SLIME_SOUTH);
+    assert.equal(huntRouteGoal(viewAt({ x: FARM_SLIME_SOUTH.x, y: FARM_SLIME_SOUTH.y, worldId: 'arefarm' })), null);
+});
+
+test('mage without Fire Strike melees instead of waiting', () => {
+    const brain = new PlayerBotBrain();
+    const near = brain.decide(viewAt({
+        fireStrikeSpellId: null,
+        attackRangeCells: 1,
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 11, y: 10, dead: false }],
+    }), { isOpen: openGrid() });
+    assert.deepEqual(near, { type: 'melee', monsterId: '2' });
+
+    const far = brain.decide(viewAt({
+        fireStrikeSpellId: null,
+        x: 0,
+        y: 0,
+        monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 8, y: 0, dead: false }],
+    }), { isOpen: openGrid() });
+    assert.equal(far.type, 'move');
+});
+
+test('playtest kit grants potions and Fire Strike, and PLAYTEST binds loopback', () => {
+    const kit = readFileSync(new URL('../multiplayer/server/Helpers/PlaytestQaKit.cs', import.meta.url), 'utf8');
+    assert.match(kit, /BigRedPotionItemId = 164/);
+    assert.match(kit, /PotionQuantity = 20/);
+    assert.match(kit, /FireStrikeOlympiaId = 30/);
+    assert.match(kit, /LearnOlympiaSpell/);
+    assert.match(kit, /IsBotActor/);
+    assert.match(kit, /PLAYTEST=1 is refused/);
+    const server = readFileSync(new URL('../multiplayer/server/Server.cs', import.meta.url), 'utf8');
+    assert.match(server, /127\.0\.0\.1/);
+    assert.match(server, /PlaytestQaKit\.IsEnabled/);
+    assert.doesNotMatch(server, /PLAYTEST=1[\s\S]{0,80}0\.0\.0\.0/);
+    const readme = readFileSync(new URL('./README.md', import.meta.url), 'utf8');
+    assert.match(readme, /npm ci --ignore-scripts/);
+    assert.match(readme, /experimental-websocket/);
+    const simulator = readFileSync(new URL('./client-simulator.ts', import.meta.url), 'utf8');
+    assert.match(simulator, /ensureGlobalWebSocket/);
+    assert.match(simulator, /experimental-websocket/);
+    const spawn = readFileSync(new URL('../multiplayer/server/Helpers/Spawn.cs', import.meta.url), 'utf8');
+    assert.match(spawn, /PlaytestQaKit\.Apply/);
 });
 
 test('live wallet login is not weakened and eval stays outside the loop', () => {

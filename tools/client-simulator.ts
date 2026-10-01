@@ -56,6 +56,7 @@ import {
     type PlayerAttackModeChanged,
     type PlayerDied,
     type PlayerMoved,
+    type PlayerReceiveDamage,
     type PlayerResurrected,
     type PlayerTeleported,
     type PlayersEnteredRange,
@@ -92,6 +93,32 @@ import {
     pingResponseMatchesPending,
     shouldSendClientPing,
 } from '../multiplayer/mp-client/src/utils/pingInFlight';
+
+/**
+ * Node 22+ has a global WebSocket. Node 20 needs `NODE_OPTIONS=--experimental-websocket`,
+ * or the `ws` package (loaded here when the global is missing). Protobuf wire stubs come from
+ * `npm ci --ignore-scripts` in `multiplayer/mp-client`.
+ */
+export async function ensureGlobalWebSocket(): Promise<void> {
+    if (typeof WebSocket !== 'undefined') {
+        return;
+    }
+    try {
+        const loaded = (await import('ws')) as { WebSocket?: unknown; default?: unknown };
+        const Socket = loaded.WebSocket ?? loaded.default;
+        if (typeof Socket !== 'function') {
+            throw new Error('ws module did not export a WebSocket constructor');
+        }
+        (globalThis as { WebSocket?: unknown }).WebSocket = Socket;
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+            'Global WebSocket is not available. On Node 20 start with NODE_OPTIONS=--experimental-websocket. ' +
+                'Install protobuf stubs with `npm ci --ignore-scripts` in multiplayer/mp-client (@bufbuild/protobuf/wire). ' +
+                `ws fallback failed: ${detail}`,
+        );
+    }
+}
 
 const MIN_ALLOWED_INTERVAL_MS = 220;
 const DEFAULT_MOVEMENT_SPEED_MS = 220;
@@ -372,8 +399,11 @@ class SimulatedGameClient {
     }
 
     public async start(): Promise<void> {
+        await ensureGlobalWebSocket();
         if (typeof WebSocket === 'undefined') {
-            throw new Error('Global WebSocket is not available in this Node.js runtime.');
+            throw new Error(
+                'Global WebSocket is not available. On Node 20 start with NODE_OPTIONS=--experimental-websocket.',
+            );
         }
 
         const websocketUrl = `ws://${this.config.ip}:${this.config.port}/ws`;
@@ -494,6 +524,9 @@ class SimulatedGameClient {
                 case 'hpUpdated':
                     this.noteHpUpdated(message.payload.value);
                     break;
+                case 'playerReceiveDamage':
+                    this.notePlayerReceiveDamage(message.payload.value);
+                    break;
                 case 'playerDied':
                     this.notePlayerDied(message.payload.value);
                     break;
@@ -564,9 +597,6 @@ class SimulatedGameClient {
     }
 
     private async handleInitialGameWorldState(data: InitialGameWorldState): Promise<void> {
-        if (this.isInitialized) {
-            return;
-        }
         if (!this.playerId) {
             console.warn(`[client ${this.clientIndex}] InitialGameWorldState received before InitialState.`);
             return;
@@ -574,7 +604,7 @@ class SimulatedGameClient {
 
         this.clearConnectTimeout();
         const nextMap = await getSharedMap(data.mapName);
-        if (this.isInitialized && this.config.botAuth && this.map && this.currentPosition) {
+        if (this.map && this.currentPosition) {
             this.map.setTileOccupied(this.currentPosition.x, this.currentPosition.y, false);
         }
         this.map = nextMap;
@@ -589,15 +619,27 @@ class SimulatedGameClient {
             this.observation.monsters.clear();
             this.observation.notePosition(data.playerX, data.playerY);
             this.observation.dead = data.dead;
-            this.observation.noteTeleportLocs(data.teleportLocs.flatMap((set) =>
-                set.locs.map((loc) => ({ x: loc.x, y: loc.y })),
-            ));
+            this.observation.noteWorld(
+                data.gameWorldId,
+                data.teleportLocs.map((set) => ({
+                    sources: set.locs.map((loc) => ({ x: loc.x, y: loc.y })),
+                    targetWorldId: set.target?.worldId ?? '',
+                })),
+            );
             if (this.isInitialized) {
                 this.observation.pushSignal('world');
+                console.log(
+                    `[client ${this.clientIndex}] Changed world to ${data.gameWorldId || '?'} ` +
+                    `at (${data.playerX}, ${data.playerY})`,
+                );
                 return;
             }
         }
+        const already = this.isInitialized;
         this.isInitialized = true;
+        if (already) {
+            return;
+        }
 
         console.log(
             `[client ${this.clientIndex}] Ready on game world ${data.gameWorldId || '?'} (${normalizeMapFileName(data.mapName)}) ` +
@@ -970,6 +1012,15 @@ class SimulatedGameClient {
             return;
         }
         this.observation.noteVitals(data.hp, data.maxHp);
+    }
+
+    private notePlayerReceiveDamage(data: PlayerReceiveDamage): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        if (data.damage > 0) {
+            this.observation.noteDamageTaken();
+        }
     }
 
     private notePlayerDied(data: PlayerDied): void {
@@ -2284,12 +2335,21 @@ async function applyRulesAction(
         case 'unequip-weapon':
             client.sendUnequipWeapon(action.itemUid);
             return;
-        case 'drink':
+        case 'drink': {
+            const before = client.getObservation();
+            brain.noteDrink(before.hp);
             client.sendConsume(action.itemUid);
             totals.potionsUsed += 1;
             lockPotion(1500);
-            log.event('potion', { itemUid: action.itemUid, potionsUsed: totals.potionsUsed });
+            log.event('potion', {
+                itemUid: action.itemUid,
+                potionsUsed: totals.potionsUsed,
+                hp: before.hp,
+                maxHp: before.maxHp,
+                tookDamage: before.tookDamage,
+            });
             return;
+        }
         case 'move':
             client.stepTo(action.x, action.y);
             return;

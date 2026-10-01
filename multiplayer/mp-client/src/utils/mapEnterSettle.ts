@@ -25,7 +25,11 @@ export const MAP_ENTER_ENTITY_CATCHUP_MS = 12_000;
 /** NPC spr decode — city streets have few catalog NPCs; keep off the monster tick. */
 export const MAP_ENTER_NPC_SYNC_MS = 14_000;
 
-/** Equipped appearance / paper-doll gear (Elvine F5 OOM path). */
+/**
+ * Full settle / paper-doll gear dump (Elvine F5 OOM path).
+ * Body run sheets, equipped stand/run sheets, and spell VFX are cached earlier
+ * by `actionSpritePreload` — this timer must not gate those pixels.
+ */
 export const MAP_ENTER_HEAVY_DECODE_MS = 16_000;
 
 /** Restore saved camera zoom (zoom-out enlarges the stream frustum). */

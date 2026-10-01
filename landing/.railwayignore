@@ -2,4 +2,5 @@ olympia-assets/
 README.md
 .git/
 node_modules/
-*.md
+# Do not blanket-ignore *.md — content/reglas-economicas.md is public copy
+# injected into the landing and must ship in the Railway image.

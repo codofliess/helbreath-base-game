@@ -1,5 +1,7 @@
 # X draft — paste as @ChainLordsHQ (agent cannot post)
 
+> **DEPRECATED (PO 2026-09-29).** `$HELL` (Solana) is the only Chain Lords token; it launches 2026-09-30 in the afternoon. The RH / Pons `HELBREATH` path in this file is kept as a record only: do not deploy, promote, or post it. See `docs/ADR-001-MULTICHAIN-AUTH.md` (2026-09-29 amendment).
+
 X MCP has **no create-post tool**. Credits checked once: `total_balance` 0 / `prepaid_balance` -0.05. **Not posted.** Martín pastes.
 
 **TokenLaunched is live.** RH 4663 tx `0x31c269413ab9290e81e683fb47fd050683533f025afb314c80cd20e29629cd97` from `0x86ffd5F62CC71a5a8EEC1888EDEAFB5f08E70108`.

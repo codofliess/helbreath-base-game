@@ -113,7 +113,7 @@ function statusLabel(status: string): string {
 }
 
 type TechMode = 'as_is' | 'equalize_ping' | 'fixed_delay';
-type StreamGuidePlatform = 'none' | 'discord' | 'twitch' | 'youtube';
+type StreamGuidePlatform = 'none' | 'x' | 'discord' | 'twitch' | 'youtube';
 
 const TECH_MODE_HELP: Record<TechMode, string> = {
     as_is: 'No artificial delay. Fight with real ping/FPS. Full transparency only.',
@@ -210,6 +210,7 @@ function StreamGuidePanel({
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 {chip('none', 'No stream')}
+                {chip('x', 'X')}
                 {chip('discord', 'Discord')}
                 {chip('twitch', 'Twitch')}
                 {chip('youtube', 'YouTube')}
@@ -219,6 +220,36 @@ function StreamGuidePanel({
                 <p style={{ margin: 0, fontSize: 12, opacity: 0.75 }}>
                     El duel se puede jugar igual. Fans solo verán el horario en la cartelera (si publicás).
                 </p>
+            ) : null}
+
+            {platform === 'x' ? (
+                <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                    <ol style={{ margin: '0 0 10px', paddingLeft: 18 }}>
+                        <li>
+                            En <strong>X</strong>: botón de crear → <strong>Live</strong> (o Media Studio / OBS
+                            con la clave de X) y capturá la ventana del juego.
+                        </li>
+                        <li>
+                            Cuando esté al aire, copiá el link del live. Tiene que verse como{' '}
+                            <code>x.com/i/broadcasts/…</code> o <code>x.com/tunombre/status/…</code>.
+                        </li>
+                        <li>Pegalo abajo y publicá el duel en la cartelera.</li>
+                    </ol>
+                    <label style={{ display: 'block', marginBottom: 6 }}>
+                        Link del live en X
+                        <input
+                            type="url"
+                            placeholder="https://x.com/i/broadcasts/…"
+                            value={pasteUrl}
+                            onChange={(e) => onPasteUrl(e.target.value)}
+                            style={{ display: 'block', width: '100%', marginTop: 4, boxSizing: 'border-box' }}
+                        />
+                    </label>
+                    <p style={{ margin: 0, fontSize: 11, opacity: 0.75, color: '#9fd4ff' }}>
+                        15+ minutos en vivo en X con el link en la cartelera (duel público o Go Live) completa tu
+                        día de rewards.
+                    </p>
+                </div>
             ) : null}
 
             {platform === 'discord' ? (
@@ -366,8 +397,6 @@ export function ArenaPactDialog({
     const [minute, setMinute] = useState(() => Math.min(59, new Date().getMinutes() + 5));
     const [readyWindowMin, setReadyWindowMin] = useState(15);
     const [inviteName, setInviteName] = useState('');
-    /** Bolsa $ each fighter posts (0 = Honor). Escrow later — recorded on match for now. */
-    const [stakeAmount, setStakeAmount] = useState(0);
     /** Publish on cartelera + Discord Events. */
     const [isPublic, setIsPublic] = useState(true);
     const [duelTitle, setDuelTitle] = useState('');
@@ -542,12 +571,6 @@ export function ArenaPactDialog({
                 arenaKitJson: kitJson,
                 opensAtMs: pendingCreate.opensAtMs,
                 readyWindowSec: pendingCreate.readyWindowSec,
-                stakeAssetId: pendingCreate.stakeAmount && pendingCreate.stakeAmount > 0
-                    ? pendingCreate.stakeAssetId || 'USDT'
-                    : undefined,
-                stakeAmount: pendingCreate.stakeAmount && pendingCreate.stakeAmount > 0
-                    ? pendingCreate.stakeAmount
-                    : undefined,
                 isPublic: pendingCreate.isPublic,
                 title: pendingCreate.title,
                 hostStreamUrl: pendingCreate.hostStreamUrl,
@@ -753,7 +776,6 @@ export function ArenaPactDialog({
         const when = new Date(opensAtMs);
         const whenLabel = `${when.toLocaleDateString()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
 
-        const stake = Math.max(0, Math.floor(stakeAmount));
         const resolvedHostStream =
             buildStreamUrlFromGuide(streamGuide, twitchChannel, streamPaste) ||
             hostStreamUrl.trim() ||
@@ -766,8 +788,6 @@ export function ArenaPactDialog({
             opensAtMs,
             readyWindowSec,
             inviteName: inviteName.trim() || undefined,
-            stakeAssetId: stake > 0 ? 'USDT' : undefined,
-            stakeAmount: stake > 0 ? stake : undefined,
             isPublic,
             title: duelTitle.trim() || undefined,
             hostStreamUrl: resolvedHostStream,
@@ -786,8 +806,6 @@ export function ArenaPactDialog({
             arenaKitJson: kitJson,
             opensAtMs,
             readyWindowSec,
-            stakeAssetId: createPayload.stakeAssetId,
-            stakeAmount: createPayload.stakeAmount,
             isPublic: createPayload.isPublic,
             title: createPayload.title,
             hostStreamUrl: createPayload.hostStreamUrl,
@@ -796,7 +814,7 @@ export function ArenaPactDialog({
         // Invite is auto-sent when match state arrives (see effect on match.matchId + inviteName).
         setStatusHint(`Creating PVP duel — opens ${whenLabel}, then ${readyWindowMin} min Ready.`);
         EventBus.emit(TOAST_REQUESTED, {
-            message: `PVP duel scheduled for ${whenLabel}.${stake > 0 ? ` Bolsa ${stake} USDT each.` : ' For Honor.'}`,
+            message: `PVP duel scheduled for ${whenLabel}.`,
             severity: 'success',
         });
     };
@@ -1529,6 +1547,7 @@ export function ArenaPactDialog({
                                                 '1 = Twitch (solo tu nombre de canal, ej: pepe)',
                                                 '2 = YouTube (pegá el link del live)',
                                                 '3 = Discord (invite discord.gg/… o vacío si ya compartís pantalla en voz)',
+                                                '4 = X (pegá el link del live: x.com/i/broadcasts/…)',
                                                 '0 = borrar stream',
                                             ].join('\n'),
                                             '1',
@@ -1560,6 +1579,20 @@ export function ArenaPactDialog({
                                                     : 'Canal Twitch vacío.',
                                                 severity: url ? 'success' : 'warning',
                                             });
+                                            return;
+                                        }
+                                        if (c === '4' || c.toLowerCase() === 'x') {
+                                            const link = window.prompt(
+                                                'Pegá el link del live en X (x.com/i/broadcasts/… o x.com/tunombre/status/…):',
+                                                streamPaste || hostStreamUrl || '',
+                                            );
+                                            if (link === null) {
+                                                return;
+                                            }
+                                            const url = buildStreamUrlFromGuide('x', '', link);
+                                            setStreamPaste(link);
+                                            setHostStreamUrl(url);
+                                            nm?.sendArenaPactSetStream(match.matchId, url, false);
                                             return;
                                         }
                                         if (c === '2' || c.toLowerCase() === 'youtube') {
@@ -1791,21 +1824,6 @@ export function ArenaPactDialog({
                         </span>
                     </label>
 
-                    <label style={{ display: 'block', marginBottom: 12 }}>
-                        Bolsa $ each (USDT){' '}
-                        <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={stakeAmount}
-                            onChange={(e) => setStakeAmount(Math.max(0, Number(e.target.value) || 0))}
-                            style={{ width: 80, marginLeft: 4 }}
-                        />
-                        <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>
-                            0 = for Honor (escrow later)
-                        </span>
-                    </label>
-
                     <label
                         style={{
                             display: 'flex',
@@ -1888,7 +1906,6 @@ export function ArenaPactDialog({
                                 });
                                 return;
                             }
-                            const stake = Math.max(0, Math.floor(stakeAmount));
                             const resolvedHostStream =
                                 buildStreamUrlFromGuide(streamGuide, twitchChannel, streamPaste) ||
                                 hostStreamUrl.trim() ||
@@ -1901,8 +1918,6 @@ export function ArenaPactDialog({
                                 opensAtMs: 0,
                                 readyWindowSec,
                                 inviteName: inviteName.trim() || undefined,
-                                stakeAssetId: stake > 0 ? 'USDT' : undefined,
-                                stakeAmount: stake > 0 ? stake : undefined,
                                 isPublic,
                                 title: duelTitle.trim() || undefined,
                                 hostStreamUrl: resolvedHostStream,
@@ -1919,8 +1934,6 @@ export function ArenaPactDialog({
                                 arenaKitJson: kitJson,
                                 opensAtMs: 0,
                                 readyWindowSec,
-                                stakeAssetId: payload.stakeAssetId,
-                                stakeAmount: payload.stakeAmount,
                                 isPublic: payload.isPublic,
                                 title: payload.title,
                                 hostStreamUrl: payload.hostStreamUrl,

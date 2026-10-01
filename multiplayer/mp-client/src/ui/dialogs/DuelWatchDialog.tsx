@@ -372,14 +372,20 @@ export function DuelWatchDialog({
             return;
         }
         const platform = window.prompt(
-            'Cómo streameás?\n1 = Twitch (nombre canal)\n2 = YouTube (link)\n3 = Discord',
+            'Cómo streameás?\n1 = Twitch (nombre canal)\n2 = YouTube (link)\n3 = Discord\n4 = X (link del live)',
             '1',
         );
         if (platform === null) {
             return;
         }
         let url = '';
-        if (platform.trim() === '1') {
+        if (platform.trim() === '4') {
+            const link = window.prompt('Link del live en X (x.com/i/broadcasts/… o x.com/tunombre/status/…):', '');
+            if (link === null) {
+                return;
+            }
+            url = link.trim();
+        } else if (platform.trim() === '1') {
             const ch = window.prompt('Canal Twitch (solo nombre):', '');
             if (ch === null) {
                 return;

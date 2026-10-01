@@ -1,78 +1,58 @@
 # Cash shop pricing — stable vs $HELL
 
-> PO · 2026-07-17. Config canónica: `multiplayer/server/Config/CashShop.json`.
+> PO · 2026-07-17, actualizado **2026-09-29**. Config canónica: `multiplayer/server/Config/CashShop.json`.
 
-## 1. Tu matemática (correcta)
+## 0. Decisión PO 2026-09-29
+
+- **Los precios son los de config** (`priceStableUsdCents` / `priceHell` en `CashShop.json`). No hay combo Cape+Shoes.
+- **El precio del token lo pone el mercado.** El team nunca lo toca.
+- Internamente, el precio en $HELL de los consumibles **se re-ajusta solo si el precio de mercado salta más de 20%** respecto del último ancla, para que queden más o menos al mismo precio en dólares.
+- La venta de reputación (`ticket-reputation-100`) se mantiene.
+
+## 1. Base de diseño
 
 | | |
 |--|--|
-| Supply | **1 000 000 000** $HELL |
-| Design FDV (diluted) | **~$1 000 000** |
-| Precio/token de diseño | **$1 000 000 / 1e9 = $0.001** |
+| Supply | **1 000 000 000** $HELL |
+| Design FDV (diluted) | **~$1 000 000** |
+| Precio/token de diseño (`pricing.designUsdPerHell`) | **$0.001** |
+| `priceHell` en config | `usd × 1 000 × 1.2` (paridad a $0.001 + premium 20%) |
 
-Si el token cotiza a **$10M diluted** → **$0.01/token** = **10×** el design.
+Ejemplos de config (hoy):
 
-Los `priceHell: 40` del MVP inicial estaban **mal escalados** (valían ~$0.04 a design price, no ~$25).
+| SKU | USD stable | `priceHell` (a $0.001) |
+|-----|-----------:|-----------------------:|
+| Shoes / Boots boost (soulbound) | 49 | 0 — solo stable |
+| Cape boost (soulbound) | 19 | 0 — solo stable |
+| Unlearn talent / 100 Reputation | 10 | 12 000 |
+| Seal (item NFT / guild bind) | 5 | 6 000 |
+| Merien ×5 | 5 | 6 000 |
+| Xelima ×5 | 9 | 10 800 |
+| Integrity ×1 | 39 | 46 800 |
 
-## 2. Dos formas de cobrar en $HELL
+`priceHell = 0` → el SKU no acepta $HELL.
 
-### A) **Fixed HELL** (ahora en config)
-
-- Lista: `priceHell` = cantidad fija de tokens.
-- Calibrado a design **$0.001** + **premium +20%** (stable siempre más barato *en USD de referencia*).
-
-| SKU (USD stable) | Parity HELL ($0.001) | +20% premium → **priceHell** |
-|------------------|----------------------|------------------------------|
-| $25 boost (shoes/boots/cape) | 25 000 | **30 000** |
-| $40 combo | 40 000 | **48 000** |
-| $5 seal | 5 000 | **6 000** |
-| $1 Merien×5 | 1 000 | **1 200** |
-| $1.20 Xelima×5 | 1 200 | **1 440** |
-
-**Si FDV = $10M ($0.01/token)** con lista fija:
-
-| SKU | Costo en USD al pagar HELL |
-|-----|----------------------------|
-| Boost 30k HELL | **$300** (10× vs $25 stable) |
-| Combo 48k | **$480** |
-| Seal 6k | **$60** |
-
-Eso **es** la “big sale” automática para el treasury: quien paga en token cuando el precio subió, paga más USD-equivalente. Quien paga USDC sigue en $25.
-
-**Riesgo:** jugadores sienten que $HELL shop es “imposible” en pump → empujás a stable (bien) o pedís sales.
-
-### B) **Dynamic HELL** (futuro, recomendado post-launch)
+## 2. Cómo se cobra en $HELL (implementado · `HellPriceAnchor`)
 
 ```
-hellAmount = ceil( (usdCents/100) / oracleUsdPerHell * (1 + premiumBps/10000) )
+cobro = ceil( priceHell × designUsdPerHell / anchorUsdPerHell ) × qty
 ```
 
-- Stable: siempre USD fijo.
-- $HELL: siempre ~USD target × premium (ej. $25 × 1.2 = $30 de token al precio de mercado).
-- En pump a $10M: boost cuesta **3 000 HELL** (~$30), no 30 000.
-- En dump a $0.0005: boost cuesta **60 000 HELL** (~$30).
+- `anchorUsdPerHell` arranca en `designUsdPerHell` (factor 1 → se cobra exactamente `priceHell`).
+- Cada **10 min** el server toma una muestra del precio de mercado:
+  - `HELL_USD_PRICE` (override estático de ops), o
+  - DexScreener para `HELL_MINT` (par con más liquidez USD donde $HELL es el token base; `HELL_PRICE_FEED_URL` con `{mint}` lo reemplaza; `HELL_PRICE_FEED=off` lo apaga).
+- Guarda las últimas **6** muestras (≈1 h). Con al menos 3, si la **mediana** se aleja **más de 20%** del ancla, el ancla pasa a ser esa mediana (log `[HellPrice] Re-peg …`).
+- Movimientos menores al 20% no cambian nada. Un pico corto no alcanza: tiene que sostenerse en la mediana.
+- El ancla persiste en `Chars/hell-price-anchor.json` (sobrevive reinicios).
+- Sin `HELL_MINT` ni `HELL_USD_PRICE`, el feed queda apagado y se sigue cobrando con el último ancla.
 
-Necesita oracle (Jupiter/Pyth) + caps min/max amount anti-manipulation.
+Ejemplo: si el mercado se asienta en $0.0015 (+50%), un SKU de `priceHell` 12 000 pasa a cobrar **8 000** $HELL (siguen siendo ~$12). Si cae a $0.0005 (−50%), cobra **24 000**.
 
-## 3. Recomendación de producto
+**Ojo al launch:** si el token arranca muy por debajo de $0.001 (FDV chico), el primer re-peg multiplica los montos en $HELL en la misma proporción — ese es el comportamiento pedido (precio en dólares estable).
 
-| Fase | Política |
-|------|----------|
-| **Mes de test / pre-pump** | **Fixed HELL** calibrado a **$0.001 + 20%** (tabla arriba). Simple, sin oracle. |
-| **Post listing / volátil** | Pasar a **dynamic** con premium 15–25%, o **sales** manuales (multiplicador 0.5× en HELL amounts). |
-| **Mensaje UI** | “Stablecoin = precio fijo USD. $HELL = tokens a precio de referencia $0.001 (+20%); si el token sube, el shop en $HELL se encarece en dólares.” |
+## 3. Checklist copy
 
-## 4. Sales en pump (opcional)
-
-Sin oracle, si FDV ≫ $1M:
-
-- `hellPriceMultiplier` global en config (ej. 0.3 = 70% off HELL list) para “$HELL sale weekend”.
-- O bajar `priceHell` a mano en `CashShop.json`.
-
-No mezclar con freeze marketing “token = investment” — copy = utilidad de juego.
-
-## 5. Checklist copy
-
-- No prometer que $HELL “siempre vale $0.001”.
+- No prometer que $HELL “vale” un precio; el shop solo sigue al mercado.
 - Stable = ancla USD.
-- HELL rail = sink de play-mine + premium / riesgo de precio.
+- El Reward Market sigue oculto (`SHOW_TOKEN_PRICE=false`); la copy de jugador dice “rewards”, sin montos de token.

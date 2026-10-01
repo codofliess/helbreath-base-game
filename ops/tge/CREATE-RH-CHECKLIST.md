@@ -1,5 +1,7 @@
 # PATH RH — Robinhood Chain launch (HELBREATH)
 
+> **DEPRECATED (PO 2026-09-29).** `$HELL` (Solana) is the only Chain Lords token; it launches 2026-09-30 in the afternoon. The RH / Pons `HELBREATH` path in this file is kept as a record only: do not deploy, promote, or post it. See `docs/ADR-001-MULTICHAIN-AUTH.md` (2026-09-29 amendment).
+
 **How the gainers actually launch:** [Pons](./CREATE-PONS-CHECKLIST.md) — one tx, 1B in a locked Uni V3/WETH pool, on-chain `logo()` + `socials()` (Abaddon face, game, Discord, X). Extra ETH above `0.0005` = the **$50** first buy. **No 60% treasury bag on Pons.**
 
 This file is the **custom tax-token fallback** if you want 600M in a wallet on day 0. That is **not** the Pons/gainer setup.

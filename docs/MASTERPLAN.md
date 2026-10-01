@@ -146,9 +146,11 @@ Leyenda de estado: **Hecho** · **En curso** · **Diseño** · **Pendiente** · 
 |---------|--------|-----------------|-----------------|
 | **Share de fees al GM** | El GM de cada guild recibe un **% de los fees generados por su propia guild** | **No cash** — **consumibles** (packs de potions, repair kits, scrolls, etc.) | % y catálogo en config; fee sources = tax/unbind/marketplace/etc. TBD; anti-farm de alts |
 | **Bonus de egreso (“graduación”)** | Extra cuando un jugador está **maxed** y **egresa** de la guild | Consumibles / soft rewards (TBD) | Incentiva **entrenar y soltar** en vez de solo hoardear roster; definir “maxed” (RB20 / level cap) |
-| **Partner de largo plazo** | Guilds establecidas = **socios minoritarios** del negocio del server | Dividends / revenue-share ($$$$) — **programa TBD con counsel** | Criterios: antigüedad, online estable, no drama/exploit; **no** equity pública ni promesa de retorno |
+| **Partner de largo plazo** | Guilds establecidas = **socios minoritarios** del negocio del server | ~~Dividends / revenue-share~~ — **en pausa (PO 2026-09-29 · D10):** sin dividendos hasta que los reguladores cambien las reglas de staking; mientras tanto premios en **consumibles** | Criterios: antigüedad, online estable, no drama/exploit; **no** equity pública ni promesa de retorno |
 
-**Meta estratégica:** un server activo con **1000+ online** es máquina de ingresos; los dividends a guilds grandes deben hacer **más atractivo construir guild fuerte a largo plazo** que “hacer plata” con un server privado / “fruta”. Competir por líderes serios, no por shady ops.
+**Meta estratégica:** un server activo con **1000+ online** es máquina de ingresos; los premios a guilds grandes (hoy **consumibles**, D10) deben hacer **más atractivo construir guild fuerte a largo plazo** que “hacer plata” con un server privado / “fruta”. Competir por líderes serios, no por shady ops.
+
+**Guild sinks (PO 2026-09-29 · D9):** crear guild cuesta **100k $HELL**, que se **queman**; los $HELL de cada **upgrade** de guild también se queman.
 
 **Capacidad / anti-sybil (idea 2026-07-12):** guildes “establecidas” también pueden ser señal de **prioridad de ingreso** cerca del cap — ver [`ANTIBOT-AIRDROP.md`](./ANTIBOT-AIRDROP.md) (no shipped; no confundir con partner payout).
 
@@ -190,20 +192,40 @@ Leyenda de estado: **Hecho** · **En curso** · **Diseño** · **Pendiente** · 
 
 > **2026-07-13 · PO · tentativo** (números supply/alloc/mining). **Decisiones de diseño cerradas** (adquisición / stake / descuentos / mercado / freeze / **launch·LP·fees DEX C8–C12** / **cash-out personal·treasury + black-swan C13** / **wallets·Squads C14**) = bloques **Decisiones cerradas** abajo — **no** tentativas. Donde el protocolo (pump.fun / PumpSwap) fija el fee schedule, la política del team es **tentativa / acotada** a lo controlable (recipient de creator fee). **Sin código** de token, staking, mining ni DEX. Alinear con § 1.6 / canvas `helbreath-gov-staking-rep` vía **TBD reconcile** solo en **caps de combate** (no silenciar el estudio prior). Counsel: § 0 / [`LEGAL-CHECKLIST.md`](./LEGAL-CHECKLIST.md) antes de comunicar supply/allocations públicamente.
 
+#### Decisiones PO 2026-09-29 — economía $HELL (supersede lo que choque abajo)
+
+> **Fuente de verdad** hasta una nueva Decisión § 5. Donde una tabla vieja de § 1.4 / 1.6 / 1.7 / 1.7.4 choque con esto, **gana esta tabla**. Las tablas viejas quedan como historia salvo donde el PO pidió borrar (montos viejos de Cape/Shoes).
+
+| # | Decisión | Código / config | Estado |
+|---|----------|-----------------|--------|
+| **D1** | **Un solo token: `$HELL`** (Solana; launch **2026-09-30 por la tarde**). `$HELBREATH` (Robinhood Chain / Pons) y cualquier otro ticker = **deprecated**. | [`ADR-001-MULTICHAIN-AUTH.md`](./ADR-001-MULTICHAIN-AUTH.md) · `ops/tge/CREATE-RH-CHECKLIST.md` (header deprecated). Mint = lo fija ops al launch (**no inventar**) | Cerrado |
+| **D2** | **Tokenomics simplificada (1B):** mining **30% (300M)** de a **500k/día**; **bonding curve 30% (300M)**; al graduar, **10–20%** = liquidez inicial inyectada para armar pools en otros DEX; **team 10%**; **resto = airdrops** (20–10%). | `HellMiningStore.TotalMiningPool = 300M` · `middleware-node/scripts/init-hell-token.js` (`HELL_GRADUATION_LIQUIDITY_PCT`, default 15) | Cerrado (10 vs 20% exacto = open) |
+| **D3** | **El precio lo pone el mercado.** El team **nunca** toca el precio del token. Internamente, los consumibles del Cash Shop cambian su precio en $HELL solo si el precio de mercado salta **>20%** → quedan ~USD-equivalentes. | `HellPriceAnchor` (mediana de 6 muestras × 10 min; `HELL_MINT` → DexScreener o `HELL_USD_PRICE`) · `CashShop.json` `pricing.designUsdPerHell` | Cerrado |
+| **D4** | **Mining:** tope **50k por wallet por día**. El pool diario (500k) se reparte **proporcional** a los créditos, con tope 50k c/u; lo que sobra de los topeados se re-reparte entre el resto. Un solo jugador online → máx. 50k para él. | `HellMiningStore.WalletDailyCap` · `SplitCappedLocked` | Cerrado |
+| **D5** | **Stream en X ≥15 min** con el link publicado en la cartelera (duel público o Go Live) → **50k directos** ese día (completa hasta el tope de wallet, del mismo presupuesto diario). La cartelera es la verificación; 1 stream paga a 1 wallet por día. | `StreamRewards` · `StreamLinks` · `HellMiningStore.AwardXStreamDay` | Cerrado |
+| **D6** | **Arena dentro del pool diario:** duelo **7k ganador / 3k perdedor** (empate por tiempo = 3k c/u); **máx. 1 duelo pagado entre los mismos rivales por día**; máx. 5 duelos pagos por wallet/día; AFK BI 2h = 5k. Stream Discord 20k = **eliminado**. | `ArenaIncentives` | Cerrado |
+| **D7** | **Premios Arena = treasury.** Sin bolsa aportada por jugadores (sin stakes ni pledges). | `ArenaPrizeWhitelist.json` (`playerPledgesEnabled: false`, `houseSponsor`) | Cerrado (monto por duelo = ops) |
+| **D8** | **Maestría de tiers:** kills + **1 nivel por cada 50k staked** (5M = +100). Cada nivel sube **todos** los parámetros juntos (hit, drop, daño, reducción…) parejo y más lento, de modo que **L40 de tier acá = mismos totales que L40 en Olympia**. | `MobSpecialty` (`StakePerTier`, `OlympiaParityLevel`) · [`MOB-MASTERY-STAKE-STACKING.md`](./MOB-MASTERY-STAKE-STACKING.md) | Cerrado |
+| **D9** | **Guilds:** crear guild = **100k $HELL quemados**; los tokens de **upgrade** de guild también se **queman**. | Diseño; create/upgrade de guild **no built** (Fase H) — [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md) | Cerrado (diseño) |
+| **D10** | **Premios a guilds = consumibles.** **Sin dividendos** a guilds hasta que los reguladores cambien las reglas de staking. | § 1.4 | Cerrado |
+| **D11** | **Cash Shop:** los precios son los de **config** (`CashShop.json`). La venta de **reputación se mantiene**. | `multiplayer/server/Config/CashShop.json` | Cerrado |
+| **D12** | **Árbol de drop Olympia** (gate → oro vs ítem → estándar vs valioso) y **rebirth directo a L79**. | `MonsterLoot` (PR aparte `cursor/olympia-drop-tree-ab66`) · `Progression.json` `rebirthResetLevel: 79` (ya en código) | Cerrado |
+| **D13** | **Team (10% = 100M) en 5 cuotas.** **Cuota 1 = 1% del supply (10M) en el TGE, sin lock.** Cuotas 2–5 = el 9% restante (**22,5M** cada una) a TGE+3 / +6 / +9 / +12 meses. Reemplaza el unlock de 3,33%/mes. | `init-hell-token.js` `teamVestingSchedule` (`team` = 10M; `teamVesting` = 90M). El split es dos vaults, **no** un timelock on-chain | Cerrado (spacing 3 meses) |
+
 #### Mapa rápido — economía / capital ops / próximo slice
 
 > Puntero de navegación (no duplica tablas). Todo lo denso sigue abajo en esta § 1.7 + § 1.4 / § 1.6. Canvases: `helbreath-gov-staking-rep`, `helbreath-hell-tokenomics-legal-econ`, `helbreath-dex-liquidity-robinhood-base`.
 
 | Bloque | Qué | Dónde | Estado |
 |--------|-----|-------|--------|
-| **Supply / allocations** | 1B $HELL; team 100M · liq/market 300M · DAO/guilds 100M · growth 100M · play-mine 400M | [Supply](#supply-y-precio-de-referencia) · [Allocations](#allocations-suman-1-000-000-000) | Tentativo (schedule DAO open) |
+| **Supply / allocations** | 1B $HELL; mining 300M · bonding curve 300M · liquidez de graduación 10–20% · team 100M · airdrops resto (**D2**) | [Supply](#supply-y-precio-de-referencia) · [Allocations](#allocations-suman-1-000-000-000) | **Cerrado 2026-09-29** (10 vs 20% open) |
 | **Launch / LP / capital ops** | pump ~20% → PumpSwap; Meteora Phase-2 earmark; LP almost-never; fees; offramp C13; Squads treasury C14 | **C8–C14** + [Política launch/LP](#política-de-lanzamiento--liquidez--fees-dex-c8c13--2026-07-13) | **Cerrado** (path/política); montos C13 / delta 300M / Squads members **open** |
 | **Stake / utility (no yield)** | Utilidad char/guild + descuentos soulbound; **no** emisión ni fee-share a stakers | **C1–C5** · [STAKE](#stake-hell-modelo-cerrado--números-combate-tentativos) · § **1.6** (caps combate TBD reconcile) | Modelo **cerrado**; caps combate **tentativo** |
 | **Revenue de juego** | Embudo Cape/Shoes + piedras; ~5% P2P; recycle ~50%; shops $HELL/stables | [Usuarios/revenue](#usuarios--revenue-esperados-framing-optimista--po) · [Embudo](#embudo-de-gasto-consumibles-po--tentativo--2026-07-13) · postura #6–#7 | Framing tentativo; **shops premium TBD**; gold shops + **Olympia sell** + qty wheel **viven** |
-| **Guild economy (visión)** | Fee share → consumibles; egreso; partner TBD | § **1.4** · [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md) | Diseño; **guild upgrade fee table = no built** |
+| **Guild economy (visión)** | Fee share → consumibles; egreso; crear 100k $HELL quemados + upgrades quemados (**D9**); **sin dividendos** (**D10**) | § **1.4** · [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md) | Diseño; **guild create/upgrade = no built** |
 | **Mercado in-game (código)** | Auction board MVP (C6); F6 Item Drops layout **60% lista / 40% detalle** + sell Olympia formula; shop buy **qty wheel** | § 3 changelog · F6 Inventory · `OlympiaSellPrice` | **Auction** mock gold; **Item Drops** sell gold OK; on-chain $HELL / recycle shards **TBD** |
 | **Próximo slice de build** | 1) Auction on-chain / phishing allowlist (C6) → 2) **NPC shop catalogs** ampliados (stables/$HELL) → 3) **Guild upgrade** fee table + create/join real (Fase H) | Roadmap abajo; checklist § 3 | Auction MVP gold **shipped**; shops premium / guild upgrade still TBD |
-| **Mes de test (launch)** | **Prioridad 2026-07-17:** subir test ~1 mes; jugadores + niveles + **créditos airdrop**; soulbound Cape/Shoes **USD 25** / combo **40** (persisten post-test); **sin** pump day-0; hero art premium **después** | [§ 1.7.4](#174-checklist--mes-de-test-público--cerrado--2026-07-14) · [§ 1.8](#18-hero-set--look-pixel-premium--futuro--no-bloquea-test) | Play-mine ledger + SysMenu; cash shop soulbound **TBD build**; refs hero en `docs/refs/hero-set-premium/` |
+| **Mes de test (launch)** | **Prioridad 2026-07-17:** subir test ~1 mes; jugadores + niveles + **créditos airdrop**; soulbound Cape/Shoes a precio de **config** (`CashShop.json`, persisten post-test); **sin** pump day-0; hero art premium **después** | [§ 1.7.4](#174-checklist--mes-de-test-público--cerrado--2026-07-14) · [§ 1.8](#18-hero-set--look-pixel-premium--futuro--no-bloquea-test) | Play-mine ledger + SysMenu; cash shop soulbound **TBD build**; refs hero en `docs/refs/hero-set-premium/` |
 
 #### Decisiones cerradas — $HELL stake / mine / descuentos / mercado (2026-07-13 · PO + craneo)
 
@@ -260,9 +282,8 @@ En un server **blockchain** esos riesgos se perciben **mucho más bajos** → ma
 
 | Ítem | Rol PO | Precio sketch |
 |------|--------|---------------|
-| **Shoes** + attrs (**exp +30%**, **HP/MP +30**, **drop +5%**) | Casi must-have · **soulbound** | **USD 25** / pieza (**cerrado 2026-07-17** · § 1.7.4) |
-| **Cape** + attrs (**exp +40%**, **HP/MP +40**, **drop +5%**) | Casi must-have · **soulbound** | **USD 25** / pieza (**cerrado 2026-07-17**) |
-| **Ambos** | Pack inicial · **soulbound** | **USD 40** combo (**cerrado 2026-07-17**; antes ~$50 tentativo) |
+| **Shoes / Boots** + attrs (**exp +30%**, **HP/MP +30**, **drop +5%**) | Casi must-have · **soulbound** | Config `CashShop.json` (hoy **USD 49** / pieza · D11) |
+| **Cape** + attrs (**exp +40%**, **HP/MP +40**, **drop +5%**) | Casi must-have · **soulbound** | Config `CashShop.json` (hoy **USD 19** · D11) |
 
 - Early Chain Lord: **no menos de 50–100** users harán ese gasto inicial → sube mucho el **$ promedio invertido en año 1**.
 - Referencia Olympia (estimación PO): **≥ ~500 cuentas** compraron ese spend inicial.
@@ -280,23 +301,23 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 
 | Pieza | Fórmula ejemplo | $ año 1 (ilustrativo) |
 |-------|-----------------|------------------------|
-| Cape+Shoes early | **50–100** × **$40** combo | **$2k–$4k** |
-| Cape+Shoes mid (punto) | **75** × **$40** | **$3k** |
-| Cape+Shoes sensibilidad Olympia-like | **500** × **$40** | **$20k** |
+| Cape+Shoes early | **50–100** × **$68** (Cape 19 + Shoes 49, config) | **$3.4k–$6.8k** |
+| Cape+Shoes mid (punto) | **75** × **$68** | **$5.1k** |
+| Cape+Shoes sensibilidad Olympia-like | **500** × **$68** | **$34k** |
 | Piedras (variable baja) | **200** cuentas × **80** piedras × **$1** | **$16k** |
 | Piedras (variable alta) | **500** cuentas × **120** piedras × **$1** | **$60k** |
 | Bulk packs | uplift sobre unitario | **TBD** (no inventar %) |
 
 **Lecturas blended (contribución de *este* embudo, no revenue total):**
 
-| Base users (escenario) | Cape/Shoes + piedras (combo ej.) | $ embudo | ≈ $/user/año solo embudo | vs $1/día (= **$365**/user/año) |
-|------------------------|----------------------------------|----------|---------------------------|----------------------------------|
-| **Low 400** | 75 × $40 + 200×80 piedras | **~$19k** | **~$48** | Cubriría ~**13%** del ARPU $1/día |
-| **Mod 1 500** | 100 × $40 + 300×100 piedras | **~$34k** | **~$23** | ~**6%** |
-| **Mod + Olympia-like** | 500 × $40 + 500×120 piedras | **~$80k** | **~$53** | ~**15%** |
-| **Optimista 4 000** | 500 × $40 + 800×100 piedras | **~$100k** | **~$25** | ~**7%** |
+| Base users (escenario) | Cape+Shoes ($68) + piedras | $ embudo | ≈ $/user/año solo embudo | vs $1/día (= **$365**/user/año) |
+|------------------------|----------------------------|----------|---------------------------|----------------------------------|
+| **Low 400** | 75 × $68 + 200×80 piedras | **~$21k** | **~$53** | Cubriría ~**14%** del ARPU $1/día |
+| **Mod 1 500** | 100 × $68 + 300×100 piedras | **~$37k** | **~$25** | ~**7%** |
+| **Mod + Olympia-like** | 500 × $68 + 500×120 piedras | **~$94k** | **~$63** | ~**17%** |
+| **Optimista 4 000** | 500 × $68 + 800×100 piedras | **~$114k** | **~$29** | ~**8%** |
 
-**ARPU del *comprador* (no blended):** Cape+Shoes **$40** combo día 1 + p.ej. **80–120** piedras → **~$120–160** año 1 antes de packs; whales que masifican +7 **pueden superar $365**/año fácilmente. Eso **refuerza** la tesis de que el framing $1/día es alcanzable *en cohortes monetizadas*, no que el promedio de toda la base lo sea.
+**ARPU del *comprador* (no blended):** Cape+Shoes **$68** (config) día 1 + p.ej. **80–120** piedras → **~$150–190** año 1 antes de packs; whales que masifican +7 **pueden superar $365**/año fácilmente. Eso **refuerza** la tesis de que el framing $1/día es alcanzable *en cohortes monetizadas*, no que el promedio de toda la base lo sea.
 
 **Nota económica honesta (qué fortalece vs qué no prueba):**
 
@@ -318,7 +339,7 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 
 **4. Estudio crítico — control / captura de fees del par DEX (parcialmente cerrado · C8–C12).** Path launch + política LP/fees = **C8–C12**. Sigue open: par exacto (SOL vs USDC/USDT), Creator Fees vs Cashback Coins, vaults/sharing_config, tax al claim. **Sin contratos DEX propios en este pass.** Detalle en canvas `helbreath-dex-liquidity-robinhood-base`. **Freeze C5:** el team **no** opera un “DEX floor” pensado para cash-out de stakers.
 
-**5. Contingencia burn de team tokens.** Si llegan fondos grandes vía fees DEX + ventas de consumibles, el PO contempla **quemar / eliminar todos los tokens del bucket team**. Óptica de buena fe vs unlock ya documentado (3.33%/mes sobre 100M) — reconciliar schedule si se activa burn (cliff cancelado, burn on-chain verificable, no “promesa de buyback”). Coherente con **C7**.
+**5. Contingencia burn de team tokens.** Si llegan fondos grandes vía fees DEX + ventas de consumibles, el PO contempla **quemar / eliminar todos los tokens del bucket team**. Óptica de buena fe vs el schedule vigente (**D13**: 1% del supply libre en el TGE; cuotas 2–5 sin liberar, a TGE+3 / +6 / +9 / +12) — si se activa el burn, las cuotas 2–5 no liberadas se cancelan (burn on-chain verificable, no “promesa de buyback”). Coherente con **C7**.
 
 **6. Fee marketplace P2P (sketch) + postura custody (C6).** **~5%** sobre trades intermediados jugador-a-jugador (ítems). Preferir flujo **non-custodial**; engines con balances **bajos**; warning UX: no acumular $$$ en la app de auction; fondos viven en **wallets de jugadores**. Allowlist / tooling vs phishing skins = **intent, TBD implement**. Preocupación legal del owner: ¿puede meterse en problemas personales por **quedarse** con (a) fees DEX si las controla/cobra y (b) ese 5%? → **entity + counsel** (abajo); no operar como persona física.
 
@@ -356,9 +377,24 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 | Dato | Valor PO |
 |------|----------|
 | Supply total | **1 000 000 000** $HELL |
-| A **$1M** market cap | precio **$0.001** / token |
+| A **$1M** market cap | precio **$0.001** / token — solo **precio de diseño** del Cash Shop (`designUsdPerHell`) |
+| Precio real | **Lo pone el mercado** (D3). El team nunca lo toca; el Cash Shop re-precia en $HELL solo con drift **>20%** (`HellPriceAnchor`) |
 
 #### Allocations (suman 1 000 000 000)
+
+> **PO 2026-09-29 (D2) — tabla vigente.** Reemplaza la tabla 2026-07-13 de abajo (team 100M · liq 300M · DAO 100M · growth 100M · mined 400M), que queda como historia.
+
+| Bucket | Cantidad | Notas PO |
+|--------|----------|----------|
+| **Mined by playing** | **300 000 000 (30%)** | De a **500k/día**; tope **50k/wallet/día**; Arena y stream X salen del mismo presupuesto diario — **única** emisión por jugar (**C1**) |
+| **Bonding curve** | **300 000 000 (30%)** | Venta inicial por curva |
+| **Liquidez de graduación** | **100–200M (10–20%)** | Al egresar de la curva se inyecta como liquidez inicial para armar pools en otros DEX |
+| **Team** | **100 000 000 (10%)** | **D13:** cuota 1 = **10M (1% del supply) en el TGE, sin lock**. Cuotas 2–5 = **22,5M** a TGE+3 / +6 / +9 / +12 meses. Vault `team` = 10M; `teamVesting` = 90M. Custody Squads (C14). El 3,33%/mes queda solo en la tabla histórica |
+| **Airdrops** | **resto (20–10%)** | Créditos del mes de test, guilds legacy, campañas |
+
+Devnet: `npm run init-hell-token` (middleware-node) crea estos vaults. El bucket team se parte en `team` (cuota 1, 10M, sin lock) y `teamVesting` (90M, cuotas 2–5). `HELL_GRADUATION_LIQUIDITY_PCT` (10–20, default 15) fija el split liquidez/airdrops. El vault de vesting no es un timelock on-chain.
+
+<details><summary>Tabla 2026-07-13 (superseded)</summary>
 
 | Bucket | Cantidad | Vesting / notas PO |
 |--------|----------|--------------------|
@@ -369,6 +405,8 @@ Números de **puente** (no sustituyen la tabla Low/Mod/Optimista). Muestran cóm
 | **Mined by playing** | **400 000 000** | Airdrops + gameplay (pool play-mine) — **única** emisión por jugar (**C1**) |
 
 **Ambigüedad DAO (documentar literal + aclarar):** el PO escribió *“DAO (guilds — 3 months at 5% each?)"* con signo de interrogación. Interpretación provisional: **liberación escalonada** hacia DAO/guilds (p.ej. tramos mensuales ~5% del bucket DAO, o tres meses × 5% — **no está cerrado**). **No** hardcodear schedule hasta que PO confirme: ¿5%/mes del bucket DAO durante 20 meses? ¿tres ventanas de 5%? ¿5% del supply total?
+
+</details>
 
 #### Política de lanzamiento / liquidez / fees DEX (C8–C13 · 2026-07-13)
 
@@ -480,6 +518,7 @@ Devnet traveler puede usar hot game-authority; **mainnet / capital real** → mi
 |-----------|---------------|--------|
 | Bonus drop | **1% a 20%** | **Tentativo** (PO) — **TBD reconcile** vs estudio § 1.6 (+8%) |
 | Drop + luck | **máx. 20 luck** | **Tentativo** — **TBD reconcile** vs estudio § 1.6 (+5%) |
+| **Maestría de tiers** | **+1 nivel por cada 50k staked** (5M = +100) sobre los niveles por kills; cada nivel sube hit/drop/daño/reducción juntos; L40 = totales Olympia L40 | **Cerrado 2026-09-29** (D8 · `MobSpecialty`) |
 | **Guildmaster** | Stake de la **guild** + **stake colectivo** | **Tentativo** (detalle fórmula open) |
 | **Descuentos consumibles** (ej. piedras) | % fuerte escalado por stake; **cap máx. unidades/día** | **Cerrado** (C2) — %/cap/catálogo = **open** |
 | Flag de compra descontada | Ítem/mat = **soulbound** | **Cerrado** (C3) |
@@ -506,7 +545,8 @@ Devnet traveler puede usar hot game-authority; **mainnet / capital real** → mi
 
 #### MINING $HELL (play-mine diario) — emisión por jugar (C1)
 
-- Distribución diaria **capped 500 000 tokens/día** hasta agotar el pool de **400 000 000** mined-by-playing.
+- Distribución diaria **capped 500 000 tokens/día** hasta agotar el pool de **300 000 000** mined-by-playing (D2; antes 400M). **Tope 50 000 por wallet por día** (D4): el día se reparte proporcional a créditos con ese tope; lo que sobra de los topeados se re-reparte entre los demás. Un solo jugador online → máx. 50k.
+- **Arena** (D6: duelo 7k ganador / 3k perdedor, 1 duelo pagado por par de rivales por día, AFK BI 5k) y **stream en X ≥15 min** verificado por la cartelera (D5: completa 50k ese día) salen del **mismo** presupuesto diario de 500k y respetan el tope de wallet.
 - Se reparte entre jugadores con **créditos diarios** según la tabla:
 
 | Acción | Créditos | Tokens directos (si aplica) | Cap / nota |
@@ -516,7 +556,7 @@ Devnet traveler puede usar hot game-authority; **mainnet / capital real** → mi
 | EK **top 100** | **3** créditos | **+300** tokens | Ranking EK |
 | Participar en **events** | **5** créditos | **+100** tokens | Eventos de juego |
 
-**Footnote verificación mining:** `400 000 000 ÷ 500 000 = **800 días**` (~2.2 años) al rate máximo diario si el cap se llena todos los días. Los tokens “directos” de EK/eventos deben restarse del mismo pool diario o ser adicionales — **PO no lo detalla** → **open**.
+**Footnote verificación mining:** `300 000 000 ÷ 500 000 = **600 días**` (~1.6 años) al rate máximo diario si el cap se llena todos los días (antes 400M → 800 días). Arena y stream X ya **restan** del presupuesto diario (D5/D6); garden quests y referidos siguen fuera del pool → open.
 
 **Open (tokenomics · aún tentativo / no cerrado):** schedule DAO; fórmula créditos→share del pool diario; si tokens fijos de EK/eventos cuentan dentro del cap 500k/día; **reconcile** stake 1–20% vs estudio § 1.6 (**#26**); catálogo descuentos + fórmula stake→%→cap/día; **delta liq 300M vs seed pump 200M** (C8 · **#38**); cuánto del earmark partnerships 100M a Meteora (C9 · **#40**); **banda $/% C13** cash-out post-Meteora (**#41**); allowlist phishing auction (C6); Item Drops recycle shards (**#42**); counsel copy “mining/airdrop” (sin soar a salary).
 
@@ -550,12 +590,11 @@ Devnet traveler puede usar hot game-authority; **mainnet / capital real** → mi
 
 | SKU | Efectos (producto) | Precio | Notas |
 |-----|-------------------|--------|--------|
-| **Shoes / Boots boost** | Exp **+30%** · HP/MP **+30** · Drop rate **+5%** | **USD 25** c/u | Soulbound; duración TBD (timed buff item vs permanent equip — open #43) |
-| **Cape boost** | Exp **+40%** · HP/MP **+40** · Drop rate **+5%** | **USD 25** c/u | Soulbound; mismo open de duración |
-| **Combo Cape + Shoes** | Ambos | **USD 40** (ahorro vs 50) | Bundle checkout; no stack de % inventado — aplicar ambos efectos según reglas de item |
+| **Shoes / Boots boost** | Exp **+30%** · HP/MP **+30** · Drop rate **+5%** | Config `CashShop.json` (hoy **USD 49** c/u) | Soulbound; duración TBD (timed buff item vs permanent equip — open #43) |
+| **Cape boost** | Exp **+40%** · HP/MP **+40** · Drop rate **+5%** | Config `CashShop.json` (hoy **USD 19** c/u) | Soulbound; mismo open de duración |
 
 - Copy: utilidad de juego / cosmético-progresión **soulbound** — **nunca** “investment / APY / se vende a USDT”.
-- Alinea C3 (soulbound no flip) y embudo ARPU § 1.7; **supersede** montos tentativos viejos ~$30/$50 si chocan → **25 / 25 / 40 combo** es la fuente actual.
+- Alinea C3 (soulbound no flip) y embudo ARPU § 1.7. **PO 2026-09-29 (D11):** la fuente de precios es **`CashShop.json`** (sin combo); la venta de reputación se mantiene.
 - Implementación cash shop + payment rail = **must del mes** si se vende en test; si day-0 sin pagos, anunciar “coming this month” y no vender vapor.
 
 ##### Airdrop inicial (créditos del mes de test)
@@ -757,7 +796,7 @@ Detalle de implementación futura: README en la carpeta de refs + Fase F (fila a
 
 ### 1.10 Progression Chain Lords: rebirth L79, Block Level + Promise Land / PL Dungeons (2026-07-25)
 
-> **Estado:** **diseño canónico PO** (append decisión § 5). Código hoy: rebirth resetea a **L1** (`GameWorldPlayer.ApplyRebirth`); majestics solo en **maxLevel**; spawns PL/farm dungeon aún parity Olympia parcial.  
+> **Estado:** **diseño canónico PO** (append decisión § 5). Código hoy: rebirth **va directo a L79** (`Progression.json` `rebirthResetLevel: 79` → `GameWorldPlayer.ApplyRebirth`; reconfirmado PO 2026-09-29 · D12) y Block Level existe (`levelBlocked`); majestics solo en **maxLevel**; spawns PL/farm dungeon aún parity Olympia parcial.  
 > **Objetivo producto:** desparramar PvP y uso de mapas mid (PL outdoor + PL Dungeons) sin forzar a todo el mundo a push 150, y sin castigar a quien se queda farmeando majestic/upgrades.
 
 #### A) Rebirth Chain Lords ≠ Olympia
@@ -1044,6 +1083,24 @@ helbreath-base-game/
 > Sesión legible: [`BITACORA.md`](./BITACORA.md).  
 > Handoff PC-reset: [`SESSION-HANDOFF-2026-08-05.md`](./SESSION-HANDOFF-2026-08-05.md).
 
+### 2026-09-29 — Decisiones PO economía $HELL (D1–D12 · código + docs)
+
+- [x] Mining: pool 300M, 500k/día, tope **50k/wallet/día** con reparto proporcional (`HellMiningStore`)
+- [x] Arena: duelo **7k / 3k** dentro del pool diario; 1 duelo pagado por par de rivales/día; stream Discord 20k eliminado (`ArenaIncentives`)
+- [x] Stream en **X ≥15 min** con link en cartelera → 50k ese día (`StreamRewards`, `StreamLinks`)
+- [x] Maestría: +1 nivel por 50k staked; curva pareja con paridad Olympia L40 (`MobSpecialty`)
+- [x] Cash Shop: precio $HELL re-peg solo con drift de mercado **>20%** (`HellPriceAnchor`)
+- [x] Premios Arena = treasury; pledges/stakes de jugadores off (`ArenaPrizeWhitelist.json`)
+- [x] Devnet mint script con la nueva tokenomics (`init-hell-token.js`)
+- [x] Docs: § 1.7 D1–D12, allocations, mining, Cash Shop sin combo, § 1.4 sin dividendos, ADR-001 $HELL único
+- [ ] Mint $HELL mainnet en config/env (`HELL_MINT`, `ArenaPrizeWhitelist` HELL) — ops al launch
+- [ ] Guild create/upgrade con burn (Fase H; feature no existe)
+- [ ] Landing hero: reemplazar CA $HELBREATH (RH) por $HELL cuando exista el mint
+
+### 2026-09-30 — Team vesting D13 (1% sin lock en el TGE)
+
+- [x] Team 100M en 5 cuotas. Cuota 1 = 10M (1% del supply) en el TGE, sin lock. Cuotas 2–5 = 22,5M a TGE+3 / +6 / +9 / +12 (`teamVestingSchedule`). Vault `teamVesting` = 90M, sin timelock on-chain.
+
 ### 2026-08-06 — Prod ops + bag/regen/mobs + spin-off TMS + agent memory skills
 
 - [x] GitGuardian: rotar `REALM_STATS_SECRET` (Railway stats + VPS); no reusar secret del historial git
@@ -1058,7 +1115,7 @@ helbreath-base-game/
 ### 2026-08-05 — Arena desk + $HELL incentives + kit free/credits + cast/mana + spell gates
 
 - [x] Landing Arena: Phaser desk + React BI strip / jump tabs; footer no solapa BI
-- [x] Incentivos: AFK BI 2h→**5k** $HELL; duel **10k**; stream **20k**; ledger UTC; anti-AFK off en BI; X+Discord announce
+- [x] Incentivos: AFK BI 2h→**5k** $HELL; duel **10k**; stream **20k**; ledger UTC; anti-AFK off en BI; X+Discord announce *(superseded 2026-09-29: duelo 7k/3k dentro del pool, sin stream Discord)*
 - [x] Kit catalog: free path war/mage; free HP/MP sets; ban Cape plain; credits DR/MR+MCon capes
 - [x] Mage hero Cap/Robe/Hauberk sprites (416/420 + gender fallback); dual-magic armor display
 - [x] Blood Rapier STR 39 / 1 FS; Merien Shield STR 40; Angel INT en spell gates
@@ -1501,7 +1558,7 @@ helbreath-base-game/
 | Spectator embeds | Diseño (Fase E) |
 | Unbind + mercado Hero Set | Diseño (Fase F) |
 | Hero Set look pixel premium | Futuro post-test — refs en `docs/refs/hero-set-premium/`; § 1.8 |
-| Mes de test + soulbound Cape/Shoes USD 25 / combo 40 | **Prioridad launch** — § 1.7.4; créditos → airdrop inicial |
+| Mes de test + soulbound Cape/Shoes (precio config) | **Prioridad launch** — § 1.7.4; créditos → airdrop inicial |
 | Escrow desafíos con pozo | Diseño (T3) |
 | EKs ledger + ladder + aura | Diseño (Fase G); screenshot path aparte |
 | Guilds + Legacy Airdrop | Diseño (Fase H) |
@@ -1718,7 +1775,7 @@ Detalle: [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md). Objet
 |---|-----|-----------|----------------|
 | P3.1 | **Enchanting + Enchanting Bag (Shards/Fragments) + Item Upgrade + Alchemy + Crafting/Manufacture** — cadena completa de crafting Olympia; conecta con **Recycle shards TBD** (F6) y piedras Xelima/Merien (§ 1.7 embudo). | windows.json (Enchanting, Enchanting Bag, Item Upgrade, Alchemy, Crafting) | Nuevas ventanas + server crafting; priorizar **Item Upgrade** (monetiza piedras) |
 | P3.2 | **Game Options estilo Olympia** (tabs Main/Gameplay/Graphics/Input o General/Video/Social/HUD/Input): volúmenes, Detail level, Chat logging/time stamps, **Mute List**, **Screenshots Folder**, **Support Ticket**, **News**, **Discord**, **Upcoming Events**, Local/Server time + Avg Ping, indicador **`Non-raid day (1 minute)`**. Nuestro F12 SysMenu es una lista simple. | asset 298; windows.json | `SysMenuDialog.tsx` → ventana Options tabbed; raid-day flag desde server |
-| P3.3 | **Cash Shop window** (botón dentro de Options). Enlaza § 1.7 / **1.7.4** (Cape/Shoes soulbound **USD 25** / combo **40**, piedras ~$1, bulk packs) — **must del mes de test** si se vende day-0. | asset 298; windows.json (Cash Shop) | Nueva ventana + catálogo config JSON + middleware pagos (stables/$HELL/fiat) — coordinar con C6 y counsel |
+| P3.3 | **Cash Shop window** (botón dentro de Options). Enlaza § 1.7 / **1.7.4** (Cape/Shoes soulbound a precio de `CashShop.json`, piedras ~$1, bulk packs) — **must del mes de test** si se vende day-0. | asset 298; windows.json (Cash Shop) | Nueva ventana + catálogo config JSON + middleware pagos (stables/$HELL/fiat) — coordinar con C6 y counsel |
 | P3.4 | **Guild window completa** (Members/Board/**Upgrades**/Donations) — hoy guild = stubs; ya trackeado Fase H slice #3; los screenshots confirman el shape exacto de Olympia. | windows.json (common.guild) | Fase H — no antes de proto/schema guild |
 | P3.5 | **Mailbox + Friends + Users(online) + Leaderboards in-game + News + Upcoming Events** — ventanas sociales secundarias. Leaderboards ya existe vía middleware para torneos; falta ventana genérica in-game. | windows.json | Ventanas React nuevas; baja urgencia hasta población real |
 | P3.6 | **Death Recap** (`draw.notif.death_recap` en windows.json) — desglose de daño al morir. Sinergia con torneos/EK (aprender de la muerte). | windows.json | Server: buffer últimos hits; client: panel post-muerte |
@@ -1797,7 +1854,7 @@ Detalle: [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md). Objet
 | 2026-07-12 | **Gov staking → reputación:** stake del governance token sube R a **nivel wallet** (≤4 chars comparten R). Curva suave + **hard cap** R=100 (ej. ~25k u). Bonos grind capped (luck ≤+5%, drop general ≤+8%, rare ≤+3% o 0 legendary); **prohibido** daño/HP/hit/CC y bonos en torneo. Overflow → gobernanza + WL/utilidades + rent/rebates (**no** más drop). Unstake cooldown 7–14d + decay. **Sin código** aún. | Anti-whale P2W + utilidad del gov token. Ver § 1.6 + canvas `helbreath-gov-staking-rep` + `BITACORA.md`. |
 | 2026-07-13 | **EK screenshots + gallery rarity:** Olympia = schedule ~650ms → JPEG `SAVE/eks/{Victim}_{NNN}.jpg`. Ours: `EnemyKillAwarded` + client capture MVP. Gallery rarity locked: Legendary top10 / Rare 11–50 / Common 51–200 opposing-city killers. | Ver `EK-SCREENSHOT-GALLERY.md`. |
 | 2026-07-13 | **Tokenomics $HELL (tentativo PO):** supply **1B**; @ $1M MC → **$0.001**. Alloc: team 100M (3.33%/mes), liq/market 300M, DAO/guilds 100M (schedule “3 months at 5%?” ambiguo), growth 100M (5%/mes), play-mine 400M. Stake: drop **1–20%**, luck **máx. 20**, Guildmaster = guild + collective stake. Uso: consumibles/exp. Mining: **500k/día** cap hasta agotar 400M; créditos (500 kills→10; leg EK→5+1k tok cap 5k/día; top100 EK→3+300; events→5+100). Revenue framing 4k/1.5k/0.4k users × $1/día. **Supersede tentativo** topes § 1.6 luck+5%/drop+8% → **TBD reconcile** (estudio prior preservado). **Sin código**. | Fuente de verdad provisional del PO. Ver § **1.7** + § 1.6 + `BITACORA.md`. |
-| 2026-07-13 | **ARPU / embudo consumibles (tentativo PO):** trust on-chain mitiga miedo moneygrab + GM black market → más spend. MUST: Cape+Shoes (montos **superseded 2026-07-17** → USD **25** c/u / combo **40**; early 50–100; Olympia ≥~500). Recurrente: Xelima/Merien ~$1 + bulk packs a +7. $1/día scenarios **se mantienen**; puente año 1 ilustrativo + nota honesta. **Sin código** shop al 13; ver fila 2026-07-17 soulbound. | Mecanismo de soporte ARPU. Ver § **1.7** + `BITACORA.md` + canvas legal-econ. |
+| 2026-07-13 | **ARPU / embudo consumibles (tentativo PO):** trust on-chain mitiga miedo moneygrab + GM black market → más spend. MUST: Cape+Shoes (montos: ver `CashShop.json` · fila 2026-09-29; early 50–100; Olympia ≥~500). Recurrente: Xelima/Merien ~$1 + bulk packs a +7. $1/día scenarios **se mantienen**; puente año 1 ilustrativo + nota honesta. **Sin código** shop al 13; ver fila 2026-07-17 soulbound. | Mecanismo de soporte ARPU. Ver § **1.7** + `BITACORA.md` + canvas legal-econ. |
 | 2026-07-13 | **$HELL utilidad / no-shill / fees (tentativo PO):** MC nunca promesa de enriquecimiento; token = utility (stake char/guild + roles económicos). MC >$1M posible por compras orgánicas en pump.fun **sin** shill — disclaimer de mercado, no target. Estudio crítico captura fees DEX (PumpSwap creator fees dinámicos). Contingencia: burn **all team tokens** si fees+consumibles fondean. Worry legal: retention personal de DEX fees + **5%** P2P intermediary. Policy ~**50%** exchange fees → torneos/marketing/hire. **Sin** DEX code. | Postura marketing + fee retention. Ver § **1.7** + `BITACORA.md` + canvas. |
 | 2026-07-13 | **$HELL stake / mine / descuentos / mercado (cerrado PO + craneo):** **C1** $HELL solo play-mine — **no** de stake. **C2** stake = beneficios in-game (§ 1.6–1.7) + descuentos fuertes en consumibles (ej. piedras), cap máx./día, escala por stake. **C3** compras descontadas = **soulbound** (no flip). **C4** mercado espontáneo: mats soulbound → maxxear gear → vender ítem maxxed (no soulbound), precio libre; team **no** shillea como cash-out/crafting business. **C5** freeze: yield tokens, fee-share a stakers, DEX floor cash-out, “stake=dinero”, OTC USDT de goods descontados. **C6** auction non-custodial preferido; balances engines bajos; warn no acumular $$$; fondos en wallets; allowlist phishing TBD. **C7** ~50% fees → torneos/marketing/hire; burn team tokens opcional si fees fuertes — **sin** payout a stakers. Supersede overflow “rent/rebates” § 1.6 (sonaba a dividendos). Caps combate 1–20% vs estudio +5%/+8% = **sigue TBD reconcile**. **Sin código**. | Una historia coherente stake≠mine. Ver § **1.6** / § **1.7** C1–C7 + `BITACORA.md`. |
 | 2026-07-13 | **$HELL ~20% liquidez DEX (estudio PO) + Robinhood Chain vs Base:** Pregunta ~**20% (200M)** a DEX como liquidez inicial — **delta** vs bucket docs **300M/30%** (no overwrite). Opciones: deep pair / auction leftovers / MM budget / split; separar de team burn. Postura: lock/burn LP, disclose, no piso/MC promise (C5). **Robinhood Chain** = producto real (mainnet **2026-07-01**, L2 EVM Arbitrum Orbit, Stock Tokens/RWA) — **watchlist**, no P1 gaming constellation. **Base** sigue #1 seat; ARB/Ronin sin cambio. Travel pass intacto. **Sin contratos.** | Ver § **1.7** liq + trayectoria § 1; canvas `helbreath-dex-liquidity-robinhood-base` + `BITACORA.md`. |
@@ -1811,7 +1868,7 @@ Detalle: [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md). Objet
 | 2026-07-18 | **AFK vs activo + capacidad early (PO):** AFK ≈ activo en **CCU/RAM**; AFK << activo en **CPU combate/red**. Kick early para liberar cupos (hunt 10–20m; ciudad más laxo). Soft XP drip OFF en prod. Menú: auction offline, idle mode ligero, multi-box, cola login. **AFK largo / park online** → requiere **gran cantidad de $HELL staked** (umbral config; utilidad stake C2, **no** yield). Sin stake live aún: kick por zona + multi-box. Detalle § **1.9**. | Capacidad VPS chico + utilidad $HELL. Ver `ANTIBOT-AIRDROP.md` + `BITACORA.md`. |
 | 2026-07-18 | **Priorización dinámica de recursos por mapa/horario (PO · diseño):** con presión de infra, **no** repartir CPU igual 24/7. Días/horas **sin raid de ciudad** → empujar workers/tick budget a **Middleland (ML)** (y mapas calientes); con raid/war → priorizar ciudades + mid. **Sunday Arena** → ventana dedicada coliseum. Requisito: **estadísticas por mapa × día × hora** (CCU, tick p95, msgs/s, kills). Aplicación: primero cron/config manual; luego semi-auto; auto solo con datos estables. Palancas: weights de `GameWorldWorkers`, tick/AI/AOI caps, sleep de mapas vacíos. Detalle § **1.9**. | Infra inteligente sin overprovision. Ver `BITACORA.md`. |
 | 2026-07-17 | **Prioridad = lanzar mes de test ya** (traer jugadores, grind nivel, **créditos para airdrop inicial**). Hero set **look pixel premium** (refs Ares/Elv private-server style) = **futuro post-test**, no bloquea launch — copia interna `docs/refs/hero-set-premium/` + § **1.8**. | Focus ship test. |
-| 2026-07-17 | **Soulbound cash shop (persiste post-test):** Shoes/Boots Exp+30 · HP/MP+30 · Drop+5% = **USD 25**; Cape Exp+40 · HP/MP+40 · Drop+5% = **USD 25**; **combo USD 40**. Soulbound (no flip). Duración timed vs permanent = open. Supersede montos tentativos ~$30/$50 del embudo ARPU si chocan. | ARPU del mes de test. Ver § **1.7.4**. |
+| 2026-07-17 | **Soulbound cash shop (persiste post-test):** Shoes/Boots Exp+30 · HP/MP+30 · Drop+5%; Cape Exp+40 · HP/MP+40 · Drop+5%. Soulbound (no flip). Duración timed vs permanent = open. Montos → `CashShop.json` (fila 2026-09-29). | ARPU del mes de test. Ver § **1.7.4**. |
 | 2026-07-17 | **Unbind fee = consumible ~USD 5** (*Unbind Seal*): 1 seal quemado = 1 unbind de **cualquier** `item_uid` elegible (hero set, DK upgraded, soulbound cape/shoes, rares bound, …). NFT = **título 1:1** con `item_uid`; stats/bind **off-chain**; **no** remint ni stats on-chain. Preferencia **mint-on-first-unbind** si aún no hay mint. Torneo loadout excluido. **No implementar** en day-0 del mes de test salvo stub. | Ver [`HERO-SET-UNBIND-MARKET.md`](./HERO-SET-UNBIND-MARKET.md) § 5–7. |
 | 2026-07-17 | **Todo item NFT puede Soul Bind o Guild Bind por ~USD 5** (seals): **no dropea al morir** aunque no haya Zem en bag. Unbind Seal $5 revierte a tradeable (y vuelve a poder dropear / Zem clásico). Tráfico alto de seals = sink cash shop. Guild Bind requiere guilds (Fase H); MVP puede ser solo Soul Bind. Death-loot filter + 3 consumibles; NFT sin cambios de metadata. | Ver [`HERO-SET-UNBIND-MARKET.md`](./HERO-SET-UNBIND-MARKET.md) § 3–4, 7. |
 | 2026-07-17 | **MVP código ItemBind shipped:** seals **960/961/962**; proto + bag RMB; persist `bindState`/`boundGuildId`; block sell/auction; soulbound no floor drop; guildbound floor only same-guild pickup; **solo GM/captain (`GuildRank` 2–3) unbindea guildbound**. Cash shop USD + death-loot hook pendientes. | `ItemBind.cs` + client bag menu. |
@@ -1831,6 +1888,8 @@ Detalle: [`GUILDS-AND-LEGACY-AIRDROP.md`](./GUILDS-AND-LEGACY-AIRDROP.md). Objet
 | 2026-07-30 | **Item magic affixes CL (PO):** (1) Quality = **daño base flat** en armas físicas — Superior +1 · Superior Sharp +2 · Exceptional Sharp +3 · Exceptional Ancient +4; Sharp siempre **1 menos** que Ancient. **No** usar tooltip vanilla `Damage+value×7`. (2) Primarios + color: Light/Sharp/Critical/Agile/Righteous/Poison/Ancient/CP; **Strong anulado** en armas. (3) Secundarios: HR / CAD / Exp / Gold(Rep) **+1..+7**. (4) Wands: MS0/10/20/22 de catálogo + primario CP/HP vamp/MP vamp + secondary HR/CAD/Exp/Gold. (5) **Rares puros** (Giant BH, Berserk/Kloness, MS22 charge, SuperRare…) sin Sharp/HR/Exp. Código: `OlympiaMagicRoll` + `WeaponQualityBaseDamage` + `IsPureRareDrop` + `OlympiaItemName`. | Feel bag Olympia + economía de drops legible. Doc `OLYMPIA-ITEM-MAGIC-AFFIXES.md`. |
 | 2026-07-30 | **PvP / combate feel vs Olympia (PO):** objetivo = **igual o mejor** que Olympia en reglas y feel. **Única distancia aceptable:** límites técnicos de **browser game** (WebGL/JS/tab) y **ping / calidad de servidor pagado**. No usar “es browser” para justificar gaps de mecánica (DamageMove 50/80, stun, cast, spacing, bumps evitables). Capa A+B en `OLYMPIA-PVP-FEEL-GAP.md`; Capa C = videos Tola (top PvP Olympia). | Barra de calidad PvP; priorización post-clips. |
 | 2026-07-30 | **Combat feel vs Helbreath War (PO + live Ditizar):** referencia dens 100+ on (ToH). **A** = reglas (DamageMove 50/80, Cancel/Para, floats, quest UI, drops). **B** = snappiness (equip/cast optimistic, wall-slide, delay hit, sin rubber-band). **C** = techo browser (mitigar, no prometer nativo). Meta: acercarse decente; no 1:1 nativo. Código: DamageMove + wall-slide + hit delay; docs § **1.11** + `refs/HELBREATH-WAR-LIVE-NOTES.md`. | Dens PvP feel = prioridad de producto junto a Olympia parity. |
+| 2026-09-29 | **Economía $HELL (PO, D1–D12 en § 1.7):** único token **$HELL** (launch 2026-09-30 tarde; $HELBREATH/RH deprecated). Tokenomics 30% mining (500k/día) · 30% bonding curve · 10–20% liquidez de graduación · 10% team · resto airdrops. Precio = mercado; Cash Shop re-precia en $HELL solo con drift >20%. Mining tope **50k/wallet/día** proporcional; stream X ≥15 min (cartelera) = 50k ese día; Arena 7k/3k dentro del pool, 1 duelo pagado por par de rivales/día. Premios Arena = treasury (sin bolsa de jugadores). Maestría +1 nivel por 50k staked, todos los parámetros suben parejo, L40 = Olympia L40. Guild create 100k quemados + upgrades quemados; guilds cobran en consumibles, sin dividendos hasta cambio regulatorio. Cash Shop = precios de config (se borra el combo viejo); venta de reputación sigue. Drop tree Olympia + rebirth L79. | Cierra la crítica de economía 2026-09-29; código en PRs `cursor/hell-economy-decisions-ab66` y `cursor/olympia-drop-tree-ab66`. |
+| 2026-09-30 | **Team vesting (D13):** el 10% del team sale en 5 cuotas. **Cuota 1 = 1% del supply (10M) en el TGE, sin lock.** Cuotas 2–5 = 22,5M a TGE+3 / +6 / +9 / +12 meses. Vault `team` = 10M; `teamVesting` = 90M. No es timelock on-chain. Reemplaza el 3,33%/mes. | `init-hell-token.js` `teamVestingSchedule` |
 
 <!-- APPEND nuevas decisiones debajo de esta línea, misma tabla o filas nuevas -->
 

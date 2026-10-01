@@ -35,6 +35,8 @@ public static class StreamDirectory {
         public long StartedAtMs { get; init; }
         public long ExpiresAtMs { get; set; }
         public bool Active { get; set; } = true;
+        /// <summary>UTC ms the current X live link went up on the cartelera; 0 when the link is not an X live.</summary>
+        public long XLiveSinceMs { get; set; }
     }
 
     public sealed class BroadcastDto {
@@ -85,7 +87,7 @@ public static class StreamDirectory {
 
         if (url is null) {
             NetworkManager.SendToPlayer(player, NetworkManager.CreateSendMessage(
-                "[Stream] Need a valid https stream URL (Twitch / YouTube / Discord invite)."));
+                "[Stream] Need a valid https stream URL (X live / Twitch / YouTube / Discord invite)."));
             return;
         }
 
@@ -97,6 +99,9 @@ public static class StreamDirectory {
         if (IdBySession.TryGetValue(player.SessionId, out var existingId) &&
             ById.TryGetValue(existingId, out var existing)) {
             existing.Title = title;
+            if (!string.Equals(existing.StreamUrl, url, StringComparison.Ordinal)) {
+                existing.XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? now : 0;
+            }
             existing.StreamUrl = url;
             existing.StreamPlatform = DetectPlatform(url);
             existing.WorldId = worldId;
@@ -124,6 +129,7 @@ public static class StreamDirectory {
             StartedAtMs = now,
             ExpiresAtMs = now + DefaultTtlHours * 3600_000L,
             Active = true,
+            XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? now : 0,
         };
         ById[id] = b;
         IdBySession[player.SessionId] = id;
@@ -137,6 +143,25 @@ public static class StreamDirectory {
             return;
         }
         ById.TryRemove(id, out _);
+    }
+
+    /// <summary>Earliest X live link <paramref name="wallet"/> has up on the cartelera right now, if any.</summary>
+    public static (string Url, long SinceMs)? GetXLiveForWallet(string? wallet) {
+        if (string.IsNullOrWhiteSpace(wallet)) {
+            return null;
+        }
+        PurgeExpired();
+        (string Url, long SinceMs)? best = null;
+        foreach (var b in ById.Values) {
+            if (!b.Active || b.XLiveSinceMs <= 0 || b.StreamUrl is null ||
+                !string.Equals(b.Wallet, wallet.Trim(), StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+            if (best is null || b.XLiveSinceMs < best.Value.SinceMs) {
+                best = (b.StreamUrl, b.XLiveSinceMs);
+            }
+        }
+        return best;
     }
 
     public static IReadOnlyList<BroadcastDto> ListLive(string? kindFilter = null) {
@@ -321,22 +346,7 @@ public static class StreamDirectory {
         return uri.ToString();
     }
 
-    private static string? DetectPlatform(string? url) {
-        if (string.IsNullOrWhiteSpace(url)) {
-            return null;
-        }
-        var u = url.ToLowerInvariant();
-        if (u.Contains("twitch")) {
-            return "twitch";
-        }
-        if (u.Contains("youtube") || u.Contains("youtu.be")) {
-            return "youtube";
-        }
-        if (u.Contains("discord")) {
-            return "discord";
-        }
-        return "other";
-    }
+    private static string? DetectPlatform(string? url) => StreamLinks.DetectPlatform(url);
 
     private static void NotifyDiscord(Broadcast b, bool updated) {
         var webhook = Environment.GetEnvironmentVariable("DISCORD_PVP_WEBHOOK_URL")?.Trim()

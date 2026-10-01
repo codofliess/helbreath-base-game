@@ -1418,6 +1418,7 @@ public sealed class GameWorld : IWorkerWorld {
             HellMining.OnSessionMinute(player);
             // Arena: AFK 2h on Bleeding Island → daily $HELL incentive.
             ArenaIncentives.OnSessionMinute(id, player);
+            StreamRewards.OnSessionMinute(player);
         }
     }
 

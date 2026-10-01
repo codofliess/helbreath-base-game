@@ -10,6 +10,7 @@ namespace Server.Helpers;
 /// Guild-hall / city-hall Cashier: dual market (genuine USDC/USDT vs pending $HELL).
 /// All SKUs accept stablecoin. $HELL only when <see cref="CashShopSku.PriceHell"/> &gt; 0
 /// (combos + stones). Individual shoes/boots/cape and seals are stablecoin-only.
+/// $HELL prices follow <see cref="HellPriceAnchor"/> so they stay near their USD price.
 /// Fake SPL mints are rejected via allowlist.
 /// </summary>
 public static class CashShop {
@@ -53,6 +54,14 @@ public static class CashShop {
     public static IReadOnlyList<CashShopSku> GetSkus() {
         EnsureLoaded();
         return config!.Skus;
+    }
+
+    /// <summary>USD/HELL that config <see cref="CashShopSku.PriceHell"/> values were priced at.</summary>
+    public static double DesignUsdPerHell {
+        get {
+            EnsureLoaded();
+            return config!.Pricing.DesignUsdPerHell;
+        }
     }
 
     public static bool IsGenuineStablecoinMint(string mintAddress) {
@@ -122,7 +131,7 @@ public static class CashShop {
         var currency = request.Currency;
 
         if (currency == CurrencyHell) {
-            var hellCost = (long)sku.PriceHell * qty;
+            var hellCost = HellPriceAnchor.ScaleDesignPrice(sku.PriceHell) * qty;
             if (hellCost <= 0 || sku.PriceHell <= 0) {
                 Send(player, ok: false, "Stablecoin only (USDC/USDT) — this product does not accept $HELL.");
                 return;
@@ -280,7 +289,13 @@ public sealed class CashShopFile {
     public bool AllowDevGrantWithoutChainTx { get; set; } = true;
     public string TreasuryWallet { get; set; } = "";
     public Dictionary<string, Dictionary<string, string>> GenuineStablecoinMints { get; set; } = new();
+    public CashShopPricing Pricing { get; set; } = new();
     public List<CashShopSku> Skus { get; set; } = new();
+}
+
+public sealed class CashShopPricing {
+    public double DesignUsdPerHell { get; set; } = 0.001;
+    public int HellPremiumBps { get; set; } = 2000;
 }
 
 public sealed class CashShopSku {

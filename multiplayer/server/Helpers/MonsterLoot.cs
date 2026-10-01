@@ -7,9 +7,13 @@ namespace Server.Helpers;
 /// <summary>
 /// Rolls configured monster death loot and places accepted drops on the corpse cell (or nearby cells for multi-drop).
 /// <para>
-/// <b>Normal / elite single-drop (Hellclaw, Tigerworm, Demon, …)</b> — Olympia NpcDeadItemGenerator style:
-/// at most <b>one primary</b> (gold / pot / stone / clothes / weapon) + optionally <b>one rare/legendary</b>
-/// path item. Secondary/rare rolls are intentionally rare.
+/// <b>Normal mobs (Demon, Orc, Slime, …)</b> — Olympia <c>NpcDeadItemGenerator</c> tree: ~35% drop, of which
+/// 60% gold and 40% item (90% standard pots/stones, 10% valuable weapon/armor), plus one <c>DeleteNpc</c> walk for
+/// body parts / named rares.
+/// </para>
+/// <para>
+/// <b>Hellclaw / Tigerworm</b> — at most <b>one primary</b> (gold / pot / stone / clothes / weapon) + optionally
+/// <b>one rare/legendary</b> path item.
 /// </para>
 /// <para>
 /// <b>Multi-drop bosses (Wyvern family, Abaddon, Middleland dragons)</b> — independent multi-item rolls
@@ -43,6 +47,33 @@ public static class MonsterLoot {
 
     /// <summary>Rare path scale for single-primary elites (kept low — secondary should be uncommon).</summary>
     const double SinglePrimaryRareChanceScale = 0.55;
+
+    /// <summary>Olympia <c>iDice(1,10000)</c> upper bound used by the <c>NpcDeadItemGenerator</c> gates.</summary>
+    const int OlympiaDiceMax = 10000;
+
+    /// <summary>Olympia <c>m_iPrimaryDropRate</c>: <c>iDice &gt;= 6500</c> enters the drop path (~35% of kills).</summary>
+    const int PrimaryDropRate = 6500;
+
+    /// <summary>Inside the drop path <c>iDice &lt;= 6000</c> is gold (~21% of kills).</summary>
+    const int GoldDropRate = 6000;
+
+    /// <summary>
+    /// Olympia <c>m_iSecondaryDropRate</c>: item path <c>iDice &lt;= 9000</c> is the standard band (~12.6% of kills),
+    /// otherwise the valuable weapon/armor band (~1.4%).
+    /// </summary>
+    const int SecondaryDropRate = 9000;
+
+    /// <summary>Olympia <c>m_cRepDropModifier</c>; inert until character reputation is persisted.</summary>
+    const int RepDropModifier = 0;
+
+    /// <summary>Items the Olympia standard band can produce (pots, candies, stones, tablets, balls).</summary>
+    static readonly HashSet<int> StandardBandItemIds = [
+        91, 92, 93, 94, 95, 96, 390, 391,
+        780, 781, 782, 970,
+        650, 656, 657,
+        868, 869, 870, 871,
+        651, 652, 653, 654, 655,
+    ];
 
     // Chebyshev ring for multi-drop scatter around the corpse.
     static readonly (int Dx, int Dy)[] ScatterOffsets = [
@@ -170,7 +201,8 @@ public static class MonsterLoot {
     /// Non-multi loot:
     /// <list type="bullet">
     /// <item>Hellclaw / Tigerworm — at most one primary (gold|pot|stone|gear) + optional rare/legendary.</item>
-    /// <item>Normal mobs — gold independent + at most one pot + one gear + one rare (Olympia caps).</item>
+    /// <item>Normal mobs — Olympia <c>NpcDeadItemGenerator</c> tree (one of gold | standard | valuable)
+    /// + one <c>DeleteNpc</c> walk (at most one body part or named rare).</item>
     /// </list>
     /// </summary>
     static void DropSinglePrimaryLoot(
@@ -186,67 +218,108 @@ public static class MonsterLoot {
             return;
         }
 
-        // Normal mobs: gold independent; pot / gear / rare each at most one (reservoir sampling).
-        MonsterLootEntry? consumablePick = null;
-        MonsterLootEntry? gearPick = null;
-        MonsterLootEntry? rarePick = null;
-        var consumableSuccessCount = 0;
-        var gearSuccessCount = 0;
-        var rareSuccessCount = 0;
+        var (primary, deleteNpc) = RollNormalMobLoot(wr.ItemsById, lootTable, dropMult, wr.WorldId, monster.CatalogMonsterId);
+        if (primary is { } p) {
+            SpawnLootEntry(wr, monster, p.Config, p.Entry, genLevel, killer, scatterIndex: 0);
+        }
+        if (deleteNpc is { } d) {
+            SpawnLootEntry(wr, monster, d.Config, d.Entry, genLevel, killer, scatterIndex: 1);
+        }
+    }
+
+    readonly record struct LootPick(MonsterLootEntry Entry, ItemConfig Config);
+
+    static (LootPick? Primary, LootPick? DeleteNpc) RollNormalMobLoot(
+            IReadOnlyDictionary<int, ItemConfig> itemsById,
+            MonsterLootEntry[] lootTable,
+            double dropMult,
+            string worldId,
+            int catalogMonsterId) {
+        var primaryBand = RollPrimaryBand(dropMult);
+        LootPick? primary = null;
+        var primaryWeight = 0.0;
+
+        // DeleteNpc is one switch in Olympia: a single uniform roll walked over the cumulative row chances.
+        var deleteNpcRoll = Random.Shared.NextDouble();
+        var deleteNpcCumulative = 0.0;
+        LootPick? deleteNpc = null;
 
         foreach (var lootEntry in lootTable) {
-            var chance = Math.Min(1.0, lootEntry.Chance * dropMult);
-            if (lootEntry.Chance <= 0 || Random.Shared.NextDouble() > chance) {
+            if (lootEntry.Chance <= 0) {
                 continue;
             }
-            if (!wr.ItemsById.TryGetValue(lootEntry.ItemId, out var itemConfig)) {
+            if (!itemsById.TryGetValue(lootEntry.ItemId, out var itemConfig)) {
                 Console.WriteLine(
-                    $"[GameWorld:{wr.WorldId}] Monster loot references unknown item id {lootEntry.ItemId} for catalog monster {monster.CatalogMonsterId}.");
+                    $"[GameWorld:{worldId}] Monster loot references unknown item id {lootEntry.ItemId} for catalog monster {catalogMonsterId}.");
                 continue;
             }
 
-            // Gold always independent for normal trash mobs.
-            if (lootEntry.ItemId == GroundItemPickup.GoldItemId) {
-                SpawnLootEntry(wr, monster, itemConfig, lootEntry, genLevel, killer, scatterIndex: 0);
+            var band = ClassifyNormalMobRow(lootEntry.ItemId, itemConfig);
+            if (band == NormalMobLootBand.DeleteNpc) {
+                if (deleteNpc is null) {
+                    deleteNpcCumulative += Math.Min(1.0, lootEntry.Chance * dropMult);
+                    if (deleteNpcRoll < deleteNpcCumulative) {
+                        deleteNpc = new LootPick(lootEntry, itemConfig);
+                    }
+                }
                 continue;
             }
 
-            if (IsRareOrLegendaryLootItem(itemConfig)) {
-                rareSuccessCount++;
-                if (Random.Shared.Next(rareSuccessCount) == 0) {
-                    rarePick = lootEntry;
-                }
-            } else if (IsConsumableLootItem(itemConfig) || IsCraftingStone(lootEntry.ItemId)) {
-                consumableSuccessCount++;
-                if (Random.Shared.Next(consumableSuccessCount) == 0) {
-                    consumablePick = lootEntry;
-                }
-            } else if (IsGearLootItem(itemConfig)) {
-                gearSuccessCount++;
-                if (Random.Shared.Next(gearSuccessCount) == 0) {
-                    gearPick = lootEntry;
-                }
-            } else {
-                // Misc materials that are not jewelry/rares → treat as consumable-bucket primary.
-                consumableSuccessCount++;
-                if (Random.Shared.Next(consumableSuccessCount) == 0) {
-                    consumablePick = lootEntry;
-                }
+            if (band != primaryBand) {
+                continue;
+            }
+            // Baked row chances keep Olympia's relative odds inside a band (e.g. 60% weapon / 40% armor).
+            primaryWeight += lootEntry.Chance;
+            if (Random.Shared.NextDouble() * primaryWeight < lootEntry.Chance) {
+                primary = new LootPick(lootEntry, itemConfig);
             }
         }
 
-        if (consumablePick is { } potEntry &&
-            wr.ItemsById.TryGetValue(potEntry.ItemId, out var potConfig)) {
-            SpawnLootEntry(wr, monster, potConfig, potEntry, genLevel, killer, scatterIndex: 0);
+        return (primary, deleteNpc);
+    }
+
+    enum NormalMobLootBand {
+        None,
+        Gold,
+        Standard,
+        Valuable,
+        DeleteNpc,
+    }
+
+    /// <summary>
+    /// Olympia <c>NpcDeadItemGenerator</c>: gate → gold vs item → standard vs valuable. Mastery drop rate
+    /// scales the gate, like lowering <c>m_iPrimaryDropRate</c>.
+    /// </summary>
+    static NormalMobLootBand RollPrimaryBand(double dropMult) {
+        var gateChance = Math.Min(1.0, (OlympiaDiceMax + 1 - PrimaryDropRate) / (double)OlympiaDiceMax * dropMult);
+        if (Random.Shared.NextDouble() >= gateChance) {
+            return NormalMobLootBand.None;
         }
-        if (gearPick is { } gearEntry &&
-            wr.ItemsById.TryGetValue(gearEntry.ItemId, out var gearConfig)) {
-            SpawnLootEntry(wr, monster, gearConfig, gearEntry, genLevel, killer, scatterIndex: 0);
+        if (RollOlympiaDice() <= GoldDropRate) {
+            return NormalMobLootBand.Gold;
         }
-        if (rarePick is { } rareEntry &&
-            wr.ItemsById.TryGetValue(rareEntry.ItemId, out var rareConfig)) {
-            SpawnLootEntry(wr, monster, rareConfig, rareEntry, genLevel, killer, scatterIndex: 1);
+        return RollOlympiaDice() <= ResolveSecondaryDropThreshold(SecondaryDropRate, RepDropModifier)
+            ? NormalMobLootBand.Standard
+            : NormalMobLootBand.Valuable;
+    }
+
+    static int RollOlympiaDice() => Random.Shared.Next(1, OlympiaDiceMax + 1);
+
+    /// <summary>
+    /// Named rares stay on the DeleteNpc walk at their baked chance even when Olympia lists them in a
+    /// valuable pool (Giant Battle Hammer, Barbarian Hammer), so the tree does not change rare supply.
+    /// </summary>
+    static NormalMobLootBand ClassifyNormalMobRow(int itemId, ItemConfig item) {
+        if (itemId == GroundItemPickup.GoldItemId) {
+            return NormalMobLootBand.Gold;
         }
+        if (StandardBandItemIds.Contains(itemId)) {
+            return NormalMobLootBand.Standard;
+        }
+        if (IsRareOrLegendaryLootItem(item)) {
+            return NormalMobLootBand.DeleteNpc;
+        }
+        return IsGearLootItem(item) ? NormalMobLootBand.Valuable : NormalMobLootBand.DeleteNpc;
     }
 
     /// <summary>
@@ -492,16 +565,6 @@ public static class MonsterLoot {
             return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Potions / food — used only for diagnostics; primary path is the non-rare bucket.
-    /// </summary>
-    static bool IsConsumableLootItem(ItemConfig item) {
-        if (NftDropEvaluator.IsSuperRareItemId(item.Id)) {
-            return false;
-        }
-        return item.Consumable == true;
     }
 
     /// <summary>

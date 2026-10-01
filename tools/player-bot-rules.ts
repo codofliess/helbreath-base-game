@@ -45,6 +45,8 @@ export interface BagStack {
     uid: string;
     itemId: number;
     quantity: number;
+    curLifeSpan?: number;
+    maxLifeSpan?: number;
 }
 
 export interface ItemNameEntry {
@@ -83,6 +85,12 @@ export const TRAVELER_SLIME_FIELD: GridPoint = { x: 105, y: 92 };
  */
 export const SLOW_CAST_BAR_MS = 1800;
 
+/** Swing this many times after a rejected cast, then try Fire Strike again. */
+export const MELEE_HITS_BEFORE_RECAST = 6;
+
+/** Or try again after this long, even if the swing count is still short. */
+export const CAST_RETRY_MS = 8000;
+
 export interface PlayerBotView {
     className: PlayerBotClassName;
     x: number;
@@ -103,6 +111,8 @@ export interface PlayerBotView {
     recallScrollUid: string | null;
     equippedWeaponUid: string | null;
     equippedWeaponBlocksCast: boolean;
+    /** A dagger in the bag that still has durability. Empty when it is already worn or broken. */
+    daggerUid: string | null;
     monsters: readonly VisibleMonster[];
     worldId: string;
     teleports: readonly ClientTeleport[];
@@ -120,6 +130,7 @@ export type PlayerBotAction =
     | { type: 'resurrect' }
     | { type: 'attack-mode' }
     | { type: 'unequip-weapon'; itemUid: string }
+    | { type: 'equip-weapon'; itemUid: string }
     | { type: 'drink'; itemUid: string }
     | { type: 'move'; x: number; y: number }
     | { type: 'melee'; monsterId: string }
@@ -701,6 +712,24 @@ export class PlayerBotObservation {
         }
     }
 
+    /** Bag dagger that can still be worn. A zero-durability dagger stays in the bag. */
+    public usableDaggerUid(): string | null {
+        for (const stack of this.bag.values()) {
+            const name = this.itemNames.get(stack.itemId)?.name ?? '';
+            const isDagger = stack.itemId === 1 || /dagger/i.test(name);
+            if (!isDagger) {
+                continue;
+            }
+            const maxLife = stack.maxLifeSpan ?? 0;
+            const curLife = stack.curLifeSpan ?? 0;
+            if (maxLife > 0 && curLife <= 0) {
+                continue;
+            }
+            return stack.uid;
+        }
+        return null;
+    }
+
     public hpPotions(): Array<{ uid: string; quantity: number }> {
         const potions: Array<{ uid: string; quantity: number }> = [];
         for (const stack of this.bag.values()) {
@@ -729,11 +758,21 @@ export class PlayerBotBrain {
     /** HP at which a potion failed to heal. Another drink waits for a further drop. */
     private healFailedAtHp: number | null = null;
     private readonly visits = new Map<string, number>();
-    /** True after a cast finish was rejected at the slow bar. Melee until a cast lands. */
+    /** True after a cast finish was rejected at the slow bar. Melee until the next retry. */
     private castMeleeFallback = false;
+    private meleeHits = 0;
+    private lastCastAtMs = 0;
 
-    public noteCastFinish(result: 'ok' | 'retry' | 'melee'): void {
+    public noteCastFinish(result: 'ok' | 'retry' | 'melee', nowMs = 0): void {
         this.castMeleeFallback = result === 'melee';
+        this.meleeHits = 0;
+        if (nowMs > 0) {
+            this.lastCastAtMs = nowMs;
+        }
+    }
+
+    public noteMelee(): void {
+        this.meleeHits += 1;
     }
 
     public noteDrink(hp: number): void {
@@ -752,7 +791,7 @@ export class PlayerBotBrain {
         this.recallFailures += 1;
     }
 
-    public decide(view: PlayerBotView, nav: PlayerBotNav): PlayerBotAction {
+    public decide(view: PlayerBotView, nav: PlayerBotNav, nowMs = 0): PlayerBotAction {
         assertNoServerState(view);
         assertNoServerState(nav);
         const merged: PlayerBotView = {
@@ -761,10 +800,10 @@ export class PlayerBotBrain {
             dryRetreatDone: this.dryRetreatDone,
             recallFailures: this.recallFailures,
         };
-        return this.decideMerged(merged, nav);
+        return this.decideMerged(merged, nav, nowMs);
     }
 
-    private decideMerged(view: PlayerBotView, nav: PlayerBotNav): PlayerBotAction {
+    private decideMerged(view: PlayerBotView, nav: PlayerBotNav, nowMs: number): PlayerBotAction {
         if (view.dead) {
             return { type: 'resurrect' };
         }
@@ -817,6 +856,16 @@ export class PlayerBotBrain {
             this.inTown = false;
         }
 
+        const retryCast =
+            this.castMeleeFallback &&
+            view.className === 'mage' &&
+            view.fireStrikeSpellId !== null &&
+            (this.meleeHits >= MELEE_HITS_BEFORE_RECAST ||
+                (this.lastCastAtMs > 0 && nowMs - this.lastCastAtMs >= CAST_RETRY_MS));
+        if (this.castMeleeFallback && !retryCast && !view.equippedWeaponUid && view.daggerUid) {
+            return { type: 'equip-weapon', itemUid: view.daggerUid };
+        }
+
         const slime = nearestSlime(view);
         if (!slime) {
             const warpWorldId = warpTarget(view);
@@ -838,7 +887,7 @@ export class PlayerBotBrain {
         }
 
         const canCast =
-            view.className === 'mage' && view.fireStrikeSpellId !== null && !this.castMeleeFallback;
+            view.className === 'mage' && view.fireStrikeSpellId !== null && (!this.castMeleeFallback || retryCast);
         const range = canCast ? MAGE_CAST_RANGE_CELLS : Math.max(1, view.attackRangeCells);
         const distance = chebyshev(view.x, view.y, slime.x, slime.y);
         if (distance <= range) {
@@ -936,6 +985,7 @@ export function buildPlayerBotView(
         recallScrollUid: observation.recallScrollUid,
         equippedWeaponUid: observation.equippedWeaponUid,
         equippedWeaponBlocksCast: weaponBlocksCast(observation.equippedWeaponName),
+        daggerUid: observation.usableDaggerUid(),
         monsters: [...observation.monsters.values()],
         worldId: observation.worldId,
         teleports: observation.teleports,

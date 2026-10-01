@@ -10,7 +10,9 @@ import {
 } from './player-bot-guard.ts';
 import {
     ARESDEN_FARM_GATE,
+    CAST_RETRY_MS,
     FARM_SLIME_SOUTH,
+    MELEE_HITS_BEFORE_RECAST,
     SLOW_CAST_BAR_MS,
     TRAVELER_SLIME_FIELD,
     PlayerBotBrain,
@@ -51,6 +53,7 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         recallScrollUid: null,
         equippedWeaponUid: null,
         equippedWeaponBlocksCast: false,
+        daggerUid: null,
         monsters: [],
         worldId: '',
         teleports: [],
@@ -456,6 +459,65 @@ test('traveler hub walks to the slime field and a rejected cast melees', () => {
         monsters: [{ id: '2', name: 'Slime', sprite: 'slm', x: 95, y: 80, dead: false }],
     }), nav);
     assert.equal(outOfReach.type, 'move');
+});
+
+test('a rejected cast retries Fire Strike after swings or a few seconds', () => {
+    const slime = { id: '2', name: 'Slime', sprite: 'slm', x: 11, y: 10, dead: false as const };
+    const nav = { isOpen: openGrid() };
+    const near = viewAt({
+        x: 10,
+        y: 10,
+        fireStrikeSpellId: 2,
+        monsters: [slime],
+    });
+    const brain = new PlayerBotBrain();
+    brain.noteCastFinish('melee', 1_000);
+    for (let hit = 0; hit < MELEE_HITS_BEFORE_RECAST - 1; hit += 1) {
+        brain.noteMelee();
+    }
+    const stillMelee = brain.decide(near, nav, 2_000);
+    assert.equal(stillMelee.type, 'melee');
+    brain.noteMelee();
+    const afterHits = brain.decide(near, nav, 2_000);
+    assert.equal(afterHits.type, 'cast');
+
+    const timed = new PlayerBotBrain();
+    timed.noteCastFinish('melee', 5_000);
+    const tooSoon = timed.decide(near, nav, 5_000 + CAST_RETRY_MS - 1);
+    assert.equal(tooSoon.type, 'melee');
+    const byTime = timed.decide(near, nav, 5_000 + CAST_RETRY_MS);
+    assert.equal(byTime.type, 'cast');
+});
+
+test('melee mode equips a bag dagger and leaves a broken one alone', () => {
+    const slime = { id: '2', name: 'Slime', sprite: 'slm', x: 11, y: 10, dead: false as const };
+    const nav = { isOpen: openGrid() };
+    const brain = new PlayerBotBrain();
+    brain.noteCastFinish('melee', 1_000);
+    const equip = brain.decide(viewAt({
+        x: 10,
+        y: 10,
+        monsters: [slime],
+        equippedWeaponUid: null,
+        daggerUid: 'dag',
+    }), nav, 1_500);
+    assert.deepEqual(equip, { type: 'equip-weapon', itemUid: 'dag' });
+
+    const armed = brain.decide(viewAt({
+        x: 10,
+        y: 10,
+        monsters: [slime],
+        equippedWeaponUid: 'dag',
+        daggerUid: 'dag',
+    }), nav, 1_500);
+    assert.equal(armed.type, 'melee');
+
+    const observation = new PlayerBotObservation();
+    observation.noteItems([{ id: 1, name: 'Dagger', consumable: false }]);
+    observation.noteBag([{ uid: 'broken', itemId: 1, quantity: 1, curLifeSpan: 0, maxLifeSpan: 300 }]);
+    assert.equal(observation.usableDaggerUid(), null);
+    observation.noteBag([{ uid: 'fresh', itemId: 1, quantity: 1, curLifeSpan: 300, maxLifeSpan: 300 }]);
+    assert.equal(observation.usableDaggerUid(), 'fresh');
 });
 
 test('PLAYTEST allows wallet-less login without weakening the live wallet check', () => {

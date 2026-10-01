@@ -980,6 +980,13 @@ class SimulatedGameClient {
         });
     }
 
+    public sendEquipWeapon(itemUid: string): void {
+        this.sendClient({
+            $case: 'equipItemRequest',
+            value: { itemUid: BigInt(itemUid), targetSlot: 'weapon' },
+        });
+    }
+
     public sendAttackMode(attackMode: boolean): void {
         this.sendClient({
             $case: 'playerAttackModeChangeRequest',
@@ -1258,12 +1265,20 @@ class SimulatedGameClient {
     }
 }
 
-function toBagStack(item: InventoryItemEntry): { uid: string; itemId: number; quantity: number } {
+function toBagStack(item: InventoryItemEntry): {
+    uid: string;
+    itemId: number;
+    quantity: number;
+    curLifeSpan?: number;
+    maxLifeSpan?: number;
+} {
     const quantity = item.quantity ?? 1;
     return {
         uid: String(item.itemUid),
         itemId: item.itemId,
         quantity: quantity > 0 ? quantity : 1,
+        curLifeSpan: item.curLifeSpan,
+        maxLifeSpan: item.maxLifeSpan,
     };
 }
 
@@ -2317,7 +2332,7 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         );
         const action: PlayerBotAction = brain.decide(view, {
             isOpen: (x, y) => activeClient.isOpenCell(x, y),
-        });
+        }, Date.now());
         await delay(randomIntInclusive(ACTION_DELAY_MIN_MS, ACTION_DELAY_MAX_MS));
         if (finished) {
             break;
@@ -2357,6 +2372,10 @@ async function applyRulesAction(
         case 'unequip-weapon':
             client.sendUnequipWeapon(action.itemUid);
             return;
+        case 'equip-weapon':
+            client.sendEquipWeapon(action.itemUid);
+            log.event('equip', { itemUid: action.itemUid, slot: 'weapon' });
+            return;
         case 'drink': {
             const before = client.getObservation();
             brain.noteDrink(before.hp);
@@ -2376,13 +2395,14 @@ async function applyRulesAction(
             client.stepTo(action.x, action.y);
             return;
         case 'melee':
+            brain.noteMelee();
             client.sendMelee(action.monsterId);
             return;
         case 'cast': {
             const result = await castSpell(action.spellId, action.x, action.y, action.monsterId);
             const observation = client.getObservation();
             if (result === 'ok') {
-                brain.noteCastFinish('ok');
+                brain.noteCastFinish('ok', Date.now());
                 totals.casts += 1;
                 log.event('cast', {
                     spellId: action.spellId,
@@ -2392,7 +2412,7 @@ async function applyRulesAction(
                 });
             } else if (result === 'finish-failed') {
                 const next = observation.noteCastFinishRejected();
-                brain.noteCastFinish(next);
+                brain.noteCastFinish(next, Date.now());
                 log.event('cast-failed', {
                     spellId: action.spellId,
                     monsterId: action.monsterId,
@@ -2401,7 +2421,7 @@ async function applyRulesAction(
                     castSpeedMs: observation.castSpeedMs,
                 });
             } else {
-                brain.noteCastFinish('melee');
+                brain.noteCastFinish('melee', Date.now());
                 log.event('cast-failed', {
                     spellId: action.spellId,
                     monsterId: action.monsterId,

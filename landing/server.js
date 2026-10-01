@@ -8,7 +8,9 @@ const path = require('path');
 const { URL } = require('url');
 
 const PORT = Number(process.env.PORT || 3000);
-const ROOT = __dirname;
+const ROOT = path.resolve(__dirname);
+const ROOT_PREFIX = ROOT.endsWith(path.sep) ? ROOT : ROOT + path.sep;
+const DENIED_BASENAMES = new Set(['server.js', 'package.json', 'package-lock.json', 'railway.toml']);
 
 const MIDDLEWARE_URL = (process.env.CHAINLORDS_MIDDLEWARE_URL || 'https://chainlords-middleware-production.up.railway.app').replace(/\/$/, '');
 const PLAY_URL = (process.env.CHAINLORDS_PLAY_URL || 'https://play.chainlords.net').replace(/\/$/, '');
@@ -61,6 +63,21 @@ function isAssetPath(pathname) {
   return false;
 }
 
+function isDeniedPath(filePath) {
+  const rel = path.relative(ROOT, filePath);
+  if (!rel || rel === '') return false;
+  const parts = rel.split(path.sep);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith('.')) return true;
+    if (part === 'node_modules') return true;
+  }
+  const base = path.basename(filePath);
+  if (DENIED_BASENAMES.has(base)) return true;
+  if (base.endsWith('.test.js')) return true;
+  return false;
+}
+
 async function proxyRequest(req, res, route, url) {
   const target = `${route.targetBase}${url.pathname}${url.search}`;
   const headers = { ...req.headers, host: new URL(route.targetBase).host };
@@ -98,12 +115,29 @@ async function proxyRequest(req, res, route, url) {
 }
 
 function serveStatic(req, res, url) {
-  let filePath = path.join(ROOT, decodeURIComponent(url.pathname));
-  if (url.pathname.endsWith('/')) {
-    filePath = path.join(filePath, 'index.html');
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(url.pathname);
+  } catch {
+    send(res, 400, 'Bad Request', { 'Content-Type': 'text/plain; charset=utf-8' });
+    return;
   }
-  if (!filePath.startsWith(ROOT)) {
+  if (decodedPath.includes('\0')) {
+    send(res, 400, 'Bad Request', { 'Content-Type': 'text/plain; charset=utf-8' });
+    return;
+  }
+
+  const relative = decodedPath.replace(/^\/+/, '');
+  let filePath = path.resolve(ROOT, relative);
+  if (url.pathname.endsWith('/')) {
+    filePath = path.resolve(filePath, 'index.html');
+  }
+  if (filePath !== ROOT && !filePath.startsWith(ROOT_PREFIX)) {
     send(res, 403, 'Forbidden');
+    return;
+  }
+  if (isDeniedPath(filePath)) {
+    send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
     return;
   }
 
@@ -141,13 +175,38 @@ function serveStatic(req, res, url) {
 }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-  const route = shouldProxy(url.pathname);
-  if (route) {
-    void proxyRequest(req, res, route, url);
+  try {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const route = shouldProxy(url.pathname);
+    if (route) {
+      void proxyRequest(req, res, route, url);
+      return;
+    }
+    serveStatic(req, res, url);
+  } catch (error) {
+    if (error instanceof URIError) {
+      if (!res.headersSent) {
+        send(res, 400, 'Bad Request', { 'Content-Type': 'text/plain; charset=utf-8' });
+      }
+      return;
+    }
+    console.error('[landing] request handler error', error);
+    if (!res.headersSent) {
+      send(res, 500, 'Internal error', { 'Content-Type': 'text/plain; charset=utf-8' });
+    }
+  }
+});
+
+server.on('clientError', (err, socket) => {
+  if (socket.writable) {
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
     return;
   }
-  serveStatic(req, res, url);
+  socket.destroy();
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[landing] uncaughtException', err);
 });
 
 if (require.main === module) {

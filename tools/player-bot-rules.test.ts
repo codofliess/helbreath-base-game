@@ -11,6 +11,7 @@ import {
 import {
     ARESDEN_FARM_GATE,
     CAST_RETRY_MS,
+    CONTROL_FIZZLE_CAP,
     CROWD_MIN,
     FARM_SLIME_SOUTH,
     MAGE_SPELL_BOOK,
@@ -47,6 +48,7 @@ function viewAt(overrides: Partial<PlayerBotView> = {}): PlayerBotView {
         dead: false,
         attackMode: true,
         attackRangeCells: 1,
+        attackDamage: 0,
         canMove: true,
         potionLocked: false,
         fireStrikeSpellId: 2,
@@ -615,6 +617,8 @@ test('spell book ids, names, mana, and delay match Spells.json and Magic.cfg', (
     const mapStart = tower.indexOf('OlympiaToServerSpellId');
     const mapBody = tower.slice(mapStart, tower.indexOf('};', mapStart));
     assert.doesNotMatch(mapBody, /\[11\]\s*=/);
+    // PLAYTEST grants Olympia Magic.cfg id 30. The cast the client sends is Spells.json id 2.
+    assert.match(mapBody, /\[30\]\s*=\s*2/);
     const kit = readFileSync(new URL('../multiplayer/server/Helpers/PlaytestQaKit.cs', import.meta.url), 'utf8');
     for (const olympiaId of [30, 1, 13, 35, 91, 32]) {
         assert.match(kit, new RegExp(`GrantedOlympiaSpellIds[\\s\\S]*${olympiaId}`));
@@ -646,32 +650,109 @@ test('low HP raises Defense Shield, then Heal', () => {
     }
 });
 
-test('several mobs paralyze, and Blizzard only when mana can pay it', () => {
+test('a pack of slimes is Fire Strike, not Paralyze', () => {
     const nav = { isOpen: openGrid() };
-    const packed = Array.from({ length: CROWD_MIN }, (_, index) => ({
+    const packed = Array.from({ length: 8 }, (_, index) => ({
         id: String(index + 1),
         name: 'Slime',
         sprite: 'slm',
-        x: 10 + (index === 0 ? 1 : 0),
-        y: 10 + (index === 2 ? 1 : index === 1 ? 1 : 0),
+        x: 10 + (index % 3) - 1,
+        y: 10 + Math.floor(index / 3) - 1,
         dead: false,
         hp: 7,
         maxHp: 7,
         attackDamage: 1,
     }));
-    const para = new PlayerBotBrain().decide(booked({ monsters: packed }), nav);
+    // Traveler InitialState.attack_damage is 8, above a slime's max HP of 7.
+    const strike = new PlayerBotBrain().decide(booked({
+        attackDamage: 8,
+        mp: 200,
+        maxMp: 200,
+        monsters: packed,
+    }), nav);
+    assert.equal(strike.type, 'cast');
+    if (strike.type === 'cast') {
+        assert.equal(strike.spellId, 2);
+        assert.equal(strike.spellName, 'Fire Strike');
+        assert.equal(strike.reason, 'normal');
+        assert.notEqual(strike.spellId, 30);
+    }
+});
+
+test('several mobs paralyze when the group is dangerous, and Blizzard only when mana can pay it', () => {
+    const nav = { isOpen: openGrid() };
+    // Each mob is under the single-target strong bars (40 HP, 8 damage). Together they are not.
+    const packed = Array.from({ length: CROWD_MIN }, (_, index) => ({
+        id: String(index + 1),
+        name: 'Orc',
+        sprite: 'orc',
+        x: 10 + (index === 0 ? 1 : 0),
+        y: 10 + (index === 2 ? 1 : index === 1 ? 1 : 0),
+        dead: false,
+        hp: 25,
+        maxHp: 25,
+        attackDamage: 3,
+    }));
+    const para = new PlayerBotBrain().decide(booked({ attackDamage: 8, monsters: packed }), nav);
     assert.equal(para.type, 'cast');
     if (para.type === 'cast') {
         assert.equal(para.spellId, 27);
         assert.equal(para.spellName, 'Paralyze');
         assert.equal(para.reason, 'several-mobs');
     }
-    const storm = new PlayerBotBrain().decide(booked({ mp: 200, maxMp: 200, monsters: packed }), nav);
+    const storm = new PlayerBotBrain().decide(booked({
+        attackDamage: 8,
+        mp: 200,
+        maxMp: 200,
+        monsters: packed,
+    }), nav);
     assert.equal(storm.type, 'cast');
     if (storm.type === 'cast') {
         assert.equal(storm.spellId, 21);
         assert.equal(storm.spellName, 'Blizzard');
         assert.equal(storm.reason, 'several-mobs');
+    }
+});
+
+test('control fizzles in a row go back to Fire Strike', () => {
+    const nav = { isOpen: openGrid() };
+    const packed = Array.from({ length: CROWD_MIN }, (_, index) => ({
+        id: String(index + 1),
+        name: 'Orc',
+        sprite: 'orc',
+        x: 11,
+        y: 10,
+        dead: false,
+        hp: 25,
+        maxHp: 25,
+        attackDamage: 3,
+    }));
+    const view = booked({ attackDamage: 8, defenseShieldUp: true, monsters: packed });
+    const brain = new PlayerBotBrain();
+    const opening = brain.decide(view, nav);
+    assert.equal(opening.type, 'cast');
+    if (opening.type === 'cast') {
+        assert.equal(opening.spellName, 'Paralyze');
+    }
+    for (let fizzle = 0; fizzle < CONTROL_FIZZLE_CAP; fizzle += 1) {
+        brain.noteCastResult('melee', {
+            spellId: 27,
+            spellName: 'Paralyze',
+            reason: 'several-mobs',
+            x: 11,
+            y: 10,
+            monsterId: '1',
+        }, 1_000 + fizzle * 10_000, true);
+        for (let hit = 0; hit < MELEE_HITS_BEFORE_RECAST; hit += 1) {
+            brain.noteMelee();
+        }
+    }
+    const damage = brain.decide(view, nav, 1_000 + CONTROL_FIZZLE_CAP * 10_000);
+    assert.equal(damage.type, 'cast');
+    if (damage.type === 'cast') {
+        assert.equal(damage.spellId, 2);
+        assert.equal(damage.spellName, 'Fire Strike');
+        assert.equal(damage.reason, 'normal');
     }
 });
 

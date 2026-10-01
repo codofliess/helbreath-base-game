@@ -593,6 +593,7 @@ class SimulatedGameClient {
             this.observation.noteVitals(data.hp, data.maxHp);
             this.observation.attackMode = data.attackMode;
             this.observation.attackRangeCells = data.attackRangeCells > 0 ? data.attackRangeCells : 1;
+            this.observation.noteAttackDamage(data.attackDamage);
             this.observation.castSpeedMs = data.castSpeedMs > 0 ? data.castSpeedMs : 700;
             this.observation.noteMana(data.mp, data.maxMp);
             this.observation.noteSpells(data.spells.map((spell) => ({ id: spell.id, name: spell.name })));
@@ -2462,8 +2463,16 @@ async function applyRulesAction(
             const observation = client.getObservation();
             const spellName = action.spellName;
             const reason = action.reason;
+            const castChoice = {
+                spellId: action.spellId,
+                spellName,
+                reason,
+                x: action.x,
+                y: action.y,
+                monsterId: action.monsterId,
+            };
             if (result === 'ok') {
-                brain.noteCastFinish('ok', Date.now());
+                brain.noteCastResult('ok', castChoice, Date.now(), false);
                 totals.casts += 1;
                 spellCasts.push({ spellId: action.spellId, spellName, result: 'accepted', reason });
                 log.event('cast', {
@@ -2477,7 +2486,8 @@ async function applyRulesAction(
                 });
             } else if (result === 'finish-failed') {
                 const next = observation.noteCastFinishRejected();
-                brain.noteCastFinish(next, Date.now());
+                const fizzled = next === 'melee';
+                brain.noteCastResult(next, castChoice, Date.now(), fizzled);
                 const outcome = next === 'melee' ? 'fizzled' : 'rejected';
                 spellCasts.push({ spellId: action.spellId, spellName, result: outcome, reason });
                 log.event('cast-failed', {
@@ -2491,7 +2501,7 @@ async function applyRulesAction(
                     castSpeedMs: observation.castSpeedMs,
                 });
             } else {
-                brain.noteCastFinish('melee', Date.now());
+                brain.noteCastResult('melee', castChoice, Date.now(), false);
                 spellCasts.push({ spellId: action.spellId, spellName, result: 'rejected', reason });
                 log.event('cast-failed', {
                     spellId: action.spellId,

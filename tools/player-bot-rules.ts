@@ -107,8 +107,9 @@ export const MELEE_HITS_BEFORE_RECAST = 6;
 export const CAST_RETRY_MS = 8000;
 
 /**
- * Living hostiles this close count as "on" the mage. Three or more is the crowd branch.
+ * Living hostiles this close are the group the mage might control.
  * Slime chase in the catalog is 2 cells, so a pack that has reached the seat is inside this.
+ * Count alone does not select Paralyze. See {@link dangerousCrowd}.
  */
 export const CROWD_RANGE_CELLS = 2;
 export const CROWD_MIN = 3;
@@ -116,10 +117,17 @@ export const CROWD_MIN = 3;
 /**
  * A mob is strong when the enter packet says so. Slime packets are max HP 7 and attack damage 1
  * (the snapshot sends the minimum). 40 HP or 8 damage is well above that, from the same fields.
+ * A group is dangerous when the mobs that do not die in one swing total at least one of these bars.
  */
 export const STRONG_RANGE_CELLS = 5;
 export const STRONG_MAX_HP = 40;
 export const STRONG_ATTACK_DAMAGE = 8;
+
+/**
+ * Paralyze or Blizzard fizzles in a row before the mage goes back to damage.
+ * The streak clears once that dangerous group is gone.
+ */
+export const CONTROL_FIZZLE_CAP = 3;
 
 /** TemporaryEffectType values from network.proto. The bot only stores effects the server applied to it. */
 export const EFFECT_INVISIBILITY = 0;
@@ -165,6 +173,11 @@ export interface PlayerBotView {
     dead: boolean;
     attackMode: boolean;
     attackRangeCells: number;
+    /**
+     * This seat's attack damage from InitialState. 0 means that packet field has not arrived.
+     * A monster whose packet max HP is at or under this dies in one swing and is not a control target.
+     */
+    attackDamage: number;
     canMove: boolean;
     potionLocked: boolean;
     fireStrikeSpellId: number | null;
@@ -550,6 +563,8 @@ export class PlayerBotObservation {
     readonly teleports: ClientTeleport[] = [];
     attackMode = false;
     attackRangeCells = 1;
+    /** InitialState.attack_damage. Traveler seats are 8, which is above a slime's max HP of 7. */
+    attackDamage = 0;
     castSpeedMs = 700;
     mp = 0;
     maxMp = 0;
@@ -636,6 +651,12 @@ export class PlayerBotObservation {
     /** PlayerReceiveDamage for this character. A hit counts even before the HP packet arrives. */
     public noteDamageTaken(): void {
         this.tookDamage = true;
+    }
+
+    public noteAttackDamage(attackDamage: number): void {
+        if (attackDamage > 0) {
+            this.attackDamage = attackDamage;
+        }
     }
 
     public noteMana(mp: number, maxMp: number): void {
@@ -922,6 +943,51 @@ export function crowdMobs(view: PlayerBotView): VisibleMonster[] {
     );
 }
 
+/** Packet max HP (or current HP when max is absent) is at or under this seat's attack damage. */
+export function diesInOneSwing(view: Pick<PlayerBotView, 'attackDamage'>, monster: VisibleMonster): boolean {
+    const hp = monster.maxHp ?? monster.hp ?? 0;
+    return view.attackDamage > 0 && hp > 0 && hp <= view.attackDamage;
+}
+
+/**
+ * Control a group only when it is dangerous on the packets, not because three mobs are nearby.
+ * Mobs this seat can finish in one swing are left out, so a slime pack never qualifies.
+ * The rest must be at least {@link CROWD_MIN} and total max HP ≥ {@link STRONG_MAX_HP}
+ * or total attack damage ≥ {@link STRONG_ATTACK_DAMAGE}.
+ */
+export function dangerousCrowd(view: PlayerBotView): VisibleMonster[] {
+    const packed = crowdMobs(view).filter((monster) => !diesInOneSwing(view, monster));
+    if (packed.length < CROWD_MIN) {
+        return [];
+    }
+    let totalHp = 0;
+    let totalDamage = 0;
+    for (const monster of packed) {
+        totalHp += monster.maxHp ?? monster.hp ?? 0;
+        totalDamage += monster.attackDamage ?? 0;
+    }
+    if (totalHp >= STRONG_MAX_HP || totalDamage >= STRONG_ATTACK_DAMAGE) {
+        return packed;
+    }
+    return [];
+}
+
+function isControlReason(reason: SpellCastReason): boolean {
+    return reason === 'several-mobs' || reason === 'strong-mob';
+}
+
+/** Aim a remembered cast at the monster's current cell. Null when that monster is gone. */
+function retargetCast(view: PlayerBotView, choice: MageCastChoice): MageCastChoice | null {
+    if (choice.monsterId === null) {
+        return { ...choice, x: view.x, y: view.y };
+    }
+    const monster = view.monsters.find((entry) => entry.id === choice.monsterId && !entry.dead);
+    if (!monster) {
+        return null;
+    }
+    return { ...choice, x: monster.x, y: monster.y };
+}
+
 export function nearestStrongMob(view: PlayerBotView): VisibleMonster | null {
     const strong = livingHostiles(view).filter((monster) => {
         const distance = chebyshev(view.x, view.y, monster.x, monster.y);
@@ -995,10 +1061,10 @@ export function chooseSurvivalCast(view: PlayerBotView): MageCastChoice | null {
  * Invisibility only to slip past another player. Monster chase skips an invisible player.
  * Running is not a hearing check: RunningMode only doubles the tile time, and chase
  * range does not read it. This function does not invent a walk-to-stay-quiet action.
- * A crowd uses Blizzard when mana can pay it, otherwise Paralyze. A strong mob is Paralyze.
- * Anything else that can pay Fire Strike uses that.
+ * A dangerous group uses Blizzard when mana can pay it, otherwise Paralyze.
+ * A strong mob is Paralyze. Fire Strike is the base attack, including after control is capped.
  */
-export function chooseCombatCast(view: PlayerBotView): MageCastChoice | null {
+export function chooseCombatCast(view: PlayerBotView, allowControl = true): MageCastChoice | null {
     if (view.className !== 'mage') {
         return null;
     }
@@ -1011,8 +1077,8 @@ export function chooseCombatCast(view: PlayerBotView): MageCastChoice | null {
     ) {
         return selfCast(view, view.invisibilitySpellId, 'Invisibility', 'enemy-player');
     }
-    const packed = crowdMobs(view);
-    if (packed.length >= CROWD_MIN) {
+    if (allowControl) {
+        const packed = dangerousCrowd(view);
         const anchor = nearestOf(view, packed);
         if (
             anchor &&
@@ -1028,14 +1094,15 @@ export function chooseCombatCast(view: PlayerBotView): MageCastChoice | null {
         ) {
             return targetCast(anchor, view.paralyzeSpellId, 'Paralyze', 'several-mobs');
         }
-    }
-    const strong = nearestStrongMob(view);
-    if (strong && view.paralyzeSpellId !== null && canAffordSpell(view, spellMana('paralyze'))) {
-        return targetCast(strong, view.paralyzeSpellId, 'Paralyze', 'strong-mob');
+        const strong = nearestStrongMob(view);
+        if (strong && view.paralyzeSpellId !== null && canAffordSpell(view, spellMana('paralyze'))) {
+            return targetCast(strong, view.paralyzeSpellId, 'Paralyze', 'strong-mob');
+        }
     }
     const slime = nearestSlime(view);
-    if (slime && view.fireStrikeSpellId !== null && canAffordSpell(view, spellMana('fire strike'))) {
-        return targetCast(slime, view.fireStrikeSpellId, 'Fire Strike', 'normal');
+    const strike = slime ?? (allowControl ? null : nearestOf(view, livingHostiles(view)));
+    if (strike && view.fireStrikeSpellId !== null && canAffordSpell(view, spellMana('fire strike'))) {
+        return targetCast(strike, view.fireStrikeSpellId, 'Fire Strike', 'normal');
     }
     return null;
 }
@@ -1058,6 +1125,10 @@ export class PlayerBotBrain {
     private castMeleeFallback = false;
     private meleeHits = 0;
     private lastCastAtMs = 0;
+    /** Paralyze/Blizzard fizzles while the same danger is still in view. */
+    private controlFizzles = 0;
+    /** The spell a rejected cast should try again. Damage stays queued even if the group changes. */
+    private queuedRetry: MageCastChoice | null = null;
 
     public noteCastFinish(result: 'ok' | 'retry' | 'melee', nowMs = 0): void {
         this.castMeleeFallback = result === 'melee';
@@ -1065,6 +1136,36 @@ export class PlayerBotBrain {
         if (nowMs > 0) {
             this.lastCastAtMs = nowMs;
         }
+    }
+
+    /**
+     * Record how a cast ended. A fizzle of Paralyze or Blizzard counts toward
+     * {@link CONTROL_FIZZLE_CAP}. The same spell is tried again after the melee window,
+     * unless that cap has already sent the mage back to damage.
+     */
+    public noteCastResult(
+        result: 'ok' | 'retry' | 'melee',
+        spell: MageCastChoice | null,
+        nowMs = 0,
+        fizzled = false,
+    ): void {
+        this.noteCastFinish(result, nowMs);
+        const control = spell !== null && isControlReason(spell.reason);
+        if (result === 'ok') {
+            if (control) {
+                this.controlFizzles = 0;
+            }
+            this.queuedRetry = null;
+            return;
+        }
+        if (result !== 'melee' || spell === null) {
+            this.queuedRetry = null;
+            return;
+        }
+        if (fizzled && control) {
+            this.controlFizzles += 1;
+        }
+        this.queuedRetry = spell;
     }
 
     public noteMelee(): void {
@@ -1174,7 +1275,7 @@ export class PlayerBotBrain {
             return { type: 'equip-weapon', itemUid: view.daggerUid };
         }
 
-        const combat = casting ? chooseCombatCast(view) : null;
+        const combat = casting ? this.takeCombatCast(view) : null;
         if (combat) {
             return this.approachOrCast(view, nav, combat);
         }
@@ -1216,6 +1317,27 @@ export class PlayerBotBrain {
         }
         this.visits.set(cellKey(view.x, view.y), (this.visits.get(cellKey(view.x, view.y)) ?? 0) + 1);
         return { type: 'move', x: step.x, y: step.y };
+    }
+
+    private takeCombatCast(view: PlayerBotView): MageCastChoice | null {
+        if (dangerousCrowd(view).length === 0 && nearestStrongMob(view) === null) {
+            this.controlFizzles = 0;
+            if (this.queuedRetry && isControlReason(this.queuedRetry.reason)) {
+                this.queuedRetry = null;
+            }
+        }
+        const allowControl = this.controlFizzles < CONTROL_FIZZLE_CAP;
+        if (this.queuedRetry) {
+            const queued = this.queuedRetry;
+            this.queuedRetry = null;
+            if (!(isControlReason(queued.reason) && !allowControl)) {
+                const aimed = retargetCast(view, queued);
+                if (aimed) {
+                    return aimed;
+                }
+            }
+        }
+        return chooseCombatCast(view, allowControl);
     }
 
     private approachOrCast(view: PlayerBotView, nav: PlayerBotNav, choice: MageCastChoice): PlayerBotAction {
@@ -1326,6 +1448,7 @@ export function buildPlayerBotView(
         dead: observation.dead,
         attackMode: observation.attackMode,
         attackRangeCells: observation.attackRangeCells,
+        attackDamage: observation.attackDamage,
         canMove,
         potionLocked,
         fireStrikeSpellId: observation.fireStrikeSpellId,

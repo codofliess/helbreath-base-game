@@ -398,6 +398,9 @@ export class Player extends GameObject {
             worldX,
             worldY,
             frameRate: this.IDLE_FRAME_RATE,
+            // Naked-body silhouette, sheared onto the ground (Olympia PutShadowSprite).
+            // A rotated black copy of that sprite reads as a bald body behind the gear.
+            olympiaBodyShadow: true,
         });
 
         // Center the player in the initial cell
@@ -2053,6 +2056,7 @@ export class Player extends GameObject {
             worldX: this.worldX,
             worldY: this.worldY,
             frameRate: this.IDLE_FRAME_RATE,
+            olympiaBodyShadow: true,
         });
 
         this.switchToIdle();

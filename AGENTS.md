@@ -1,5 +1,9 @@
 # Standing orders for agents (Chain Lords / helbreath-base-game)
 
+## Cómo hablarle a Martín
+
+Si escribe en castellano, responder en castellano. Frases completas, una idea por párrafo corto. Primero decir qué es la cosa; el número o el nombre de rama va después, y solo si hace falta para abrirlo. Un estado tiene tres partes: qué está hecho, qué falta, y quién hace el próximo paso. No amontonar siglas, tickets y roles en el mismo bloque.
+
 ## GitHub + Cursor Origin
 
 - **Source of truth:** GitHub `codofliess/helbreath-base-game` (mirrored into Cursor Origin).

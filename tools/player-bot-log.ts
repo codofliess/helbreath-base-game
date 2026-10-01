@@ -11,6 +11,75 @@ export interface PlayerBotRunTotals {
     casts: number;
     durationMs: number;
     worldId?: string;
+    spellTable?: readonly SpellTableRow[];
+}
+
+export interface SpellCastRecord {
+    spellId: number;
+    spellName: string;
+    result: 'accepted' | 'rejected' | 'fizzled';
+    reason: string;
+}
+
+export interface SpellTableRow {
+    spellId: number;
+    spellName: string;
+    attempts: number;
+    accepted: number;
+    rejected: number;
+    fizzled: number;
+    reasons: Record<string, number>;
+}
+
+/** Per-spell attempts from the bot's own cast lines. A spell with no lines is absent, not zeroed. */
+export function summarizeSpellCasts(records: readonly SpellCastRecord[]): SpellTableRow[] {
+    const rows = new Map<number, SpellTableRow>();
+    for (const record of records) {
+        let row = rows.get(record.spellId);
+        if (!row) {
+            row = {
+                spellId: record.spellId,
+                spellName: record.spellName,
+                attempts: 0,
+                accepted: 0,
+                rejected: 0,
+                fizzled: 0,
+                reasons: {},
+            };
+            rows.set(record.spellId, row);
+        }
+        if (record.spellName) {
+            row.spellName = record.spellName;
+        }
+        row.attempts += 1;
+        if (record.result === 'accepted') {
+            row.accepted += 1;
+        } else if (record.result === 'fizzled') {
+            row.fizzled += 1;
+        } else {
+            row.rejected += 1;
+        }
+        const reason = record.reason.trim() || 'unknown';
+        row.reasons[reason] = (row.reasons[reason] ?? 0) + 1;
+    }
+    return [...rows.values()].sort((left, right) => left.spellId - right.spellId);
+}
+
+export function formatSpellTable(rows: readonly SpellTableRow[]): string {
+    if (rows.length === 0) {
+        return 'spell-table: (no casts)';
+    }
+    const lines = ['spellId name attempts accepted rejected fizzled reasons'];
+    for (const row of rows) {
+        const reasons = Object.entries(row.reasons)
+            .sort((left, right) => left[0].localeCompare(right[0]))
+            .map(([reason, count]) => `${reason}=${count}`)
+            .join(',');
+        lines.push(
+            `${row.spellId} ${row.spellName} ${row.attempts} ${row.accepted} ${row.rejected} ${row.fizzled} ${reasons}`,
+        );
+    }
+    return lines.join('\n');
 }
 
 /**
@@ -48,6 +117,7 @@ export class PlayerBotLog {
             casts: totals.casts,
             durationMs: totals.durationMs,
             worldId: totals.worldId ?? '',
+            spellTable: totals.spellTable ?? [],
             verdict,
         });
         return verdict;

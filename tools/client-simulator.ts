@@ -67,8 +67,11 @@ import {
     type ResetPosition,
     type SpellCastFailed,
     type SpellCastStarted,
+    type TemporaryEffectApplied,
+    type TemporaryEffectExpired,
+    TemporaryEffectEntityKind,
 } from '../multiplayer/mp-client/src/proto/generated/network.ts';
-import { PlayerBotLog } from './player-bot-log.ts';
+import { PlayerBotLog, summarizeSpellCasts, formatSpellTable, type SpellCastRecord } from './player-bot-log.ts';
 import {
     assertNoServerStateFlags,
     assertNotProductionHost,
@@ -569,6 +572,12 @@ class SimulatedGameClient {
                 case 'playerAttackModeChanged':
                     this.noteAttackModeChanged(message.payload.value);
                     break;
+                case 'temporaryEffectApplied':
+                    this.noteTemporaryEffect(message.payload.value, true);
+                    break;
+                case 'temporaryEffectExpired':
+                    this.noteTemporaryEffect(message.payload.value, false);
+                    break;
             }
         } catch (error) {
             console.warn(`[client ${this.clientIndex}] Failed to parse server message.`, error);
@@ -585,6 +594,7 @@ class SimulatedGameClient {
             this.observation.attackMode = data.attackMode;
             this.observation.attackRangeCells = data.attackRangeCells > 0 ? data.attackRangeCells : 1;
             this.observation.castSpeedMs = data.castSpeedMs > 0 ? data.castSpeedMs : 700;
+            this.observation.noteMana(data.mp, data.maxMp);
             this.observation.noteSpells(data.spells.map((spell) => ({ id: spell.id, name: spell.name })));
             this.observation.noteItems(data.itemsDirectory.map((item) => ({
                 id: item.id,
@@ -617,6 +627,7 @@ class SimulatedGameClient {
         if (this.config.botAuth) {
             this.remoteMonsterCells.clear();
             this.observation.monsters.clear();
+            this.observation.players.clear();
             this.observation.notePosition(data.playerX, data.playerY);
             this.observation.dead = data.dead;
             this.observation.noteWorld(
@@ -693,6 +704,21 @@ class SimulatedGameClient {
             }
             this.remotePlayerCells.set(id, { x: p.x, y: p.y });
         }
+        if (this.config.botAuth) {
+            this.observation.notePlayers(data.players.flatMap((player) => {
+                const id = String(player.playerId);
+                if (id === this.playerId) {
+                    return [];
+                }
+                return [{
+                    id,
+                    name: player.characterName,
+                    x: player.x,
+                    y: player.y,
+                    dead: player.dead,
+                }];
+            }));
+        }
     }
 
     private handlePlayersLeftRange(data: PlayersLeftRange): void {
@@ -703,6 +729,9 @@ class SimulatedGameClient {
         for (const rawId of data.playerIds) {
             this.remotePlayerCells.delete(String(rawId));
         }
+        if (this.config.botAuth) {
+            this.observation.notePlayersLeft(data.playerIds.map((rawId) => String(rawId)));
+        }
     }
 
     private handlePlayerMoved(data: PlayerMoved): void {
@@ -712,6 +741,9 @@ class SimulatedGameClient {
         }
         this.stats.remotePlayerMoves += 1;
         this.remotePlayerCells.set(id, { x: data.destX, y: data.destY });
+        if (this.config.botAuth) {
+            this.observation.notePlayerMoved(id, data.destX, data.destY);
+        }
     }
 
     private handleMonstersEnteredRange(data: MonstersEnteredRange): void {
@@ -730,6 +762,10 @@ class SimulatedGameClient {
                 x: monster.x,
                 y: monster.y,
                 dead: monster.dead,
+                hp: monster.hp,
+                maxHp: monster.maxHp,
+                attackDamage: monster.attackDamage,
+                allegiance: monster.allegiance,
             })));
         }
     }
@@ -1143,6 +1179,9 @@ class SimulatedGameClient {
             this.observation.noteKillBaseline(row.monsterId, Number(row.kills));
         }
         this.observation.markKillBaselineReady();
+        if (data.maxMp > 0) {
+            this.observation.noteMana(data.mp, data.maxMp);
+        }
     }
 
     private noteProgressionUpdated(data: ProgressionUpdated): void {
@@ -1152,6 +1191,22 @@ class SimulatedGameClient {
         if (data.maxHp > 0) {
             this.observation.noteVitals(data.hp, data.maxHp);
         }
+        if (data.maxMp > 0) {
+            this.observation.noteMana(data.mp, data.maxMp);
+        }
+    }
+
+    private noteTemporaryEffect(data: TemporaryEffectApplied | TemporaryEffectExpired, active: boolean): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        if (data.entityKind !== TemporaryEffectEntityKind.TEMPORARY_EFFECT_ENTITY_KIND_PLAYER) {
+            return;
+        }
+        if (String(data.entityId) !== this.playerId) {
+            return;
+        }
+        this.observation.noteSelfEffect(data.temporaryEffectType, active);
     }
 
     private noteAttackModeChanged(data: PlayerAttackModeChanged): void {
@@ -2176,6 +2231,7 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         potionsUsed: 0,
         casts: 0,
     };
+    const spellCasts: SpellCastRecord[] = [];
     let finished = false;
     let client: SimulatedGameClient | undefined;
     const brain = new PlayerBotBrain();
@@ -2245,12 +2301,14 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         finished = true;
         const durationMs = Date.now() - startedAt;
         const worldId = client?.getObservation().worldId ?? '';
-        const verdict = log.summary({ ...totals, durationMs, worldId });
+        const spellTable = summarizeSpellCasts(spellCasts);
+        const verdict = log.summary({ ...totals, durationMs, worldId, spellTable });
         console.log(
             `${reason} verdict=${verdict} slimeKills=${totals.slimeKills} deaths=${totals.deaths} ` +
             `disconnects=${totals.disconnects} potionsUsed=${totals.potionsUsed} casts=${totals.casts} ` +
             `durationMs=${durationMs} world=${worldId} log=${log.path}`,
         );
+        console.log(formatSpellTable(spellTable));
         client?.stop();
         process.exit(verdict === 'PASS' ? 0 : 1);
     };
@@ -2337,7 +2395,7 @@ async function runPlayerBot(argv: readonly string[]): Promise<void> {
         if (finished) {
             break;
         }
-        await applyRulesAction(activeClient, brain, action, totals, log, (lockedMs) => {
+        await applyRulesAction(activeClient, brain, action, totals, spellCasts, log, (lockedMs) => {
             potionLockedUntil = Date.now() + lockedMs;
         }, () => {
             recalling = true;
@@ -2350,6 +2408,7 @@ async function applyRulesAction(
     brain: PlayerBotBrain,
     action: PlayerBotAction,
     totals: { potionsUsed: number; casts: number },
+    spellCasts: SpellCastRecord[],
     log: PlayerBotLog,
     lockPotion: (ms: number) => void,
     markRecalling: () => void,
@@ -2401,11 +2460,17 @@ async function applyRulesAction(
         case 'cast': {
             const result = await castSpell(action.spellId, action.x, action.y, action.monsterId);
             const observation = client.getObservation();
+            const spellName = action.spellName;
+            const reason = action.reason;
             if (result === 'ok') {
                 brain.noteCastFinish('ok', Date.now());
                 totals.casts += 1;
+                spellCasts.push({ spellId: action.spellId, spellName, result: 'accepted', reason });
                 log.event('cast', {
                     spellId: action.spellId,
+                    spellName,
+                    reason,
+                    result: 'accepted',
                     monsterId: action.monsterId,
                     casts: totals.casts,
                     castSpeedMs: observation.castSpeedMs,
@@ -2413,8 +2478,13 @@ async function applyRulesAction(
             } else if (result === 'finish-failed') {
                 const next = observation.noteCastFinishRejected();
                 brain.noteCastFinish(next, Date.now());
+                const outcome = next === 'melee' ? 'fizzled' : 'rejected';
+                spellCasts.push({ spellId: action.spellId, spellName, result: outcome, reason });
                 log.event('cast-failed', {
                     spellId: action.spellId,
+                    spellName,
+                    reason,
+                    result: outcome,
                     monsterId: action.monsterId,
                     phase: 'finish',
                     next,
@@ -2422,8 +2492,12 @@ async function applyRulesAction(
                 });
             } else {
                 brain.noteCastFinish('melee', Date.now());
+                spellCasts.push({ spellId: action.spellId, spellName, result: 'rejected', reason });
                 log.event('cast-failed', {
                     spellId: action.spellId,
+                    spellName,
+                    reason,
+                    result: 'rejected',
                     monsterId: action.monsterId,
                     phase: 'start',
                     next: 'melee',

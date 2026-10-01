@@ -39,6 +39,21 @@ export interface VisibleMonster {
     x: number;
     y: number;
     dead: boolean;
+    /** From MonsterInRange. Omitted when the packet did not carry it. */
+    hp?: number;
+    maxHp?: number;
+    attackDamage?: number;
+    /** 0 hostile, 1 neutral, 2 friendly. Omitted counts as hostile. */
+    allegiance?: number;
+}
+
+/** Another character from PlayersEnteredRange / PlayerMoved. Not this seat. */
+export interface VisiblePlayer {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    dead: boolean;
 }
 
 export interface BagStack {
@@ -85,11 +100,59 @@ export const TRAVELER_SLIME_FIELD: GridPoint = { x: 105, y: 92 };
  */
 export const SLOW_CAST_BAR_MS = 1800;
 
-/** Swing this many times after a rejected cast, then try Fire Strike again. */
+/** Swing this many times after a rejected cast, then try that spell again. */
 export const MELEE_HITS_BEFORE_RECAST = 6;
 
 /** Or try again after this long, even if the swing count is still short. */
 export const CAST_RETRY_MS = 8000;
+
+/**
+ * Living hostiles this close count as "on" the mage. Three or more is the crowd branch.
+ * Slime chase in the catalog is 2 cells, so a pack that has reached the seat is inside this.
+ */
+export const CROWD_RANGE_CELLS = 2;
+export const CROWD_MIN = 3;
+
+/**
+ * A mob is strong when the enter packet says so. Slime packets are max HP 7 and attack damage 1
+ * (the snapshot sends the minimum). 40 HP or 8 damage is well above that, from the same fields.
+ */
+export const STRONG_RANGE_CELLS = 5;
+export const STRONG_MAX_HP = 40;
+export const STRONG_ATTACK_DAMAGE = 8;
+
+/** TemporaryEffectType values from network.proto. The bot only stores effects the server applied to it. */
+export const EFFECT_INVISIBILITY = 0;
+export const EFFECT_DEFENSE_SHIELD = 12;
+export const EFFECT_GREAT_DEFENSE_SHIELD = 13;
+
+export type SpellCastReason = 'low-hp' | 'several-mobs' | 'strong-mob' | 'enemy-player' | 'normal';
+
+/**
+ * Spells the mage may cast. Server id and name are Spells.json. Mana and delay are the
+ * Magic.cfg columns (id, name, type, delay, last, mana). Delay is 0 for every row here.
+ * The cast the server enforces is FastestAllowedCastSpeedMs (1800 when Mag is under 50
+ * and Magic skill is under 100, otherwise 1200). That check is not changed here.
+ *
+ * Olympia Magic.cfg id 11 Staminar-Drain (mana 14, delay 0) is not in
+ * MagicTower.OlympiaToServerSpellId, so the server cannot cast it. It is not listed.
+ * Blizzard's chill slows movement and attack. It does not drain stamina.
+ */
+export const MAGE_SPELL_BOOK: readonly {
+    id: number;
+    name: string;
+    mana: number;
+    /** Magic.cfg Delay column. Not the character cast bar. */
+    magicCfgDelay: number;
+    olympiaId: number;
+}[] = [
+    { id: 2, name: 'Fire Strike', mana: 36, magicCfgDelay: 0, olympiaId: 30 },
+    { id: 29, name: 'Heal', mana: 15, magicCfgDelay: 0, olympiaId: 1 },
+    { id: 32, name: 'Defense Shield', mana: 19, magicCfgDelay: 0, olympiaId: 13 },
+    { id: 27, name: 'Paralyze', mana: 35, magicCfgDelay: 0, olympiaId: 35 },
+    { id: 21, name: 'Blizzard', mana: 170, magicCfgDelay: 0, olympiaId: 91 },
+    { id: 24, name: 'Invisibility', mana: 31, magicCfgDelay: 0, olympiaId: 32 },
+];
 
 export interface PlayerBotView {
     className: PlayerBotClassName;
@@ -105,7 +168,17 @@ export interface PlayerBotView {
     canMove: boolean;
     potionLocked: boolean;
     fireStrikeSpellId: number | null;
+    healSpellId: number | null;
+    defenseShieldSpellId: number | null;
+    paralyzeSpellId: number | null;
+    blizzardSpellId: number | null;
+    invisibilitySpellId: number | null;
     recallSpellId: number | null;
+    /** MP from InitialState or ProgressionUpdated. maxMp 0 means the packet has not arrived. */
+    mp: number;
+    maxMp: number;
+    defenseShieldUp: boolean;
+    invisible: boolean;
     recallFailures: number;
     potions: ReadonlyArray<{ uid: string; quantity: number }>;
     recallScrollUid: string | null;
@@ -114,6 +187,7 @@ export interface PlayerBotView {
     /** A dagger in the bag that still has durability. Empty when it is already worn or broken. */
     daggerUid: string | null;
     monsters: readonly VisibleMonster[];
+    players: readonly VisiblePlayer[];
     worldId: string;
     teleports: readonly ClientTeleport[];
     teleportLocs: readonly GridPoint[];
@@ -134,7 +208,15 @@ export type PlayerBotAction =
     | { type: 'drink'; itemUid: string }
     | { type: 'move'; x: number; y: number }
     | { type: 'melee'; monsterId: string }
-    | { type: 'cast'; spellId: number; x: number; y: number; monsterId: string }
+    | {
+          type: 'cast';
+          spellId: number;
+          spellName: string;
+          reason: SpellCastReason;
+          x: number;
+          y: number;
+          monsterId: string | null;
+      }
     | { type: 'recall'; spellId: number }
     | { type: 'recall-scroll'; itemUid: string }
     | { type: 'warp'; worldId: string; gameWorldId: string };
@@ -434,7 +516,7 @@ function exploreStep(view: PlayerBotView, nav: PlayerBotNav, visits: Map<string,
     return best?.first ?? null;
 }
 
-function fleeStep(view: PlayerBotView, nav: PlayerBotNav, threat: VisibleMonster): GridPoint | null {
+function fleeStep(view: PlayerBotView, nav: PlayerBotNav, threat: GridPoint): GridPoint | null {
     let best: GridPoint | null = null;
     let bestDistance = -1;
     for (const offset of NEIGHBORS) {
@@ -469,8 +551,13 @@ export class PlayerBotObservation {
     attackMode = false;
     attackRangeCells = 1;
     castSpeedMs = 700;
+    mp = 0;
+    maxMp = 0;
     fireStrikeSpellId: number | null = null;
     recallSpellId: number | null = null;
+    readonly knownSpells = new Map<string, number>();
+    readonly selfEffects = new Set<number>();
+    readonly players = new Map<string, VisiblePlayer>();
     recallScrollUid: string | null = null;
     equippedWeaponUid: string | null = null;
     equippedItemId = -1;
@@ -551,20 +638,66 @@ export class PlayerBotObservation {
         this.tookDamage = true;
     }
 
+    public noteMana(mp: number, maxMp: number): void {
+        this.mp = Math.max(0, mp);
+        if (maxMp > 0) {
+            this.maxMp = maxMp;
+        }
+        if (this.maxMp > 0 && this.mp > this.maxMp) {
+            this.mp = this.maxMp;
+        }
+    }
+
     public noteSpells(spells: ReadonlyArray<{ id: number; name: string }>): void {
         // World transfer sends an empty spell directory on purpose. Keep the book the client already has.
-        if (spells.length === 0 && (this.fireStrikeSpellId !== null || this.recallSpellId !== null)) {
+        if (spells.length === 0 && this.knownSpells.size > 0) {
             return;
         }
+        this.knownSpells.clear();
         this.fireStrikeSpellId = null;
         this.recallSpellId = null;
         for (const spell of spells) {
             const name = spell.name.trim().toLowerCase();
+            this.knownSpells.set(name, spell.id);
             if (name === 'fire strike') {
                 this.fireStrikeSpellId = spell.id;
             } else if (name === 'recall') {
                 this.recallSpellId = spell.id;
             }
+        }
+    }
+
+    public spellIdByName(name: string): number | null {
+        return this.knownSpells.get(name.trim().toLowerCase()) ?? null;
+    }
+
+    public noteSelfEffect(effectType: number, active: boolean): void {
+        if (active) {
+            this.selfEffects.add(effectType);
+            return;
+        }
+        this.selfEffects.delete(effectType);
+    }
+
+    public notePlayers(players: readonly VisiblePlayer[]): void {
+        for (const player of players) {
+            this.players.set(player.id, { ...player });
+        }
+    }
+
+    public notePlayerMoved(id: string, x: number, y: number): void {
+        const existing = this.players.get(id);
+        if (existing) {
+            existing.x = x;
+            existing.y = y;
+            return;
+        }
+        this.players.set(id, { id, name: '', x, y, dead: false });
+    }
+
+    public notePlayersLeft(ids: readonly string[]): void {
+        for (const id of ids) {
+            this.players.delete(id);
         }
     }
 
@@ -744,6 +877,169 @@ export class PlayerBotObservation {
     }
 }
 
+export interface MageCastChoice {
+    spellId: number;
+    spellName: string;
+    reason: SpellCastReason;
+    x: number;
+    y: number;
+    monsterId: string | null;
+}
+
+function spellMana(name: string): number {
+    const row = MAGE_SPELL_BOOK.find((entry) => entry.name.toLowerCase() === name);
+    return row?.mana ?? Number.POSITIVE_INFINITY;
+}
+
+/** maxMp 0 means no mana packet yet, so the cast is still attempted and the server accepts or rejects it. */
+export function canAffordSpell(view: Pick<PlayerBotView, 'mp' | 'maxMp'>, mana: number): boolean {
+    if (view.maxMp <= 0) {
+        return true;
+    }
+    return view.mp >= mana;
+}
+
+function livingHostiles(view: PlayerBotView): VisibleMonster[] {
+    return view.monsters.filter((monster) => !monster.dead && monster.allegiance !== 2);
+}
+
+function nearestOf(view: PlayerBotView, monsters: readonly VisibleMonster[]): VisibleMonster | null {
+    let best: VisibleMonster | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const monster of monsters) {
+        const distance = chebyshev(view.x, view.y, monster.x, monster.y);
+        if (best === null || distance < bestDistance || (distance === bestDistance && monster.id < best.id)) {
+            best = monster;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+export function crowdMobs(view: PlayerBotView): VisibleMonster[] {
+    return livingHostiles(view).filter(
+        (monster) => chebyshev(view.x, view.y, monster.x, monster.y) <= CROWD_RANGE_CELLS,
+    );
+}
+
+export function nearestStrongMob(view: PlayerBotView): VisibleMonster | null {
+    const strong = livingHostiles(view).filter((monster) => {
+        const distance = chebyshev(view.x, view.y, monster.x, monster.y);
+        if (distance > STRONG_RANGE_CELLS) {
+            return false;
+        }
+        const bulky = (monster.maxHp ?? 0) >= STRONG_MAX_HP;
+        const hard = (monster.attackDamage ?? 0) >= STRONG_ATTACK_DAMAGE;
+        return bulky || hard;
+    });
+    return nearestOf(view, strong);
+}
+
+export function nearestEnemyPlayer(view: PlayerBotView): VisiblePlayer | null {
+    let best: VisiblePlayer | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const player of view.players) {
+        if (player.dead) {
+            continue;
+        }
+        const distance = chebyshev(view.x, view.y, player.x, player.y);
+        if (best === null || distance < bestDistance || (distance === bestDistance && player.id < best.id)) {
+            best = player;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+function selfCast(
+    view: PlayerBotView,
+    spellId: number,
+    spellName: string,
+    reason: SpellCastReason,
+): MageCastChoice {
+    return { spellId, spellName, reason, x: view.x, y: view.y, monsterId: null };
+}
+
+function targetCast(monster: VisibleMonster, spellId: number, spellName: string, reason: SpellCastReason): MageCastChoice {
+    return { spellId, spellName, reason, x: monster.x, y: monster.y, monsterId: monster.id };
+}
+
+/**
+ * Heal and defense shield. Shield comes first while it is down, then heal, so a low bar
+ * puts the protect up before the next heal. A strong mob or another player also raises
+ * the shield when HP is still high.
+ */
+export function chooseSurvivalCast(view: PlayerBotView): MageCastChoice | null {
+    if (view.className !== 'mage') {
+        return null;
+    }
+    const low = view.tookDamage && hpRatio(view) <= HP_LOW_RATIO;
+    const strong = nearestStrongMob(view);
+    const enemy = nearestEnemyPlayer(view);
+    if (
+        view.defenseShieldSpellId !== null &&
+        !view.defenseShieldUp &&
+        canAffordSpell(view, spellMana('defense shield')) &&
+        (low || strong !== null || enemy !== null)
+    ) {
+        const reason: SpellCastReason = low ? 'low-hp' : strong ? 'strong-mob' : 'enemy-player';
+        return selfCast(view, view.defenseShieldSpellId, 'Defense Shield', reason);
+    }
+    if (low && view.healSpellId !== null && canAffordSpell(view, spellMana('heal'))) {
+        return selfCast(view, view.healSpellId, 'Heal', 'low-hp');
+    }
+    return null;
+}
+
+/**
+ * Invisibility only to slip past another player. Monster chase skips an invisible player.
+ * Running is not a hearing check: RunningMode only doubles the tile time, and chase
+ * range does not read it. This function does not invent a walk-to-stay-quiet action.
+ * A crowd uses Blizzard when mana can pay it, otherwise Paralyze. A strong mob is Paralyze.
+ * Anything else that can pay Fire Strike uses that.
+ */
+export function chooseCombatCast(view: PlayerBotView): MageCastChoice | null {
+    if (view.className !== 'mage') {
+        return null;
+    }
+    const enemy = nearestEnemyPlayer(view);
+    if (
+        enemy &&
+        !view.invisible &&
+        view.invisibilitySpellId !== null &&
+        canAffordSpell(view, spellMana('invisibility'))
+    ) {
+        return selfCast(view, view.invisibilitySpellId, 'Invisibility', 'enemy-player');
+    }
+    const packed = crowdMobs(view);
+    if (packed.length >= CROWD_MIN) {
+        const anchor = nearestOf(view, packed);
+        if (
+            anchor &&
+            view.blizzardSpellId !== null &&
+            canAffordSpell(view, spellMana('blizzard'))
+        ) {
+            return targetCast(anchor, view.blizzardSpellId, 'Blizzard', 'several-mobs');
+        }
+        if (
+            anchor &&
+            view.paralyzeSpellId !== null &&
+            canAffordSpell(view, spellMana('paralyze'))
+        ) {
+            return targetCast(anchor, view.paralyzeSpellId, 'Paralyze', 'several-mobs');
+        }
+    }
+    const strong = nearestStrongMob(view);
+    if (strong && view.paralyzeSpellId !== null && canAffordSpell(view, spellMana('paralyze'))) {
+        return targetCast(strong, view.paralyzeSpellId, 'Paralyze', 'strong-mob');
+    }
+    const slime = nearestSlime(view);
+    if (slime && view.fireStrikeSpellId !== null && canAffordSpell(view, spellMana('fire strike'))) {
+        return targetCast(slime, view.fireStrikeSpellId, 'Fire Strike', 'normal');
+    }
+    return null;
+}
+
 /**
  * Mutable policy flags that are still client-side (town latch, visit counts, failed recalls).
  * They are not read from the server.
@@ -841,6 +1137,24 @@ export class PlayerBotBrain {
             return { type: 'drink', itemUid: potionUid };
         }
 
+        const casting =
+            view.className === 'mage' &&
+            (!this.castMeleeFallback ||
+                this.meleeHits >= MELEE_HITS_BEFORE_RECAST ||
+                (this.lastCastAtMs > 0 && nowMs - this.lastCastAtMs >= CAST_RETRY_MS));
+        // Already invisible beside another player: step away. A new cast would break invisibility.
+        // Running is unchanged. The server does not use a hearing check.
+        if (casting && view.invisible && nearestEnemyPlayer(view)) {
+            return this.slipPast(view, nav);
+        }
+        // Shield, then heal, before a town recall. A seat with neither spell still recalls.
+        if (casting) {
+            const survival = chooseSurvivalCast(view);
+            if (survival) {
+                return this.approachOrCast(view, nav, survival);
+            }
+        }
+
         // Retreat only after real damage. An undamaged character with a bogus low ratio keeps hunting.
         // Empty potions recall only once health is already low. After one town latch, dryRetreatDone lets it fight again.
         const lowAndDry = view.tookDamage && ratio <= HP_LOW_RATIO && charges === 0 && !this.dryRetreatDone;
@@ -856,17 +1170,16 @@ export class PlayerBotBrain {
             this.inTown = false;
         }
 
-        const retryCast =
-            this.castMeleeFallback &&
-            view.className === 'mage' &&
-            view.fireStrikeSpellId !== null &&
-            (this.meleeHits >= MELEE_HITS_BEFORE_RECAST ||
-                (this.lastCastAtMs > 0 && nowMs - this.lastCastAtMs >= CAST_RETRY_MS));
-        if (this.castMeleeFallback && !retryCast && !view.equippedWeaponUid && view.daggerUid) {
+        if (this.castMeleeFallback && !casting && !view.equippedWeaponUid && view.daggerUid) {
             return { type: 'equip-weapon', itemUid: view.daggerUid };
         }
 
-        const slime = nearestSlime(view);
+        const combat = casting ? chooseCombatCast(view) : null;
+        if (combat) {
+            return this.approachOrCast(view, nav, combat);
+        }
+
+        const slime = nearestSlime(view) ?? nearestOf(view, livingHostiles(view));
         if (!slime) {
             const warpWorldId = warpTarget(view);
             if (warpWorldId) {
@@ -886,19 +1199,11 @@ export class PlayerBotBrain {
             return { type: 'move', x: step.x, y: step.y };
         }
 
-        const canCast =
-            view.className === 'mage' && view.fireStrikeSpellId !== null && (!this.castMeleeFallback || retryCast);
-        const range = canCast ? MAGE_CAST_RANGE_CELLS : Math.max(1, view.attackRangeCells);
+        const range = Math.max(1, view.attackRangeCells);
         const distance = chebyshev(view.x, view.y, slime.x, slime.y);
         if (distance <= range) {
-            if (canCast && view.fireStrikeSpellId !== null) {
-                return {
-                    type: 'cast',
-                    spellId: view.fireStrikeSpellId,
-                    x: slime.x,
-                    y: slime.y,
-                    monsterId: slime.id,
-                };
+            if (!view.equippedWeaponUid && view.daggerUid) {
+                return { type: 'equip-weapon', itemUid: view.daggerUid };
             }
             return { type: 'melee', monsterId: slime.id };
         }
@@ -906,6 +1211,51 @@ export class PlayerBotBrain {
             return { type: 'wait' };
         }
         const step = stepToward({ x: view.x, y: view.y }, slime, range, nav.isOpen);
+        if (!step) {
+            return { type: 'wait' };
+        }
+        this.visits.set(cellKey(view.x, view.y), (this.visits.get(cellKey(view.x, view.y)) ?? 0) + 1);
+        return { type: 'move', x: step.x, y: step.y };
+    }
+
+    private approachOrCast(view: PlayerBotView, nav: PlayerBotNav, choice: MageCastChoice): PlayerBotAction {
+        if (choice.monsterId !== null) {
+            const distance = chebyshev(view.x, view.y, choice.x, choice.y);
+            if (distance > MAGE_CAST_RANGE_CELLS) {
+                if (!view.canMove) {
+                    return { type: 'wait' };
+                }
+                const step = stepToward(
+                    { x: view.x, y: view.y },
+                    { x: choice.x, y: choice.y },
+                    MAGE_CAST_RANGE_CELLS,
+                    nav.isOpen,
+                );
+                if (!step) {
+                    return { type: 'wait' };
+                }
+                this.visits.set(cellKey(view.x, view.y), (this.visits.get(cellKey(view.x, view.y)) ?? 0) + 1);
+                return { type: 'move', x: step.x, y: step.y };
+            }
+        }
+        return {
+            type: 'cast',
+            spellId: choice.spellId,
+            spellName: choice.spellName,
+            reason: choice.reason,
+            x: choice.x,
+            y: choice.y,
+            monsterId: choice.monsterId,
+        };
+    }
+
+    /** Step away from the nearest other player. Does not change run mode. */
+    private slipPast(view: PlayerBotView, nav: PlayerBotNav): PlayerBotAction {
+        const enemy = nearestEnemyPlayer(view);
+        if (!enemy || !view.canMove) {
+            return { type: 'wait' };
+        }
+        const step = fleeStep(view, nav, enemy);
         if (!step) {
             return { type: 'wait' };
         }
@@ -979,7 +1329,18 @@ export function buildPlayerBotView(
         canMove,
         potionLocked,
         fireStrikeSpellId: observation.fireStrikeSpellId,
+        healSpellId: observation.spellIdByName('heal'),
+        defenseShieldSpellId: observation.spellIdByName('defense shield'),
+        paralyzeSpellId: observation.spellIdByName('paralyze'),
+        blizzardSpellId: observation.spellIdByName('blizzard'),
+        invisibilitySpellId: observation.spellIdByName('invisibility'),
         recallSpellId: observation.recallSpellId,
+        mp: observation.mp,
+        maxMp: observation.maxMp,
+        defenseShieldUp:
+            observation.selfEffects.has(EFFECT_DEFENSE_SHIELD) ||
+            observation.selfEffects.has(EFFECT_GREAT_DEFENSE_SHIELD),
+        invisible: observation.selfEffects.has(EFFECT_INVISIBILITY),
         recallFailures: 0,
         potions: observation.hpPotions(),
         recallScrollUid: observation.recallScrollUid,
@@ -987,6 +1348,7 @@ export function buildPlayerBotView(
         equippedWeaponBlocksCast: weaponBlocksCast(observation.equippedWeaponName),
         daggerUid: observation.usableDaggerUid(),
         monsters: [...observation.monsters.values()],
+        players: [...observation.players.values()],
         worldId: observation.worldId,
         teleports: observation.teleports,
         teleportLocs: observation.teleportLocs,

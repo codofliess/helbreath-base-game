@@ -11,7 +11,19 @@ import { resolveSoundAsset } from './soundAlias';
 
 export { fetchGameAssetArrayBuffer, isHtmlAssetBody, looksLikeAmdMap };
 
-let spriteDecodeChain: Promise<void> = Promise.resolve();
+type SpriteDecodeTask = {
+    work: () => Promise<unknown>;
+    resolve: (value: unknown) => void;
+    reject: (reason: unknown) => void;
+};
+
+/**
+ * Not-yet-started decode jobs. The running job is not in this list.
+ * Action sheets use `priority` so they run before queued tile expansion.
+ */
+const spriteDecodeQueue: SpriteDecodeTask[] = [];
+let spriteDecodePumping = false;
+
 const spriteLoadPromises = new Map<string, Promise<void>>();
 const soundLoadPromises = new Map<string, Promise<void>>();
 const musicLoadPromises = new Map<string, Promise<void>>();
@@ -20,19 +32,60 @@ const failedAudioKeys = new Set<string>();
 export interface LoadSpriteOnDemandOptions {
     /** Decode only these local sheet indexes. Omit to decode the whole `.spr`. */
     sheetIndices?: ReadonlySet<number>;
+    /**
+     * Run before tile/map jobs already waiting. Used for body run sheets, equipped
+     * clothes, and spell VFX so those pixels are not stuck behind plaza expansion.
+     */
+    priority?: boolean;
 }
 
 /**
  * Runs sprite decode/register work one-at-a-time. Parallel `HBSpriteFile.load`
  * of item/effect/tile packs is a known Chrome Aw Snap 9 (OOM) spike on live enter.
+ * `priority` inserts ahead of queued work; the job already decoding still finishes.
  */
-export function enqueueSpriteDecode<T>(work: () => Promise<T>): Promise<T> {
-    const run = spriteDecodeChain.then(work, work);
-    spriteDecodeChain = run.then(
-        () => undefined,
-        () => undefined,
-    );
-    return run;
+export function enqueueSpriteDecode<T>(
+    work: () => Promise<T>,
+    options?: { priority?: boolean },
+): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const task: SpriteDecodeTask = {
+            work,
+            resolve: (value) => resolve(value as T),
+            reject,
+        };
+        if (options?.priority) {
+            spriteDecodeQueue.unshift(task);
+        } else {
+            spriteDecodeQueue.push(task);
+        }
+        if (!spriteDecodePumping) {
+            spriteDecodePumping = true;
+            void pumpSpriteDecodeQueue();
+        }
+    });
+}
+
+async function pumpSpriteDecodeQueue(): Promise<void> {
+    try {
+        while (spriteDecodeQueue.length > 0) {
+            const task = spriteDecodeQueue.shift();
+            if (!task) {
+                break;
+            }
+            try {
+                task.resolve(await task.work());
+            } catch (error) {
+                task.reject(error);
+            }
+        }
+    } finally {
+        spriteDecodePumping = false;
+        if (spriteDecodeQueue.length > 0) {
+            spriteDecodePumping = true;
+            void pumpSpriteDecodeQueue();
+        }
+    }
 }
 
 /** True when sheet 0 for this asset key is registered (load finished enough to draw). */
@@ -144,7 +197,7 @@ export function loadSpriteAssetOnDemand(
             asset.tileStartIndex,
         );
         await hbFile.load(scene, sheetIndices ? { sheetIndices } : undefined);
-    }).catch((error) => {
+    }, { priority: options?.priority === true }).catch((error) => {
         spriteLoadPromises.delete(promiseKey);
         throw error;
     });

@@ -33,6 +33,14 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 var settings = await Config.LoadSettings();
+var portOverride = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(portOverride)) {
+    if (!int.TryParse(portOverride.Trim(), out var parsedPort) || parsedPort is < 1 or > 65535) {
+        throw new InvalidOperationException("PORT must be an integer from 1 to 65535.");
+    }
+    settings = settings with { Port = parsedPort };
+    Console.WriteLine($"[Server] PORT override {parsedPort} (Settings.json unchanged).");
+}
 await GamePersistence.InitializeAsync();
 var antiBotToolsConfig = await Config.LoadAntiBotToolsConfig();
 AntiBotTools.Initialize(antiBotToolsConfig);
@@ -41,6 +49,7 @@ PvpAcademy.Initialize();
 
 // Launch security banners — ops must set these for a real soft test.
 WalletAuthValidator.EnsureProductionSecretOrThrow();
+PlaytestQaKit.ThrowIfUnsafe();
 if (!WalletAuthValidator.IsRequired) {
     Console.WriteLine(
         "[SECURITY] WARNING: WALLET_AUTH_SECRET is not set — any client can spoof any wallet id. " +
@@ -915,7 +924,7 @@ app.Map("/ws", async context => {
                     ? authReq.ArenaKitJson
                     : null;
                 GameWorldMessage gameWorldMessage = isReconnect
-                    ? new PlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, RequestDisconnect, RequestWorldChange, session.CharacterName, session.NetworkId, remoteIp)
+                    ? new PlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, RequestDisconnect, RequestWorldChange, session.CharacterName, session.NetworkId, remoteIp, BotActor: session.BotActor)
                     : new PlayerConnectedMessage(
                         session.SessionId,
                         EnqueueOutgoingMessage,
@@ -939,7 +948,8 @@ app.Map("/ws", async context => {
                         authChr,
                         remoteIp,
                         authReq.HasReferralCode ? authReq.ReferralCode : null,
-                        authArenaKitJson);
+                        authArenaKitJson,
+                        session.BotActor);
                 GlobalWorldMessage globalWorldMessage = isReconnect
                     ? new GlobalPlayerReconnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName)
                     : new GlobalPlayerConnectedMessage(session.SessionId, EnqueueOutgoingMessage, session.CharacterName);
@@ -1075,7 +1085,9 @@ app.Map("/ws", async context => {
     }
 });
 
-await app.RunAsync($"http://0.0.0.0:{settings.Port}");
+var listenHost = PlaytestQaKit.IsEnabled ? "127.0.0.1" : "0.0.0.0";
+Console.WriteLine($"[Server] Listening on http://{listenHost}:{settings.Port}");
+await app.RunAsync($"http://{listenHost}:{settings.Port}");
 disconnectedPlayerCleanupCts.Cancel();
 worldTransferCts.Cancel();
 try {
@@ -1119,6 +1131,10 @@ static bool TryAuthenticatePlayer(
         return false;
     }
 
+    // Bot mark comes from the signed session, or from a local PLAYTEST seat when wallet auth is off.
+    // It is not a client-supplied flag and it does not relax the wallet check above.
+    var botActor = WalletAuthValidator.IsBotSession(networkId.Trim(), authToken);
+
     var trimmedCharacterName = characterName.Trim();
     if (string.IsNullOrEmpty(trimmedCharacterName)) {
         errorMessage = "Character name is required.";
@@ -1152,6 +1168,7 @@ static bool TryAuthenticatePlayer(
                     existingSession.DisconnectDeadlineUtc = null;
                     existingSession.CleanupStarted = false;
                     existingSession.CharacterName = trimmedCharacterName;
+                    existingSession.BotActor = botActor;
                     session = existingSession;
                     isReconnect = true;
                     return true;
@@ -1185,7 +1202,9 @@ static bool TryAuthenticatePlayer(
             }
         }
 
-        var newSession = new PlayerSession(networkId, Guid.NewGuid(), initialGameWorldId, webSocket, trimmedCharacterName);
+        var newSession = new PlayerSession(networkId, Guid.NewGuid(), initialGameWorldId, webSocket, trimmedCharacterName) {
+            BotActor = botActor,
+        };
         if (!sessionsByNetworkId.TryAdd(networkId, newSession)) {
             continue;
         }
@@ -2226,6 +2245,11 @@ public sealed class PlayerSession {
     public bool IsWorldTransferPending { get; set; }
     /// <summary>When true, this session came from the traveler client (:8081): soft combat, limited spells, separate save file.</summary>
     public bool TravelerMode { get; set; }
+    /// <summary>
+    /// Signed <c>actorKind: bot</c>, or a local PLAYTEST seat when wallet auth is off.
+    /// Excluded from rankings, airdrops, economy, and transferable loot.
+    /// </summary>
+    public bool BotActor { get; set; }
 }
 
 /// <summary>Work item for the world-transfer channel: move <see cref="SessionId"/> to <see cref="TargetWorldId"/> and spawn near the authoritative target cell.</summary>

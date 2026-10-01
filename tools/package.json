@@ -11,7 +11,8 @@
     "@jsquash/oxipng": "^2.3.0",
     "fflate": "^0.8.2",
     "fluent-ffmpeg": "^2.1.3",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "grpc-tools": "^1.13.1",

@@ -638,6 +638,10 @@ public static class AuctionBoard {
 
     static bool TryEnsureCanTrade(GameWorldPlayer player, long nowMs, out string error) {
         error = string.Empty;
+        if (BotActor.ExcludedFromEconomy(player)) {
+            error = "Bots are excluded from the economy.";
+            return false;
+        }
         if (AuctionBoardStore.IsIpBlocked(player.LastKnownIp)) {
             error = "This IP is blocked from the auction board (overdue fee debt).";
             return false;

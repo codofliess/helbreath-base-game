@@ -210,7 +210,9 @@ public static class GroundItemPickup {
             return false;
         }
 
-        NftDropLedger.TryRecordPickup(wr, player, ToInventoryItem(removedItem));
+        if (!BotActor.IsBot(player)) {
+            NftDropLedger.TryRecordPickup(wr, player, ToInventoryItem(removedItem));
+        }
 
         GroundStateVisibility.BroadcastGroundItemTopStateChanged(wr, removedItem, revealedTopItem);
         return true;

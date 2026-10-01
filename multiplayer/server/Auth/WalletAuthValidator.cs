@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Server.Helpers;
 
 namespace Server.Auth;
 
@@ -57,6 +59,11 @@ public static class WalletAuthValidator {
                     "true",
                     StringComparison.OrdinalIgnoreCase);
             if (string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase) || allowInsecure) {
+                return true;
+            }
+            // Safe local PLAYTEST (not production, no live secrets) is the same wallet-less door.
+            // A set WALLET_AUTH_SECRET never reaches this branch. This does not open the GM sandbox.
+            if (PlaytestQaKit.IsEnabled) {
                 return true;
             }
             errorMessage =
@@ -145,7 +152,8 @@ public static class WalletAuthValidator {
                 .ToArray();
         }
 
-        // Bind-before-world: enroll-bot / register without a wallet bind cannot enter the world.
+        // Live still requires a wallet (PR #33). actorKind bot does not skip this check.
+        // Wallet-less login exists only when WALLET_AUTH_SECRET is unset (Development, or a safe local PLAYTEST).
         if (boundChains.Length == 0 || wallets.Length == 0) {
             errorMessage = "Wallet binding required before entering the world.";
             return false;
@@ -157,6 +165,81 @@ public static class WalletAuthValidator {
         }
 
         return true;
+    }
+
+    /// <summary>Published PLAYTEST door token. Honored only when wallet auth is off (local).</summary>
+    public const string LocalPlaytestAuthToken = "playtest-bypass-token";
+
+    /// <summary>
+    /// Seat account ids the local rules bot uses. They are bots only on the wallet-less local path.
+    /// A live server with <c>WALLET_AUTH_SECRET</c> never treats these strings as a login bypass.
+    /// </summary>
+    private static readonly HashSet<string> LocalPlaytestAccountIds = new(StringComparer.Ordinal) {
+        "playtest-elonqa",
+        "playtest-a",
+        "playtest-maggy",
+        "playtest-b",
+        "playtest-pist",
+        "playtest-c",
+        "playtest-stalk",
+        "playtest-pulpo",
+        "playtest-proj",
+        "playtest-paio",
+    };
+
+    /// <summary>
+    /// Whether an already-validated session is a bot.
+    /// Live: only a signed v2 <c>actorKind: bot</c> claim (middleware enroll-bot). The wallet binding check above still applies.
+    /// Local, secret unset, not production: a PLAYTEST seat id or the playtest bypass token.
+    /// </summary>
+    public static bool IsBotSession(string walletPubkey, string authToken) {
+        if (!TryValidate(walletPubkey, authToken, out _)) {
+            return false;
+        }
+
+        if (IsRequired) {
+            return SignedPayloadActorKindIsBot(authToken);
+        }
+
+        if (IsProductionHost) {
+            return false;
+        }
+
+        var id = (walletPubkey ?? "").Trim();
+        if (LocalPlaytestAccountIds.Contains(id)) {
+            return true;
+        }
+
+        return string.Equals((authToken ?? "").Trim(), LocalPlaytestAuthToken, StringComparison.Ordinal);
+    }
+
+    private static bool SignedPayloadActorKindIsBot(string authToken) {
+        if (!IsRequired || string.IsNullOrWhiteSpace(authToken)) {
+            return false;
+        }
+
+        var parts = authToken.Split('.', 2);
+        if (parts.Length != 2) {
+            return false;
+        }
+
+        string payload;
+        try {
+            payload = Encoding.UTF8.GetString(Convert.FromBase64String(PadBase64(parts[0])));
+        } catch (FormatException) {
+            return false;
+        }
+
+        if (!payload.StartsWith('{')) {
+            return false;
+        }
+
+        try {
+            var session = JsonSerializer.Deserialize<SessionV2>(payload, SessionJsonOptions);
+            return string.Equals(session?.ActorKind, "bot", StringComparison.Ordinal);
+        } catch (JsonException) {
+            return false;
+        }
     }
 
     private static bool TryValidateLegacy(string walletPubkey, string payload, out string? errorMessage) {

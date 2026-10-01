@@ -301,6 +301,30 @@ describe('multichain auth', () => {
         }
     });
 
+    it('enroll-bot marks actorKind bot and public verify still cannot', async () => {
+        process.env.BOT_ENROLL_SECRET = 'bot-enroll-test';
+        const auth = loadAuth();
+        const app = express();
+        app.use(express.json());
+        auth.registerAuthRoutes(app);
+        const { server, url } = await listen(app);
+        try {
+            const enroll = await jsonReq(url, {
+                method: 'POST',
+                path: '/auth/enroll-bot',
+                headers: { 'x-bot-enroll-secret': 'bot-enroll-test' },
+                body: {},
+            });
+            assert.equal(enroll.status, 200);
+            assert.equal(enroll.json.actorKind, 'bot');
+            const session = auth.parseSession(enroll.json.token);
+            assert.equal(session.actorKind, 'bot');
+            assert.equal(session.wallets.length, 0);
+        } finally {
+            server.close();
+        }
+    });
+
     it('public register cannot set bot; enroll requires secret', async () => {
         const auth = loadAuth();
         const kp = nacl.sign.keyPair();

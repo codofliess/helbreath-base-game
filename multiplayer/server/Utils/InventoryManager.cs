@@ -1082,6 +1082,42 @@ public sealed class InventoryManager {
         NormalizeBagZIndices();
     }
 
+    /// <summary>Bag plus equipped quantity for one catalog id.</summary>
+    public int CountItem(int itemId) {
+        var total = 0;
+        foreach (var item in bagItems) {
+            if (item.ItemId == itemId) {
+                total += Math.Max(0, item.Quantity);
+            }
+        }
+        foreach (var item in equippedItems.Values) {
+            if (item.ItemId == itemId) {
+                total += Math.Max(0, item.Quantity);
+            }
+        }
+        return total;
+    }
+
+    /// <summary>Adds one stackable bag pile. Used by the local PLAYTEST kit. False when the catalog has no such item.</summary>
+    public bool TryGrantBagStack(int itemId, int quantity) {
+        if (quantity < 1 || !itemsById.TryGetValue(itemId, out var def)) {
+            return false;
+        }
+        var (bagX, bagY) = AllocateBagSlot(bagItems.Count);
+        var stack = new InventoryItemState(
+            itemId,
+            CreateItemUid(),
+            bagX,
+            bagY,
+            quantity: quantity,
+            bagZIndex: bagItems.Count,
+            effectOverrides: null);
+        stack.EnsureCatalogDurability(def);
+        bagItems.Add(stack);
+        NormalizeBagZIndices();
+        return true;
+    }
+
     /// <summary>Removes <paramref name="amount"/> gold from bag stacks (item id 90). Fails without mutating when the player cannot afford it.</summary>
     public bool TrySpendGold(int amount, out InventoryMutationResult result) {
         result = new InventoryMutationResult();

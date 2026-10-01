@@ -15,10 +15,18 @@
  *   --rampUpTime=<number>   Seconds to spawn all clients (default: 10)
  *   --minInterval=<number>  Min ms between movement requests (default: 500)
  *   --maxInterval=<number>  Max ms between movement requests (default: 1000)
+ *
+ * Rules bot (one client, PLAYTEST auth, no LLM). Refuses production hosts.
+ *   --class mage|melee      mage casts Fire Strike; anything else melees
+ *   --minutes=<number>      Run length (default 30)
+ *   --host=<host[:port]>    Loopback, or a private LAN host with --playtest
+ *   --seat=<name>           Playtest seat (default elon / ElonQa)
+ *   --log=<path>            JSONL run log
+ *   --playtest              Required only for a private-LAN playtest host
  * Examples:
  *   pnpm run client-simulator
  *   pnpm run client-simulator -- --clients=50
- *   pnpm run client-simulator -- --port=8080 --minInterval=300 --maxInterval=800
+ *   pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 31337 --seat elon --log ./player-bot.jsonl
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -27,19 +35,58 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
     ClientMessage,
+    PlayerGender,
+    PlayerSkinColor,
     ServerMessage,
+    type EquippedInventoryItemEntry,
+    type HpUpdated,
     type InitialGameWorldState,
     type InitialState,
+    type InventoryItemEntry,
+    type ItemAddedToBag,
+    type ItemEquipped,
+    type ItemRemovedFromBag,
+    type ItemUnequipped,
+    type MonsterDied,
+    type MonsterKillsUpdated,
     type MonsterMoved,
     type MonstersEnteredRange,
     type MonstersLeftRange,
     type PingResponse,
+    type PlayerAttackModeChanged,
+    type PlayerDied,
     type PlayerMoved,
+    type PlayerReceiveDamage,
+    type PlayerResurrected,
+    type PlayerTeleported,
     type PlayersEnteredRange,
     type PlayersLeftRange,
     type PositionCorrected,
+    type ProgressionState,
+    type ProgressionUpdated,
     type ResetPosition,
+    type SpellCastFailed,
+    type SpellCastStarted,
 } from '../multiplayer/mp-client/src/proto/generated/network.ts';
+import { PlayerBotLog } from './player-bot-log.ts';
+import {
+    assertNoServerStateFlags,
+    assertNotProductionHost,
+    assertRulesTargetAllowed,
+    PLAYTEST_AUTH_TOKEN,
+    resolvePlaytestSeat,
+    rulesModeRequested,
+    splitHostPort,
+} from './player-bot-guard.ts';
+import {
+    ACTION_DELAY_MAX_MS,
+    ACTION_DELAY_MIN_MS,
+    buildPlayerBotView,
+    PlayerBotBrain,
+    PlayerBotObservation,
+    type PlayerBotAction,
+    type PlayerBotClassName,
+} from './player-bot-rules.ts';
 import { applyItemDirectory } from '../multiplayer/mp-client/src/constants/Items';
 import {
     nextPingSequenceUint32,
@@ -47,10 +94,41 @@ import {
     shouldSendClientPing,
 } from '../multiplayer/mp-client/src/utils/pingInFlight';
 
+/**
+ * Node 22+ has a global WebSocket. Node 20 needs `NODE_OPTIONS=--experimental-websocket`,
+ * or the `ws` package (loaded here when the global is missing). Protobuf wire stubs come from
+ * `npm ci --ignore-scripts` in `multiplayer/mp-client`.
+ */
+export async function ensureGlobalWebSocket(): Promise<void> {
+    if (typeof WebSocket !== 'undefined') {
+        return;
+    }
+    try {
+        const loaded = (await import('ws')) as { WebSocket?: unknown; default?: unknown };
+        const Socket = loaded.WebSocket ?? loaded.default;
+        if (typeof Socket !== 'function') {
+            throw new Error('ws module did not export a WebSocket constructor');
+        }
+        (globalThis as { WebSocket?: unknown }).WebSocket = Socket;
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+            'Global WebSocket is not available. On Node 20 start with NODE_OPTIONS=--experimental-websocket. ' +
+                'Install protobuf stubs with `npm ci --ignore-scripts` in multiplayer/mp-client (@bufbuild/protobuf/wire). ' +
+                `ws fallback failed: ${detail}`,
+        );
+    }
+}
+
 const MIN_ALLOWED_INTERVAL_MS = 220;
 const DEFAULT_MOVEMENT_SPEED_MS = 220;
 const MAP_HEADER_SIZE = 256;
 const MAP_BLOCKED_FLAG = 0x80;
+
+interface SimulatorBotAuth {
+    accountId: string;
+    characterName: string;
+}
 
 interface SimulatorConfig {
     ip: string;
@@ -59,6 +137,8 @@ interface SimulatorConfig {
     rampUpTimeSeconds: number;
     minIntervalMs: number;
     maxIntervalMs: number;
+    /** Set only for the rules bot. Stress-test clients leave this unset. */
+    botAuth?: SimulatorBotAuth;
 }
 
 interface Position {
@@ -302,13 +382,16 @@ class SimulatedGameClient {
     private resolveReady!: () => void;
     private rejectReady!: (error: Error) => void;
     private pingSequence = 1;
-    private readonly networkId = crypto.randomUUID();
+    private readonly networkId: string;
+    /** Packet-derived view for the rules bot. Unused by the stress-test path. */
+    private readonly observation = new PlayerBotObservation();
 
     constructor(
         private readonly clientIndex: number,
         private readonly config: SimulatorConfig,
         private readonly callbacks: SimulatedGameClientCallbacks = {},
     ) {
+        this.networkId = config.botAuth?.accountId ?? crypto.randomUUID();
         this.readyPromise = new Promise<void>((resolve, reject) => {
             this.resolveReady = resolve;
             this.rejectReady = reject;
@@ -316,8 +399,11 @@ class SimulatedGameClient {
     }
 
     public async start(): Promise<void> {
+        await ensureGlobalWebSocket();
         if (typeof WebSocket === 'undefined') {
-            throw new Error('Global WebSocket is not available in this Node.js runtime.');
+            throw new Error(
+                'Global WebSocket is not available. On Node 20 start with NODE_OPTIONS=--experimental-websocket.',
+            );
         }
 
         const websocketUrl = `ws://${this.config.ip}:${this.config.port}/ws`;
@@ -435,6 +521,54 @@ class SimulatedGameClient {
                 case 'playerMovementStateChanged':
                     this.stats.remoteMovementStateMessages += 1;
                     break;
+                case 'hpUpdated':
+                    this.noteHpUpdated(message.payload.value);
+                    break;
+                case 'playerReceiveDamage':
+                    this.notePlayerReceiveDamage(message.payload.value);
+                    break;
+                case 'playerDied':
+                    this.notePlayerDied(message.payload.value);
+                    break;
+                case 'playerResurrected':
+                    this.notePlayerResurrected(message.payload.value);
+                    break;
+                case 'monsterDied':
+                    this.noteMonsterDied(message.payload.value);
+                    break;
+                case 'spellCastStarted':
+                    this.noteSpellCastStarted(message.payload.value);
+                    break;
+                case 'spellCastFailed':
+                    this.noteSpellCastFailed(message.payload.value);
+                    break;
+                case 'itemAddedToBag':
+                    this.noteItemAdded(message.payload.value);
+                    break;
+                case 'itemRemovedFromBag':
+                    this.noteItemRemoved(message.payload.value);
+                    break;
+                case 'itemEquipped':
+                    this.noteItemEquipped(message.payload.value);
+                    break;
+                case 'itemUnequipped':
+                    this.noteItemUnequipped(message.payload.value);
+                    break;
+                case 'monsterKillsUpdated':
+                    this.noteMonsterKills(message.payload.value);
+                    break;
+                case 'playerTeleported':
+                    this.notePlayerTeleported(message.payload.value);
+                    break;
+                case 'progressionState':
+                    this.noteProgressionState(message.payload.value);
+                    break;
+                case 'progressionUpdated':
+                    this.noteProgressionUpdated(message.payload.value);
+                    break;
+                case 'playerAttackModeChanged':
+                    this.noteAttackModeChanged(message.payload.value);
+                    break;
             }
         } catch (error) {
             console.warn(`[client ${this.clientIndex}] Failed to parse server message.`, error);
@@ -446,26 +580,66 @@ class SimulatedGameClient {
         applyItemDirectory(data.itemsDirectory);
         this.movementSpeedMs = data.movementSpeedMs > 0 ? data.movementSpeedMs : DEFAULT_MOVEMENT_SPEED_MS;
         this.runningMode = data.runningMode;
+        if (this.config.botAuth) {
+            this.observation.noteVitals(data.hp, data.maxHp);
+            this.observation.attackMode = data.attackMode;
+            this.observation.attackRangeCells = data.attackRangeCells > 0 ? data.attackRangeCells : 1;
+            this.observation.castSpeedMs = data.castSpeedMs > 0 ? data.castSpeedMs : 700;
+            this.observation.noteSpells(data.spells.map((spell) => ({ id: spell.id, name: spell.name })));
+            this.observation.noteItems(data.itemsDirectory.map((item) => ({
+                id: item.id,
+                name: item.name,
+                consumable: item.consumable === true,
+            })));
+            this.observation.noteBag(data.bagItems.map((item) => toBagStack(item)));
+            this.observation.noteEquipped('weapon', weaponStack(data.equippedItems));
+        }
     }
 
     private async handleInitialGameWorldState(data: InitialGameWorldState): Promise<void> {
-        if (this.isInitialized) {
-            return;
-        }
         if (!this.playerId) {
             console.warn(`[client ${this.clientIndex}] InitialGameWorldState received before InitialState.`);
             return;
         }
 
         this.clearConnectTimeout();
-        this.map = await getSharedMap(data.mapName);
+        const nextMap = await getSharedMap(data.mapName);
+        if (this.map && this.currentPosition) {
+            this.map.setTileOccupied(this.currentPosition.x, this.currentPosition.y, false);
+        }
+        this.map = nextMap;
         this.gameWorldId = data.gameWorldId;
         this.currentPosition = {
             x: data.playerX,
             y: data.playerY,
         };
         this.map.setTileOccupied(this.currentPosition.x, this.currentPosition.y, true);
+        if (this.config.botAuth) {
+            this.remoteMonsterCells.clear();
+            this.observation.monsters.clear();
+            this.observation.notePosition(data.playerX, data.playerY);
+            this.observation.dead = data.dead;
+            this.observation.noteWorld(
+                data.gameWorldId,
+                data.teleportLocs.map((set) => ({
+                    sources: set.locs.map((loc) => ({ x: loc.x, y: loc.y })),
+                    targetWorldId: set.target?.worldId ?? '',
+                })),
+            );
+            if (this.isInitialized) {
+                this.observation.pushSignal('world');
+                console.log(
+                    `[client ${this.clientIndex}] Changed world to ${data.gameWorldId || '?'} ` +
+                    `at (${data.playerX}, ${data.playerY})`,
+                );
+                return;
+            }
+        }
+        const already = this.isInitialized;
         this.isInitialized = true;
+        if (already) {
+            return;
+        }
 
         console.log(
             `[client ${this.clientIndex}] Ready on game world ${data.gameWorldId || '?'} (${normalizeMapFileName(data.mapName)}) ` +
@@ -475,7 +649,9 @@ class SimulatedGameClient {
 
         this.startPingInterval();
         this.resolveReady();
-        this.scheduleNextMovement();
+        if (!this.config.botAuth) {
+            this.scheduleNextMovement();
+        }
     }
 
     private handlePositionCorrected(data: PositionCorrected): void {
@@ -546,6 +722,16 @@ class SimulatedGameClient {
         for (const m of data.monsters) {
             this.remoteMonsterCells.set(String(m.monsterId), { x: m.x, y: m.y });
         }
+        if (this.config.botAuth) {
+            this.observation.noteMonsters(data.monsters.map((monster) => ({
+                id: String(monster.monsterId),
+                name: monster.name,
+                sprite: monster.sprite,
+                x: monster.x,
+                y: monster.y,
+                dead: monster.dead,
+            })));
+        }
     }
 
     private handleMonstersLeftRange(data: MonstersLeftRange): void {
@@ -553,14 +739,22 @@ class SimulatedGameClient {
             return;
         }
         this.stats.monstersLeftBatches += 1;
-        for (const rawId of data.monsterIds) {
-            this.remoteMonsterCells.delete(String(rawId));
+        const ids = data.monsterIds.map((rawId) => String(rawId));
+        for (const id of ids) {
+            this.remoteMonsterCells.delete(id);
+        }
+        if (this.config.botAuth) {
+            this.observation.noteMonstersLeft(ids);
         }
     }
 
     private handleMonsterMoved(data: MonsterMoved): void {
         this.stats.remoteMonsterMoves += 1;
-        this.remoteMonsterCells.set(String(data.monsterId), { x: data.destX, y: data.destY });
+        const monsterId = String(data.monsterId);
+        this.remoteMonsterCells.set(monsterId, { x: data.destX, y: data.destY });
+        if (this.config.botAuth) {
+            this.observation.noteMonsterMoved(monsterId, data.destX, data.destY);
+        }
     }
 
     private applyAuthoritativePosition(nextX: number, nextY: number): void {
@@ -571,6 +765,9 @@ class SimulatedGameClient {
         this.map.setTileOccupied(this.currentPosition.x, this.currentPosition.y, false);
         this.currentPosition = { x: nextX, y: nextY };
         this.map.setTileOccupied(this.currentPosition.x, this.currentPosition.y, true);
+        if (this.config.botAuth) {
+            this.observation.notePosition(nextX, nextY);
+        }
     }
 
     private scheduleNextMovement(): void {
@@ -635,6 +832,7 @@ class SimulatedGameClient {
                     destX: nextCell.x,
                     destY: nextCell.y,
                     gameWorldId: this.gameWorldId ?? '',
+                    dashAttack: false,
                 },
             },
         }).finish();
@@ -647,17 +845,320 @@ class SimulatedGameClient {
             return;
         }
 
+        const botAuth = this.config.botAuth;
         const command = ClientMessage.encode({
             payload: {
                 $case: 'authenticateRequest',
-                value: {
-                    id: this.networkId,
-                    characterName: `Bot ${this.clientIndex}`,
-                },
+                value: botAuth
+                    ? {
+                        id: botAuth.accountId,
+                        characterName: botAuth.characterName,
+                        authToken: PLAYTEST_AUTH_TOKEN,
+                        playerMode: 'gm',
+                        gender: PlayerGender.PLAYER_GENDER_MALE,
+                        skinColor: PlayerSkinColor.PLAYER_SKIN_COLOR_LIGHT,
+                        hairStyleIndex: 0,
+                        underwearColorIndex: 0,
+                        slotIndex: 0,
+                        str: 10,
+                        vit: 10,
+                        dex: 12,
+                        intel: 14,
+                        mag: 14,
+                        chr: 10,
+                    }
+                    : {
+                        id: this.networkId,
+                        characterName: `Bot ${this.clientIndex}`,
+                        authToken: '',
+                    },
             },
         }).finish();
 
         this.socket.send(command);
+    }
+
+    public getObservation(): PlayerBotObservation {
+        return this.observation;
+    }
+
+    public canStep(): boolean {
+        return !this.pendingMove && !!this.map && !!this.currentPosition;
+    }
+
+    public isOpenCell(x: number, y: number): boolean {
+        if (!this.map || !this.currentPosition) {
+            return false;
+        }
+        if (x === this.currentPosition.x && y === this.currentPosition.y) {
+            return false;
+        }
+        const tile = this.map.getTile(x, y);
+        if (!tile || !tile.isMoveAllowed || tile.occupiedByGameObject) {
+            return false;
+        }
+        return !isCellOccupiedByRemoteMap(x, y, this.remotePlayerCells) &&
+            !isCellOccupiedByRemoteMap(x, y, this.remoteMonsterCells);
+    }
+
+    public stepTo(x: number, y: number): boolean {
+        if (!this.map || !this.currentPosition || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+        if (this.pendingMove) {
+            return false;
+        }
+        const previous = this.currentPosition;
+        if (Math.max(Math.abs(x - previous.x), Math.abs(y - previous.y)) !== 1) {
+            return false;
+        }
+        if (!this.isOpenCell(x, y)) {
+            return false;
+        }
+
+        this.pendingMove = { fromX: previous.x, fromY: previous.y, toX: x, toY: y };
+        this.map.setTileOccupied(x, y, true);
+        this.map.setTileOccupied(previous.x, previous.y, false);
+        this.currentPosition = { x, y };
+        this.observation.notePosition(x, y);
+        this.stats.movementRequests += 1;
+        this.pendingMoveTimer = setTimeout(() => {
+            this.pendingMove = undefined;
+            this.pendingMoveTimer = undefined;
+        }, Math.max(this.movementSpeedMs, MIN_ALLOWED_INTERVAL_MS));
+
+        this.sendClient({
+            $case: 'requestMovement',
+            value: {
+                curX: previous.x,
+                curY: previous.y,
+                destX: x,
+                destY: y,
+                gameWorldId: this.gameWorldId ?? '',
+                dashAttack: false,
+            },
+        });
+        return true;
+    }
+
+    public sendMelee(monsterId: string): void {
+        this.sendClient({
+            $case: 'playerAttackedMonsterRequest',
+            value: { monsterId: BigInt(monsterId), rangedAttack: false, attackType: 0 },
+        });
+    }
+
+    public sendCastStart(spellId: number): void {
+        this.sendClient({
+            $case: 'spellCastStartRequest',
+            value: { spellId },
+        });
+    }
+
+    public sendCastFinish(x: number, y: number, monsterId: string | null): void {
+        this.sendClient({
+            $case: 'spellCastRequest',
+            value: {
+                x,
+                y,
+                monsterId: monsterId ? BigInt(monsterId) : undefined,
+            },
+        });
+    }
+
+    public sendConsume(itemUid: string): void {
+        this.sendClient({
+            $case: 'consumeItemRequest',
+            value: { itemUid: BigInt(itemUid) },
+        });
+    }
+
+    public sendUnequipWeapon(itemUid: string): void {
+        this.sendClient({
+            $case: 'unequipItemRequest',
+            value: { slot: 'weapon', itemUid: BigInt(itemUid) },
+        });
+    }
+
+    public sendEquipWeapon(itemUid: string): void {
+        this.sendClient({
+            $case: 'equipItemRequest',
+            value: { itemUid: BigInt(itemUid), targetSlot: 'weapon' },
+        });
+    }
+
+    public sendAttackMode(attackMode: boolean): void {
+        this.sendClient({
+            $case: 'playerAttackModeChangeRequest',
+            value: { attackMode },
+        });
+        this.observation.attackMode = attackMode;
+    }
+
+    public sendWorldChange(targetWorldId: string, gameWorldId: string): void {
+        this.sendClient({
+            $case: 'worldChangeRequest',
+            value: {
+                worldId: targetWorldId,
+                gameWorldId,
+                validateTeleport: true,
+            },
+        });
+    }
+
+    public sendResurrect(): void {
+        this.sendClient({
+            $case: 'playerResurrectedRequest',
+            value: {},
+        });
+    }
+
+    public drainSignals(): string[] {
+        return this.observation.drainSignals();
+    }
+
+    private sendClient(payload: NonNullable<ClientMessage['payload']>): void {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        const command = ClientMessage.encode({ payload }).finish();
+        this.socket.send(command);
+    }
+
+    private noteHpUpdated(data: HpUpdated): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        this.observation.noteVitals(data.hp, data.maxHp);
+    }
+
+    private notePlayerReceiveDamage(data: PlayerReceiveDamage): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        if (data.damage > 0) {
+            this.observation.noteDamageTaken();
+        }
+    }
+
+    private notePlayerDied(data: PlayerDied): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        this.observation.dead = true;
+        this.observation.notePosition(data.x, data.y);
+        this.observation.pushSignal('died');
+    }
+
+    private notePlayerResurrected(data: PlayerResurrected): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        this.observation.dead = false;
+        this.observation.noteVitals(data.hp, data.maxHp);
+        this.applyAuthoritativePosition(data.x, data.y);
+        this.observation.pushSignal('resurrected');
+    }
+
+    private noteMonsterDied(data: MonsterDied): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        this.observation.noteMonsterDied(String(data.monsterId));
+    }
+
+    private noteSpellCastStarted(data: SpellCastStarted): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        if (data.castSpeedMs > 0) {
+            this.observation.castSpeedMs = data.castSpeedMs;
+        }
+        this.observation.pushSignal('cast-started');
+    }
+
+    private noteSpellCastFailed(_data: SpellCastFailed): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        this.observation.pushSignal('cast-failed');
+    }
+
+    private noteItemAdded(data: ItemAddedToBag): void {
+        if (!this.config.botAuth || !data.item) {
+            return;
+        }
+        this.observation.noteBagAdded(toBagStack(data.item));
+    }
+
+    private noteItemRemoved(data: ItemRemovedFromBag): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        this.observation.noteBagRemoved(String(data.itemUid));
+    }
+
+    private noteItemEquipped(data: ItemEquipped): void {
+        const equipped = data.equippedItem;
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId || !equipped?.item) {
+            return;
+        }
+        this.observation.noteEquipped(equipped.slot, toBagStack(equipped.item));
+    }
+
+    private noteItemUnequipped(data: ItemUnequipped): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        if (data.slot === 'weapon') {
+            this.observation.noteEquipped('weapon', null);
+        }
+    }
+
+    private noteMonsterKills(data: MonsterKillsUpdated): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        const delta = this.observation.noteSlimeKills(data.monsterId, data.monsterName, Number(data.kills));
+        if (delta > 0) {
+            this.observation.pushSignal(`kill:${delta}:${data.monsterName}`);
+        }
+    }
+
+    private notePlayerTeleported(data: PlayerTeleported): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        this.pendingMove = undefined;
+        this.clearPendingMoveTimer();
+        this.applyAuthoritativePosition(data.x, data.y);
+        this.observation.pushSignal('teleported');
+    }
+
+    private noteProgressionState(data: ProgressionState): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        for (const row of data.monsterKills) {
+            this.observation.noteKillBaseline(row.monsterId, Number(row.kills));
+        }
+        this.observation.markKillBaselineReady();
+    }
+
+    private noteProgressionUpdated(data: ProgressionUpdated): void {
+        if (!this.config.botAuth) {
+            return;
+        }
+        if (data.maxHp > 0) {
+            this.observation.noteVitals(data.hp, data.maxHp);
+        }
+    }
+
+    private noteAttackModeChanged(data: PlayerAttackModeChanged): void {
+        if (!this.config.botAuth || String(data.playerId) !== this.playerId) {
+            return;
+        }
+        this.observation.attackMode = data.attackMode;
     }
 
     private startPingInterval(): void {
@@ -762,6 +1263,28 @@ class SimulatedGameClient {
             this.pingTimer = undefined;
         }
     }
+}
+
+function toBagStack(item: InventoryItemEntry): {
+    uid: string;
+    itemId: number;
+    quantity: number;
+    curLifeSpan?: number;
+    maxLifeSpan?: number;
+} {
+    const quantity = item.quantity ?? 1;
+    return {
+        uid: String(item.itemUid),
+        itemId: item.itemId,
+        quantity: quantity > 0 ? quantity : 1,
+        curLifeSpan: item.curLifeSpan,
+        maxLifeSpan: item.maxLifeSpan,
+    };
+}
+
+function weaponStack(equipped: readonly EquippedInventoryItemEntry[]): { uid: string; itemId: number } | null {
+    const weapon = equipped.find((entry) => entry.slot === 'weapon');
+    return weapon?.item ? toBagStack(weapon.item) : null;
 }
 
 function normalizeMapFileName(mapName: string): string {
@@ -1559,8 +2082,392 @@ function escapeHtml(value: string): string {
         .replaceAll("'", '&#39;');
 }
 
+interface RulesRunOptions {
+    host: string;
+    port: number;
+    className: PlayerBotClassName;
+    minutes: number;
+    seatKey: string;
+    accountIds: readonly string[];
+    characterName: string;
+    logPath: string;
+}
+
+function parseRulesRun(argv: readonly string[]): RulesRunOptions {
+    const values = readFlagMap(argv);
+    const explicitPlaytest = values.has('playtest');
+    const hostArg = values.get('host') ?? values.get('ip') ?? '127.0.0.1';
+    const portFallback = values.has('port')
+        ? parsePositiveInteger(values.get('port'), '--port', 31337)
+        : 31337;
+    const endpoint = splitHostPort(hostArg, portFallback);
+    assertRulesTargetAllowed(endpoint.host, explicitPlaytest);
+    const classRaw = (values.get('class') ?? 'mage').trim().toLowerCase();
+    const className: PlayerBotClassName = classRaw === 'mage' ? 'mage' : 'melee';
+    const minutes = parsePositiveInteger(values.get('minutes'), '--minutes', 30);
+    const seat = resolvePlaytestSeat(values.get('seat'));
+    const logPath = values.get('log') ?? resolve(process.cwd(), 'player-bot.jsonl');
+    return {
+        host: endpoint.host,
+        port: endpoint.port,
+        className,
+        minutes,
+        seatKey: seat.seatKey,
+        accountIds: seat.accountIds,
+        characterName: seat.characterName,
+        logPath,
+    };
+}
+
+function readFlagMap(argv: readonly string[]): Map<string, string> {
+    const values = new Map<string, string>();
+    for (let index = 0; index < argv.length; index++) {
+        const token = argv[index];
+        if (!token.startsWith('--')) {
+            continue;
+        }
+        const equalsIndex = token.indexOf('=');
+        if (equalsIndex >= 0) {
+            values.set(token.slice(2, equalsIndex), token.slice(equalsIndex + 1));
+            continue;
+        }
+        const key = token.slice(2);
+        const nextToken = argv[index + 1];
+        if (!nextToken || nextToken.startsWith('--')) {
+            values.set(key, 'true');
+            continue;
+        }
+        values.set(key, nextToken);
+        index += 1;
+    }
+    return values;
+}
+
+async function waitForSignal(
+    client: SimulatedGameClient,
+    names: readonly string[],
+    timeoutMs: number,
+    observe: (signals: readonly string[]) => void,
+): Promise<string | null> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const signals = client.drainSignals();
+        if (signals.length > 0) {
+            observe(signals);
+        }
+        for (const signal of signals) {
+            if (names.includes(signal)) {
+                return signal;
+            }
+        }
+        await delay(50);
+    }
+    return null;
+}
+
+async function runPlayerBot(argv: readonly string[]): Promise<void> {
+    const options = parseRulesRun(argv);
+    const log = new PlayerBotLog(options.logPath);
+    const startedAt = Date.now();
+    const totals = {
+        slimeKills: 0,
+        deaths: 0,
+        disconnects: 0,
+        potionsUsed: 0,
+        casts: 0,
+    };
+    let finished = false;
+    let client: SimulatedGameClient | undefined;
+    const brain = new PlayerBotBrain();
+    let potionLockedUntil = 0;
+    let recalling = false;
+
+    const observeSignals = (signals: readonly string[]): void => {
+        for (const signal of signals) {
+            if (signal.startsWith('kill:')) {
+                const parts = signal.split(':');
+                const delta = Number.parseInt(parts[1] ?? '1', 10);
+                const name = parts.slice(2).join(':') || 'Slime';
+                const added = Number.isFinite(delta) && delta > 0 ? delta : 1;
+                totals.slimeKills += added;
+                log.event('kill', { monsterName: name, delta: added, slimeKills: totals.slimeKills });
+            } else if (signal === 'died') {
+                totals.deaths += 1;
+                log.event('death', { deaths: totals.deaths });
+            } else if (signal === 'teleported' || signal === 'world' || signal === 'resurrected') {
+                if (signal === 'world') {
+                    const obs = client?.getObservation();
+                    log.event('world', { worldId: obs?.worldId ?? '', x: obs?.x, y: obs?.y, hp: obs?.hp, maxHp: obs?.maxHp });
+                }
+                const charges = client?.getObservation().hpPotions().reduce((sum, potion) => sum + potion.quantity, 0) ?? 0;
+                brain.noteTown(charges);
+                if (recalling || signal === 'resurrected') {
+                    log.event('town', {
+                        signal,
+                        x: client?.getObservation().x,
+                        y: client?.getObservation().y,
+                    });
+                }
+                recalling = false;
+            }
+        }
+    };
+
+    const castSpell = async (
+        spellId: number,
+        x: number,
+        y: number,
+        monsterId: string | null,
+    ): Promise<'ok' | 'start-failed' | 'finish-failed'> => {
+        const active = client;
+        if (!active) {
+            return 'start-failed';
+        }
+        observeSignals(active.drainSignals());
+        active.sendCastStart(spellId);
+        // The server fans SpellCastStarted out to other players and does not echo it to the caster.
+        // The bar is the castSpeedMs from the join snapshot (the duration that character is allowed).
+        // A short bar is lengthened after a rejected finish. The server check is not loosened.
+        const castMs = Math.max(200, active.getObservation().castSpeedMs);
+        const during = await waitForSignal(active, ['cast-failed'], castMs, observeSignals);
+        if (during === 'cast-failed') {
+            return 'start-failed';
+        }
+        active.sendCastFinish(x, y, monsterId);
+        const after = await waitForSignal(active, ['cast-failed'], 400, observeSignals);
+        return after === 'cast-failed' ? 'finish-failed' : 'ok';
+    };
+
+    const finish = (reason: string): void => {
+        if (finished) {
+            return;
+        }
+        finished = true;
+        const durationMs = Date.now() - startedAt;
+        const worldId = client?.getObservation().worldId ?? '';
+        const verdict = log.summary({ ...totals, durationMs, worldId });
+        console.log(
+            `${reason} verdict=${verdict} slimeKills=${totals.slimeKills} deaths=${totals.deaths} ` +
+            `disconnects=${totals.disconnects} potionsUsed=${totals.potionsUsed} casts=${totals.casts} ` +
+            `durationMs=${durationMs} world=${worldId} log=${log.path}`,
+        );
+        client?.stop();
+        process.exit(verdict === 'PASS' ? 0 : 1);
+    };
+
+    process.once('SIGINT', () => finish('Stopped by SIGINT.'));
+    process.once('SIGTERM', () => finish('Stopped by SIGTERM.'));
+    const durationTimer = setTimeout(() => finish(`Rules run reached ${options.minutes} minute(s).`), options.minutes * 60 * 1000);
+
+    log.event('start', {
+        host: options.host,
+        port: options.port,
+        className: options.className,
+        minutes: options.minutes,
+        seat: options.seatKey,
+        characterName: options.characterName,
+        decisionSource: 'client-packets-only',
+    });
+    console.log(
+        `Rules bot ${options.className} seat=${options.seatKey} (${options.characterName}) ` +
+        `for ${options.minutes} minute(s) at ws://${options.host}:${options.port}/ws log=${log.path}`,
+    );
+
+    let lastError: Error | undefined;
+    for (const accountId of options.accountIds) {
+        if (finished) {
+            return;
+        }
+        const config: SimulatorConfig = {
+            ip: options.host,
+            port: options.port,
+            clients: 1,
+            rampUpTimeSeconds: 0,
+            minIntervalMs: ACTION_DELAY_MIN_MS,
+            maxIntervalMs: ACTION_DELAY_MAX_MS,
+            botAuth: { accountId, characterName: options.characterName },
+        };
+        const attempt = new SimulatedGameClient(1, config, {
+            onUnexpectedDisconnect: () => {
+                if (finished || !attempt.isConnected() && !client) {
+                    return;
+                }
+                totals.disconnects += 1;
+                log.event('disconnect', { accountId });
+                clearTimeout(durationTimer);
+                finish('Disconnected.');
+            },
+        });
+        try {
+            await attempt.start();
+            client = attempt;
+            log.event('ready', { accountId, characterName: options.characterName });
+            lastError = undefined;
+            break;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            attempt.stop();
+            log.event('auth-failed', { accountId, message: lastError.message });
+            console.warn(`[rules] Seat account ${accountId} did not enter: ${lastError.message}`);
+        }
+    }
+
+    if (!client) {
+        totals.disconnects += 1;
+        log.event('disconnect', { message: lastError?.message ?? 'auth failed' });
+        clearTimeout(durationTimer);
+        finish(lastError?.message ?? 'Playtest auth failed.');
+        return;
+    }
+
+    const activeClient = client;
+    while (!finished) {
+        observeSignals(activeClient.drainSignals());
+
+        const view = buildPlayerBotView(
+            activeClient.getObservation(),
+            options.className,
+            activeClient.canStep(),
+            Date.now() < potionLockedUntil,
+        );
+        const action: PlayerBotAction = brain.decide(view, {
+            isOpen: (x, y) => activeClient.isOpenCell(x, y),
+        }, Date.now());
+        await delay(randomIntInclusive(ACTION_DELAY_MIN_MS, ACTION_DELAY_MAX_MS));
+        if (finished) {
+            break;
+        }
+        await applyRulesAction(activeClient, brain, action, totals, log, (lockedMs) => {
+            potionLockedUntil = Date.now() + lockedMs;
+        }, () => {
+            recalling = true;
+        }, castSpell);
+    }
+}
+
+async function applyRulesAction(
+    client: SimulatedGameClient,
+    brain: PlayerBotBrain,
+    action: PlayerBotAction,
+    totals: { potionsUsed: number; casts: number },
+    log: PlayerBotLog,
+    lockPotion: (ms: number) => void,
+    markRecalling: () => void,
+    castSpell: (
+        spellId: number,
+        x: number,
+        y: number,
+        monsterId: string | null,
+    ) => Promise<'ok' | 'start-failed' | 'finish-failed'>,
+): Promise<void> {
+    switch (action.type) {
+        case 'wait':
+            return;
+        case 'resurrect':
+            client.sendResurrect();
+            return;
+        case 'attack-mode':
+            client.sendAttackMode(true);
+            return;
+        case 'unequip-weapon':
+            client.sendUnequipWeapon(action.itemUid);
+            return;
+        case 'equip-weapon':
+            client.sendEquipWeapon(action.itemUid);
+            log.event('equip', { itemUid: action.itemUid, slot: 'weapon' });
+            return;
+        case 'drink': {
+            const before = client.getObservation();
+            brain.noteDrink(before.hp);
+            client.sendConsume(action.itemUid);
+            totals.potionsUsed += 1;
+            lockPotion(1500);
+            log.event('potion', {
+                itemUid: action.itemUid,
+                potionsUsed: totals.potionsUsed,
+                hp: before.hp,
+                maxHp: before.maxHp,
+                tookDamage: before.tookDamage,
+            });
+            return;
+        }
+        case 'move':
+            client.stepTo(action.x, action.y);
+            return;
+        case 'melee':
+            brain.noteMelee();
+            client.sendMelee(action.monsterId);
+            return;
+        case 'cast': {
+            const result = await castSpell(action.spellId, action.x, action.y, action.monsterId);
+            const observation = client.getObservation();
+            if (result === 'ok') {
+                brain.noteCastFinish('ok', Date.now());
+                totals.casts += 1;
+                log.event('cast', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    casts: totals.casts,
+                    castSpeedMs: observation.castSpeedMs,
+                });
+            } else if (result === 'finish-failed') {
+                const next = observation.noteCastFinishRejected();
+                brain.noteCastFinish(next, Date.now());
+                log.event('cast-failed', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    phase: 'finish',
+                    next,
+                    castSpeedMs: observation.castSpeedMs,
+                });
+            } else {
+                brain.noteCastFinish('melee', Date.now());
+                log.event('cast-failed', {
+                    spellId: action.spellId,
+                    monsterId: action.monsterId,
+                    phase: 'start',
+                    next: 'melee',
+                    castSpeedMs: observation.castSpeedMs,
+                });
+            }
+            return;
+        }
+        case 'recall': {
+            markRecalling();
+            const result = await castSpell(action.spellId, client.getObservation().x, client.getObservation().y, null);
+            if (result !== 'ok') {
+                brain.noteRecallFailed();
+                log.event('cast-failed', { spellId: action.spellId, recall: true });
+            } else {
+                totals.casts += 1;
+                log.event('cast', { spellId: action.spellId, recall: true, casts: totals.casts });
+            }
+            return;
+        }
+        case 'recall-scroll':
+            markRecalling();
+            client.sendConsume(action.itemUid);
+            log.event('potion', { itemUid: action.itemUid, recallScroll: true });
+            return;
+        case 'warp':
+            client.sendWorldChange(action.worldId, action.gameWorldId);
+            log.event('warp', { worldId: action.worldId, from: action.gameWorldId });
+            return;
+        default:
+            return;
+    }
+}
+
 async function main(): Promise<void> {
-    const config = parseArgs(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    assertNoServerStateFlags(argv);
+    if (rulesModeRequested(argv)) {
+        await runPlayerBot(argv);
+        return;
+    }
+
+    const config = parseArgs(argv);
+    assertNotProductionHost(config.ip);
     const controller = new StressTestController(config);
     process.once('SIGINT', () => {
         controller.handleSignal('SIGINT');

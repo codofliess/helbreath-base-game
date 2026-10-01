@@ -121,6 +121,9 @@ public static class Spawn {
 
     /// <summary>Sends spell entries when <paramref name="includeSpells"/> is true, item directory on every send, plus session-scoped player tunables; called on every join (spells omitted on world transfer).</summary>
     public static void SendInitialState(GameWorldRef wr, GameWorldPlayer player, bool includeSpells) {
+        // The cast-start check floors this character at FastestAllowedCastSpeedMs (1800 when
+        // Mag < 50 and Magic skill < 100). Publish that duration in this snapshot. The check itself is unchanged.
+        PlayerDerivedStats.ApplyAuthoritativeCastSpeed(player);
         IEnumerable<SpellConfig> spells;
         if (!includeSpells) {
             spells = Array.Empty<SpellConfig>();
@@ -224,6 +227,8 @@ public static class Spawn {
         Inventory.UnequipItemsInvalidForStats(wr, player);
         // Equip Merien/Xelima/Ice SA from currently worn gear (silent on join).
         SpecialAbility.RecomputeFromEquipment(wr, player, notify: false);
+        // Local PLAYTEST bots: potion stack + Fire Strike, before the client snapshot.
+        PlaytestQaKit.Apply(player);
         SendInitialState(wr, player, includeSpellsInInitialState);
         SendInitialGameWorldState(wr, player);
         // Live F7 Circle reads Olympia ids from magic-shop learned= — not InitialState Spells.json ids.

@@ -58,7 +58,7 @@ public static class PvpAcademy {
     };
 
     public static void RecordEnemyKill(GameWorldPlayer killer) {
-        if (killer is null) {
+        if (killer is null || BotActor.ExcludedFromRankings(killer)) {
             return;
         }
         var wallet = NormalizeWallet(killer.AccountWallet);
@@ -125,7 +125,8 @@ public static class PvpAcademy {
     /// Hard/Elite (elite-player-like tiers) can grant Academy EKs with daily caps (1 Hard / 3 Elite).
     /// </summary>
     public static void OnChallengeCleared(GameWorldRef wr, GameWorldPlayer player, int mode, int elapsedMs) {
-        if (player is null || mode is < TimedChallenge.ModeChallengeEasy or > TimedChallenge.ModeChallengeElite) {
+        if (player is null || BotActor.ExcludedFromRankings(player) ||
+            mode is < TimedChallenge.ModeChallengeEasy or > TimedChallenge.ModeChallengeElite) {
             return;
         }
 

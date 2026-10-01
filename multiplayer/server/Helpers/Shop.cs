@@ -189,6 +189,11 @@ public static class Shop {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(request);
 
+        if (BotActor.ExcludedFromEconomy(player)) {
+            SendBuyResult(player, ok: false, "Bots are excluded from the economy.");
+            return;
+        }
+
         if (!IsRequestForCurrentWorld(wr, request.GameWorldId)) {
             return;
         }
@@ -256,6 +261,11 @@ public static class Shop {
     public static void HandleSellBagItemRequest(GameWorldRef wr, GameWorldPlayer player, SellBagItemRequest request) {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(request);
+
+        if (BotActor.ExcludedFromEconomy(player)) {
+            SendSellResult(player, ok: false, "Bots are excluded from the economy.");
+            return;
+        }
 
         if (!IsRequestForCurrentWorld(wr, request.GameWorldId)) {
             return;

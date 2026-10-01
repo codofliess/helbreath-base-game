@@ -36,6 +36,51 @@ pnpm exec tsx client-simulator.ts --ip=127.0.0.1 --minInterval=500 --maxInterval
 
 Optional flags: `--ip`, `--port`, `--clients`, `--rampUpTime` (seconds), `--minInterval` / `--maxInterval` (ms between movement attempts; minimum allowed interval is 220 ms).
 
+### Rules bot (local PLAYTEST only)
+
+One mage (or melee) client plays with a fixed rules loop: nearest slime, walk to it, cast Fire Strike or melee, drink an HP potion when health is low, return to town when health is critical or when health is low and no potions remain, then hunt again. Delays between actions are 250–900 ms. There are no LLM calls.
+
+Cruchi's conditions, in the code that applies them:
+
+(a) The bot may use everything the server sends via protocol to any client, including monster positions and HP, plus the client map file the simulator already loads for pathing. Internal state a client does not receive stays forbidden. Startup fails closed for `--server-log`, `--server-state`, `--database`, `--admin`, `--memory`, `--telemetry`, and the same family.
+
+(b) Local only, no wallet. Auth is the PLAYTEST door: token `playtest-bypass-token`, seat `elon` → character `ElonQa`. The bot tries account `playtest-elonqa` and then `playtest-a` if the first login does not enter. It refuses to open a socket unless the host is localhost / 127.0.0.1 / ::1, or a private-LAN address passed with `--playtest`. `play.chainlords.net` and other public hosts are refused.
+
+(c) Every bot is marked `actorKind: bot` (`middleware-node/auth.js` `/auth/enroll-bot`, and a local PLAYTEST seat when wallet auth is off). Bots are excluded from rankings, airdrops, economy, and transferable loot (`BotActor` on the game server).
+
+(d) The wallet-less login exists only locally (PLAYTEST). Live still requires a wallet (`WalletAuthValidator.cs`, PR #33). A bot claim does not skip that check.
+
+(e) Server logs are only for post-run evaluation (`player-bot-eval.ts`). That file is not imported by the bot, it is not inside the decision loop, and its result is never fed back into the bot.
+
+The bot imports protobuf from `multiplayer/mp-client`. Install those stubs before the first run (the `ws` / wire package scripts are not required):
+
+```bash
+cd multiplayer/mp-client && npm ci --ignore-scripts
+```
+
+Node 22+ has a global `WebSocket`. Node 20 does not, unless you start it with `NODE_OPTIONS=--experimental-websocket`. The simulator also loads the `ws` package when the global is missing.
+
+Start the local server with `PLAYTEST=1`. That flag binds `127.0.0.1` (not `0.0.0.0`). Wallet-less login is allowed when `PLAYTEST=1` and the process is not production and has no live secrets. `ASPNETCORE_ENVIRONMENT=Development` is the other local door for the same login. Either one is enough. A set `WALLET_AUTH_SECRET` still requires a wallet, including for a bot, and `PLAYTEST=1` refuses to start when that secret (or `DATABASE_URL`, `HELL_MINT`, `MARKET_MIDDLEWARE_URL`, `SOLANA_RPC_URL`) is set. `PLAYTEST` does not open the GM sandbox, so a new seat stays a traveler. Run the built DLL directly so a launch profile cannot inject those secrets.
+
+The listen port is `PORT` when that variable is set (1–65535). Otherwise it is the port in `multiplayer/server/Config/Settings.json` (1337). You do not edit `Settings.json` when 1337 is taken. Pass the same port to the bot with `--port`.
+
+A fresh seat is level 1 on the `traveler` world at the inland hub (90, 80), not Aresden. The bot walks to the southeast slime field on that map. The cast bar is `castSpeedMs` from the join snapshot, which is the duration the server enforces for that character (1800 ms when magic is low). A rejected finish lengthens a shorter bar to that slow cast and tries once more. A rejection at the slow bar switches the mage to melee so a level-1 seat can still kill slimes, then tries Fire Strike again after 6 swings or 8 seconds. While it is swinging, it equips a dagger from the bag if its hands are empty. The server's too-quick check is unchanged. A mage with no Fire Strike in the spell list melees instead of waiting. The PLAYTEST kit grants item 164 (Big Red Potion) and Fire Strike. Potions are used only after HP actually drops.
+
+```bash
+# from multiplayer/server, after building the DLL
+PORT=1340 PLAYTEST=1 ASPNETCORE_ENVIRONMENT=Development dotnet bin/Release/net10.0/Server.dll
+
+# from tools. --port must match PORT. Development is optional when PLAYTEST=1 is already set.
+pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 1340 --seat elon --log ./player-bot.jsonl
+```
+
+The JSONL log records kills, deaths, disconnects, potions, casts, and timestamps. The last line is a summary. **PASS** = at least 30 slime kills and 0 disconnects. **FAIL** = under 10 slime kills (treated as a game/network problem). Score it after the run:
+
+```bash
+pnpm exec tsx player-bot-eval.ts --log ./player-bot.jsonl
+pnpm exec tsx player-bot-eval.ts --log ./player-bot.jsonl --server-log /path/to/local-server.log
+```
+
 To regenerate protos only:
 
 ```bash

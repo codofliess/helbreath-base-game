@@ -76,6 +76,9 @@ public static class GardenQuests {
 
     public static void OnMonsterKilled(GameWorldPlayer killer, int catalogMonsterId) {
         ArgumentNullException.ThrowIfNull(killer);
+        if (BotActor.ExcludedFromAirdrops(killer)) {
+            return;
+        }
         var quest = killer.GardenQuestId;
         if (string.IsNullOrEmpty(quest)) {
             return;

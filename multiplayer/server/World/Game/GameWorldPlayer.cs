@@ -505,6 +505,9 @@ public class GameWorldPlayer : GameWorldActionableEntity {
     public string CharacterName => characterName;
     public string AccountWallet => accountWallet;
 
+    /// <summary>True when this session is <c>actorKind: bot</c> or a local PLAYTEST seat. Not persisted on the character.</summary>
+    public bool IsBotActor { get; private set; }
+
     public long Exp => exp;
     public int Level => level;
     public int Rebirth => rebirth;
@@ -1771,6 +1774,10 @@ public class GameWorldPlayer : GameWorldActionableEntity {
 
     public void SetAccountWallet(string wallet) {
         accountWallet = string.IsNullOrWhiteSpace(wallet) ? "" : wallet.Trim();
+    }
+
+    public void SetBotActor(bool isBot) {
+        IsBotActor = isBot;
     }
 
     /// <summary>Records move/cast/attack/chat activity and clears the AFK warning latch.</summary>

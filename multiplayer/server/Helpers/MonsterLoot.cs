@@ -84,6 +84,11 @@ public static class MonsterLoot {
     public static void TryDropLootOnDeath(GameWorldRef wr, GameWorldMonster monster, GameWorldPlayer? killer = null) {
         ArgumentNullException.ThrowIfNull(monster);
 
+        // A bot kill must not leave transferable loot on the ground for another player.
+        if (BotActor.LootMustNotTransfer(killer)) {
+            return;
+        }
+
         if (!wr.MonstersById.TryGetValue(monster.CatalogMonsterId, out var catalogEntry) ||
             catalogEntry.Loot is not { Length: > 0 } lootTable) {
             return;

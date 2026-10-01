@@ -18,6 +18,9 @@ public static class Referral {
     /// </summary>
     public static void OnPlayerEnteredWorld(GameWorldRef wr, GameWorldPlayer player, string? referralCodeFromAuth) {
         ArgumentNullException.ThrowIfNull(player);
+        if (BotActor.ExcludedFromEconomy(player) || BotActor.ExcludedFromAirdrops(player)) {
+            return;
+        }
         var wallet = player.AccountWallet;
         if (string.IsNullOrWhiteSpace(wallet)) {
             return;

@@ -3,8 +3,11 @@
  * (nearest threat, then a cast or a swing, then survival). Randomness is not used here.
  * Human-like delays live in the session loop.
  *
- * Inputs are fields a normal client already has from network packets plus the client map
- * walk grid. Server logs, memory, admin sockets, and databases are refused.
+ * The bot may use every field the server sends via protocol to any client: monster and
+ * player positions, HP, attacks, casts, potions, and the item directory. Internal state
+ * a client does not receive (server memory, admin sockets, the database, a side channel)
+ * is refused, including on localhost. Server logs are not an input; score them afterward
+ * with player-bot-eval.ts, which is not imported here.
  */
 
 export const HP_LOW_RATIO = 0.5;

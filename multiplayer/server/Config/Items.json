@@ -752,6 +752,13 @@
     "stackable": true
   },
   {
+    "id": 164,
+    "name": "Big Red Potion",
+    "itemType": "misc",
+    "stackable": true,
+    "consumable": true
+  },
+  {
     "id": 188,
     "name": "Snake Meat",
     "itemType": "misc",

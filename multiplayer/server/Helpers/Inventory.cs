@@ -351,6 +351,9 @@ public static class Inventory {
     public static bool TryRemoveBagItemForGroundDrop(GameWorldRef wr, GameWorldPlayer player, long itemUid, out InventoryItemState? droppedItem) {
         ArgumentNullException.ThrowIfNull(player);
         droppedItem = null;
+        if (BotActor.LootMustNotTransfer(player)) {
+            return false;
+        }
         if (!player.InventoryManager.TryRemoveItemFromBagForGroundDrop(itemUid, out droppedItem, out var result)) {
             return false;
         }
@@ -371,6 +374,14 @@ public static class Inventory {
         }
         if (!player.InventoryManager.TryAddGroundItemToBag(groundItem, out var result)) {
             return false;
+        }
+
+        if (BotActor.LootMustNotTransfer(player)) {
+            foreach (var bag in player.InventoryManager.BagItems) {
+                if (bag.ItemUid == groundItem.ItemUid || bag.ItemId == groundItem.ItemId) {
+                    bag.BindState = ItemBind.BindStateSoulbound;
+                }
+            }
         }
 
         ApplyInventoryMutation(wr, player, result);

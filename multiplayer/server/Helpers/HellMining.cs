@@ -39,7 +39,7 @@ public static class HellMining {
 
     /// <summary>1-minute heartbeat: session minutes + 1 credit per full hour online (AFK counts).</summary>
     public static void OnSessionMinute(GameWorldPlayer player) {
-        if (player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
+        if (player is null || BotActor.ExcludedFromAirdrops(player) || string.IsNullOrWhiteSpace(player.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -51,7 +51,7 @@ public static class HellMining {
 
     /// <summary>Monster kill: testing = HP-weighted farm credits, max 100 kills/species + diversity double.</summary>
     public static void OnMonsterKilled(GameWorldPlayer killer, int catalogMonsterId = 0, int monsterMaxHp = 0) {
-        if (killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
+        if (killer is null || BotActor.ExcludedFromAirdrops(killer) || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -70,7 +70,7 @@ public static class HellMining {
         GameWorldPlayer killer,
         int? victimCityKillerRank,
         EkScreenshotRarity rarity) {
-        if (killer is null || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
+        if (killer is null || BotActor.ExcludedFromAirdrops(killer) || string.IsNullOrWhiteSpace(killer.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -98,7 +98,7 @@ public static class HellMining {
 
     /// <summary>Timed Challenge clear → credits (and post-testing direct tokens).</summary>
     public static void OnEventParticipation(GameWorldPlayer player) {
-        if (player is null || string.IsNullOrWhiteSpace(player.AccountWallet)) {
+        if (player is null || BotActor.ExcludedFromAirdrops(player) || string.IsNullOrWhiteSpace(player.AccountWallet)) {
             return;
         }
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();

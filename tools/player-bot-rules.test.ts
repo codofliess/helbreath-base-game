@@ -201,6 +201,38 @@ test('kill baseline does not count historical slime kills', () => {
     assert.equal(view.fireStrikeSpellId, null);
 });
 
+test('playtest kit potion is in the client item directory and is drunk when HP is low', () => {
+    const catalog = JSON.parse(readFileSync(new URL('../multiplayer/server/Config/Items.json', import.meta.url), 'utf8')) as Array<{
+        id: number;
+        name: string;
+        consumable?: boolean;
+    }>;
+    const potion = catalog.find((item) => item.id === 164);
+    assert.ok(potion);
+    assert.equal(potion.name, 'Big Red Potion');
+    assert.equal(potion.consumable, true);
+    assert.equal(isHpPotionName(potion.name), true);
+
+    const observation = new PlayerBotObservation();
+    observation.noteVitals(40, 100);
+    observation.attackMode = true;
+    observation.noteItems([{ id: potion.id, name: potion.name, consumable: potion.consumable === true }]);
+    observation.noteBag([{ uid: '164-stack', itemId: potion.id, quantity: 5 }]);
+    const brain = new PlayerBotBrain();
+    const action = brain.decide(buildPlayerBotView(observation, 'mage', true, false), { isOpen: openGrid() });
+    assert.equal(action.type, 'drink');
+    if (action.type === 'drink') {
+        assert.equal(action.itemUid, '164-stack');
+    }
+});
+
+test('live wallet login is not weakened and eval stays outside the loop', () => {
+    const validator = readFileSync(new URL('../multiplayer/server/Auth/WalletAuthValidator.cs', import.meta.url), 'utf8');
+    assert.match(validator, /Wallet binding required before entering the world/);
+    assert.match(validator, /WALLET_AUTH_SECRET is required in production/);
+    assert.match(validator, /actorKind bot does not skip this check/);
+});
+
 test('bot sources do not import the post-run evaluator', () => {
     const files = [
         'client-simulator.ts',

@@ -825,6 +825,20 @@ public static class TimedChallenge {
         DespawnPlayerRunners(wr, player);
         player.ClearTimedChallengeRun();
 
+        if (BotActor.ExcludedFromRankings(player)) {
+            var excluded = $"Cleared in {FormatMs(elapsedMs)}. Bots are excluded from rankings.";
+            NetworkManager.SendToPlayer(player, new ServerMessage {
+                TimedChallengeFinished = new TimedChallengeFinished {
+                    Ok = true,
+                    Message = excluded,
+                    Mode = ModeSkills,
+                    ElapsedMs = elapsedMs,
+                },
+            });
+            ReplyState(player, active: false, ModeSkills, TargetCount, TargetCount, 0, excluded, freeMana: false);
+            return;
+        }
+
         var hardMet = elapsedMs > 0 && elapsedMs <= HardThresholdMs;
         var expGranted = false;
         var stoneGranted = false;

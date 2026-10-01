@@ -947,6 +947,8 @@ function registerAuthRoutes(app) {
             return;
         }
         try {
+            // Every bot is actorKind bot. The game server excludes that kind from rankings,
+            // airdrops, economy, and transferable loot. Public /auth/verify cannot set this.
             const player = await registerPlayer('bot');
             const session = await issueSessionResponse(player.playerId);
             res.json(session);

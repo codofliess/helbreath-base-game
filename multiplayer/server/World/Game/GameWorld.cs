@@ -738,6 +738,7 @@ public sealed class GameWorld : IWorkerWorld {
             connectedMessage.PersistedState?.Y);
         player.SetCharacterName(connectedMessage.CharacterName);
         player.SetAccountWallet(connectedMessage.AccountWallet);
+        player.SetBotActor(connectedMessage.BotActor);
         if (!string.IsNullOrWhiteSpace(connectedMessage.ArenaKitJson)) {
             player.SetArenaKitJson(connectedMessage.ArenaKitJson);
         }
@@ -790,6 +791,7 @@ public sealed class GameWorld : IWorkerWorld {
 
         reconnectedPlayer.SetCharacterName(reconnectedMessage.CharacterName);
         reconnectedPlayer.SetAccountWallet(reconnectedMessage.AccountWallet);
+        reconnectedPlayer.SetBotActor(reconnectedMessage.BotActor);
         reconnectedPlayer.SetLastKnownIp(reconnectedMessage.RemoteIp);
         reconnectedPlayer.AttachConnection(reconnectedMessage.SendMessage, reconnectedMessage.RequestDisconnect);
         OnlinePlayerDirectory.Register(reconnectedPlayer);
@@ -909,7 +911,8 @@ public sealed class GameWorld : IWorkerWorld {
                 player.TravelerMode,
                 player.AccountWallet,
                 player.LastKnownIp,
-                player.ArenaKitJson));
+                player.ArenaKitJson,
+                player.IsBotActor));
         Console.WriteLine($"[GameWorld:{id}] Player transferred to world '{transferPlayerOutMessage.TargetWorldId}'. Players on world: {playersBySessionId.Count}");
     }
 
@@ -927,6 +930,7 @@ public sealed class GameWorld : IWorkerWorld {
         if (!string.IsNullOrWhiteSpace(transferPlayerInMessage.Player.AccountWallet)) {
             player.SetAccountWallet(transferPlayerInMessage.Player.AccountWallet);
         }
+        player.SetBotActor(transferPlayerInMessage.Player.BotActor);
         if (!string.IsNullOrWhiteSpace(transferPlayerInMessage.Player.ArenaKitJson)) {
             player.SetArenaKitJson(transferPlayerInMessage.Player.ArenaKitJson);
         }

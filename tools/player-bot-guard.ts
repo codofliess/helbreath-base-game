@@ -1,7 +1,8 @@
 /**
  * Fail-closed target and seat checks for the rules bot.
+ * Local PLAYTEST only, no wallet. The playtest token is the loopback door's published bypass.
  * Decisions never read server memory, admin sockets, databases, or logs.
- * The playtest token is the loopback door's published bypass (PLAYTEST=1 only).
+ * Server logs are scored after the run by player-bot-eval.ts and never feed this loop.
  */
 
 export const PLAYTEST_AUTH_TOKEN = 'playtest-bypass-token';

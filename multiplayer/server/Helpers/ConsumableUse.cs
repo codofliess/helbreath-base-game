@@ -114,6 +114,7 @@ public static class ConsumableUse {
                 bonus = 10;
                 return true;
             case 92: // BigRedPotion
+            case 164: // PLAYTEST kit Big Red Potion (pre-Olympia id). Same heal as 92 so the client directory name is drinkable.
                 pool = VitalPool.Hp;
                 diceCount = 3;
                 diceSides = 8;

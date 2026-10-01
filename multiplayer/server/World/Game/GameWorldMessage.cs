@@ -215,7 +215,9 @@ public sealed record TransferredPlayerState(
     string AccountWallet = "",
     string? RemoteIp = null,
     /// <summary>Arena Pre-Ready kit JSON (re-applied on tournament arena entry after transfer).</summary>
-    string? ArenaKitJson = null);
+    string? ArenaKitJson = null,
+    /// <summary>Session is a bot: excluded from rankings, airdrops, economy, and transferable loot.</summary>
+    bool BotActor = false);
 
 /// <summary>Authoritative destination chosen by the source world; spawn coordinates are optional for non-teleport transfers.</summary>
 public sealed record WorldTransferDestination(string WorldId, int? SpawnX, int? SpawnY);
@@ -252,7 +254,9 @@ public sealed record PlayerConnectedMessage(
     /// <summary>Optional ?ref= code from AuthenticateRequest (first-touch attribution).</summary>
     string? ReferralCode = null,
     /// <summary>Optional Arena Pre-Ready kit JSON (applied on tournament-arena entry).</summary>
-    string? ArenaKitJson = null) : GameWorldMessage;
+    string? ArenaKitJson = null,
+    /// <summary>Session is a bot: excluded from rankings, airdrops, economy, and transferable loot.</summary>
+    bool BotActor = false) : GameWorldMessage;
 
 /// <summary>Existing in-world player attached a new socket after disconnect grace.</summary>
 public sealed record PlayerReconnectedMessage(
@@ -263,7 +267,9 @@ public sealed record PlayerReconnectedMessage(
     string CharacterName,
     string AccountWallet,
     /// <summary>Client remote IP for auction fee-debt IP blocks (MVP).</summary>
-    string? RemoteIp = null) : GameWorldMessage;
+    string? RemoteIp = null,
+    /// <summary>Session is a bot: excluded from rankings, airdrops, economy, and transferable loot.</summary>
+    bool BotActor = false) : GameWorldMessage;
 
 /// <summary>Socket closed; <paramref name="SessionRemainsActive"/> controls whether others still see a disconnected ghost in range.</summary>
 public sealed record PlayerDisconnectedMessage(Guid SessionId, bool SessionRemainsActive) : GameWorldMessage;

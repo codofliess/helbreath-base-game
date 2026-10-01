@@ -1,8 +1,7 @@
 /**
- * Post-run scorer. Run this only after the bot has stopped.
- * It may read a local server log to cross-check the JSONL. That cross-check is printed
- * and then discarded. It is not an input to player-bot rules and this file must not be
- * imported by client-simulator.ts or player-bot-rules.ts.
+ * Post-run evaluation only. Server logs and local telemetry are read here, after the bot
+ * has stopped, and only to score the run. They are never an input to the bot loop.
+ * This file must not be imported by client-simulator.ts or player-bot-rules.ts.
  */
 import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';

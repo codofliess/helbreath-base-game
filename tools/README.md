@@ -40,9 +40,17 @@ Optional flags: `--ip`, `--port`, `--clients`, `--rampUpTime` (seconds), `--minI
 
 One mage (or melee) client plays with a fixed rules loop: nearest slime, walk to it, cast Fire Strike or melee, drink an HP potion when health is low, return to town when health is critical or when health is low and no potions remain, then hunt again. Delays between actions are 250–900 ms. There are no LLM calls.
 
-The bot decides **only** from what a normal client receives over the network (monster and player positions, attack, cast, consume potion, vitals, the item directory) plus the client map file the simulator already loads for pathing. There is no server-state channel, live or on the local test server. It does not read server memory, admin sockets, the database, or any side channel, including on localhost. Startup fails closed if those inputs are requested (`--server-log`, `--server-state`, `--database`, `--admin`, `--memory`, `--telemetry`, and the same family). A separate post-run script, `player-bot-eval.ts`, may read a **local** server log or telemetry file after the run to score it. That file is not imported by the bot, it is not inside the decision loop, and its result is never fed back into the bot.
+Cruchi's conditions, in the code that applies them:
 
-Auth is the PLAYTEST door (no wallet): token `playtest-bypass-token`, seat `elon` → character `ElonQa`. The bot tries account `playtest-elonqa` (PR #87) and then `playtest-a` (consolidacion door) if the first login does not enter. It refuses to open a socket unless the host is localhost / 127.0.0.1 / ::1, or a private-LAN address passed with `--playtest`. `play.chainlords.net` and other public hosts are refused.
+(a) The bot may use everything the server sends via protocol to any client, including monster positions and HP, plus the client map file the simulator already loads for pathing. Internal state a client does not receive stays forbidden. Startup fails closed for `--server-log`, `--server-state`, `--database`, `--admin`, `--memory`, `--telemetry`, and the same family.
+
+(b) Local only, no wallet. Auth is the PLAYTEST door: token `playtest-bypass-token`, seat `elon` → character `ElonQa`. The bot tries account `playtest-elonqa` and then `playtest-a` if the first login does not enter. It refuses to open a socket unless the host is localhost / 127.0.0.1 / ::1, or a private-LAN address passed with `--playtest`. `play.chainlords.net` and other public hosts are refused.
+
+(c) Every bot is marked `actorKind: bot` (`middleware-node/auth.js` `/auth/enroll-bot`, and a local PLAYTEST seat when wallet auth is off). Bots are excluded from rankings, airdrops, economy, and transferable loot (`BotActor` on the game server).
+
+(d) The wallet-less login exists only locally (PLAYTEST). Live still requires a wallet (`WalletAuthValidator.cs`, PR #33). A bot claim does not skip that check.
+
+(e) Server logs are only for post-run evaluation (`player-bot-eval.ts`). That file is not imported by the bot, it is not inside the decision loop, and its result is never fed back into the bot.
 
 Start the local PLAYTEST server yourself (`PLAYTEST=1`, loopback port 31337). Then, from `tools/`:
 

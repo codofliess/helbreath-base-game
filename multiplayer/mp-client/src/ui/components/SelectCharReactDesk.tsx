@@ -33,6 +33,60 @@ type SealDrops =
     | { status: 'error' }
     | { status: 'ready'; rows: UnclaimedDrop[] };
 
+export interface ExplorerHubScroller {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+}
+
+/**
+ * PageDown/PageUp must move `.explorer-hub-scroll` only.
+ * The browser otherwise pages the gate: `overflow: hidden` is still a scrollport,
+ * and the sticky header cannot stick through it, so the title leaves the viewport.
+ * Home/End stay with text fields so the caret is not stolen.
+ */
+export function scrollExplorerHubOnPageKey(
+    key: string,
+    scroll: ExplorerHubScroller,
+    target: EventTarget | null,
+): boolean {
+    if (key !== 'PageDown' && key !== 'PageUp' && key !== 'Home' && key !== 'End') {
+        return false;
+    }
+    const tag =
+        target && typeof target === 'object' && 'tagName' in target
+            ? String((target as { tagName?: string }).tagName || '')
+            : '';
+    const editing =
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (typeof HTMLElement !== 'undefined' &&
+            target instanceof HTMLElement &&
+            target.isContentEditable);
+    if (editing) {
+        return false;
+    }
+    if (tag === 'INPUT' && (key === 'Home' || key === 'End')) {
+        return false;
+    }
+    const max = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+    const page = Math.max(1, Math.floor(scroll.clientHeight * 0.85));
+    if (key === 'PageDown') {
+        scroll.scrollTop = Math.min(max, scroll.scrollTop + page);
+        return true;
+    }
+    if (key === 'PageUp') {
+        scroll.scrollTop = Math.max(0, scroll.scrollTop - page);
+        return true;
+    }
+    if (key === 'Home') {
+        scroll.scrollTop = 0;
+        return true;
+    }
+    scroll.scrollTop = max;
+    return true;
+}
+
 /**
  * Explorer character hub: create or swap a slot, manage the referral code,
  * and read the selected character's cover (gear, seal NFT drops, monster groups).
@@ -49,6 +103,22 @@ export function SelectCharReactDesk() {
     const occupied = selectedRow?.occupied;
     const hasEmpty = rows.some((row) => !row.occupied);
     const [drops, setDrops] = useState<SealDrops>({ status: 'idle' });
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            const scroll = scrollRef.current;
+            if (!scroll || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+                return;
+            }
+            if (!scrollExplorerHubOnPageKey(event.key, scroll, event.target)) {
+                return;
+            }
+            event.preventDefault();
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, []);
 
     useEffect(() => {
         document.body.classList.add('login-selectchar-active');
@@ -98,7 +168,7 @@ export function SelectCharReactDesk() {
                     {walletShort ? <p className="explorer-hub-seal">Seal {walletShort}</p> : null}
                 </header>
 
-                <div className="explorer-hub-scroll">
+                <div className="explorer-hub-scroll" ref={scrollRef}>
                     <div className="explorer-hub-grid">
                         <section className="explorer-hub-roster" aria-labelledby="explorer-roster-title">
                             <h2 id="explorer-roster-title" className="explorer-hub-kicker">

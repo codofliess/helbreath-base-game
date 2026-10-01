@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it } from 'node:test';
-import { SelectCharReactDesk } from './SelectCharReactDesk';
+import { SelectCharReactDesk, scrollExplorerHubOnPageKey } from './SelectCharReactDesk';
 import { connectDialogStore } from '../store/ConnectDialog.store';
 import type { CharacterSlotSummary } from '../../utils/characterListApi';
 
@@ -67,5 +67,25 @@ describe('SelectCharReactDesk markup', () => {
             characterSlots: [],
             walletSession: null,
         }));
+    });
+});
+
+describe('scrollExplorerHubOnPageKey', () => {
+    it('pages the hub body and does not steal Home from a text field', () => {
+        const scroll = { scrollTop: 100, scrollHeight: 800, clientHeight: 200 };
+        assert.equal(scrollExplorerHubOnPageKey('PageDown', scroll, null), true);
+        assert.equal(scroll.scrollTop, 270);
+        assert.equal(scrollExplorerHubOnPageKey('PageUp', scroll, null), true);
+        assert.equal(scroll.scrollTop, 100);
+        assert.equal(scrollExplorerHubOnPageKey('End', scroll, null), true);
+        assert.equal(scroll.scrollTop, 600);
+        assert.equal(scrollExplorerHubOnPageKey('Home', scroll, null), true);
+        assert.equal(scroll.scrollTop, 0);
+        scroll.scrollTop = 40;
+        assert.equal(scrollExplorerHubOnPageKey('Home', scroll, { tagName: 'INPUT' } as EventTarget), false);
+        assert.equal(scroll.scrollTop, 40);
+        assert.equal(scrollExplorerHubOnPageKey('PageDown', scroll, { tagName: 'TEXTAREA' } as EventTarget), false);
+        assert.equal(scroll.scrollTop, 40);
+        assert.equal(scrollExplorerHubOnPageKey('ArrowDown', scroll, null), false);
     });
 });

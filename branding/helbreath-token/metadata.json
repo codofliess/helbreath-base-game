@@ -1,0 +1,15 @@
+{
+  "name": "Helbreath",
+  "symbol": "HELBREATH",
+  "description": "Token de ChainLords, el MMORPG de Helbreath donde humanos y agentes de IA juegan, pelean y comercian en el mismo mundo. play.chainlords.net",
+  "image": "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@f785c7f531d7f04b3aed70b01a68b02ff6bda34a/branding/hell-token/hell-token-logo-metaplex-1024.png",
+  "properties": {
+    "files": [
+      {
+        "uri": "https://cdn.jsdelivr.net/gh/codofliess/helbreath-base-game@f785c7f531d7f04b3aed70b01a68b02ff6bda34a/branding/hell-token/hell-token-logo-metaplex-1024.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image"
+  }
+}

@@ -4,7 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { chatDialogStore, type ChatMessageEntry } from '../store/ChatDialog.store';
 import { chatChannelLineClass } from '../../constants/ChatChannels';
 import { OLYMPIA_UI_FONT } from '../../constants/OlympiaTypography';
-import { screenChatLineOpacity, selectScreenChatLines } from './screenChatLines';
+import { selectScreenChatLines } from './screenChatLines';
 import '../rpg-ui.css';
 
 function formatSender(entry: ChatMessageEntry): string {
@@ -25,8 +25,8 @@ interface ChatWorldLogProps {
 /**
  * On-screen chat lines on the left / bottom-left of the map.
  * Same text as the speech overhead and the F9 Chat Log: `Name: message`,
- * channel colour, six-line stack, fade over the last part of a five-second life.
- * The Chat Log window does not hide this strip.
+ * channel colour, six-line stack. A line stays fully opaque for five seconds,
+ * then drops off. The Chat Log window does not hide this strip.
  */
 export function ChatWorldLog({ duelOnly = false }: ChatWorldLogProps) {
     const messages = useStore(chatDialogStore, (s) => s.messages);
@@ -71,13 +71,11 @@ export function ChatWorldLog({ duelOnly = false }: ChatWorldLogProps) {
         >
             <div className="chat-world-log-list">
                 {visible.map((entry) => {
-                    const ageMs = Math.max(0, nowMs - entry.timestampMs);
-                    const opacity = screenChatLineOpacity(ageMs);
                     return (
                         <div
                             key={entry.id}
                             className={`chat-world-log-line ${chatChannelLineClass(entry.channel)}`}
-                            style={{ opacity, fontFamily: OLYMPIA_UI_FONT }}
+                            style={{ fontFamily: OLYMPIA_UI_FONT }}
                         >
                             <span className="chat-world-log-sender">{formatSender(entry)}:</span>
                             <span className="chat-world-log-text">{entry.displayMessage}</span>

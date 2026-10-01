@@ -4,7 +4,6 @@ import type { ChatMessageEntry } from '../store/ChatDialog.store';
 import {
     SCREEN_CHAT_MAX_LINES,
     SCREEN_CHAT_TTL_MS,
-    screenChatLineOpacity,
     selectScreenChatLines,
 } from './screenChatLines';
 
@@ -35,7 +34,6 @@ describe('screen chat overlay', () => {
         assert.equal(visible[0]?.senderCharacterName, 'Co2');
         assert.equal(visible[0]?.displayMessage, 'hola');
         assert.equal(visible[0]?.channel, 'nearby');
-        assert.equal(screenChatLineOpacity(100), 1);
     });
 
     it('caps the stack at six lines and drops anything older than five seconds', () => {
@@ -50,15 +48,15 @@ describe('screen chat overlay', () => {
         assert.equal(visible.length, 6);
         assert.equal(visible[0]?.id, 'id-2');
         assert.equal(visible[5]?.id, 'id-7');
-        assert.equal(screenChatLineOpacity(SCREEN_CHAT_TTL_MS), 0);
     });
 
-    it('fades only in the last 30% of the lifetime', () => {
-        const fadeStart = SCREEN_CHAT_TTL_MS * 0.7;
-        assert.equal(screenChatLineOpacity(fadeStart - 1), 1);
-        const midFade = screenChatLineOpacity(fadeStart + (SCREEN_CHAT_TTL_MS - fadeStart) / 2);
-        assert.ok(midFade > 0.4 && midFade < 0.6, `expected ~0.5, got ${midFade}`);
-        assert.equal(screenChatLineOpacity(SCREEN_CHAT_TTL_MS - 1) < 0.05, true);
+    it('holds a line at full life until 5000 ms, then cuts it', () => {
+        const nowMs = 20_000;
+        const held = selectScreenChatLines([line('held', SCREEN_CHAT_TTL_MS - 1, 'nearby', nowMs)], nowMs);
+        assert.equal(held.length, 1);
+        assert.equal(held[0]?.id, 'held');
+        const cut = selectScreenChatLines([line('cut', SCREEN_CHAT_TTL_MS, 'nearby', nowMs)], nowMs);
+        assert.equal(cut.length, 0);
     });
 
     it('duel filter keeps nearby and drops trade', () => {

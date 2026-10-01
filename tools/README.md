@@ -36,6 +36,27 @@ pnpm exec tsx client-simulator.ts --ip=127.0.0.1 --minInterval=500 --maxInterval
 
 Optional flags: `--ip`, `--port`, `--clients`, `--rampUpTime` (seconds), `--minInterval` / `--maxInterval` (ms between movement attempts; minimum allowed interval is 220 ms).
 
+### Rules bot (local PLAYTEST only)
+
+One mage (or melee) client plays with a fixed rules loop: nearest slime, walk to it, cast Fire Strike or melee, drink an HP potion when health is low, return to town when health is critical or when health is low and no potions remain, then hunt again. Delays between actions are 250–900 ms. There are no LLM calls.
+
+The bot decides **only** from what a normal client receives over the network (monster and player positions, attack, cast, consume potion, vitals, the item directory) plus the client map file the simulator already loads for pathing. There is no server-state channel, live or on the local test server. It does not read server memory, admin sockets, the database, or any side channel, including on localhost. Startup fails closed if those inputs are requested (`--server-log`, `--server-state`, `--database`, `--admin`, `--memory`, `--telemetry`, and the same family). A separate post-run script, `player-bot-eval.ts`, may read a **local** server log or telemetry file after the run to score it. That file is not imported by the bot, it is not inside the decision loop, and its result is never fed back into the bot.
+
+Auth is the PLAYTEST door (no wallet): token `playtest-bypass-token`, seat `elon` → character `ElonQa`. The bot tries account `playtest-elonqa` (PR #87) and then `playtest-a` (consolidacion door) if the first login does not enter. It refuses to open a socket unless the host is localhost / 127.0.0.1 / ::1, or a private-LAN address passed with `--playtest`. `play.chainlords.net` and other public hosts are refused.
+
+Start the local PLAYTEST server yourself (`PLAYTEST=1`, loopback port 31337). Then, from `tools/`:
+
+```bash
+pnpm exec tsx client-simulator.ts --class mage --minutes 30 --host 127.0.0.1 --port 31337 --seat elon --log ./player-bot.jsonl
+```
+
+The JSONL log records kills, deaths, disconnects, potions, casts, and timestamps. The last line is a summary. **PASS** = at least 30 slime kills and 0 disconnects. **FAIL** = under 10 slime kills (treated as a game/network problem). Score it after the run:
+
+```bash
+pnpm exec tsx player-bot-eval.ts --log ./player-bot.jsonl
+pnpm exec tsx player-bot-eval.ts --log ./player-bot.jsonl --server-log /path/to/local-server.log
+```
+
 To regenerate protos only:
 
 ```bash

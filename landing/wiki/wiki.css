@@ -261,6 +261,7 @@ h2 {
 
 .loot-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 8px; }
 .resolve { display: block; font-size: 18px; }
+a.resolve { text-underline-offset: 3px; }
 
 .planner-grid {
   display: grid;

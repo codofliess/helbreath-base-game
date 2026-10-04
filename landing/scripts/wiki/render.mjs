@@ -264,6 +264,29 @@ function formatChance(value) {
   return `${(Math.round(value * 10000) / 100).toFixed(2)}%`;
 }
 
+function formatDurationMs(value) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error('Move and respawn times must be a non-negative whole number of milliseconds.');
+  }
+  return `${(value / 1000).toFixed(1)} s`;
+}
+
+function isLootItemPath(path) {
+  return /(?:^|\.)loot\.\d+\.itemId$/.test(path);
+}
+
+const ZERO_MAGIC_KEYS = new Set(['magicLevel', 'maxMana', 'magicHitRatio']);
+
+function magicTrioIsZero(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return false;
+  }
+  const magic = Object.prototype.hasOwnProperty.call(record, 'magicLevel') ? record.magicLevel : 0;
+  const mana = Object.prototype.hasOwnProperty.call(record, 'maxMana') ? record.maxMana : 0;
+  const hit = Object.prototype.hasOwnProperty.call(record, 'magicHitRatio') ? record.magicHitRatio : 0;
+  return magic === 0 && mana === 0 && hit === 0;
+}
+
 function combinedRow(object, key) {
   const spec = COMBINED.find((entry) => entry.keys.includes(key) && entry.keys.every((name) => Object.prototype.hasOwnProperty.call(object, name)));
   if (!spec) {
@@ -310,7 +333,19 @@ function renderPrimitives(value, path, indexes) {
     return '';
   }
   const leaf = path.split('.').pop();
-  const shown = leaf === 'chance' && typeof value === 'number' ? formatChance(value) : value;
+  if (leaf === 'itemId' && isLootItemPath(path)) {
+    const name = lookupName(indexes.items, value);
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw new Error(`Loot item ${value} has no name.`);
+    }
+    return `<a class="resolve" href="/wiki/items/${esc(value)}.html" data-resolve="item" data-resolve-id="${esc(value)}">${field(path, name)}</a>`;
+  }
+  let shown = value;
+  if (leaf === 'chance' && typeof value === 'number') {
+    shown = formatChance(value);
+  } else if ((leaf === 'movementSpeed' || leaf === 'respawnTime') && typeof value === 'number') {
+    shown = formatDurationMs(value);
+  }
   const text = primitiveText(shown);
   if (text === null) {
     return '';
@@ -382,10 +417,14 @@ function renderNode(value, path, indexes) {
 }
 
 function renderRecord(record, indexes) {
+  const dropMagic = magicTrioIsZero(record);
   const scalars = [];
   const nested = [];
   for (const entry of visiblePairs(record)) {
     if (entry.key === 'name' || entry.key === 'id') {
+      continue;
+    }
+    if (dropMagic && ZERO_MAGIC_KEYS.has(entry.key)) {
       continue;
     }
     if (entry.synthetic || !entry.value || typeof entry.value !== 'object') {
@@ -409,9 +448,9 @@ function renderRecord(record, indexes) {
 }
 
 export function renderDetail(kind, record, indexes) {
+  const lede = kind === 'monsters' ? '' : `    <p class="lede">${field('id', record.id)}</p>\n`;
   const body = `    <h1>${field('name', record.name)}</h1>
-    <p class="lede">${field('id', record.id)}</p>
-    ${renderRecord(record, indexes)}
+${lede}    ${renderRecord(record, indexes)}
 ${playButton()}
     <script type="application/json" id="wiki-record">${jsonForScript(record)}</script>`;
   return shell({
@@ -479,17 +518,12 @@ export function renderHome(catalog) {
     const count = catalog[kind.key].length;
     return `      <a class="card" href="${kind.slug}/index.html"><span>${esc(kind.title)}</span><strong data-count="${count}" data-kind="${kind.key}">${count}</strong></a>`;
   }).join('\n');
-  const sources = catalog.sources.map((source) => `      <li>${esc(source)}</li>`).join('\n');
   const body = `    <h1>${esc(PAGE_TITLE)}</h1>
     <p class="lede">${esc(PAGE_DESCRIPTION)}</p>
     <p><a class="plan-btn" href="/wiki/planner/index.html">${PLAN_LABEL}</a></p>
     <div class="cards">
 ${cards}
-    </div>
-    <h2>Config files</h2>
-    <ul class="sources">
-${sources}
-    </ul>`;
+    </div>`;
   return shell({
     canonical: SITE,
     current: '',

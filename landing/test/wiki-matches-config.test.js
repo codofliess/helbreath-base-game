@@ -89,6 +89,20 @@ function formatChance(value) {
   return `${(Math.round(value * 10000) / 100).toFixed(2)}%`;
 }
 
+function formatDurationMs(value) {
+  assert.equal(Number.isInteger(value) && value >= 0, true, value);
+  return `${(value / 1000).toFixed(1)} s`;
+}
+
+const ZERO_MAGIC_KEYS = new Set(['magicLevel', 'maxMana', 'magicHitRatio']);
+
+function magicTrioIsZero(record) {
+  const magic = Object.prototype.hasOwnProperty.call(record, 'magicLevel') ? record.magicLevel : 0;
+  const mana = Object.prototype.hasOwnProperty.call(record, 'maxMana') ? record.maxMana : 0;
+  const hit = Object.prototype.hasOwnProperty.call(record, 'magicHitRatio') ? record.magicHitRatio : 0;
+  return magic === 0 && mana === 0 && hit === 0;
+}
+
 function omitItem1309(value) {
   if (Array.isArray(value)) {
     return value
@@ -143,7 +157,7 @@ function emitPair(pair, pathName, indexes, out) {
   visibleFields(pair.value, childPath, indexes, out, false);
 }
 
-function visibleFields(value, pathName, indexes, out, top) {
+function visibleFields(value, pathName, indexes, out, top, options = {}) {
   if (Array.isArray(value)) {
     if (value.length === 0) {
       out.push({ path: pathName, empty: true, text: '0' });
@@ -154,18 +168,21 @@ function visibleFields(value, pathName, indexes, out, top) {
   }
   if (value && typeof value === 'object') {
     const pairs = pairList(value);
+    const dropMagic = top && options.kind === 'monsters' && magicTrioIsZero(value);
+    const skipKey = (key) => key === 'name' || key === 'id' || (dropMagic && ZERO_MAGIC_KEYS.has(key)) || (top && options.kind === 'monsters' && key === 'id');
     if (top) {
       for (const key of ['name', 'id']) {
+        if (options.kind === 'monsters' && key === 'id') continue;
         const pair = pairs.find((entry) => entry.key === key);
         if (pair) emitPair(pair, pathName, indexes, out);
       }
       for (const pair of pairs) {
-        if (pair.key === 'name' || pair.key === 'id') continue;
+        if (skipKey(pair.key)) continue;
         if (pair.synthetic || !pair.value || typeof pair.value !== 'object') emitPair(pair, pathName, indexes, out);
       }
       for (const pair of pairs) {
         if (pair.synthetic || !pair.value || typeof pair.value !== 'object') continue;
-        if (pair.key === 'name' || pair.key === 'id') continue;
+        if (skipKey(pair.key)) continue;
         emitPair(pair, pathName, indexes, out);
       }
       return;
@@ -174,7 +191,18 @@ function visibleFields(value, pathName, indexes, out, top) {
     return;
   }
   const leaf = pathName.split('.').pop();
-  const text = leaf === 'chance' && typeof value === 'number' ? formatChance(value) : primitiveText(value);
+  if (leaf === 'itemId' && /(?:^|\.)loot\.\d+\.itemId$/.test(pathName)) {
+    const item = indexes.items.get(String(value));
+    assert.ok(item, value);
+    out.push({ path: pathName, text: item.name });
+    return;
+  }
+  let text = primitiveText(value);
+  if (leaf === 'chance' && typeof value === 'number') {
+    text = formatChance(value);
+  } else if ((leaf === 'movementSpeed' || leaf === 'respawnTime') && typeof value === 'number') {
+    text = formatDurationMs(value);
+  }
   out.push({ path: pathName, text });
 }
 
@@ -194,9 +222,9 @@ function fieldsIn(html) {
   return found;
 }
 
-function assertFieldsMatchRecord(html, record, indexes) {
+function assertFieldsMatchRecord(html, record, indexes, kind) {
   const expected = [];
-  visibleFields(record, '', indexes, expected, true);
+  visibleFields(record, '', indexes, expected, true, { kind });
   const found = fieldsIn(html);
   assert.equal(found.length, expected.length, `${record.id} field count`);
   for (let index = 0; index < expected.length; index += 1) {
@@ -292,7 +320,19 @@ describe('wiki catalog matches server config', () => {
         const html = fs.readFileSync(path.join(wikiDir, dir, `${row.id}.html`), 'utf8');
         const embedded = extractRecord(html);
         assert.deepEqual(embedded, row, `${dir}/${row.id}`);
-        assertFieldsMatchRecord(html, row, indexes);
+        assertFieldsMatchRecord(html, row, indexes, dir);
+        const visible = html.replace(/<script[\s\S]*?<\/script>/g, '');
+        if (dir === 'monsters') {
+          assert.equal(visible.includes('<p class="lede">'), false, `${row.id} id`);
+          assert.equal(/data-field="loot\.\d+\.itemId">\d+</.test(visible), false, `${row.id} loot id`);
+        }
+        const lootLinks = [...visible.matchAll(/<a class="resolve" href="([^"]+)" data-resolve="item" data-resolve-id="([^"]+)"><span data-field="loot\.\d+\.itemId">([^<]*)<\/span><\/a>/g)];
+        for (const match of lootLinks) {
+          const item = indexes.items.get(match[2]);
+          assert.ok(item, match[2]);
+          assert.equal(match[1], `/wiki/items/${match[2]}.html`);
+          assert.equal(unescapeHtml(match[3]), item.name);
+        }
         const resolves = [...html.matchAll(/<span class="resolve" data-resolve="([^"]+)" data-resolve-id="([^"]+)">([^<]*)<\/span>/g)];
         for (const match of resolves) {
           const section = RESOLVE_TO_SECTION[match[1]];
@@ -325,9 +365,8 @@ describe('wiki catalog matches server config', () => {
         assert.equal(Number(chip[2]), count, `${dir} chip ${chip[1]}`);
       }
     }
-    for (const source of SOURCE_FILES) {
-      assert.ok(home.includes(source), source);
-    }
+    assert.equal(home.includes('Config files'), false);
+    assert.equal(home.includes('multiplayer/server/Config/'), false);
   });
 
   it('uses the fixed title, description, and buttons', () => {
@@ -456,6 +495,28 @@ describe('wiki catalog matches server config', () => {
     assert.match(demonVisible, /data-field="loot\.1\.chance">3\.28%</);
     assert.equal(demonVisible.includes('>Pact<'), false);
     assert.equal(demonVisible.includes('>Sprite<'), false);
+    const slime = catalog.monsters.find((row) => row.id === 1 && row.name === 'Slime');
+    assert.equal(slime.movementSpeed, 2300);
+    assert.equal(slime.respawnTime, 3500);
+    assert.equal(slime.magicLevel, 0);
+    assert.equal(slime.maxMana, 0);
+    assert.equal(slime.magicHitRatio, 0);
+    const slimeVisible = fs.readFileSync(path.join(wikiDir, 'monsters', '1.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.match(slimeVisible, /data-field="movementSpeed">2\.3 s</);
+    assert.match(slimeVisible, /data-field="respawnTime">3\.5 s</);
+    assert.equal(slimeVisible.includes('>Magic<'), false);
+    assert.equal(slimeVisible.includes('>Mana<'), false);
+    assert.equal(slimeVisible.includes('>Magic hit<'), false);
+    assert.equal(slimeVisible.includes('<p class="lede">'), false);
+    const gold = catalog.items.find((row) => row.id === slime.loot[0].itemId);
+    assert.equal(gold.name, 'Gold');
+    assert.match(slimeVisible, /href="\/wiki\/items\/90\.html" data-resolve="item" data-resolve-id="90"><span data-field="loot\.0\.itemId">Gold<\/span>/);
+    const caster = catalog.monsters.find((row) => row.magicLevel > 0 && row.maxMana > 0 && row.magicHitRatio > 0);
+    assert.ok(caster);
+    const casterVisible = fs.readFileSync(path.join(wikiDir, 'monsters', `${caster.id}.html`), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.match(casterVisible, new RegExp(`data-field="magicLevel">${caster.magicLevel}<`));
+    assert.match(casterVisible, new RegExp(`data-field="maxMana">${caster.maxMana}<`));
+    assert.match(casterVisible, new RegExp(`data-field="magicHitRatio">${caster.magicHitRatio}<`));
   });
 
   it('uses the fixed screen sentences', () => {

@@ -55,7 +55,7 @@ const COMBINED = [
 /** Short field labels. Unknown keys fail the build instead of growing a new phrase. */
 export const LABELS = {
   allegiance: 'Side',
-  aoeRadius: 'Area',
+  aoeRadius: 'Radius',
   area: 'Area',
   arenaSize: 'Size',
   armorLifeDecrement: 'Armor',

@@ -64,7 +64,7 @@ The landing service runs `node server.js`, which serves static files and **rever
 
 ## Catalog pages
 
-`npm run build` regenerates `wiki/` from `multiplayer/server/Config/` (items, monsters, spells, game worlds, NPCs, and the planner tunables in `Progression.json`). The pages do not read other Helbreath servers. `npm test` checks every published value against those files.
+`npm run build` regenerates `wiki/` from `multiplayer/server/Config/` when that folder sits next to `landing/` (items, monsters, spells, game worlds, NPCs, and the planner tunables in `Progression.json`). A deploy whose service root is only `landing/` keeps the committed `wiki/` instead. The pages do not read other Helbreath servers. `npm test` checks every published value against those files.
 
 ## Local
 

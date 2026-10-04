@@ -1,12 +1,14 @@
 /**
- * Regenerates landing/wiki from the server config allowlist.
+ * Regenerates landing/wiki from the server config allowlist when that
+ * config is reachable next to this landing folder. A deploy whose service
+ * root is only landing/ keeps the committed wiki.
  * Run from landing/: npm run build
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { loadCatalog } from './project.mjs';
+import { indexById, loadCatalog, SOURCE_FILES } from './project.mjs';
 import {
   KINDS,
   renderDetail,
@@ -16,11 +18,32 @@ import {
   renderPlanner,
   renderSitemap,
 } from './render.mjs';
-import { indexById } from './project.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '../../..');
-const outDir = path.join(repoRoot, 'landing', 'wiki');
+const landingDir = path.resolve(here, '../..');
+const outDir = path.join(landingDir, 'wiki');
+const repoRoot = path.resolve(landingDir, '..');
+
+function configReachable(root) {
+  const resolvedRoot = path.resolve(root);
+  return SOURCE_FILES.every((rel) => {
+    const abs = path.resolve(resolvedRoot, rel);
+    if (abs !== resolvedRoot && !abs.startsWith(resolvedRoot + path.sep)) {
+      return false;
+    }
+    return fs.existsSync(abs);
+  });
+}
+
+if (!configReachable(repoRoot)) {
+  const committed = path.join(outDir, 'catalog.json');
+  if (!fs.existsSync(committed)) {
+    console.error('[wiki] server config is not reachable and there is no committed wiki');
+    process.exit(1);
+  }
+  console.log('[wiki] server config is not reachable; using the committed wiki');
+  process.exit(0);
+}
 
 function browserMath() {
   const source = fs.readFileSync(path.join(here, 'planner.mjs'), 'utf8');

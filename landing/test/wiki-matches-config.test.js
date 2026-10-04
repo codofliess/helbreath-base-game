@@ -58,30 +58,6 @@ function primitiveText(value) {
   return null;
 }
 
-function walkPrimitives(value, pathName, out) {
-  if (Array.isArray(value)) {
-    if (value.length === 0) out.push({ path: pathName, empty: true });
-    value.forEach((entry, index) => walkPrimitives(entry, `${pathName}.${index}`, out));
-    return;
-  }
-  if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      walkPrimitives(child, pathName ? `${pathName}.${key}` : key, out);
-    }
-    return;
-  }
-  out.push({ path: pathName, text: primitiveText(value) });
-}
-
-function getPath(record, pathName) {
-  let current = record;
-  for (const part of pathName.split('.')) {
-    if (current == null) return undefined;
-    current = current[part];
-  }
-  return current;
-}
-
 function unescapeHtml(text) {
   return text
     .replace(/&lt;/g, '<')
@@ -96,47 +72,153 @@ function extractRecord(html) {
   return JSON.parse(match[1]);
 }
 
+const HIDDEN_KEYS = new Set([
+  'aimAssist', 'chaseDistance', 'chaseMaxDistance', 'clearTemporaryEffects', 'corpseDecayTime',
+  'direction', 'effect', 'endShards', 'loc', 'locs', 'maxIdleTime', 'minIdleTime', 'music',
+  'olympiaEffectType', 'pactArena', 'sprite', 'startShards', 'tickRate', 'workerThread',
+  'x', 'x1', 'x2', 'y', 'y1', 'y2',
+]);
+
+const COMBINED = [
+  { keys: ['damageDiceCount', 'damageDiceSides'], field: 'damageDice', format: (count, sides) => `${count}d${sides}` },
+  { keys: ['healDiceCount', 'healDiceSides'], field: 'healDice', format: (count, sides) => `${count}d${sides}` },
+  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}\u2013${max}` },
+];
+
+function formatChance(value) {
+  return `${(Math.round(value * 10000) / 100).toFixed(2)}%`;
+}
+
+function omitItem1309(value) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry) => !(entry && typeof entry === 'object' && !Array.isArray(entry) && entry.itemId === 1309))
+      .map((entry) => omitItem1309(entry));
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, child] of Object.entries(value)) out[key] = omitItem1309(child);
+    return out;
+  }
+  return value;
+}
+
+function joinPath(parent, key) {
+  return parent ? `${parent}.${key}` : key;
+}
+
+function pairList(object) {
+  const skip = new Set();
+  const pairs = [];
+  for (const key of Object.keys(object)) {
+    if (skip.has(key) || HIDDEN_KEYS.has(key)) continue;
+    const spec = COMBINED.find((entry) => entry.keys.includes(key) && entry.keys.every((name) => Object.prototype.hasOwnProperty.call(object, name)));
+    if (spec) {
+      spec.keys.forEach((name) => skip.add(name));
+      const nums = spec.keys.map((name) => object[name]);
+      assert.ok(nums.every((num) => Number.isInteger(num)), spec.keys.join('+'));
+      pairs.push({ key: spec.field, synthetic: true, text: spec.format(nums[0], nums[1]) });
+      continue;
+    }
+    pairs.push({ key, value: object[key], synthetic: false });
+  }
+  return pairs;
+}
+
+function emitPair(pair, pathName, indexes, out) {
+  const childPath = joinPath(pathName, pair.key);
+  if (pair.synthetic) {
+    out.push({ path: childPath, text: pair.text });
+    return;
+  }
+  if (pair.key === 'target' && pair.value && typeof pair.value === 'object' && !Array.isArray(pair.value)) {
+    const keys = Object.keys(pair.value);
+    if (keys.includes('worldId') && keys.every((name) => name === 'worldId' || HIDDEN_KEYS.has(name))) {
+      const map = indexes.maps.get(String(pair.value.worldId));
+      assert.ok(map, pair.value.worldId);
+      out.push({ path: `${childPath}.leadsTo`, text: map.name });
+      return;
+    }
+  }
+  visibleFields(pair.value, childPath, indexes, out, false);
+}
+
+function visibleFields(value, pathName, indexes, out, top) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      out.push({ path: pathName, empty: true, text: '0' });
+      return;
+    }
+    value.forEach((entry, index) => visibleFields(entry, `${pathName}.${index}`, indexes, out, false));
+    return;
+  }
+  if (value && typeof value === 'object') {
+    const pairs = pairList(value);
+    if (top) {
+      for (const key of ['name', 'id']) {
+        const pair = pairs.find((entry) => entry.key === key);
+        if (pair) emitPair(pair, pathName, indexes, out);
+      }
+      for (const pair of pairs) {
+        if (pair.key === 'name' || pair.key === 'id') continue;
+        if (pair.synthetic || !pair.value || typeof pair.value !== 'object') emitPair(pair, pathName, indexes, out);
+      }
+      for (const pair of pairs) {
+        if (pair.synthetic || !pair.value || typeof pair.value !== 'object') continue;
+        if (pair.key === 'name' || pair.key === 'id') continue;
+        emitPair(pair, pathName, indexes, out);
+      }
+      return;
+    }
+    pairs.forEach((pair) => emitPair(pair, pathName, indexes, out));
+    return;
+  }
+  const leaf = pathName.split('.').pop();
+  const text = leaf === 'chance' && typeof value === 'number' ? formatChance(value) : primitiveText(value);
+  out.push({ path: pathName, text });
+}
+
 function fieldsIn(html) {
   const found = [];
-  const re = /<span data-field="([^"]+)"( data-empty="1")?>([^<]*)<\/span>/g;
+  const re = /<span\b([^>]*)>([^<]*)<\/span>/g;
   let match;
   while ((match = re.exec(html))) {
+    const field = match[1].match(/data-field="([^"]+)"/);
+    if (!field) continue;
     found.push({
-      path: match[1],
-      empty: Boolean(match[2]),
-      text: unescapeHtml(match[3]),
+      path: field[1],
+      empty: /data-empty="1"/.test(match[1]),
+      text: unescapeHtml(match[2]),
     });
   }
   return found;
 }
 
-function assertFieldsMatchRecord(html, record) {
+function assertFieldsMatchRecord(html, record, indexes) {
   const expected = [];
-  walkPrimitives(record, '', expected);
+  visibleFields(record, '', indexes, expected, true);
   const found = fieldsIn(html);
-  const byPath = new Map();
-  for (const field of found) {
-    if (!byPath.has(field.path)) byPath.set(field.path, []);
-    byPath.get(field.path).push(field);
+  assert.equal(found.length, expected.length, `${record.id} field count`);
+  for (let index = 0; index < expected.length; index += 1) {
+    const item = expected[index];
+    const hit = found[index];
+    assert.equal(hit.path, item.path, `${record.id} ${item.path}`);
+    assert.equal(hit.empty, Boolean(item.empty), `${record.id} ${item.path}`);
+    assert.equal(hit.text, item.text, `${record.id} ${item.path}`);
   }
-  for (const item of expected) {
-    const hits = byPath.get(item.path);
-    assert.ok(hits && hits.length > 0, `missing visible field ${item.path}`);
-    for (const hit of hits) {
-      if (item.empty) {
-        assert.equal(hit.empty, true, item.path);
-        assert.equal(hit.text, '0', item.path);
-        assert.deepEqual(getPath(record, item.path), []);
-      } else {
-        assert.equal(hit.empty, false, item.path);
-        assert.equal(hit.text, item.text, item.path);
-      }
+}
+
+function htmlFiles() {
+  const files = [];
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      const abs = path.join(dir, name);
+      if (fs.statSync(abs).isDirectory()) walk(abs);
+      else if (name.endsWith('.html')) files.push(abs);
     }
   }
-  for (const field of found) {
-    const expectedItem = expected.find((item) => item.path === field.path);
-    assert.ok(expectedItem, `unexpected field ${field.path}`);
-  }
+  walk(wikiDir);
+  return files;
 }
 
 function indexById(rows) {
@@ -160,11 +242,11 @@ describe('wiki catalog matches server config', () => {
 
   it('copies items, monsters, spells, maps, and npcs with internal notes removed', () => {
     const expected = {
-      items: stripInternal(readJson(SOURCE_FILES[0])),
-      monsters: stripInternal(readJson(SOURCE_FILES[1])),
-      spells: stripInternal(readJson(SOURCE_FILES[2])),
-      maps: stripInternal(readJson(SOURCE_FILES[3])),
-      npcs: stripInternal(readJson(SOURCE_FILES[4])),
+      items: stripInternal(readJson(SOURCE_FILES[0])).filter((row) => row.id !== 1309),
+      monsters: omitItem1309(stripInternal(readJson(SOURCE_FILES[1]))),
+      spells: omitItem1309(stripInternal(readJson(SOURCE_FILES[2]))),
+      maps: omitItem1309(stripInternal(readJson(SOURCE_FILES[3]))),
+      npcs: omitItem1309(stripInternal(readJson(SOURCE_FILES[4]))),
     };
     assert.deepEqual(catalog.items, expected.items);
     assert.deepEqual(catalog.monsters, expected.monsters);
@@ -210,7 +292,7 @@ describe('wiki catalog matches server config', () => {
         const html = fs.readFileSync(path.join(wikiDir, dir, `${row.id}.html`), 'utf8');
         const embedded = extractRecord(html);
         assert.deepEqual(embedded, row, `${dir}/${row.id}`);
-        assertFieldsMatchRecord(html, row);
+        assertFieldsMatchRecord(html, row, indexes);
         const resolves = [...html.matchAll(/<span class="resolve" data-resolve="([^"]+)" data-resolve-id="([^"]+)">([^<]*)<\/span>/g)];
         for (const match of resolves) {
           const section = RESOLVE_TO_SECTION[match[1]];
@@ -292,7 +374,85 @@ describe('wiki catalog matches server config', () => {
     }
     assert.ok(used.has('HP'));
     assert.ok(used.has('Loot'));
+    assert.ok(used.has('Leads to'));
+    assert.ok(used.has('Heal'));
+    assert.ok(used.has('Damage'));
+    const hiddenLabels = [
+      'Sprite', 'Corpse', 'Facing', 'Idle min', 'Idle max', 'Chase', 'Chase max', 'Cells',
+      'Worker', 'Music', 'Clear', 'Aim', 'Tick', 'Start shards', 'End shards',
+      'X', 'Y', 'X1', 'X2', 'Y1', 'Y2', 'At', 'To', 'Effect', 'Pact',
+      'Dice', 'Sides', 'Heal dice', 'Heal sides', 'Min damage', 'Max damage',
+    ];
+    for (const label of hiddenLabels) {
+      assert.equal(used.has(label), false, label);
+    }
     assert.equal([...used].some((label) => /olympia|catalog|download|token|nft|\$/i.test(label)), false);
+  });
+
+  it('omits item 1309 and the word NFT from generated pages', () => {
+    assert.equal(catalog.items.some((row) => row.id === 1309), false);
+    assert.equal(fs.existsSync(path.join(wikiDir, 'items', '1309.html')), false);
+    const rawItems = stripInternal(readJson(SOURCE_FILES[0]));
+    assert.equal(rawItems.some((row) => row.id === 1309 && row.name === 'Item into NFT Ticket'), true);
+    function walk(value) {
+      if (Array.isArray(value)) {
+        value.forEach(walk);
+        return;
+      }
+      if (value && typeof value === 'object') {
+        assert.notEqual(value.itemId, 1309);
+        Object.values(value).forEach(walk);
+      }
+    }
+    walk(catalog);
+    for (const file of htmlFiles()) {
+      const html = fs.readFileSync(file, 'utf8');
+      assert.equal(/NFT/i.test(html), false, file);
+    }
+    const sitemap = fs.readFileSync(path.join(wikiDir, 'sitemap.xml'), 'utf8');
+    assert.equal(sitemap.includes('/items/1309.html'), false);
+    const catalogText = fs.readFileSync(path.join(wikiDir, 'catalog.json'), 'utf8');
+    assert.equal(/NFT/i.test(catalogText), false);
+  });
+
+  it('formats combined rows and loot chance from the config numbers', () => {
+    const spell = catalog.spells.find((row) => row.damageDiceCount === 2 && row.damageDiceSides === 6);
+    assert.ok(spell);
+    const spellHtml = fs.readFileSync(path.join(wikiDir, 'spells', `${spell.id}.html`), 'utf8');
+    assert.match(spellHtml, /<dt>Damage<\/dt><dd><span data-field="damageDice">2d6<\/span>/);
+    const heal = catalog.spells.find((row) => Number.isInteger(row.healDiceCount) && Number.isInteger(row.healDiceSides));
+    assert.ok(heal);
+    const healHtml = fs.readFileSync(path.join(wikiDir, 'spells', `${heal.id}.html`), 'utf8');
+    assert.match(healHtml, new RegExp(`<dt>Heal</dt><dd><span data-field="healDice">${heal.healDiceCount}d${heal.healDiceSides}</span>`));
+    const monster = catalog.monsters.find((row) => Number.isInteger(row.attackDamageMin) && Number.isInteger(row.attackDamageMax));
+    assert.ok(monster);
+    const monsterHtml = fs.readFileSync(path.join(wikiDir, 'monsters', `${monster.id}.html`), 'utf8');
+    assert.match(monsterHtml, new RegExp(`<dt>Damage</dt><dd><span data-field="attackDamage">${monster.attackDamageMin}\u2013${monster.attackDamageMax}</span>`));
+    const rare = catalog.monsters.find((row) => (row.loot || []).some((entry) => entry.chance === 0.00336));
+    assert.ok(rare);
+    const rareHtml = fs.readFileSync(path.join(wikiDir, 'monsters', `${rare.id}.html`), 'utf8');
+    const visible = rareHtml.replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.match(visible, />0\.34%</);
+    assert.equal(visible.includes('0.00336'), false);
+    const dagger = fs.readFileSync(path.join(wikiDir, 'items', '1.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.equal(dagger.includes('>Effect<'), false);
+    assert.equal(dagger.includes('olympiaEffectType'), false);
+  });
+
+  it('uses the fixed screen sentences', () => {
+    const items = fs.readFileSync(path.join(wikiDir, 'items', 'index.html'), 'utf8');
+    assert.match(items, /Checking this list against the server…/);
+    assert.match(items, /No match\. Clear the search to see everything\./);
+    const statusAt = items.indexOf('id="wiki-status"');
+    const listAt = items.indexOf('id="wiki-list"');
+    assert.ok(statusAt > 0 && statusAt < listAt);
+    const error = fs.readFileSync(path.join(wikiDir, 'error.html'), 'utf8');
+    assert.match(error, /That page isn't in the wiki\./);
+    assert.match(error, /href="\/wiki\/index.html">Back to the wiki</);
+    const client = fs.readFileSync(path.join(wikiDir, 'wiki.js'), 'utf8');
+    assert.match(client, /Couldn't confirm this list is current\. It may be out of date\./);
+    assert.equal(client.includes('Catalog check failed'), false);
+    assert.equal(client.includes('Loading catalog check'), false);
   });
 
   it('does not publish wallet, login, or third-party pages', () => {
@@ -406,7 +566,8 @@ describe('wiki miss stays on the catalog error page', () => {
     const response = await fetch(`http://127.0.0.1:${port}/wiki/items/not-a-real-page.html`);
     const body = await response.text();
     assert.equal(response.status, 404);
-    assert.match(body, /Page not in the catalog/);
+    assert.match(body, /That page isn't in the wiki\./);
+    assert.match(body, /Back to the wiki/);
     assert.equal(body.includes('Play Now'), false);
     assert.equal(body.includes('wallet'), false);
   });

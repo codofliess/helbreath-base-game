@@ -12,16 +12,54 @@ const PLAN_LABEL = 'Plan your build';
 const PLAY_LABEL = 'Play Helbreath in your browser';
 const PLAY_URL = 'https://play.chainlords.net';
 
+const CHECKING = 'Checking this list against the server…';
+const NO_MATCH = 'No match. Clear the search to see everything.';
+const MISSING_PAGE = "That page isn't in the wiki.";
+const BACK_LINK = 'Back to the wiki';
+
+/** Config keys that stay off the page. Unknown visible keys still fail the build. */
+const HIDDEN_KEYS = new Set([
+  'aimAssist',
+  'chaseDistance',
+  'chaseMaxDistance',
+  'clearTemporaryEffects',
+  'corpseDecayTime',
+  'direction',
+  'effect',
+  'endShards',
+  'loc',
+  'locs',
+  'maxIdleTime',
+  'minIdleTime',
+  'music',
+  'olympiaEffectType',
+  'pactArena',
+  'sprite',
+  'startShards',
+  'tickRate',
+  'workerThread',
+  'x',
+  'x1',
+  'x2',
+  'y',
+  'y1',
+  'y2',
+]);
+
+const COMBINED = [
+  { keys: ['damageDiceCount', 'damageDiceSides'], field: 'damageDice', format: (count, sides) => `${count}d${sides}` },
+  { keys: ['healDiceCount', 'healDiceSides'], field: 'healDice', format: (count, sides) => `${count}d${sides}` },
+  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}\u2013${max}` },
+];
+
 /** Short field labels. Unknown keys fail the build instead of growing a new phrase. */
 export const LABELS = {
-  aimAssist: 'Aim',
   allegiance: 'Side',
   aoeRadius: 'Area',
   area: 'Area',
   arenaSize: 'Size',
   armorLifeDecrement: 'Armor',
-  attackDamageMax: 'Max damage',
-  attackDamageMin: 'Min damage',
+  attackDamage: 'Damage',
   attackRange: 'Range',
   attackRecoveryTime: 'Recovery',
   attackSpeed: 'Attack',
@@ -33,35 +71,26 @@ export const LABELS = {
   castSpeedModifier: 'Cast',
   category: 'Category',
   chance: 'Chance',
-  chaseDistance: 'Chase',
-  chaseMaxDistance: 'Chase max',
-  clearTemporaryEffects: 'Clear',
   consumable: 'Use',
-  corpseDecayTime: 'Corpse',
   count: 'Count',
   createFood: 'Food',
   curePoison: 'Cure',
+  damageDice: 'Damage',
   damageDiceBonus: 'Bonus',
-  damageDiceCount: 'Dice',
-  damageDiceSides: 'Sides',
   damageMultiplier: 'Multiplier',
   damageType: 'Damage',
   defaultWeather: 'Weather',
-  direction: 'Facing',
   duration: 'Time',
   dwellAreas: 'Spawns',
-  effect: 'Effect',
   effectColor: 'Color',
   effects: 'Effects',
   emissionSteps: 'Steps',
   endRadius: 'End',
-  endShards: 'End shards',
   gender: 'Gender',
   genLevel: 'Level',
   group: 'Group',
   healBonus: 'Heal bonus',
-  healDiceCount: 'Heal dice',
-  healDiceSides: 'Heal sides',
+  healDice: 'Heal',
   hitChanceBonus: 'Hit bonus',
   hitsToAggro: 'Hits',
   hp: 'HP',
@@ -69,31 +98,25 @@ export const LABELS = {
   itemId: 'Item',
   itemType: 'Type',
   kind: 'Kind',
-  loc: 'At',
-  locs: 'Cells',
+  leadsTo: 'Leads to',
   loot: 'Loot',
   magicHitRatio: 'Magic hit',
   magicLevel: 'Magic',
   map: 'Map',
   maxHitsPerTarget: 'Hits',
-  maxIdleTime: 'Idle max',
   maxLifeSpan: 'Life',
   maxMana: 'Mana',
   maxPlayerLevel: 'Max level',
   maxQuantity: 'Max',
-  minIdleTime: 'Idle min',
   minQuantity: 'Min',
   miningNodes: 'Mining',
   monsterId: 'Monster',
   movementSpeed: 'Move',
   movementSpeedModifier: 'Move',
-  music: 'Music',
   name: 'Name',
   note: 'Note',
   npcId: 'NPC',
   npcs: 'NPCs',
-  olympiaEffectType: 'Effect',
-  pactArena: 'Pact',
   pickupGroundItem: 'Pickup',
   poisonLevel: 'Poison',
   projectileDistance: 'Distance',
@@ -104,32 +127,21 @@ export const LABELS = {
   respawnTime: 'Respawn',
   spellId: 'Spell',
   spells: 'Spells',
-  sprite: 'Sprite',
   stackable: 'Stack',
   startRadius: 'Start',
-  startShards: 'Start shards',
   summonCreature: 'Summon',
-  target: 'To',
   teleportLocs: 'Teleports',
   temporaryEffects: 'Effects',
-  tickRate: 'Tick',
   tournamentArena: 'Tournament',
   trainingArena: 'Training',
   type: 'Type',
   value: 'Value',
   weaponType: 'Weapon',
-  workerThread: 'Worker',
   worldId: 'World',
-  x: 'X',
-  x1: 'X1',
-  x2: 'X2',
-  y: 'Y',
-  y1: 'Y1',
-  y2: 'Y2',
 };
 
 const KINDS = [
-  { key: 'monsters', slug: 'monsters', title: 'Monsters', extra: 'sprite' },
+  { key: 'monsters', slug: 'monsters', title: 'Monsters' },
   { key: 'items', slug: 'items', title: 'Items', extra: 'itemType' },
   { key: 'maps', slug: 'maps', title: 'Maps', extra: 'map' },
   { key: 'spells', slug: 'spells', title: 'Spells', extra: 'damageType' },
@@ -245,6 +257,51 @@ function walkPrimitives(value, path, out) {
   out.push({ path, value });
 }
 
+function formatChance(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error('Loot chance is not a finite number.');
+  }
+  return `${(Math.round(value * 10000) / 100).toFixed(2)}%`;
+}
+
+function combinedRow(object, key) {
+  const spec = COMBINED.find((entry) => entry.keys.includes(key) && entry.keys.every((name) => Object.prototype.hasOwnProperty.call(object, name)));
+  if (!spec) {
+    return null;
+  }
+  const nums = spec.keys.map((name) => object[name]);
+  if (!nums.every((num) => Number.isInteger(num))) {
+    throw new Error(`Expected integers for ${spec.keys.join(' + ')}.`);
+  }
+  return { field: spec.field, text: spec.format(nums[0], nums[1]), keys: spec.keys };
+}
+
+function isTeleportTarget(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.includes('worldId') && keys.every((key) => key === 'worldId' || HIDDEN_KEYS.has(key));
+}
+
+function visiblePairs(object) {
+  const skip = new Set();
+  const pairs = [];
+  for (const key of Object.keys(object)) {
+    if (skip.has(key) || HIDDEN_KEYS.has(key)) {
+      continue;
+    }
+    const combined = combinedRow(object, key);
+    if (combined) {
+      combined.keys.forEach((name) => skip.add(name));
+      pairs.push({ key: combined.field, synthetic: true, text: combined.text });
+      continue;
+    }
+    pairs.push({ key, value: object[key], synthetic: false });
+  }
+  return pairs;
+}
+
 function renderPrimitives(value, path, indexes) {
   if (Array.isArray(value)) {
     if (value.length === 0) {
@@ -252,12 +309,13 @@ function renderPrimitives(value, path, indexes) {
     }
     return '';
   }
-  const text = primitiveText(value);
+  const leaf = path.split('.').pop();
+  const shown = leaf === 'chance' && typeof value === 'number' ? formatChance(value) : value;
+  const text = primitiveText(shown);
   if (text === null) {
     return '';
   }
   let extra = '';
-  const leaf = path.split('.').pop();
   if (leaf === 'itemId') {
     extra = resolveSpan('item', value, lookupName(indexes.items, value));
   } else if (leaf === 'spellId') {
@@ -269,7 +327,15 @@ function renderPrimitives(value, path, indexes) {
   } else if (leaf === 'worldId') {
     extra = resolveSpan('map', value, lookupName(indexes.maps, value));
   }
-  return `${field(path, value)}${extra}`;
+  return `${field(path, shown)}${extra}`;
+}
+
+function leadsTo(value, path, indexes) {
+  const name = lookupName(indexes.maps, value.worldId);
+  if (typeof name !== 'string' || name.trim() === '') {
+    throw new Error(`Teleport world ${value.worldId} has no map name.`);
+  }
+  return `<div><dt>${esc(label('leadsTo'))}</dt><dd><span data-field="${esc(`${path}.leadsTo`)}" class="resolve" data-resolve="map" data-resolve-id="${esc(value.worldId)}">${esc(name)}</span></dd></div>`;
 }
 
 function renderNode(value, path, indexes) {
@@ -277,18 +343,40 @@ function renderNode(value, path, indexes) {
     if (value.length === 0) {
       return `<p><span data-field="${esc(path)}" data-empty="1">0</span></p>`;
     }
-    const items = value.map((entry, index) => {
-      const childPath = `${path}.${index}`;
-      return `<li class="nest">${renderNode(entry, childPath, indexes)}</li>`;
-    }).join('');
-    return `<ol class="nest-list">${items}</ol>`;
+    const items = [];
+    value.forEach((entry, index) => {
+      const html = renderNode(entry, `${path}.${index}`, indexes);
+      if (html) {
+        items.push(`<li class="nest">${html}</li>`);
+      }
+    });
+    if (items.length === 0) {
+      return '';
+    }
+    return `<ol class="nest-list">${items.join('')}</ol>`;
   }
   if (value && typeof value === 'object') {
-    const bits = Object.entries(value).map(([key, child]) => {
-      const childPath = path ? `${path}.${key}` : key;
-      return `<div><dt>${esc(label(key))}</dt><dd>${renderNode(child, childPath, indexes)}</dd></div>`;
-    }).join('');
-    return `<dl class="fields">${bits}</dl>`;
+    const bits = [];
+    for (const entry of visiblePairs(value)) {
+      const childPath = path ? `${path}.${entry.key}` : entry.key;
+      if (entry.synthetic) {
+        bits.push(`<div><dt>${esc(label(entry.key))}</dt><dd>${field(childPath, entry.text)}</dd></div>`);
+        continue;
+      }
+      if (entry.key === 'target' && isTeleportTarget(entry.value)) {
+        bits.push(leadsTo(entry.value, childPath, indexes));
+        continue;
+      }
+      const inner = renderNode(entry.value, childPath, indexes);
+      if (!inner) {
+        continue;
+      }
+      bits.push(`<div><dt>${esc(label(entry.key))}</dt><dd>${inner}</dd></div>`);
+    }
+    if (bits.length === 0) {
+      return '';
+    }
+    return `<dl class="fields">${bits.join('')}</dl>`;
   }
   return renderPrimitives(value, path, indexes);
 }
@@ -296,21 +384,26 @@ function renderNode(value, path, indexes) {
 function renderRecord(record, indexes) {
   const scalars = [];
   const nested = [];
-  for (const [key, value] of Object.entries(record)) {
-    if (key === 'name' || key === 'id') {
+  for (const entry of visiblePairs(record)) {
+    if (entry.key === 'name' || entry.key === 'id') {
       continue;
     }
-    if (value && typeof value === 'object') {
-      nested.push([key, value]);
+    if (entry.synthetic || !entry.value || typeof entry.value !== 'object') {
+      scalars.push(entry);
     } else {
-      scalars.push([key, value]);
+      nested.push(entry);
     }
   }
-  const scalarHtml = scalars.length === 0 ? '' : `<dl class="scalar-grid">${scalars.map(([key, value]) => {
-    return `<div><dt>${esc(label(key))}</dt><dd>${renderPrimitives(value, key, indexes)}</dd></div>`;
+  const scalarHtml = scalars.length === 0 ? '' : `<dl class="scalar-grid">${scalars.map((entry) => {
+    const body = entry.synthetic ? field(entry.key, entry.text) : renderPrimitives(entry.value, entry.key, indexes);
+    return `<div><dt>${esc(label(entry.key))}</dt><dd>${body}</dd></div>`;
   }).join('')}</dl>`;
-  const nestedHtml = nested.map(([key, value]) => {
-    return `<section class="section"><h2>${esc(label(key))}</h2>${renderNode(value, key, indexes)}</section>`;
+  const nestedHtml = nested.map((entry) => {
+    const inner = renderNode(entry.value, entry.key, indexes);
+    if (!inner) {
+      return '';
+    }
+    return `<section class="section"><h2>${esc(label(entry.key))}</h2>${inner}</section>`;
   }).join('');
   return `${scalarHtml}${nestedHtml}`;
 }
@@ -368,8 +461,8 @@ export function renderIndex(kindMeta, rows) {
       <input id="wiki-q" name="q" type="search" autocomplete="off" placeholder="Name or id">
     </form>
 ${typeChips(rows, kindMeta.extra)}
-    <p id="wiki-status" role="status" data-state="loading">Loading catalog check…</p>
-    <p id="wiki-empty" class="empty" hidden>No rows match.</p>
+    <p id="wiki-status" role="status" data-state="loading">${CHECKING}</p>
+    <p id="wiki-empty" class="empty" hidden>${NO_MATCH}</p>
     <ul id="wiki-list" class="rows" data-kind="${esc(kindMeta.key)}" data-catalog="../catalog.json">
 ${list}
     </ul>`;
@@ -455,9 +548,8 @@ ${stats}
 }
 
 export function renderError() {
-  const body = `    <h1>Page not in the catalog</h1>
-    <p id="wiki-status" class="alert" role="alert" data-state="error">This address is not a generated catalog page.</p>
-    <p><a href="/wiki/index.html">Back to the catalog</a></p>`;
+  const body = `    <h1>${MISSING_PAGE}</h1>
+    <p><a href="/wiki/index.html">${BACK_LINK}</a></p>`;
   return shell({
     canonical: `${SITE}error.html`,
     current: '',

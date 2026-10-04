@@ -49,7 +49,7 @@
 
   async function load() {
     status.dataset.state = 'loading';
-    status.textContent = 'Checking this list against the server\u2026';
+    status.textContent = 'Checking this list against the server…';
     const params = new URLSearchParams(location.search);
     if (params.get('slow') === '1') {
       await new Promise((resolve) => setTimeout(resolve, 2500));

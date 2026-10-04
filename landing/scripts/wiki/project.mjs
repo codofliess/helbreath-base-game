@@ -17,6 +17,28 @@ export const SOURCE_FILES = [
 ];
 
 const PLANNER_KEYS = ['maxLevel', 'maxRebirth', 'rebirthLuPoints'];
+const OMITTED_ITEM_IDS = new Set([1309]);
+
+function omitHiddenItems(value) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return true;
+        }
+        return !OMITTED_ITEM_IDS.has(entry.itemId);
+      })
+      .map((entry) => omitHiddenItems(entry));
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, child] of Object.entries(value)) {
+      out[key] = omitHiddenItems(child);
+    }
+    return out;
+  }
+  return value;
+}
 
 export function stripInternal(value) {
   if (Array.isArray(value)) {
@@ -118,15 +140,15 @@ export function loadCatalog(repoRoot) {
   assertIdentity(spells, 'spells', 'number');
   assertIdentity(maps, 'maps', 'string');
   assertIdentity(npcs, 'npcs', 'number');
-  return {
+  return omitHiddenItems({
     sources: SOURCE_FILES.slice(),
-    items,
+    items: items.filter((row) => !OMITTED_ITEM_IDS.has(row.id)),
     monsters,
     spells,
     maps,
     npcs,
     progression: plannerConfig(repoRoot),
-  };
+  });
 }
 
 export function indexById(rows) {

@@ -3912,15 +3912,6 @@
       "category": 21
     },
     {
-      "id": 1309,
-      "name": "Item into NFT Ticket",
-      "itemType": "misc",
-      "stackable": true,
-      "consumable": true,
-      "maxLifeSpan": 1,
-      "category": 21
-    },
-    {
       "id": 1310,
       "name": "Exp Tablet",
       "itemType": "misc",

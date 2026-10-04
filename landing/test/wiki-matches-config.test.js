@@ -248,6 +248,53 @@ describe('wiki catalog matches server config', () => {
     }
   });
 
+  it('uses the fixed title, description, and buttons', () => {
+    const title = 'ChainLords Wiki: Helbreath monsters, items, maps &amp; character planner';
+    const description = 'Every monster, item and map in ChainLords, plus a free character planner. Plan your build, then play Helbreath in your browser.';
+    const play = '<a class="play-btn" href="https://play.chainlords.net">Play Helbreath in your browser</a>';
+    const files = [];
+    function walk(dir) {
+      for (const name of fs.readdirSync(dir)) {
+        const abs = path.join(dir, name);
+        if (fs.statSync(abs).isDirectory()) walk(abs);
+        else if (name.endsWith('.html')) files.push(abs);
+      }
+    }
+    walk(wikiDir);
+    for (const file of files) {
+      const html = fs.readFileSync(file, 'utf8');
+      assert.ok(html.includes(`<title>${title}</title>`), file);
+      assert.ok(html.includes(`<meta name="description" content="${description}">`), file);
+      assert.equal(/No download/i.test(html), false, file);
+      assert.equal(/Play free/i.test(html), false, file);
+      assert.ok(html.includes('Plan your build'), file);
+      const isEntry = /\/(items|monsters|maps|spells)\/(?!index\.html$)[^/]+\.html$/.test(file);
+      assert.equal(html.includes(play), isEntry, file);
+    }
+  });
+
+  it('keeps entry labels inside the simple list', async () => {
+    const { LABELS } = await import(pathToFileURL(path.join(landingDir, 'scripts', 'wiki', 'render.mjs')).href);
+    const allowed = new Set(Object.values(LABELS));
+    const used = new Set();
+    for (const dir of ['items', 'monsters', 'maps', 'spells']) {
+      const folder = path.join(wikiDir, dir);
+      for (const name of fs.readdirSync(folder)) {
+        if (!name.endsWith('.html') || name === 'index.html') continue;
+        const html = fs.readFileSync(path.join(folder, name), 'utf8');
+        for (const match of html.matchAll(/<dt>([^<]+)<\/dt>|<h2>([^<]+)<\/h2>/g)) {
+          used.add(match[1] || match[2]);
+        }
+      }
+    }
+    for (const label of used) {
+      assert.equal(allowed.has(label), true, label);
+    }
+    assert.ok(used.has('HP'));
+    assert.ok(used.has('Loot'));
+    assert.equal([...used].some((label) => /olympia|catalog|download|token|nft|\$/i.test(label)), false);
+  });
+
   it('does not publish wallet, login, or third-party pages', () => {
     const banned = ['Play Now', 'Phantom', 'wallet', '$HELL', '$helbreath', 'helbreath.net', 'Item.cfg'];
     const files = [];

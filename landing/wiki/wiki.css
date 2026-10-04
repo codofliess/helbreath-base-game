@@ -84,6 +84,28 @@ a:hover { color: var(--focus); }
   color: var(--gold);
 }
 
+.plan-btn,
+.play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  background: var(--gold);
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.nav a.plan-btn,
+.nav a.plan-btn[aria-current="page"] {
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.end-actions { margin-top: 28px; }
+
 .wrap {
   width: min(960px, calc(100% - 32px));
   margin: 0 auto;

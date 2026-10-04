@@ -6,6 +6,127 @@ import { indexById } from './project.mjs';
 import { evaluate } from './planner.mjs';
 
 const SITE = 'https://chainlords.net/wiki/';
+const PAGE_TITLE = 'ChainLords Wiki: Helbreath monsters, items, maps & character planner';
+const PAGE_DESCRIPTION = 'Every monster, item and map in ChainLords, plus a free character planner. Plan your build, then play Helbreath in your browser.';
+const PLAN_LABEL = 'Plan your build';
+const PLAY_LABEL = 'Play Helbreath in your browser';
+const PLAY_URL = 'https://play.chainlords.net';
+
+/** Short field labels. Unknown keys fail the build instead of growing a new phrase. */
+export const LABELS = {
+  aimAssist: 'Aim',
+  allegiance: 'Side',
+  aoeRadius: 'Area',
+  area: 'Area',
+  arenaSize: 'Size',
+  armorLifeDecrement: 'Armor',
+  attackDamageMax: 'Max damage',
+  attackDamageMin: 'Min damage',
+  attackRange: 'Range',
+  attackRecoveryTime: 'Recovery',
+  attackSpeed: 'Attack',
+  attackSpeedModifier: 'Attack',
+  attackStunDuration: 'Stun',
+  attackType: 'Attack type',
+  blockedItemSlots: 'Slots',
+  castProbability: 'Chance',
+  castSpeedModifier: 'Cast',
+  category: 'Category',
+  chance: 'Chance',
+  chaseDistance: 'Chase',
+  chaseMaxDistance: 'Chase max',
+  clearTemporaryEffects: 'Clear',
+  consumable: 'Use',
+  corpseDecayTime: 'Corpse',
+  count: 'Count',
+  createFood: 'Food',
+  curePoison: 'Cure',
+  damageDiceBonus: 'Bonus',
+  damageDiceCount: 'Dice',
+  damageDiceSides: 'Sides',
+  damageMultiplier: 'Multiplier',
+  damageType: 'Damage',
+  defaultWeather: 'Weather',
+  direction: 'Facing',
+  duration: 'Time',
+  dwellAreas: 'Spawns',
+  effect: 'Effect',
+  effectColor: 'Color',
+  effects: 'Effects',
+  emissionSteps: 'Steps',
+  endRadius: 'End',
+  endShards: 'End shards',
+  gender: 'Gender',
+  genLevel: 'Level',
+  group: 'Group',
+  healBonus: 'Heal bonus',
+  healDiceCount: 'Heal dice',
+  healDiceSides: 'Heal sides',
+  hitChanceBonus: 'Hit bonus',
+  hitsToAggro: 'Hits',
+  hp: 'HP',
+  id: 'Id',
+  itemId: 'Item',
+  itemType: 'Type',
+  kind: 'Kind',
+  loc: 'At',
+  locs: 'Cells',
+  loot: 'Loot',
+  magicHitRatio: 'Magic hit',
+  magicLevel: 'Magic',
+  map: 'Map',
+  maxHitsPerTarget: 'Hits',
+  maxIdleTime: 'Idle max',
+  maxLifeSpan: 'Life',
+  maxMana: 'Mana',
+  maxPlayerLevel: 'Max level',
+  maxQuantity: 'Max',
+  minIdleTime: 'Idle min',
+  minQuantity: 'Min',
+  miningNodes: 'Mining',
+  monsterId: 'Monster',
+  movementSpeed: 'Move',
+  movementSpeedModifier: 'Move',
+  music: 'Music',
+  name: 'Name',
+  note: 'Note',
+  npcId: 'NPC',
+  npcs: 'NPCs',
+  olympiaEffectType: 'Effect',
+  pactArena: 'Pact',
+  pickupGroundItem: 'Pickup',
+  poisonLevel: 'Poison',
+  projectileDistance: 'Distance',
+  projectileSpeed: 'Speed',
+  rangedAttack: 'Ranged',
+  recall: 'Recall',
+  requiredInt: 'Int',
+  respawnTime: 'Respawn',
+  spellId: 'Spell',
+  spells: 'Spells',
+  sprite: 'Sprite',
+  stackable: 'Stack',
+  startRadius: 'Start',
+  startShards: 'Start shards',
+  summonCreature: 'Summon',
+  target: 'To',
+  teleportLocs: 'Teleports',
+  temporaryEffects: 'Effects',
+  tickRate: 'Tick',
+  tournamentArena: 'Tournament',
+  trainingArena: 'Training',
+  type: 'Type',
+  value: 'Value',
+  weaponType: 'Weapon',
+  workerThread: 'Worker',
+  worldId: 'World',
+  x: 'X',
+  x1: 'X1',
+  x2: 'X2',
+  y: 'Y',
+  y1: 'Y1',
+  y2: 'Y2',
+};
 
 const KINDS = [
   { key: 'monsters', slug: 'monsters', title: 'Monsters', extra: 'sprite' },
@@ -37,23 +158,14 @@ function primitiveText(value) {
 }
 
 function label(key) {
-  const known = {
-    hp: 'HP',
-    id: 'Id',
-    mp: 'MP',
-    itemType: 'Item type',
-    itemId: 'Item id',
-    spellId: 'Spell id',
-    monsterId: 'Monster id',
-    npcId: 'NPC id',
-    worldId: 'World id',
-    aoeRadius: 'AoE radius',
-  };
-  if (known[key]) {
-    return known[key];
+  if (!Object.prototype.hasOwnProperty.call(LABELS, key)) {
+    throw new Error(`No simple label for field ${key}`);
   }
-  const spaced = key.replace(/([A-Z])/g, ' $1').replace(/[_-]+/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return LABELS[key];
+}
+
+function playButton() {
+  return `    <p class="end-actions"><a class="play-btn" href="${PLAY_URL}">${PLAY_LABEL}</a></p>`;
 }
 
 function field(path, value) {
@@ -77,16 +189,16 @@ function lookupName(index, id) {
   return row ? row.name : undefined;
 }
 
-export function shell({ title, description, canonical, current, body, scripts }) {
+export function shell({ canonical, current, body, scripts }) {
   const nav = [
-    ['monsters/index.html', 'Monsters', 'monsters'],
-    ['items/index.html', 'Items', 'items'],
-    ['maps/index.html', 'Maps', 'maps'],
-    ['spells/index.html', 'Spells', 'spells'],
-    ['planner/index.html', 'Stat planner', 'planner'],
-  ].map(([href, text, key]) => {
+    ['monsters/index.html', 'Monsters', 'monsters', ''],
+    ['items/index.html', 'Items', 'items', ''],
+    ['maps/index.html', 'Maps', 'maps', ''],
+    ['spells/index.html', 'Spells', 'spells', ''],
+    ['planner/index.html', PLAN_LABEL, 'planner', ' class="plan-btn"'],
+  ].map(([href, text, key, klass]) => {
     const currentAttr = key === current ? ' aria-current="page"' : '';
-    return `<a href="/wiki/${href}"${currentAttr}>${text}</a>`;
+    return `<a href="/wiki/${href}"${klass}${currentAttr}>${text}</a>`;
   }).join('');
   const scriptTags = (scripts || []).map((src) => `<script src="/wiki/${src}"></script>`).join('');
   return `<!DOCTYPE html>
@@ -94,8 +206,8 @@ export function shell({ title, description, canonical, current, body, scripts })
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${esc(title)}</title>
-  <meta name="description" content="${esc(description)}">
+  <title>${esc(PAGE_TITLE)}</title>
+  <meta name="description" content="${esc(PAGE_DESCRIPTION)}">
   <link rel="canonical" href="${esc(canonical)}">
   <meta name="robots" content="index,follow">
   <link rel="stylesheet" href="/wiki/wiki.css">
@@ -103,15 +215,13 @@ export function shell({ title, description, canonical, current, body, scripts })
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <header class="top">
-    <a class="brand" href="/wiki/index.html">Catalog</a>
-    <nav class="nav" aria-label="Catalog">${nav}</nav>
+    <a class="brand" href="/wiki/index.html">ChainLords Wiki</a>
+    <nav class="nav" aria-label="ChainLords Wiki">${nav}</nav>
   </header>
   <main id="content" class="wrap">
 ${body}
   </main>
-  <footer>
-    <p>Pages are generated from the server config in this repository. A value that is not in those files is left out.</p>
-  </footer>
+  <footer></footer>
   ${scriptTags}
 </body>
 </html>
@@ -205,25 +315,13 @@ function renderRecord(record, indexes) {
   return `${scalarHtml}${nestedHtml}`;
 }
 
-function detailDescription(record, extraKey) {
-  const parts = [record.name];
-  if (extraKey && record[extraKey] !== undefined && record[extraKey] !== null) {
-    parts.push(String(record[extraKey]));
-  }
-  return parts.join('. ');
-}
-
 export function renderDetail(kind, record, indexes) {
-  const meta = KINDS.find((entry) => entry.slug === kind);
-  const description = detailDescription(record, meta.extra);
   const body = `    <h1>${field('name', record.name)}</h1>
     <p class="lede">${field('id', record.id)}</p>
     ${renderRecord(record, indexes)}
+${playButton()}
     <script type="application/json" id="wiki-record">${jsonForScript(record)}</script>`;
   return shell({
-    depth: 1,
-    title: `${record.name} — Chain Lords catalog`,
-    description,
     canonical: `${SITE}${kind}/${record.id}.html`,
     current: kind,
     body,
@@ -264,9 +362,9 @@ export function renderIndex(kindMeta, rows) {
       </li>`;
   }).join('\n');
   const body = `    <h1>${esc(kindMeta.title)}</h1>
-    <p class="lede"><span data-count="${rows.length}">${rows.length}</span> from the server config.</p>
+    <p class="lede"><span data-count="${rows.length}">${rows.length}</span></p>
     <form class="search" role="search" action="" onsubmit="return false">
-      <label for="wiki-q">Search ${esc(kindMeta.title.toLowerCase())}</label>
+      <label for="wiki-q">Search</label>
       <input id="wiki-q" name="q" type="search" autocomplete="off" placeholder="Name or id">
     </form>
 ${typeChips(rows, kindMeta.extra)}
@@ -276,9 +374,6 @@ ${typeChips(rows, kindMeta.extra)}
 ${list}
     </ul>`;
   return shell({
-    depth: 1,
-    title: `${kindMeta.title} — Chain Lords catalog`,
-    description: `${kindMeta.title} from the Chain Lords server config.`,
     canonical: `${SITE}${kindMeta.slug}/`,
     current: kindMeta.slug,
     body,
@@ -292,20 +387,17 @@ export function renderHome(catalog) {
     return `      <a class="card" href="${kind.slug}/index.html"><span>${esc(kind.title)}</span><strong data-count="${count}" data-kind="${kind.key}">${count}</strong></a>`;
   }).join('\n');
   const sources = catalog.sources.map((source) => `      <li>${esc(source)}</li>`).join('\n');
-  const body = `    <h1>Catalog</h1>
-    <p class="lede">Monsters, items, maps, and spells published from this server's config. Nothing here is filled in from another server.</p>
+  const body = `    <h1>${esc(PAGE_TITLE)}</h1>
+    <p class="lede">${esc(PAGE_DESCRIPTION)}</p>
+    <p><a class="plan-btn" href="/wiki/planner/index.html">${PLAN_LABEL}</a></p>
     <div class="cards">
 ${cards}
-      <a class="card" href="planner/index.html"><span>Stat planner</span><strong>Points</strong></a>
     </div>
     <h2>Config files</h2>
     <ul class="sources">
 ${sources}
     </ul>`;
   return shell({
-    depth: 0,
-    title: 'Catalog — Chain Lords',
-    description: 'Monsters, items, maps, and spells from the Chain Lords server config.',
     canonical: SITE,
     current: '',
     body,
@@ -340,8 +432,7 @@ export function renderPlanner(config) {
           <button type="button" data-bump data-stat="${key}" data-dir="-1" aria-label="Lower ${name}">−</button>
           <button type="button" data-bump data-stat="${key}" data-dir="1" aria-label="Raise ${name}">+</button>
         </div>`).join('\n');
-  const body = `    <h1>Stat planner</h1>
-    <p class="lede">Spend level-up points. HP, MP, SP, and unspent points follow the server formulas with no gear bonus. Limits come from the progression config.</p>
+  const body = `    <h1>${PLAN_LABEL}</h1>
     <form id="planner-form" class="planner-grid" action="" onsubmit="return false">
       <div class="tune-row"><label for="level">Level</label><input id="level" type="text" inputmode="numeric" value="1"></div>
       <div class="tune-row"><label for="rebirth">Rebirth</label><input id="rebirth" type="text" inputmode="numeric" value="0"></div>
@@ -356,9 +447,6 @@ ${stats}
     </div>
     <script type="application/json" id="planner-config">${jsonForScript(config)}</script>`;
   return shell({
-    depth: 1,
-    title: 'Stat planner — Chain Lords catalog',
-    description: 'Spend level-up points and see HP, MP, SP, and unspent points from the server formulas.',
     canonical: `${SITE}planner/`,
     current: 'planner',
     body,
@@ -371,9 +459,6 @@ export function renderError() {
     <p id="wiki-status" class="alert" role="alert" data-state="error">This address is not a generated catalog page.</p>
     <p><a href="/wiki/index.html">Back to the catalog</a></p>`;
   return shell({
-    depth: 0,
-    title: 'Not in the catalog — Chain Lords',
-    description: 'This address is not a generated catalog page.',
     canonical: `${SITE}error.html`,
     current: '',
     body,

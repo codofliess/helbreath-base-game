@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stat planner — Chain Lords catalog</title>
-  <meta name="description" content="Spend level-up points and see HP, MP, SP, and unspent points from the server formulas.">
+  <title>ChainLords Wiki: Helbreath monsters, items, maps &amp; character planner</title>
+  <meta name="description" content="Every monster, item and map in ChainLords, plus a free character planner. Plan your build, then play Helbreath in your browser.">
   <link rel="canonical" href="https://chainlords.net/wiki/planner/">
   <meta name="robots" content="index,follow">
   <link rel="stylesheet" href="/wiki/wiki.css">
@@ -12,12 +12,11 @@
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <header class="top">
-    <a class="brand" href="/wiki/index.html">Catalog</a>
-    <nav class="nav" aria-label="Catalog"><a href="/wiki/monsters/index.html">Monsters</a><a href="/wiki/items/index.html">Items</a><a href="/wiki/maps/index.html">Maps</a><a href="/wiki/spells/index.html">Spells</a><a href="/wiki/planner/index.html" aria-current="page">Stat planner</a></nav>
+    <a class="brand" href="/wiki/index.html">ChainLords Wiki</a>
+    <nav class="nav" aria-label="ChainLords Wiki"><a href="/wiki/monsters/index.html">Monsters</a><a href="/wiki/items/index.html">Items</a><a href="/wiki/maps/index.html">Maps</a><a href="/wiki/spells/index.html">Spells</a><a href="/wiki/planner/index.html" class="plan-btn" aria-current="page">Plan your build</a></nav>
   </header>
   <main id="content" class="wrap">
-    <h1>Stat planner</h1>
-    <p class="lede">Spend level-up points. HP, MP, SP, and unspent points follow the server formulas with no gear bonus. Limits come from the progression config.</p>
+    <h1>Plan your build</h1>
     <form id="planner-form" class="planner-grid" action="" onsubmit="return false">
       <div class="tune-row"><label for="level">Level</label><input id="level" type="text" inputmode="numeric" value="1"></div>
       <div class="tune-row"><label for="rebirth">Rebirth</label><input id="rebirth" type="text" inputmode="numeric" value="0"></div>
@@ -67,9 +66,7 @@
     </div>
     <script type="application/json" id="planner-config">{"maxLevel":150,"maxRebirth":10,"rebirthLuPoints":6}</script>
   </main>
-  <footer>
-    <p>Pages are generated from the server config in this repository. A value that is not in those files is left out.</p>
-  </footer>
+  <footer></footer>
   <script src="/wiki/planner-math.js"></script><script src="/wiki/planner-ui.js"></script>
 </body>
 </html>

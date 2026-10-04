@@ -49,7 +49,7 @@ const HIDDEN_KEYS = new Set([
 const COMBINED = [
   { keys: ['damageDiceCount', 'damageDiceSides'], field: 'damageDice', format: (count, sides) => `${count}d${sides}` },
   { keys: ['healDiceCount', 'healDiceSides'], field: 'healDice', format: (count, sides) => `${count}d${sides}` },
-  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}\u2013${max}` },
+  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}–${max}` },
 ];
 
 /** Short field labels. Unknown keys fail the build instead of growing a new phrase. */

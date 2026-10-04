@@ -82,7 +82,7 @@ const HIDDEN_KEYS = new Set([
 const COMBINED = [
   { keys: ['damageDiceCount', 'damageDiceSides'], field: 'damageDice', format: (count, sides) => `${count}d${sides}` },
   { keys: ['healDiceCount', 'healDiceSides'], field: 'healDice', format: (count, sides) => `${count}d${sides}` },
-  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}\u2013${max}` },
+  { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}–${max}` },
 ];
 
 function formatChance(value) {
@@ -427,7 +427,7 @@ describe('wiki catalog matches server config', () => {
     const monster = catalog.monsters.find((row) => Number.isInteger(row.attackDamageMin) && Number.isInteger(row.attackDamageMax));
     assert.ok(monster);
     const monsterHtml = fs.readFileSync(path.join(wikiDir, 'monsters', `${monster.id}.html`), 'utf8');
-    assert.match(monsterHtml, new RegExp(`<dt>Damage</dt><dd><span data-field="attackDamage">${monster.attackDamageMin}\u2013${monster.attackDamageMax}</span>`));
+    assert.match(monsterHtml, new RegExp(`<dt>Damage</dt><dd><span data-field="attackDamage">${monster.attackDamageMin}–${monster.attackDamageMax}</span>`));
     const rare = catalog.monsters.find((row) => (row.loot || []).some((entry) => entry.chance === 0.00336));
     assert.ok(rare);
     const rareHtml = fs.readFileSync(path.join(wikiDir, 'monsters', `${rare.id}.html`), 'utf8');

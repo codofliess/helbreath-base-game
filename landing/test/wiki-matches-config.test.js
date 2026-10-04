@@ -392,6 +392,9 @@ describe('wiki catalog matches server config', () => {
   it('omits item 1309 and the word NFT from generated pages', () => {
     assert.equal(catalog.items.some((row) => row.id === 1309), false);
     assert.equal(fs.existsSync(path.join(wikiDir, 'items', '1309.html')), false);
+    const index = fs.readFileSync(path.join(wikiDir, 'items', 'index.html'), 'utf8');
+    assert.equal(index.includes('data-id="1309"'), false);
+    assert.equal(index.includes('Item into NFT Ticket'), false);
     const rawItems = stripInternal(readJson(SOURCE_FILES[0]));
     assert.equal(rawItems.some((row) => row.id === 1309 && row.name === 'Item into NFT Ticket'), true);
     function walk(value) {
@@ -405,14 +408,22 @@ describe('wiki catalog matches server config', () => {
       }
     }
     walk(catalog);
-    for (const file of htmlFiles()) {
-      const html = fs.readFileSync(file, 'utf8');
-      assert.equal(/NFT/i.test(html), false, file);
+    const generated = [];
+    function walkFiles(dir) {
+      for (const name of fs.readdirSync(dir)) {
+        const abs = path.join(dir, name);
+        if (fs.statSync(abs).isDirectory()) walkFiles(abs);
+        else generated.push(abs);
+      }
+    }
+    walkFiles(wikiDir);
+    assert.ok(generated.length > 100);
+    for (const file of generated) {
+      const text = fs.readFileSync(file, 'utf8');
+      assert.equal(text.includes('NFT'), false, file);
     }
     const sitemap = fs.readFileSync(path.join(wikiDir, 'sitemap.xml'), 'utf8');
     assert.equal(sitemap.includes('/items/1309.html'), false);
-    const catalogText = fs.readFileSync(path.join(wikiDir, 'catalog.json'), 'utf8');
-    assert.equal(/NFT/i.test(catalogText), false);
   });
 
   it('formats combined rows and loot chance from the config numbers', () => {
@@ -437,6 +448,14 @@ describe('wiki catalog matches server config', () => {
     const dagger = fs.readFileSync(path.join(wikiDir, 'items', '1.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
     assert.equal(dagger.includes('>Effect<'), false);
     assert.equal(dagger.includes('olympiaEffectType'), false);
+    const demon = catalog.monsters.find((row) => row.id === 18);
+    assert.equal(demon.loot[0].chance, 0.21);
+    assert.equal(demon.loot[1].chance, 0.03276);
+    const demonVisible = fs.readFileSync(path.join(wikiDir, 'monsters', '18.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.match(demonVisible, /data-field="loot\.0\.chance">21\.00%</);
+    assert.match(demonVisible, /data-field="loot\.1\.chance">3\.28%</);
+    assert.equal(demonVisible.includes('>Pact<'), false);
+    assert.equal(demonVisible.includes('>Sprite<'), false);
   });
 
   it('uses the fixed screen sentences', () => {

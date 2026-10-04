@@ -85,6 +85,19 @@ const COMBINED = [
   { keys: ['attackDamageMin', 'attackDamageMax'], field: 'attackDamage', format: (min, max) => `${min}–${max}` },
 ];
 
+const DAMAGE_SHAPES = new Map([
+  [0, 'Area'],
+  [1, 'Cone'],
+  [2, 'Line'],
+  [3, 'Direct'],
+  [4, 'Ground'],
+]);
+
+function formatDamageType(value) {
+  assert.equal(DAMAGE_SHAPES.has(value), true, value);
+  return DAMAGE_SHAPES.get(value);
+}
+
 function formatChance(value) {
   return `${(Math.round(value * 10000) / 100).toFixed(2)}%`;
 }
@@ -200,6 +213,8 @@ function visibleFields(value, pathName, indexes, out, top, options = {}) {
   let text = primitiveText(value);
   if (leaf === 'chance' && typeof value === 'number') {
     text = formatChance(value);
+  } else if (leaf === 'damageType' && typeof value === 'number') {
+    text = formatDamageType(value);
   } else if ((leaf === 'movementSpeed' || leaf === 'respawnTime') && typeof value === 'number') {
     text = formatDurationMs(value);
   }
@@ -356,12 +371,13 @@ describe('wiki catalog matches server config', () => {
       for (const row of rows) {
         const block = html.slice(html.indexOf(`data-id="${row.id}"`), html.indexOf('</li>', html.indexOf(`data-id="${row.id}"`)));
         for (const field of fieldsIn(block)) {
-          assert.equal(field.text, primitiveText(row[field.path]), `${dir} ${row.id} ${field.path}`);
+          const expected = field.path === 'damageType' ? formatDamageType(row[field.path]) : primitiveText(row[field.path]);
+          assert.equal(field.text, expected, `${dir} ${row.id} ${field.path}`);
         }
       }
       const chips = [...html.matchAll(/data-q="([^"]+)">[^<]* <span>(\d+)<\/span>/g)];
       for (const chip of chips) {
-        const count = rows.filter((row) => row.itemType === chip[1] || row.sprite === chip[1] || row.map === chip[1] || String(row.damageType) === chip[1]).length;
+        const count = rows.filter((row) => row.itemType === chip[1] || row.sprite === chip[1] || row.map === chip[1] || (row.damageType !== undefined && formatDamageType(row.damageType) === chip[1])).length;
         assert.equal(Number(chip[2]), count, `${dir} chip ${chip[1]}`);
       }
     }
@@ -416,6 +432,7 @@ describe('wiki catalog matches server config', () => {
     assert.ok(used.has('Leads to'));
     assert.ok(used.has('Heal'));
     assert.ok(used.has('Damage'));
+    assert.ok(used.has('Shape'));
     const hiddenLabels = [
       'Sprite', 'Corpse', 'Facing', 'Idle min', 'Idle max', 'Chase', 'Chase max', 'Cells',
       'Worker', 'Music', 'Clear', 'Aim', 'Tick', 'Start shards', 'End shards',
@@ -466,10 +483,22 @@ describe('wiki catalog matches server config', () => {
   });
 
   it('formats combined rows and loot chance from the config numbers', () => {
-    const spell = catalog.spells.find((row) => row.damageDiceCount === 2 && row.damageDiceSides === 6);
-    assert.ok(spell);
-    const spellHtml = fs.readFileSync(path.join(wikiDir, 'spells', `${spell.id}.html`), 'utf8');
-    assert.match(spellHtml, /<dt>Damage<\/dt><dd><span data-field="damageDice">2d6<\/span>/);
+    const fireBall = catalog.spells.find((row) => row.id === 1 && row.name === 'Fire Ball');
+    assert.equal(fireBall.damageType, 0);
+    assert.equal(fireBall.damageDiceCount, 2);
+    assert.equal(fireBall.damageDiceSides, 6);
+    const spellHtml = fs.readFileSync(path.join(wikiDir, 'spells', '1.html'), 'utf8');
+    const fireVisible = spellHtml.replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.match(fireVisible, /<dt>Shape<\/dt><dd><span data-field="damageType">Area<\/span>/);
+    assert.match(fireVisible, /<dt>Damage<\/dt><dd><span data-field="damageDice">2d6<\/span>/);
+    assert.equal([...fireVisible.matchAll(/<dt>Damage<\/dt>/g)].length, 1);
+    for (const [code, word] of DAMAGE_SHAPES) {
+      const shaped = catalog.spells.find((row) => row.damageType === code);
+      assert.ok(shaped, word);
+      const page = fs.readFileSync(path.join(wikiDir, 'spells', `${shaped.id}.html`), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+      assert.match(page, new RegExp(`<dt>Shape</dt><dd><span data-field="damageType">${word}</span>`));
+      assert.equal(page.includes(`data-field="damageType">${code}<`), false);
+    }
     const heal = catalog.spells.find((row) => Number.isInteger(row.healDiceCount) && Number.isInteger(row.healDiceSides));
     assert.ok(heal);
     const healHtml = fs.readFileSync(path.join(wikiDir, 'spells', `${heal.id}.html`), 'utf8');

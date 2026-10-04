@@ -78,7 +78,7 @@ export const LABELS = {
   damageDice: 'Damage',
   damageDiceBonus: 'Bonus',
   damageMultiplier: 'Multiplier',
-  damageType: 'Damage',
+  damageType: 'Shape',
   defaultWeather: 'Weather',
   duration: 'Time',
   dwellAreas: 'Spawns',
@@ -257,6 +257,21 @@ function walkPrimitives(value, path, out) {
   out.push({ path, value });
 }
 
+const DAMAGE_SHAPES = new Map([
+  [0, 'Area'],
+  [1, 'Cone'],
+  [2, 'Line'],
+  [3, 'Direct'],
+  [4, 'Ground'],
+]);
+
+function formatDamageType(value) {
+  if (!DAMAGE_SHAPES.has(value)) {
+    throw new Error(`Unknown spell damage type ${value}.`);
+  }
+  return DAMAGE_SHAPES.get(value);
+}
+
 function formatChance(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error('Loot chance is not a finite number.');
@@ -343,6 +358,8 @@ function renderPrimitives(value, path, indexes) {
   let shown = value;
   if (leaf === 'chance' && typeof value === 'number') {
     shown = formatChance(value);
+  } else if (leaf === 'damageType' && typeof value === 'number') {
+    shown = formatDamageType(value);
   } else if ((leaf === 'movementSpeed' || leaf === 'respawnTime') && typeof value === 'number') {
     shown = formatDurationMs(value);
   }
@@ -463,7 +480,8 @@ ${playButton()}
 function searchText(record, extraKey) {
   const bits = [record.id, record.name];
   if (extraKey && record[extraKey] !== undefined && record[extraKey] !== null) {
-    bits.push(record[extraKey]);
+    const value = record[extraKey];
+    bits.push(extraKey === 'damageType' ? formatDamageType(value) : value);
   }
   return bits.join(' ');
 }
@@ -485,8 +503,12 @@ function typeChips(rows, extraKey) {
 
 export function renderIndex(kindMeta, rows) {
   const list = rows.map((row) => {
-    const extraField = kindMeta.extra && row[kindMeta.extra] !== undefined && row[kindMeta.extra] !== null
-      ? ` · ${field(kindMeta.extra, row[kindMeta.extra])}`
+    const extraValue = kindMeta.extra ? row[kindMeta.extra] : undefined;
+    const extraShown = kindMeta.extra === 'damageType' && extraValue !== undefined && extraValue !== null
+      ? formatDamageType(extraValue)
+      : extraValue;
+    const extraField = extraShown !== undefined && extraShown !== null
+      ? ` · ${field(kindMeta.extra, extraShown)}`
       : '';
     return `      <li data-row data-id="${esc(row.id)}" data-search="${esc(searchText(row, kindMeta.extra))}">
         <a href="${esc(row.id)}.html">${field('name', row.name)}</a>

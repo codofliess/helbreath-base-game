@@ -9,9 +9,9 @@
 
   const rows = Array.from(list.querySelectorAll('[data-row]'));
 
-  function showError(message) {
+  function showError() {
     status.dataset.state = 'error';
-    status.textContent = message;
+    status.textContent = "Couldn't confirm this list is current. It may be out of date.";
   }
 
   function applyFilter() {
@@ -49,14 +49,14 @@
 
   async function load() {
     status.dataset.state = 'loading';
-    status.textContent = 'Loading catalog check…';
+    status.textContent = 'Checking this list against the server\u2026';
     const params = new URLSearchParams(location.search);
     if (params.get('slow') === '1') {
       await new Promise((resolve) => setTimeout(resolve, 2500));
     }
     const url = catalogUrl();
     if (!url) {
-      showError('Catalog check rejected the requested file name. The generated list below is unchanged.');
+      showError();
       return;
     }
     let data;
@@ -67,20 +67,20 @@
       }
       data = await response.json();
     } catch (error) {
-      showError('Catalog check failed. The generated list below is unchanged.');
+      showError();
       return;
     }
     const kind = list.getAttribute('data-kind');
     const section = data && kind ? data[kind] : null;
     if (!Array.isArray(section)) {
-      showError('Catalog check failed. This section is missing. The generated list below is unchanged.');
+      showError();
       return;
     }
     const ids = new Set(section.map((row) => String(row.id)));
     const domIds = rows.map((row) => row.getAttribute('data-id'));
     const same = domIds.length === ids.size && domIds.every((id) => ids.has(id));
     if (!same) {
-      showError('This page does not match the catalog. The generated list below is unchanged.');
+      showError();
       return;
     }
     status.dataset.state = 'ready';

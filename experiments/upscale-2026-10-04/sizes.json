@@ -1,0 +1,67 @@
+{
+  "scale": 4,
+  "monsters": [
+    {
+      "name": "ant",
+      "source": "sp-client/public/assets/sprites/ant.spr",
+      "before_bytes": 58051,
+      "after_bytes": 343942,
+      "sheets": 40,
+      "mean_abs_vs_nearest": 80.35,
+      "mean_colors_per_block": 4.19,
+      "max_palette": 606
+    },
+    {
+      "name": "bunny",
+      "source": "sp-client/public/assets/sprites/bunny.spr",
+      "before_bytes": 112021,
+      "after_bytes": 1237587,
+      "sheets": 40,
+      "mean_abs_vs_nearest": 137.935,
+      "mean_colors_per_block": 7.896,
+      "max_palette": 838
+    },
+    {
+      "name": "slm",
+      "source": "sp-client/public/assets/sprites/slm.spr",
+      "before_bytes": 96921,
+      "after_bytes": 1628786,
+      "sheets": 40,
+      "mean_abs_vs_nearest": 11.821,
+      "mean_colors_per_block": 4.858,
+      "max_palette": 248
+    }
+  ],
+  "map": {
+    "map": "sp-client/public/assets/maps/bsmith_1.amd",
+    "tile_pack": "sp-client/public/assets/sprites/tile406-421.spr",
+    "tile_pack_bytes": 1150764,
+    "map_bytes": 100256,
+    "map_sha256": "f17f393db7f1875bd1f9470f8dbd9364835889f4c867829394c382a4d03828ec",
+    "after_sha256": "f17f393db7f1875bd1f9470f8dbd9364835889f4c867829394c382a4d03828ec",
+    "after_tile_bytes": 4349260,
+    "map_size": [
+      100,
+      100
+    ],
+    "content_bounds_tiles": [
+      30,
+      23,
+      53,
+      40
+    ],
+    "content_tiles": [
+      24,
+      18
+    ],
+    "used_frames": 290,
+    "sprites": [
+      418,
+      419,
+      420,
+      421
+    ],
+    "mean_abs_vs_nearest": 10.301,
+    "mean_colors_per_block": 4.724
+  }
+}

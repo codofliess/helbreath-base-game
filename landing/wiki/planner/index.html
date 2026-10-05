@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChainLords Wiki: Helbreath monsters, items, maps &amp; character planner</title>
+  <meta name="description" content="Every monster, item and map in ChainLords, plus a free character planner. Plan your build, then play Helbreath in your browser.">
+  <link rel="canonical" href="https://chainlords.net/wiki/planner/">
+  <meta name="robots" content="index,follow">
+  <link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header class="top">
+    <a class="brand" href="/wiki/index.html">ChainLords Wiki</a>
+    <nav class="nav" aria-label="ChainLords Wiki"><a href="/wiki/monsters/index.html">Monsters</a><a href="/wiki/items/index.html">Items</a><a href="/wiki/maps/index.html">Maps</a><a href="/wiki/spells/index.html">Spells</a><a href="/wiki/planner/index.html" class="plan-btn" aria-current="page">Plan your build</a></nav>
+  </header>
+  <main id="content" class="wrap">
+    <h1>Plan your build</h1>
+    <form id="planner-form" class="planner-grid" action="" onsubmit="return false">
+      <div class="tune-row"><label for="level">Level</label><input id="level" type="text" inputmode="numeric" value="1"></div>
+      <div class="tune-row"><label for="rebirth">Rebirth</label><input id="rebirth" type="text" inputmode="numeric" value="0"></div>
+        <div class="stat-row">
+          <label for="stat-str">STR</label>
+          <input id="stat-str" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="str" data-dir="-1" aria-label="Lower STR">−</button>
+          <button type="button" data-bump data-stat="str" data-dir="1" aria-label="Raise STR">+</button>
+        </div>
+        <div class="stat-row">
+          <label for="stat-vit">VIT</label>
+          <input id="stat-vit" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="vit" data-dir="-1" aria-label="Lower VIT">−</button>
+          <button type="button" data-bump data-stat="vit" data-dir="1" aria-label="Raise VIT">+</button>
+        </div>
+        <div class="stat-row">
+          <label for="stat-dex">DEX</label>
+          <input id="stat-dex" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="dex" data-dir="-1" aria-label="Lower DEX">−</button>
+          <button type="button" data-bump data-stat="dex" data-dir="1" aria-label="Raise DEX">+</button>
+        </div>
+        <div class="stat-row">
+          <label for="stat-int">INT</label>
+          <input id="stat-int" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="int" data-dir="-1" aria-label="Lower INT">−</button>
+          <button type="button" data-bump data-stat="int" data-dir="1" aria-label="Raise INT">+</button>
+        </div>
+        <div class="stat-row">
+          <label for="stat-mag">MAG</label>
+          <input id="stat-mag" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="mag" data-dir="-1" aria-label="Lower MAG">−</button>
+          <button type="button" data-bump data-stat="mag" data-dir="1" aria-label="Raise MAG">+</button>
+        </div>
+        <div class="stat-row">
+          <label for="stat-chr">CHR</label>
+          <input id="stat-chr" type="text" inputmode="numeric" value="10">
+          <button type="button" data-bump data-stat="chr" data-dir="-1" aria-label="Lower CHR">−</button>
+          <button type="button" data-bump data-stat="chr" data-dir="1" aria-label="Raise CHR">+</button>
+        </div>
+    </form>
+    <p id="planner-error" class="alert" role="alert" hidden></p>
+    <div id="planner-result" class="results" aria-live="polite">
+      <div><span>Unspent points</span><strong id="out-points">10</strong></div>
+      <div><span>HP</span><strong id="out-hp">37</strong></div>
+      <div><span>MP</span><strong id="out-mp">27</strong></div>
+      <div><span>SP</span><strong id="out-sp">22</strong></div>
+    </div>
+    <script type="application/json" id="planner-config">{"maxLevel":150,"maxRebirth":10,"rebirthLuPoints":6}</script>
+  </main>
+  <footer></footer>
+  <script src="/wiki/planner-math.js"></script><script src="/wiki/planner-ui.js"></script>
+</body>
+</html>

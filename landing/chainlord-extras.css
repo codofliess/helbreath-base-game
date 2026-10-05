@@ -31,6 +31,22 @@
   position: relative;
 }
 
+.cl-catalog-link {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 5;
+  color: var(--cl-gold-soft, #e0c878);
+  font-family: var(--cl-font-ui);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* Helbreath Chain Lords — design tokens + layout */
 :root {
   --cl-gold: #c4a050;

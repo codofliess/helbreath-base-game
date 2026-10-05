@@ -62,8 +62,13 @@ The landing service runs `node server.js`, which serves static files and **rever
 | CNAME | `@` | `gzndcp2m.up.railway.app` | DNS only |
 | CNAME | `www` | `fx5fd1dz.up.railway.app` | DNS only |
 
+## Catalog pages
+
+`npm run build` regenerates `wiki/` from `multiplayer/server/Config/` when that folder sits next to `landing/` (items, monsters, spells, game worlds, NPCs, and the planner tunables in `Progression.json`). A deploy whose service root is only `landing/` keeps the committed `wiki/` instead. The pages do not read other Helbreath servers. `npm test` checks every published value against those files.
+
 ## Local
 
 ```bash
-npx --yes serve .
+npm run build
+npm start
 ```

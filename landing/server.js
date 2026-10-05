@@ -97,6 +97,12 @@ async function proxyRequest(req, res, route, url) {
   }
 }
 
+function missPolicy(pathname) {
+  if (pathname === '/wiki' || pathname.startsWith('/wiki/')) return 'wiki-404';
+  if (isAssetPath(pathname)) return 'asset-404';
+  return 'marketing-fallback';
+}
+
 function serveStatic(req, res, url) {
   let filePath = path.join(ROOT, decodeURIComponent(url.pathname));
   if (url.pathname.endsWith('/')) {
@@ -110,7 +116,19 @@ function serveStatic(req, res, url) {
   fs.stat(filePath, (err, stat) => {
     if (err || !stat.isFile()) {
       // Never SPA-fallback asset URLs (Metaplex token uri is a locked .png path).
-      if (isAssetPath(url.pathname)) {
+      const policy = missPolicy(url.pathname);
+      if (policy === 'wiki-404') {
+        const errorPage = path.join(ROOT, 'wiki', 'error.html');
+        fs.readFile(errorPage, (readErr, data) => {
+          if (readErr) {
+            send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
+            return;
+          }
+          send(res, 404, data, { 'Content-Type': 'text/html; charset=utf-8' });
+        });
+        return;
+      }
+      if (policy === 'asset-404') {
         send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
         return;
       }
@@ -158,4 +176,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { shouldProxy, isAssetPath, PROXY_ROUTES, MIDDLEWARE_URL, PLAY_URL, server };
+module.exports = { shouldProxy, isAssetPath, missPolicy, PROXY_ROUTES, MIDDLEWARE_URL, PLAY_URL, server };

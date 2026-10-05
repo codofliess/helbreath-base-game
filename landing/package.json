@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "start:static-only": "serve -s . -l tcp://0.0.0.0:${PORT:-3000}",
+    "build": "node scripts/wiki/generate.mjs",
     "test": "node --test test/*.test.js"
   },
   "engines": {

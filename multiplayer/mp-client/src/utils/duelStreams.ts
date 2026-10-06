@@ -1,6 +1,8 @@
 /** Parse stream URLs into embeddable players (Twitch / YouTube) or external links (Discord). */
 
-export type StreamPlatform = 'twitch' | 'youtube' | 'discord' | 'other';
+export type StreamPlatform = 'twitch' | 'youtube' | 'discord' | 'x' | 'other';
+
+const X_HOSTS = new Set(['x.com', 'www.x.com', 'mobile.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com']);
 
 export interface ParsedStream {
     platform: StreamPlatform;
@@ -13,6 +15,13 @@ export interface ParsedStream {
 }
 
 export function detectPlatform(url: string): StreamPlatform {
+    try {
+        if (X_HOSTS.has(new URL(url.trim()).hostname.toLowerCase())) {
+            return 'x';
+        }
+    } catch {
+        // not an absolute URL; fall through to substring checks
+    }
     const u = url.toLowerCase();
     if (u.includes('twitch.tv') || u.includes('twitch.com')) {
         return 'twitch';
@@ -99,7 +108,7 @@ export function parseStreamUrl(raw: string | undefined | null): ParsedStream | n
         platform,
         url,
         embedUrl: null,
-        label: platform === 'discord' ? 'Discord Go Live / Stage' : uri.hostname,
+        label: platform === 'discord' ? 'Discord Go Live / Stage' : platform === 'x' ? 'X Live' : uri.hostname,
     };
 }
 

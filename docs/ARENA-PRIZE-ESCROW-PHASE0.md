@@ -1,5 +1,7 @@
 # Arena Prize Escrow — Fase 0 (contrato de producto)
 
+> **Cambio PO 2026-09-29:** los premios de Arena los paga el **treasury** (house sponsor). Los capitanes **ya no aportan** a la bolsa: pledges y stakes de jugadores quedan apagados (`ArenaPrizeWhitelist.json` → `playerPledgesEnabled: false`). Este contrato queda como diseño del FSM; donde dice “bolsas aportadas por capitanes”, leer “bolsa del treasury”.
+
 > **Estado:** contrato firmado por PO (2026-08-05). No es implementación.  
 > **Producto:** Chain Lords — duelos por botín (bolsas aportadas + escrow + settle).  
 > **Fuente de verdad del combate y del settle:** solo el **game server**.  

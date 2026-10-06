@@ -879,7 +879,7 @@ message CharacterSlotSummary {
   string citizenship_side = 18;
   // Kill-based specialty level of each monster group. Empty on older servers.
   repeated CharacterMonsterGroupTier monster_group_tiers = 19;
-  // floor(character StakedHell / 100_000). Not wallet-pending and not a displayed token amount.
+  // floor(character StakedHell / 50_000). Not wallet-pending and not a displayed token amount.
   int32 monster_stake_bonus = 20;
 }
 
@@ -1688,7 +1688,7 @@ message MonsterKillEntry {
   int64 kills = 3;
   // Olympia specialty: level from kills only (150*L^2 or species base_kills*L^2).
   int32 specialty_level = 4;
-  // specialty_level + stake bonus levels (floor(staked/100k)*10).
+  // specialty_level + stake bonus levels (floor(staked/50k)).
   int32 effective_level = 5;
   // Kills required to reach specialty_level+1 (from kill base only).
   int64 next_kills = 6;
@@ -1734,7 +1734,7 @@ message ProgressionState {
   int32 majestic_points = 15;
   // Chain Lords Block Level: when true, new exp → majestic instead of leveling.
   bool level_blocked = 16;
-  // Mock / ledger $HELL staked on this wallet (utility; no yield). Specialty uses floor(staked/100k)*10.
+  // Mock / ledger $HELL staked on this wallet (utility; no yield). Specialty uses floor(staked/50k).
   int64 staked_hell = 17;
   // Olympia m_iHungerStatus 0–100 (100 = full).
   int32 hunger = 18;

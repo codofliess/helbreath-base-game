@@ -7,6 +7,8 @@ namespace Server.Helpers;
 
 /// <summary>
 /// Phase-1 prize bag + DC combat snapshot for ArenaPact.
+/// Prizes are treasury-funded (<see cref="HouseSponsorConfig"/>); player pledges stay off unless
+/// <see cref="ArenaPrizeConfig.PlayerPledgesEnabled"/> is set.
 /// Custody is off-chain ledger first; on-chain transfers land later.
 /// Source of truth for settle: game server only.
 /// </summary>
@@ -48,7 +50,9 @@ public static class ArenaPrizeEscrow {
 
     public sealed class ArenaPrizeConfig {
         public List<PrizeAssetPolicy> Assets { get; set; } = new();
+        /// <summary>Treasury-funded prize per duel — the only prize source while <see cref="PlayerPledgesEnabled"/> is false.</summary>
         public HouseSponsorConfig HouseSponsor { get; set; } = new();
+        public bool PlayerPledgesEnabled { get; set; }
         public int DcGraceMinutes { get; set; } = DefaultDcGraceMinutes;
         public int MaxBagEdits { get; set; } = 5;
     }
@@ -206,6 +210,11 @@ public static class ArenaPrizeEscrow {
 
     public static PrizeBag CreateEmptyBag() => new();
 
+    public const string TreasuryOnlyMessage =
+        "Arena prizes are paid by the treasury — players can't add to the prize bag.";
+
+    public static bool PlayerPledgesAllowed => GetConfig().PlayerPledgesEnabled;
+
     public static bool TryPledge(
             PrizeBag bag,
             string captainName,
@@ -216,6 +225,10 @@ public static class ArenaPrizeEscrow {
             string? instanceId,
             out string error) {
         error = "";
+        if (!PlayerPledgesAllowed) {
+            error = TreasuryOnlyMessage;
+            return false;
+        }
         if (bag.State is not (BagDrafting or BagEditing)) {
             error = $"Cannot pledge while bag is '{bag.State}'.";
             return false;

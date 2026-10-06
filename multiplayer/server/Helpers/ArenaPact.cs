@@ -47,9 +47,11 @@ public static class ArenaPact {
         public bool TechAccepted { get; set; }
         /// <summary>Invited but has not Accept / 4Honor / Decline yet.</summary>
         public bool InvitePending { get; set; }
-        /// <summary>First-person stream URL (Twitch / YT / Discord Go Live).</summary>
+        /// <summary>First-person stream URL (X live / Twitch / YT / Discord Go Live).</summary>
         public string? StreamUrl { get; set; }
         public string? StreamPlatform { get; set; }
+        /// <summary>UTC ms <see cref="StreamUrl"/> became an X live link; 0 otherwise.</summary>
+        public long XLiveSinceMs { get; set; }
         /// <summary>After DC reconnect — apply buffs when we have GameWorldRef (warp/tick).</summary>
         public ArenaPrizeEscrow.FighterCombatSnapshot? PendingBuffRestore { get; set; }
     }
@@ -105,8 +107,8 @@ public static class ArenaPact {
         public bool LiveDiscordNotified { get; set; }
         /// <summary>UTC ms when match entered live (for incentives).</summary>
         public long LiveStartedAtMs { get; set; }
-        /// <summary>Earliest UTC ms a Discord stream URL was set (landing cartelera).</summary>
-        public long DiscordStreamSinceMs { get; set; }
+        /// <summary>UTC ms <see cref="GlobalStreamUrl"/> became an X live link (credited to the host); 0 otherwise.</summary>
+        public long GlobalXLiveSinceMs { get; set; }
         /// <summary>Arena $HELL participation already paid for this match.</summary>
         public bool IncentiveGranted { get; set; }
         public List<PactFighter> Fighters { get; } = new();
@@ -226,8 +228,8 @@ public static class ArenaPact {
             MapId = mapId,
             HostName = player.CharacterName,
             HostSessionId = player.SessionId,
-            StakeAssetId = req.HasStakeAssetId ? req.StakeAssetId : null,
-            StakeAmount = req.HasStakeAmount ? req.StakeAmount : 0,
+            StakeAssetId = ArenaPrizeEscrow.PlayerPledgesAllowed && req.HasStakeAssetId ? req.StakeAssetId : null,
+            StakeAmount = ArenaPrizeEscrow.PlayerPledgesAllowed && req.HasStakeAmount ? req.StakeAmount : 0,
             CreatedAtMs = now,
             ExpiresAtMs = Math.Max(opensAt, now) + InviteTtlHours * 3600_000L,
             OpensAtMs = opensAt,
@@ -242,6 +244,7 @@ public static class ArenaPact {
             Title = title.Length > 80 ? title[..80] : title,
             GlobalStreamUrl = globalStream,
             GlobalStreamPlatform = DetectStreamPlatform(globalStream),
+            GlobalXLiveSinceMs = StreamLinks.IsXLiveUrl(globalStream) ? now : 0,
         };
         if (isImmediate) {
             match.ReadyEndsAtMs = now + readyWindowSec * 1000L;
@@ -258,8 +261,8 @@ public static class ArenaPact {
             InvitePending = false,
             StreamUrl = hostStream,
             StreamPlatform = DetectStreamPlatform(hostStream),
+            XLiveSinceMs = StreamLinks.IsXLiveUrl(hostStream) ? now : 0,
         });
-        NoteDiscordStreamLocked(match, hostStream, globalStream, now);
 
         Matches[id] = match;
         MatchIdBySession[player.SessionId] = id;
@@ -279,7 +282,7 @@ public static class ArenaPact {
         }
         var url = NormalizeStreamUrl(req.StreamUrl);
         if (url is null && !string.IsNullOrWhiteSpace(req.StreamUrl)) {
-            SendStateTo(player, match, "Invalid stream URL (use https:// twitch / youtube / discord).");
+            SendStateTo(player, match, "Invalid stream URL (use https:// x.com live / twitch / youtube / discord).");
             return;
         }
         lock (match.Gate) {
@@ -292,14 +295,16 @@ public static class ArenaPact {
                     SendStateTo(player, match, "Only the host can set the global cam.");
                     return;
                 }
+                if (!string.Equals(match.GlobalStreamUrl, url, StringComparison.Ordinal)) {
+                    match.GlobalXLiveSinceMs = StreamLinks.IsXLiveUrl(url)
+                        ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        : 0;
+                }
                 match.GlobalStreamUrl = url;
                 match.GlobalStreamPlatform = DetectStreamPlatform(url);
                 match.Message = url is null
                     ? "Global cam cleared."
                     : $"Global cam set ({match.GlobalStreamPlatform}).";
-                if (url is not null) {
-                    NoteDiscordStreamLocked(match, null, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
             } else {
                 var fighter = match.Fighters.FirstOrDefault(f =>
                     f.SessionId == player.SessionId ||
@@ -308,16 +313,12 @@ public static class ArenaPact {
                     SendStateTo(player, match, "Not on this duel roster.");
                     return;
                 }
-                fighter.StreamUrl = url;
-                fighter.StreamPlatform = DetectStreamPlatform(url);
+                SetFighterStreamLocked(fighter, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 fighter.Player = player;
                 fighter.SessionId = player.SessionId;
                 match.Message = url is null
                     ? $"{player.CharacterName} cleared POV stream."
                     : $"{player.CharacterName} set POV stream ({fighter.StreamPlatform}).";
-                if (url is not null) {
-                    NoteDiscordStreamLocked(match, url, null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
             }
         }
         Broadcast(match);
@@ -470,12 +471,10 @@ public static class ArenaPact {
                 fighter.KitJson = req.ArenaKitJson;
             }
             if (req.HasStreamUrl) {
-                var sUrl = NormalizeStreamUrl(req.StreamUrl);
-                fighter.StreamUrl = sUrl;
-                fighter.StreamPlatform = DetectStreamPlatform(sUrl);
-                if (sUrl is not null) {
-                    NoteDiscordStreamLocked(match, sUrl, null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                }
+                SetFighterStreamLocked(
+                    fighter,
+                    NormalizeStreamUrl(req.StreamUrl),
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             }
             fighter.Player = player;
             fighter.SessionId = player.SessionId;
@@ -894,12 +893,19 @@ public static class ArenaPact {
         }
     }
 
-    /// <summary>Captain pledges whitelist asset into the prize bag (drafting/editing only).</summary>
+    /// <summary>
+    /// Captain pledges whitelist asset into the prize bag (drafting/editing only). Off while prizes are
+    /// treasury-only (<see cref="ArenaPrizeEscrow.PlayerPledgesAllowed"/>).
+    /// </summary>
     public static void HandlePrizePledge(GameWorldPlayer player, ArenaPactPrizePledgeRequest req) {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(req);
         if (!Matches.TryGetValue(req.MatchId ?? "", out var match)) {
             SendStateTo(player, null, "Duel not found.");
+            return;
+        }
+        if (!ArenaPrizeEscrow.PlayerPledgesAllowed) {
+            SendStateTo(player, match, ArenaPrizeEscrow.TreasuryOnlyMessage);
             return;
         }
         lock (match.Gate) {
@@ -986,7 +992,7 @@ public static class ArenaPact {
             match.Status = "done";
             match.Message = $"{player.CharacterName} signed LOSS — prize bag → {winnerCap}.";
             _ = ArenaPrizeEscrow.CompressTickLog(match.Combat);
-            TryGrantDuelIncentivesLocked(match);
+            TryGrantDuelIncentivesLocked(match, winnerTeam);
             Broadcast(match);
             ClearSessions(match);
         }
@@ -1135,7 +1141,7 @@ public static class ArenaPact {
                     if (now >= match.LiveEndsAtMs) {
                         match.Status = "done";
                         match.Message = "Time! Match ended (no elimination — prize held; ops/admin).";
-                        TryGrantDuelIncentivesLocked(match);
+                        TryGrantDuelIncentivesLocked(match, winnerTeam: null);
                         Broadcast(match);
                         ClearSessions(match);
                     }
@@ -1336,29 +1342,60 @@ public static class ArenaPact {
         match.Message =
             $"DC timeout (120m) — {match.Combat.DcCharacterName} forfeited. Prize bag → {winnerCap}.";
         _ = ArenaPrizeEscrow.CompressTickLog(match.Combat);
-        TryGrantDuelIncentivesLocked(match);
+        TryGrantDuelIncentivesLocked(match, winnerTeam);
         Broadcast(match);
         ClearSessions(match);
         Console.WriteLine($"[ArenaPact] DC forfeit settle match={match.MatchId} winner={winnerCap}");
     }
 
-    /// <summary>Mark earliest Discord stream URL (landing / cartelera) for 15m stream bonus.</summary>
-    private static void NoteDiscordStreamLocked(PactMatch match, string? povUrl, string? globalUrl, long nowMs) {
-        var platformPov = DetectStreamPlatform(povUrl);
-        var platformGlobal = DetectStreamPlatform(globalUrl);
-        if (ArenaIncentives.IsDiscordStreamPlatform(platformPov) ||
-            ArenaIncentives.IsDiscordStreamPlatform(platformGlobal)) {
-            if (match.DiscordStreamSinceMs <= 0) {
-                match.DiscordStreamSinceMs = nowMs;
-            }
+    private static void SetFighterStreamLocked(PactFighter fighter, string? url, long nowMs) {
+        if (!string.Equals(fighter.StreamUrl, url, StringComparison.Ordinal)) {
+            fighter.XLiveSinceMs = StreamLinks.IsXLiveUrl(url) ? nowMs : 0;
         }
+        fighter.StreamUrl = url;
+        fighter.StreamPlatform = DetectStreamPlatform(url);
     }
 
     /// <summary>
-    /// Pay both fighters Arena duel incentives once the match has been live.
-    /// Stream bonus when Discord share was up ≥15 minutes (landing).
+    /// Earliest X live link <paramref name="wallet"/> has on a public (cartelera-listed) duel right now:
+    /// the fighter's POV stream, or the global cam when the wallet is the host.
     /// </summary>
-    private static void TryGrantDuelIncentivesLocked(PactMatch match) {
+    public static (string Url, long SinceMs)? GetPublicXLiveForWallet(string? wallet) {
+        if (string.IsNullOrWhiteSpace(wallet)) {
+            return null;
+        }
+        var w = wallet.Trim();
+        (string Url, long SinceMs)? best = null;
+        void Consider(string? url, long since) {
+            if (url is not null && since > 0 && (best is null || since < best.Value.SinceMs)) {
+                best = (url, since);
+            }
+        }
+        foreach (var m in Matches.Values) {
+            if (!m.IsPublic || m.Status is "done" or "cancelled" or "expired") {
+                continue;
+            }
+            lock (m.Gate) {
+                foreach (var f in m.Fighters) {
+                    if (f.InvitePending || !string.Equals(f.Wallet, w, StringComparison.OrdinalIgnoreCase)) {
+                        continue;
+                    }
+                    Consider(f.StreamUrl, f.XLiveSinceMs);
+                    if (f.Team == 0 &&
+                        string.Equals(f.CharacterName, m.HostName, StringComparison.OrdinalIgnoreCase)) {
+                        Consider(m.GlobalStreamUrl, m.GlobalXLiveSinceMs);
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Pay both fighters Arena duel incentives once the match has been live
+    /// (7k winner / 3k loser; 3k each when <paramref name="winnerTeam"/> is null).
+    /// </summary>
+    private static void TryGrantDuelIncentivesLocked(PactMatch match, int? winnerTeam) {
         if (match.IncentiveGranted) {
             return;
         }
@@ -1366,22 +1403,12 @@ public static class ArenaPact {
             return; // never went live — no participation pay
         }
         match.IncentiveGranted = true;
-        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        // Re-scan active URLs in case platform was set without NoteDiscordStreamLocked race.
-        if (match.DiscordStreamSinceMs <= 0) {
-            if (ArenaIncentives.IsDiscordStreamPlatform(match.GlobalStreamPlatform) ||
-                match.Fighters.Any(f => ArenaIncentives.IsDiscordStreamPlatform(f.StreamPlatform))) {
-                match.DiscordStreamSinceMs = match.LiveStartedAtMs > 0 ? match.LiveStartedAtMs : nowMs;
-            }
-        }
-        var streamMs = match.DiscordStreamSinceMs > 0 ? nowMs - match.DiscordStreamSinceMs : 0;
-        var streamed = streamMs >= ArenaIncentives.StreamMinutesRequired * 60_000L;
-
         var roster = match.Fighters
-            .Select(f => (Wallet: (string?)f.Wallet, CharacterName: (string?)f.CharacterName, Player: f.Player))
+            .Where(f => !f.InvitePending)
+            .Select(f => new ArenaDuelFighter(f.Wallet, f.CharacterName, f.Team, f.Player))
             .ToList();
         try {
-            ArenaIncentives.OnDuelCompleted(roster, streamed, match.MatchId);
+            ArenaIncentives.OnDuelCompleted(roster, winnerTeam, match.MatchId);
         } catch (Exception ex) {
             Console.WriteLine($"[ArenaPact] Incentive grant failed match={match.MatchId}: {ex.Message}");
         }
@@ -1684,22 +1711,7 @@ public static class ArenaPact {
         return uri.ToString();
     }
 
-    private static string? DetectStreamPlatform(string? url) {
-        if (string.IsNullOrWhiteSpace(url)) {
-            return null;
-        }
-        var u = url.ToLowerInvariant();
-        if (u.Contains("twitch.tv") || u.Contains("twitch.com")) {
-            return "twitch";
-        }
-        if (u.Contains("youtube.com") || u.Contains("youtu.be")) {
-            return "youtube";
-        }
-        if (u.Contains("discord") || u.Contains("discordapp")) {
-            return "discord";
-        }
-        return "other";
-    }
+    private static string? DetectStreamPlatform(string? url) => StreamLinks.DetectPlatform(url);
 
     private static void WarpFightersLocked(PactMatch match, Action<GameWorldPlayer, string> requestWorldChange) {
         foreach (var f in match.Fighters) {

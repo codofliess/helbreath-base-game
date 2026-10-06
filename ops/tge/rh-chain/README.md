@@ -1,5 +1,7 @@
 # HELBREATH — Robinhood Chain token
 
+> **DEPRECATED (PO 2026-09-29).** `$HELL` (Solana) is the only Chain Lords token; it launches 2026-09-30 in the afternoon. The RH / Pons `HELBREATH` path in this file is kept as a record only: do not deploy, promote, or post it. See `docs/ADR-001-MULTICHAIN-AUTH.md` (2026-09-29 amendment).
+
 Foundry project. **Do not pass `--broadcast` / `--private-key` from CI or this repo.**
 
 ```bash

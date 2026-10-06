@@ -1,5 +1,6 @@
 {
-  "_comment": "Arena prize bag allowlist — only these assets may enter a duel bolsa. No BTC/ETH.",
+  "_comment": "Arena prize bag allowlist — only these assets may enter a duel prize bag. No BTC/ETH. PO 2026-09-29: prizes are paid by the treasury (houseSponsor); player pledges/stakes stay off (playerPledgesEnabled=false). HELL mint is set by ops at launch.",
+  "playerPledgesEnabled": false,
   "assets": [
     {
       "assetId": "HELL",
@@ -7,7 +8,7 @@
       "chain": "solana",
       "mintOrProgramId": "",
       "originLabel": "HELL",
-      "decimals": 0,
+      "decimals": 9,
       "minPledge": 1,
       "maxPledge": 100000000,
       "enabled": true
@@ -62,7 +63,7 @@
     "assetId": "HELL",
     "amountPerDuel": 10000,
     "maxTotalBudget": 0,
-    "note": "When enabled, house adds this amount into every locked prize bag (revisable)."
+    "note": "Treasury prize: when enabled, the treasury adds this amount into every locked prize bag (revisable). Settlement is ledger-only — the treasury pays the logged winner."
   },
   "dcGraceMinutes": 120,
   "maxBagEdits": 5

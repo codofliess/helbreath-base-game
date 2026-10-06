@@ -6,13 +6,17 @@ namespace Server.Helpers;
 /// <summary>
 /// Olympia mob specialty ladder (contents/specialties.json) + personal stake level offset.
 /// Level from kills: max L with kills &gt;= base_kills * L^2.
-/// Stake: +1 specialty level per 100_000 $HELL (5_000_000 → +50). Unstake / lower balance reverses.
+/// Stake: +1 specialty level per 50_000 $HELL (5_000_000 → +100). Unstake / lower balance reverses.
 /// Stake amount = max(character StakedHell, wallet mining PendingHell).
+/// Every level raises every bonus a little; at <see cref="OlympiaParityLevel"/> the totals equal
+/// what Olympia's step ladder gives at that level.
 /// </summary>
 public static class MobSpecialty {
-    /// <summary>$HELL required per +1 effective specialty level (5M = +50).</summary>
-    public const long StakePerTier = 100_000L;
+    /// <summary>$HELL required per +1 effective specialty level (5M = +100).</summary>
+    public const long StakePerTier = 50_000L;
     public const int LevelsPerStakeTier = 1;
+    /// <summary>Level where our even curve lands exactly on Olympia's ladder totals (same dmg, hit, drop, reduction).</summary>
+    public const int OlympiaParityLevel = 40;
     /// <summary>Fallback for unlisted species — mid-low farm band (common mobs need more kills).</summary>
     public const int DefaultBaseKills = 75;
     /// <summary>Olympia ladder continues well past L50 with stake; testing week allows high GM grants (L200).</summary>
@@ -28,7 +32,17 @@ public static class MobSpecialty {
         public string Segment { get; init; } = "";
         public string Name { get; init; } = "";
         public string[] Bonuses { get; init; } = ["damage", "damage_reduction", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate", "drop_rate"];
+        internal LadderTotals? ParityTotals { get; set; }
     }
+
+    /// <summary>Summed bonuses of Olympia's step ladder up to some level.</summary>
+    public readonly record struct LadderTotals(
+        double FlatDamage,
+        double FlatReduction,
+        double DamagePct,
+        double ReductionPct,
+        double DropPct,
+        double HitPct);
 
     /// <summary>Kill-based specialty level of one monster group for the character cover.</summary>
     public readonly record struct CharacterGroupTier(string Segment, string Label, int Level, string LeadName);
@@ -99,7 +113,7 @@ public static class MobSpecialty {
         if (stakedHell <= 0) {
             return 0;
         }
-        // floor(staked / 100_000) * LevelsPerStakeTier (currently 1 → 5M = +50).
+        // floor(staked / 50_000) * LevelsPerStakeTier (currently 1 → 5M = +100).
         var tiers = stakedHell / StakePerTier;
         if (tiers > int.MaxValue / Math.Max(1, LevelsPerStakeTier)) {
             return int.MaxValue / Math.Max(1, LevelsPerStakeTier) * LevelsPerStakeTier;
@@ -109,7 +123,7 @@ public static class MobSpecialty {
 
     /// <summary>
     /// Tokens that count toward specialty stake: explicit char field, or wallet mining pending
-    /// (daily credit-share lands in PendingHell — that balance drives +1 tier / 100k until a real stake UI).
+    /// (daily credit-share lands in PendingHell — that balance drives +1 tier / 50k until a real stake UI).
     /// </summary>
     public static long ResolveStakeAmount(GameWorldPlayer player) {
         ArgumentNullException.ThrowIfNull(player);
@@ -167,9 +181,9 @@ public static class MobSpecialty {
     }
 
     /// <summary>
-    /// Olympia bonus magnitudes (from UI #315 + types in specialties.json).
-    /// damage / damage_reduction = flat 1 per step; drop_rate ≈ 2% diminishing; hit_ratio flat +2;
-    /// damage_pct / damage_reduction_pct / hit_ratio_pct ≈ 2% each step.
+    /// Even curve: every level adds 1/<see cref="OlympiaParityLevel"/> of the species' Olympia ladder totals
+    /// at that level to every bonus at once, so an L40 here has the same dmg / reduction / drop / hit as an
+    /// Olympia L40, and higher levels keep rising at the same even pace. Flat stats floor to whole points.
     /// </summary>
     public static void AggregateBonuses(
         SpecialtyDef def,
@@ -190,13 +204,30 @@ public static class MobSpecialty {
             return;
         }
 
+        var parity = def.ParityTotals ??= OlympiaLadderTotals(def, OlympiaParityLevel);
+        var scale = effectiveLevel / (double)OlympiaParityLevel;
+        flatDamage = (int)Math.Floor(parity.FlatDamage * scale + 1e-9);
+        flatReduction = (int)Math.Floor(parity.FlatReduction * scale + 1e-9);
+        damagePct = Math.Round(parity.DamagePct * scale, 2);
+        reductionPct = Math.Round(parity.ReductionPct * scale, 2);
+        dropPct = Math.Round(parity.DropPct * scale, 2);
+        hitPct = Math.Round(parity.HitPct * scale, 2);
+    }
+
+    /// <summary>
+    /// Olympia's step ladder summed up to <paramref name="level"/> (UI #315 + specialties.json):
+    /// each level grants one bonus from <see cref="SpecialtyDef.Bonuses"/>, then drop_rate forever.
+    /// damage / damage_reduction = flat 1 per step; drop_rate ≈ 2% diminishing; hit_ratio +2;
+    /// damage_pct / damage_reduction_pct / hit_ratio_pct ≈ 2% each step.
+    /// </summary>
+    public static LadderTotals OlympiaLadderTotals(SpecialtyDef def, int level) {
+        ArgumentNullException.ThrowIfNull(def);
+        double flatDamage = 0, flatReduction = 0, damagePct = 0, reductionPct = 0, dropPct = 0, hitPct = 0;
         var dropSteps = 0;
-        for (var level = 1; level <= effectiveLevel; level++) {
-            // bonuses[i] is the reward granted when reaching specialty level (i+1).
-            // When effective > array length, keep cycling last half as drop_rate (Olympia continues drop).
+        for (var step = 1; step <= level; step++) {
             string bonus;
-            if (level - 1 < def.Bonuses.Length) {
-                bonus = def.Bonuses[level - 1];
+            if (step - 1 < def.Bonuses.Length) {
+                bonus = def.Bonuses[step - 1];
             } else {
                 bonus = "drop_rate";
             }
@@ -215,8 +246,6 @@ public static class MobSpecialty {
                     reductionPct += 2.0;
                     break;
                 case "hit_ratio":
-                    hitPct += 2.0;
-                    break;
                 case "hit_ratio_pct":
                     hitPct += 2.0;
                     break;
@@ -228,6 +257,7 @@ public static class MobSpecialty {
                     break;
             }
         }
+        return new LadderTotals(flatDamage, flatReduction, damagePct, reductionPct, dropPct, hitPct);
     }
 
     static string BuildSummary(int flatDmg, int flatRed, double dmgPct, double redPct, double drop, double hit) {

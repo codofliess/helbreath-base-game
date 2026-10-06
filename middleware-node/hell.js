@@ -62,7 +62,7 @@ function tokensToRaw(tokens, decimals) {
 function readLedger() {
     const p = ledgerPath();
     if (!fs.existsSync(p)) {
-        return { path: p, file: { remainingPool: 400_000_000, wallets: {}, days: {} } };
+        return { path: p, file: { remainingPool: 300_000_000, poolTotal: 300_000_000, wallets: {}, days: {} } };
     }
     return { path: p, file: JSON.parse(fs.readFileSync(p, 'utf8')) };
 }

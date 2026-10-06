@@ -1,7 +1,7 @@
 # Mob Mastery + personal $HELL stake stacking
 
-**Fecha:** 2026-07-25  
-**Estado:** diseño de producto (PO) — **no implementado**  
+**Fecha:** 2026-07-25 · **actualizado 2026-09-29** (decisión PO: 50k = +1 nivel, curva pareja)  
+**Estado:** implementado en `multiplayer/server/Helpers/MobSpecialty.cs`  
 **Relaciona:** MASTERPLAN § 1.6–1.7 (stake utility, no yield) · F11 Monster Kills · `Progression` kill counters  
 **Ticker:** $HELL (utility / play-mine). Stake **no emite** tokens (C1).
 
@@ -28,23 +28,43 @@ Stake **no reemplaza** el grind: multiplica / suma encima del nivel base por kil
 
 ---
 
-## 2. Fórmulas canónicas (cerradas por PO 2026-07-25)
+## 0. Decisión PO 2026-09-29 (vigente)
+
+1. **Maestría = kills + stake.** Cada **50.000 $HELL** stakeados = **+1 nivel** en todos los tiers. **5M = +100 niveles.**
+2. **Todos los parámetros suben juntos en cada nivel** (daño, daño recibido, drop rate, hit), parejo y más lento que la escalera Olympia paso a paso.
+3. **Paridad Olympia en L40:** un L40 nuestro tiene exactamente el mismo daño, reducción, drop y hit que un L40 de Olympia en esa especie. Pasado L40 sigue subiendo con la misma pendiente pareja.
+
+```
+stakeBonusLevels = floor(stakedHell / 50_000)          // 50k = +1; 5M = +100
+effectiveLevel   = specialtyLevel(kills) + stakeBonusLevels
+olympiaL40       = suma de la escalera Olympia de la especie hasta L40 (specialties.json)
+bono(p, L)       = olympiaL40[p] × L / 40              // p = dmg, −taken, dmg%, −taken%, drop%, hit
+flat dmg / flat −taken se redondean hacia abajo (enteros)
+```
+
+Ejemplo especie default (escalera Olympia: +1 dmg, −1 taken, luego drop): Olympia L40 = +1 dmg, −1 taken, +47.88% drop.
+Nuestro L20 = +23.94% drop (dmg/taken todavía 0), L40 = +1 / −1 / +47.88% (igual a Olympia), L80 = +2 / −2 / +95.76%.
+Caps en runtime: drop ≤ 200% (`MonsterLoot`), reducción % ≤ 90%.
+
+Las secciones siguientes son el diseño original (2026-07-25); donde contradicen esta sección, manda esta.
+
+## 2. Fórmulas canónicas
 
 ### 2.1 Stake → niveles extra (global a todos los bichos)
 
 ```
-stakeBonusLevels = floor(stakedHell / 100_000)   // 100k = +1; 5M = +50
+stakeBonusLevels = floor(stakedHell / 50_000)   // 50k = +1; 5M = +100
 ```
 
 | Staked $HELL | Bonus levels (todos los mobs) |
 |-------------:|------------------------------:|
-| 0 – 99_999   | 0 |
-| 100_000      | +10 |
-| 200_000      | +20 |
-| 500_000      | +50 |
-| 1_000_000    | +100 |
+| 0 – 49_999   | 0 |
+| 50_000       | +1 |
+| 500_000      | +10 |
+| 1_000_000    | +20 |
+| 5_000_000    | +100 |
 
-**Ejemplo PO:** base kill level 7 + 500k staked → `7 + 50 = 57` efectivo.
+**Ejemplo:** base kill level 7 + 500k staked → `7 + 10 = 17` efectivo.
 
 ### 2.2 Nivel efectivo
 
@@ -75,18 +95,18 @@ specialtyLevel = max { L ≥ 1 : kills >= threshold(L) } or 0
 | 4 | 2400 | **+1.96% Drop** |
 | 5–8 | 3750…9600 | drop % −0.04 pp por nivel (1.92…1.81) |
 
-**Stake:** `effectiveLevel = specialtyLevel + floor(staked/100_000)*10`  
-Bonuses = **suma de los steps 1..effectiveLevel** de la misma escalera Olympia (no inventar % lineales aparte).
+**Stake:** `effectiveLevel = specialtyLevel + floor(staked/50_000)`  
+Bonuses = curva pareja anclada a los totales Olympia en L40 (§ 0), no la escalera paso a paso.
 
-Ejemplo: Orc 359 kills → specialty **L1** (+1 dmg). Stake 500k → +50 → **effective L51**.
+Ejemplo: Orc 359 kills → specialty **L1**. Stake 500k → +10 → **effective L11**.
 
 Algunos mobs UI muestran 50/100 kills/bar — posible `base * L²` por especie; default CL **base=150**.
 
 ---
 
-## 3. Curva de bonos = escalera Olympia (no % flat inventado)
+## 3. Escalera Olympia (referencia para la paridad L40)
 
-**No usar** solo “+0.5% dmg × L”. Usar el **mismo camino** que Olympia:
+Hasta 2026-09-29 cada nivel daba un solo bono de esta escalera. Ahora la escalera solo define los **totales en L40** que la curva pareja (§ 0) tiene que igualar:
 
 | Al alcanzar nivel | Bono (stackea) |
 |------------------:|----------------|
@@ -145,7 +165,7 @@ Producto: ¿permitido?
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Wallet                                                  │
-│  stakedHell  ──► stakeBonusLevels (100k → +10)          │
+│  stakedHell  ──► stakeBonusLevels (50k → +1)            │
 │  (chars A/B/C comparten el mismo bonus)                 │
 └─────────────────────────────────────────────────────────┘
                          │
@@ -176,15 +196,15 @@ Por fila de monstruo:
 
 ```
 Slime          kills  712
-  Mastery      base 7  + stake 50  =  Lv 57
-  Bonuses      +28.5% dmg · −20% taken · +22.8% drop · +14.3% hit
+  Mastery      base 7  + stake 10  =  Lv 17
+  Bonuses      +20.35% drop (dmg / −taken llegan en L40)
 ```
 
 Header wallet:
 
 ```
-Staked: 500,000 $HELL  →  +50 mastery levels (all species)
-Next tier: 100k more → +10
+Staked: 500,000 $HELL  →  +10 mastery levels (all species)
+Next tier: 50k more → +1
 ```
 
 ### F5 / SysMenu stake panel (futuro)
@@ -237,35 +257,23 @@ Next tier: 100k more → +10
 
 ## 8. Pseudo-código servidor
 
+Implementación real: `MobSpecialty.StakeBonusLevels`, `MobSpecialty.AggregateBonuses`, `MobSpecialty.OlympiaLadderTotals`.
+
 ```csharp
-// Config
-const long StakePerTier = 100_000;
-const int LevelsPerStakeTier = 10;
-const int KillsPerLevel = 100;
-const int MaxKillLevel = 100;
+const long StakePerTier = 50_000;          // 5M = +100
+const int OlympiaParityLevel = 40;
 
-int StakeBonusLevels(long stakedHell) =>
-    (int)(Math.Min(stakedHell, long.MaxValue) / StakePerTier) * LevelsPerStakeTier;
+int StakeBonusLevels(long staked) => (int)(staked / StakePerTier);
 
-int KillBaseLevel(long kills) =>
-    (int)Math.Min(MaxKillLevel, kills / KillsPerLevel);
-
-int EffectiveMobLevel(GameWorldPlayer p, int catalogMonsterId) {
-    var kills = p.GetMonsterKills(catalogMonsterId); // existing dict
-    var baseLv = KillBaseLevel(kills);
-    var stakeLv = StakeBonusLevels(p.AccountStakedHell); // wallet-scoped
-    // O2: if (baseLv < 1) return baseLv; // no stake amplify until first mastery level
-    return baseLv + stakeLv;
-}
-
-// Damage out
-dmg = dmg * (1.0 + 0.005 * EffectiveMobLevel(attacker, monster.CatalogId));
-
-// Damage in
-dmg = dmg * (1.0 - Math.Min(0.50, 0.0035 * EffectiveMobLevel(defender, monster.CatalogId)));
-
-// Drop chance multiplier on that monster's loot rolls
-chance *= (1.0 + 0.004 * EffectiveMobLevel(killer, monster.CatalogId));
+// Totales Olympia de la especie en L40, cacheados por especie.
+var t = OlympiaLadderTotals(def, OlympiaParityLevel);
+var k = effectiveLevel / 40.0;
+flatDmg   = floor(t.FlatDamage    * k);
+flatRed   = floor(t.FlatReduction * k);
+dmgPct    = t.DamagePct    * k;
+redPct    = t.ReductionPct * k;
+dropPct   = t.DropPct      * k;
+hitPct    = t.HitPct       * k;
 ```
 
 ---
@@ -290,7 +298,8 @@ chance *= (1.0 + 0.004 * EffectiveMobLevel(killer, monster.CatalogId));
 
 ## 11. Checklist de aprobación PO
 
-- [ ] Confirmar fórmula stake: `floor(stake/100k)*10`  
+- [x] Confirmar fórmula stake: `floor(stake/50k)` (PO 2026-09-29)  
+- [x] Curva: todos los parámetros parejos, paridad Olympia en L40 (PO 2026-09-29)  
 - [ ] Confirmar curva kills → base level (100 kills/lvl?)  
 - [ ] O2: ¿stake sin kills aplica?  
 - [ ] Caps % dmg/drop/hit  

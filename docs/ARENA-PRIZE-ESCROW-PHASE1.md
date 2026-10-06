@@ -1,5 +1,7 @@
 # Arena Prize Escrow — Fase 1 (implementación server)
 
+> **Cambio PO 2026-09-29:** premios = **treasury** (`houseSponsor`). `playerPledgesEnabled: false` hace que `ArenaPactPrizePledgeRequest` responda “Arena prizes are paid by the treasury…” sin tocar la bolsa, y el stake de `ArenaPactCreateRequest` se ignora. El diálogo Create PVP Duel ya no ofrece stake USDT. Los créditos diarios de duelo (7k/3k) son aparte: salen del pool de mining (`ArenaIncentives`).
+
 > **Estado:** en código (2026-08-05). Ledger off-chain; on-chain / UI client después.  
 > Contrato: [`ARENA-PRIZE-ESCROW-PHASE0.md`](./ARENA-PRIZE-ESCROW-PHASE0.md).
 

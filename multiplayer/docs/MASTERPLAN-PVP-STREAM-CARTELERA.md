@@ -61,8 +61,14 @@ Fans watch **streams**, not a third in-engine body. That is enough for MVP.
   - World/Tournament Go Live: webhook embed
   - Env: `DISCORD_PVP_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL`, optional bot Events
 
+### X live reward (PO 2026-09-29)
+- The cartelera is the verification: an **X live** link (`x.com/i/broadcasts/<id>` or `x.com/<user>/status/<id>`) listed on a public, not-finished duel (fighter POV, or the global cam for the host) or on a World/Tournament Go Live.
+- After **15 minutes** live, `StreamRewards` tops the wallet up to the **50k daily cap** (`HellMiningStore.AwardXStreamDay`), paid from the same 500k mining day budget. Once per wallet per day; one X broadcast pays one wallet per day. Changing the URL restarts the 15 minutes.
+- No X API liveness check yet — the link shape + public listing is the proof.
+- Players see “rewards” (no token amounts). Discord Go Live no longer pays (old 20k stream bonus removed).
+
 ### Client
-- Create PVP: guided Discord/Twitch/YouTube + publish + title
+- Create PVP: guided Discord/Twitch/YouTube/**X** + publish + title
 - **Live Cartelera** dialog: Stage always ON (OFF cams until streams) + tabs PVP / World / Tournaments
 - **Go Live · World** / **Tournament** (in-game)
 - Hub: “Live Cartelera · PVP · World · Tournaments”

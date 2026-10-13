@@ -1,0 +1,10 @@
+# ChainLords economy catalog for the native client.
+# A rate is recorded only as a line that names the file it was copied from:
+#   rate <pair> <numerator> <denominator> <source-path>
+#   hell <key> <value> <source-path>
+# This checkout does not contain those sources, so there are no rate lines.
+
+unavailable docs/MASTERPLAN.md
+unavailable middleware-node/market.js
+unavailable middleware-node/hell.js
+unavailable middleware-node/mint.js

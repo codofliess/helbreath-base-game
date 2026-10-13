@@ -1,0 +1,38 @@
+name: native-client
+
+on:
+  pull_request:
+    paths:
+      - "clients/native/**"
+      - "multiplayer/proto/network.proto"
+      - ".github/workflows/native-client.yml"
+  push:
+    branches: [master]
+    paths:
+      - "clients/native/**"
+      - "multiplayer/proto/network.proto"
+      - ".github/workflows/native-client.yml"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ cmake ninja-build pkg-config \
+            libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev \
+            libgl1-mesa-dev libegl1-mesa-dev \
+            protobuf-compiler libprotobuf-dev \
+            xvfb
+      - name: Configure
+        run: cmake -S clients/native -B clients/native/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build clients/native/build
+      - name: Test
+        run: ctest --test-dir clients/native/build --output-on-failure
+      - name: Render one frame
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a clients/native/build/chainlords-native --screenshot clients/native/build/frame.png --width 1280 --height 720

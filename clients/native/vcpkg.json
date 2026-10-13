@@ -1,0 +1,12 @@
+{
+  "name": "chainlords-native",
+  "version-string": "0.1.0",
+  "description": "Optional vcpkg manifest. The default CMake build fetches SFML 3.1 and uses a system protobuf.",
+  "dependencies": [
+    {
+      "name": "sfml",
+      "features": ["window"]
+    },
+    "protobuf"
+  ]
+}

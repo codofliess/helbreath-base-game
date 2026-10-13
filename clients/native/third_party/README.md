@@ -1,0 +1,1 @@
+`stb_image.h` and `stb_image_write.h` are the public-domain stb single-file libraries by Sean Barrett (http://nothings.org/stb). They decode PNG sprite sheets and write the screenshot. The game does not link them as a separate package.

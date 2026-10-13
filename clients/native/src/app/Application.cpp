@@ -424,7 +424,10 @@ int run(int argc, char** argv) {
         if (!shotPath.empty()) {
             std::vector<std::uint8_t> pixels;
             renderer.readRgba(pixels, options.width, options.height);
-            fs::create_directories(fs::path(shotPath).parent_path());
+            const fs::path parent = fs::path(shotPath).parent_path();
+            if (!parent.empty()) {
+                fs::create_directories(parent);
+            }
             if (!cl::assets::writePng(shotPath, options.width, options.height, pixels.data())) {
                 std::cerr << "failed to write " << shotPath << "\n";
                 return false;
@@ -452,7 +455,6 @@ int run(int argc, char** argv) {
     while (window.isOpen()) {
         const cl::ports::InputFrame frame = input.poll();
         if (frame.quit) {
-            window.close();
             break;
         }
         float dt = clock.restart().asSeconds();
@@ -484,6 +486,7 @@ int run(int argc, char** argv) {
         window.display();
     }
     renderer.shutdown();
+    window.close();
     return 0;
 }
 

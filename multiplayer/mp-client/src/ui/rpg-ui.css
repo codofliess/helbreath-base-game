@@ -10221,9 +10221,8 @@ button.shop-dialog-row.shop-dialog-row--selected {
 }
 
 /*
- * Olympia world chat (F9 closed): bare PutString2 lines top-left over the map.
- * Larger readable face; ~2 ch from left edge, ~1cm from top of viewport.
- * No plate/box — black outline text only. Max ~4 lines (see ChatWorldLog).
+ * On-screen chat lines: bare outlined text, left / bottom-left over the map.
+ * No plate. Six lines. Stays up while the Chat Log window is open.
  */
 /* Arena slim: less chrome — keep bag + minimap (party dots for multi PvP). */
 body.arena-slim-mode .quest-tracker-hud,
@@ -10448,15 +10447,18 @@ body.arena-slim-mode .bag-dialog-root {
 
 .chat-world-log {
     position: fixed;
-    /* ~2 spaces (~1.2em) from left edge of the game canvas */
-    left: calc(var(--hb-canvas-left, 0px) + 1.2em);
-    /* ~1cm from top of the screen/canvas (96dpi: 1cm ≈ 37.8px) */
-    top: calc(var(--hb-canvas-inset-top, 0px) + 38px);
-    bottom: auto;
+    /* Left edge of the game canvas (same inset as the system log). */
+    left: calc(var(--hb-canvas-left, 0px) + 10px);
+    top: auto;
+    /*
+     * Bottom-left stack, above the dock and the system-log band, so the lines
+     * stay visible while the Chat Log window is open higher on the left.
+     */
+    bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 100px) + 120px);
     z-index: 12060;
     pointer-events: none;
     width: min(620px, 55vw);
-    max-height: 80px; /* ~4 × 18px + gap */
+    max-height: 114px; /* 6 × 18px + gaps */
     overflow: hidden;
     background: none !important;
     border: none !important;
@@ -10465,16 +10467,16 @@ body.arena-slim-mode .bag-dialog-root {
 }
 
 .chat-world-log--compose-open {
-    /* Stay top-left even while compose is open (Olympia map log does not move). */
-    bottom: auto;
+    /* Compose bar sits on the dock; this stack does not move. */
+    bottom: calc(var(--hb-canvas-inset-bottom, 0px) + var(--hb-dock-height, 100px) + 120px);
 }
 
 .chat-world-log-list {
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: flex-end;
     gap: 1px;
-    max-height: 80px;
+    max-height: 114px;
     overflow: hidden;
     padding: 0;
     margin: 0;

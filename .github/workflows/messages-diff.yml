@@ -1,0 +1,18 @@
+name: messages-diff
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  messages-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Message diff unit tests
+        run: node --test tools/messages-diff.test.mjs
+      - name: Diff Olympia packet IDs
+        run: node tools/messages-diff.mjs --out /tmp/messages-diff

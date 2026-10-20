@@ -5,7 +5,7 @@ namespace Server.Helpers;
 
 /// <summary>
 /// Local PLAYTEST kit for a wallet-less bot seat. Grants the client-visible Big Red Potion
-/// (item 164) and Fire Strike (Olympia Magic.cfg id 30, server spell 2) before the join snapshot.
+/// (item 164) and the mage book the rules bot can choose from, before the join snapshot.
 /// Live login is unchanged: this does not run in production and does not skip the wallet check.
 /// </summary>
 public static class PlaytestQaKit {
@@ -14,6 +14,19 @@ public static class PlaytestQaKit {
 
     /// <summary>Olympia Magic.cfg Fire Strike. <see cref="MagicTower.OlympiaToServerSpellId"/> maps it to server spell 2.</summary>
     public const int FireStrikeOlympiaId = 30;
+
+    /// <summary>
+    /// Olympia Magic.cfg ids the local mage seat may cast. Each one is in
+    /// <see cref="MagicTower.OlympiaToServerSpellId"/>. Staminar-Drain (11) is not, so it is not granted.
+    /// </summary>
+    public static readonly int[] GrantedOlympiaSpellIds = [
+        FireStrikeOlympiaId, // 30 Fire Strike → server 2, mana 36
+        1,                    // Heal → server 29, mana 15
+        13,                   // Defense Shield → server 32, mana 19
+        35,                   // Paralyze → server 27, mana 35
+        91,                   // Blizzard → server 21, mana 170
+        32,                   // Invisibility → server 24, mana 31
+    ];
 
     private static readonly string[] LiveSecretNames = [
         "WALLET_AUTH_SECRET",
@@ -71,8 +84,13 @@ public static class PlaytestQaKit {
         if (!IsEnabled || !player.IsBotActor) {
             return;
         }
-        if (!player.HasLearnedOlympiaSpell(FireStrikeOlympiaId)) {
-            player.LearnOlympiaSpell(FireStrikeOlympiaId);
+        foreach (var olympiaId in GrantedOlympiaSpellIds) {
+            if (!MagicTower.OlympiaToServerSpellId.ContainsKey(olympiaId)) {
+                continue;
+            }
+            if (!player.HasLearnedOlympiaSpell(olympiaId)) {
+                player.LearnOlympiaSpell(olympiaId);
+            }
         }
         if (player.InventoryManager.CountItem(BigRedPotionItemId) > 0) {
             return;
@@ -82,6 +100,6 @@ public static class PlaytestQaKit {
             return;
         }
         Console.WriteLine(
-            $"[PlaytestQaKit] {player.CharacterName} granted item {BigRedPotionItemId} x{PotionQuantity} and Fire Strike.");
+            $"[PlaytestQaKit] {player.CharacterName} granted item {BigRedPotionItemId} x{PotionQuantity} and mage spells {string.Join(",", GrantedOlympiaSpellIds)}.");
     }
 }

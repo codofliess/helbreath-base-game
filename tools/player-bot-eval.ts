@@ -6,6 +6,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { formatSpellTable, summarizeSpellCasts, type SpellCastRecord, type SpellTableRow } from './player-bot-log.ts';
 import { scorePlayerBotRun, type PlayerBotVerdict } from './player-bot-score.ts';
 
 interface SummaryLine {
@@ -46,6 +47,49 @@ function assertLocalServerLog(rawPath: string): string {
         throw new Error(`Server log is not a file: ${fullPath}`);
     }
     return fullPath;
+}
+
+function spellRecordsFromLog(logPath: string): SpellCastRecord[] {
+    const text = readFileSync(logPath, 'utf8');
+    const records: SpellCastRecord[] = [];
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            continue;
+        }
+        const parsed = JSON.parse(trimmed) as {
+            kind?: string;
+            spellId?: number;
+            spellName?: string;
+            reason?: string;
+            result?: string;
+            phase?: string;
+            next?: string;
+        };
+        if (parsed.kind !== 'cast' && parsed.kind !== 'cast-failed') {
+            continue;
+        }
+        if (typeof parsed.reason !== 'string' || parsed.spellId === undefined) {
+            continue;
+        }
+        let result: SpellCastRecord['result'];
+        if (parsed.result === 'accepted' || parsed.result === 'rejected' || parsed.result === 'fizzled') {
+            result = parsed.result;
+        } else if (parsed.kind === 'cast') {
+            result = 'accepted';
+        } else if (parsed.phase === 'finish' && parsed.next === 'melee') {
+            result = 'fizzled';
+        } else {
+            result = 'rejected';
+        }
+        records.push({
+            spellId: Number(parsed.spellId),
+            spellName: typeof parsed.spellName === 'string' ? parsed.spellName : '',
+            result,
+            reason: parsed.reason,
+        });
+    }
+    return records;
 }
 
 function readSummary(logPath: string): SummaryLine {
@@ -91,7 +135,9 @@ function main(): void {
     if (!logArg) {
         throw new Error('Usage: tsx player-bot-eval.ts --log <jsonl> [--server-log <local file>]');
     }
-    const summary = readSummary(resolve(logArg));
+    const logPath = resolve(logArg);
+    const summary = readSummary(logPath);
+    const spellTable: SpellTableRow[] = summarizeSpellCasts(spellRecordsFromLog(logPath));
     let serverLogNote = 'server-log cross-check: not requested';
     const serverLogArg = argValue(argv, 'server-log');
     if (serverLogArg) {
@@ -106,6 +152,7 @@ function main(): void {
         `disconnects=${summary.disconnects} potionsUsed=${summary.potionsUsed} casts=${summary.casts} ` +
         `durationMs=${summary.durationMs}`,
     );
+    console.log(formatSpellTable(spellTable));
     console.log(serverLogNote);
     if (summary.verdict !== 'PASS') {
         process.exitCode = 1;

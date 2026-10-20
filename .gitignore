@@ -42,3 +42,6 @@ multiplayer/server/Chars/
 **/.public-url.txt
 landing-api/.env.local.secret
 
+# map-diff bulk output (sample PNG under tools/map-diff/ is intentional)
+tools/map-diff-out/
+

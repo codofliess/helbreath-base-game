@@ -1,0 +1,18 @@
+name: map-diff
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  map-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Map diff unit tests
+        run: node --test tools/map-diff.test.mjs
+      - name: Audit checked-in maps
+        run: node tools/map-diff.mjs --out /tmp/map-diff --no-images

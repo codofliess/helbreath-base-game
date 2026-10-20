@@ -802,8 +802,8 @@ public record MonsterSpellEntry(int SpellId, double CastProbability);
 
 /// <summary>
 /// One loot row for <see cref="MonsterConfig.Loot"/>: <c>chance</c> is 0–1.
-/// Gold and multi-drop bosses (Wyvern/Abaddon) still roll each row independently;
-/// normal monsters cap accepted non-gold rows to one primary + one rare (see <c>MonsterLoot</c>).
+/// Multi-drop bosses (Wyvern/Abaddon) roll each row independently. Normal monsters use it as a weight inside
+/// the Olympia gold / standard / valuable bands, or as absolute odds on the DeleteNpc walk (see <c>MonsterLoot</c>).
 /// </summary>
 public record MonsterLootEntry(int ItemId, double Chance, int MinQuantity = 1, int MaxQuantity = 1);
 

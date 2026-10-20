@@ -154,13 +154,19 @@ Tied to primary attack-type roll (weapon colors 1–8); defense often `cColor = 
 | Layer | Mechanism |
 |-------|-----------|
 | Baked chances | `generate-monster-loot.mjs` expands Olympia tree → `Monsters.json` `loot[{itemId, chance, min, max}]` at **rating 0** |
-| Runtime | Independent rolls per row; **at most one primary + one rare** (+ gold independent) for normal mobs |
+| Runtime (normal mobs, since 2026-09-29) | **Single tree walk** = `NpcDeadItemGenerator` 1:1 (`MonsterLoot.RollNormalMobLoot`): gate `iDice ≥ 6500` → `≤ 6000` gold, else `≤ 9000` standard band / else valuable band. Inside a band the baked row chances are **weights** (keeps 60% weapon / 40% armor, pot shares, etc.). Plus **one `DeleteNpc` walk** (single roll over the cumulative chances of body parts + named rares → at most one). |
+| Runtime (Hellclaw / Tigerworm, multi-drop bosses) | Unchanged: one primary + one rare (elites); independent multi-rolls with scatter (Wyvern / Abaddon / dragons) |
+| Mastery drop rate | Scales the **gate** (like lowering `m_iPrimaryDropRate`), capped at 100%; also multiplies the `DeleteNpc` row odds |
 | Magic | `OlympiaMagicRoll` on gear with effect type attack/defense/wand |
-| Reputation rescale | **Stub** — `TryGetKillerHelbreathRating` always false |
+| Reputation rescale | **Stub** — `TryGetKillerHelbreathRating` always false; hook is `ResolveSecondaryDropThreshold(SecondaryDropRate, RepDropModifier)` |
+
+Per normal-mob kill (rating 0, no mastery): **21% gold · 12.6% standard · 1.4% valuable · 65% nothing** from the tree, mutually exclusive. Before the tree the independent rolls gave ~21% gold **plus** ~10% pot **plus** ~4.1% gear on the same corpse — gear supply on normal mobs drops ~3×. At +200% drop mastery the gate is 100%: 60% gold / 36% standard / 4% valuable.
+
+Named rares that Olympia lists inside a valuable pool (Giant Battle Hammer 762, Barbarian Hammer 843) stay on the `DeleteNpc` walk at their baked chance so the tree does not change rare supply. Olympia band 9 (December candies) is omitted, so the standard band is the full 12.6% year-round.
 
 ### Why drops can feel “completely wrong”
 
-1. **Independent row chances** ≠ single nested Olympia tree (mutual exclusivity differs).
+1. ~~**Independent row chances** ≠ single nested Olympia tree~~ — fixed 2026-09-29 for normal mobs (single walk).
 2. **Missing / wrong IDs** in catalog vs Item.cfg.
 3. **Magic not shown** in UI even when `itemAttribute` is set.
 4. **Gen wrong** on monster catalog → wrong weapon/armor pool.
@@ -183,7 +189,7 @@ Validate Slime: no Tower Shield **87**, no wand, has CritCandy **970** band shar
 
 1. Diff one live kill’s loot vs expected Olympia path for that gen (log `itemId` + `itemAttribute`).
 2. Confirm UI decodes `itemAttribute` (SWE type/value) for bag tooltips.
-3. Optionally replace independent multi-row rolls with a single tree walk matching `NpcDeadItemGenerator` 1:1.
+3. ~~Replace independent multi-row rolls with a single tree walk matching `NpcDeadItemGenerator` 1:1~~ — done 2026-09-29 (normal mobs; see § 5).
 4. Wire Helbreath character rating into secondary threshold when persisted.
 
 ---

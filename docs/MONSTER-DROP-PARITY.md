@@ -13,6 +13,7 @@
 | Rare standard bands | **Aligned** — Big potions **92/94/96**, Power Green **390**, candies **780–782** + CritCandy **970**, stones/tablets/balls (case 8) |
 | Wand branch | **Aligned** — gen 2–3 → **258**, 4–6 → **257**, 7–8 → **256** (20% of weapon path, `iDice≤8000` melee); gen 1 / 9–10 sin wand |
 | Armor weights (gen 6–10) | **Aligned** — nested Olympia `iDice` flattened (helms gen6, Scale/Knight gen7, Cape/Boots gen8–9, Scale/Helm gen10 reachable cases) |
+| Runtime tree (mobs normales) | **Aligned 2026-09-29** — `MonsterLoot.RollNormalMobLoot` = un solo walk `NpcDeadItemGenerator` (35% → 60% oro / 40% ítem → 90% estándar / 10% valioso) + un walk `DeleteNpc` (máx. 1 material o rare). Hellclaw/Tigerworm y bosses multi-drop sin cambio |
 | Reputation / secondary modifier | **Stub** — `MonsterLoot.TryGetKillerHelbreathRating` / `ResolveSecondaryDropThreshold`; tablas baked @ `m_iRating == 0`. Sin columna de rating Helbreath; **no** usar PvP Elo |
 | Farm / traveler / town pit monsters | Regenerated via script |
 
@@ -52,6 +53,8 @@ Primary gate (~6500): iDice(1,10000) >= PrimaryDropRate  → ~35% enter drop pat
 
 MP bake: chances in `Monsters.json` use **rating 0**. Runtime does not rescale until `TryGetKillerHelbreathRating` returns a real rating. Character Helbreath reputation is not persisted; wiring PvP Elo would be incorrect.
 
+**Runtime (desde 2026-09-29):** los mobs normales recorren este árbol literal con las constantes Olympia (`PrimaryDropRate` 6500, oro 6000, `SecondaryDropRate` 9000 en `MonsterLoot.cs`). Las `chance` baked se usan como **pesos dentro de cada banda** (oro / estándar / valioso), así que el bake de gear (~4.2% sumado, 3× Olympia) ya no infla el drop: valioso = **1.4%** por kill. Materiales + rares nombrados = un solo walk `DeleteNpc` con sus chances absolutas (máx. 1). Maestría drop rate escala el gate (tope 100%).
+
 ## Slime (catalog id 1) — proof
 
 | Path | Items | Notes |
@@ -89,7 +92,7 @@ MP bake: chances in `Monsters.json` use **rating 0**. Runtime does not rescale u
 | Valuable armor | Olympia Scale **457/477** + Helm **600/602** + CL Plate **458/478** + light Cape/Boots/horned |
 | Materials / manuals | **735, 853, 382** (+ wiki rare weights) |
 
-Runtime: `MonsterLoot.DropSinglePrimaryLoot` — gold independent; at most one pot/material bucket + one gear + one rare per kill (Olympia-style caps).
+Runtime: `MonsterLoot.RollNormalMobLoot` — árbol Olympia (oro **o** estándar **o** valioso, excluyentes) + un walk `DeleteNpc` (735 / 382 / 762 / 843… a su chance baked).
 
 ## Pit monsters covered
 

@@ -28,6 +28,7 @@ import {
     isPlayerItemAppearanceDecodeAllowed,
     loadPlayerItemAppearanceOnDemand,
 } from './ItemAssets';
+import type { ActionPreloadLook } from './actionSpritePreload';
 import { getHumanSpriteName as getHumanSpriteNameLook, resolveGearFromEquippedItems as resolveGearFromEquippedItemsLook } from './playerAppearanceLook';
 import {
     canFetchAppearanceSheetOnStateEnter,
@@ -409,6 +410,51 @@ export class PlayerAppearanceManager {
     /** Start HTTP fetch for every equipped-appearance layer still on the placeholder texture. */
     public startPendingItemAppearanceLoads(): void {
         this.kickOffAllPendingItemAppearanceLoads();
+    }
+
+    /**
+     * Local look used to cache stand + run sheets before the 16s enter gate.
+     * Bald hair (style 2) is omitted by the preloader.
+     */
+    public getActionPreloadLook(): ActionPreloadLook {
+        const female = this.gender !== Gender.MALE;
+        const equipment: ActionPreloadLook['equipment'][number][] = [];
+        const pushArmour = (spriteName: string | undefined) => {
+            if (spriteName) {
+                equipment.push({ spriteName, kind: 'armour' });
+            }
+        };
+        pushArmour(this.armor);
+        pushArmour(this.hauberk);
+        pushArmour(this.leggings);
+        pushArmour(this.boots);
+        pushArmour(this.helm);
+        pushArmour(this.cape);
+        if (this.weapon) {
+            equipment.push({
+                spriteName: this.weapon,
+                kind: 'weapon',
+                packBase: this.weaponStartSpriteSheetIndex ?? 0,
+            });
+        }
+        if (this.shield) {
+            equipment.push({
+                spriteName: this.shield,
+                kind: 'shield',
+                packBase: this.shieldStartSpriteSheetIndex ?? 0,
+            });
+        }
+        if (this.accessory) {
+            equipment.push({ spriteName: this.accessory, kind: 'accessory' });
+        }
+        return {
+            humanSpriteName: this.humanSpriteName,
+            hairSpriteName: female ? 'whr' : 'mhr',
+            underwearSpriteName: female ? 'wpt' : 'mpt',
+            hairStyleIndex: this.hairStyleIndex,
+            underwearColorIndex: this.underwearColorIndex,
+            equipment,
+        };
     }
 
     private kickOffAllPendingItemAppearanceLoads(): void {

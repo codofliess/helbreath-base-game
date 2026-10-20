@@ -101,6 +101,10 @@ import {
     setPlayerItemAppearanceDecodeAllowed,
 } from '../../utils/ItemAssets';
 import { evictUnusedSelectAppearanceSprites, loadWorldDeferredSprites, loadWorldEnterAppearanceSprites, trimSelectAppearanceToIdleSheets } from '../../utils/bootCatalog';
+import { buildBodyAndEquipmentJobs, buildSpellEffectJobs, preloadActionSpriteJobs } from '../../utils/actionSpritePreload';
+import { castDialogStore } from '../../ui/store/CastDialog.store';
+import { shortCutStore } from '../../ui/store/ShortCut.store';
+import { SPELL_ENERGY_BOLT_ID, SPELL_FIRE_STRIKE_ID, SPELL_HEAL_ID, SPELL_MAGIC_MISSILE_ID } from '../../constants/Spells';
 import { areItemIconSheetsLoaded, loadItemIconAssetsOnDemand, shouldLoadItemIconAssetsOnDemand } from '../../utils/ItemIconAssets';
 import { areNpcSpriteLoaded, evictNpcSpriteSheets, loadNpcSpriteOnDemand, shouldLoadNpcAssetsOnDemand } from '../../utils/NpcAssets';
 import { SoundManager } from '../../utils/SoundManager';
@@ -2388,6 +2392,36 @@ export class GameWorld extends Scene {
         };
     }
 
+    /**
+     * Cache the local body's run sheets, equipped stand/run sheets, and a few
+     * spell VFX sheets as soon as the map can draw. This does not wait for
+     * {@link MAP_ENTER_HEAVY_DECODE_MS} (zoom / HUD / full settle).
+     */
+    private startLocalActionSpritePreload(): void {
+        const look = this.player?.getActionPreloadLook();
+        if (!look) {
+            return;
+        }
+        const spellIds: number[] = [];
+        const selected = castDialogStore.state.selectedSpellId;
+        if (typeof selected === 'number') {
+            spellIds.push(selected);
+        }
+        for (const slot of [1, 2, 3] as const) {
+            const binding = shortCutStore.state.slots[slot];
+            if (binding?.kind === 'spell') {
+                spellIds.push(binding.spellId);
+            }
+        }
+        spellIds.push(SPELL_MAGIC_MISSILE_ID, SPELL_HEAL_ID, SPELL_ENERGY_BOLT_ID, SPELL_FIRE_STRIKE_ID);
+        void preloadActionSpriteJobs(this, [
+            ...buildBodyAndEquipmentJobs(look),
+            ...buildSpellEffectJobs(spellIds),
+        ]).then(() => {
+            this.player?.refreshAppearanceAfterSpriteCache();
+        });
+    }
+
     /** Queue equipped appearance packs; decode after map enter so they do not race tile packs. */
     private enqueuePlayerItemAppearancePrefetch(spriteNames: string[]): void {
         if (!LOAD_PLAYER_ITEM_APPEARANCE_ASSETS_ON_DEMAND || spriteNames.length === 0) {
@@ -2669,6 +2703,7 @@ export class GameWorld extends Scene {
 
         // Map has been fully loaded
         this.loadingMap = false;
+        this.startLocalActionSpritePreload();
         this.clearMapSetupWatchdog();
         MapWarpSystem.getInstance().beginPostLoadGrace();
         // Never leave warp/water debug overlays on after map load (yellow/blue boxes hide the world).

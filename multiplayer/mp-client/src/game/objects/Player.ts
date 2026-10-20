@@ -22,6 +22,11 @@ import { CriticalStrikeProjectile } from '../effects/CriticalStrikeProjectile';
 import { ArrowProjectile } from '../effects/ArrowProjectile';
 import { StormBringerEffect } from '../effects/StormBringerEffect';
 import { drawEffect, drawEffectAtPixelCoords, getTextureKeyFromEffectConfig } from '../../utils/EffectUtils';
+import {
+    buildBodyAndEquipmentJobs,
+    preloadActionSpriteJobs,
+    type ActionPreloadLook,
+} from '../../utils/actionSpritePreload';
 import { isSafeDrawableTexture } from '../../utils/worldCanvasTextureSafety';
 import {
     beginMagiasMoveDuringPrepare,
@@ -503,6 +508,7 @@ export class Player extends GameObject {
             this.appearanceManager.handleEquip(itemType, itemId, effectOverrides, itemColor);
             this.switchPlayerState(this.currentState, true);
             this.updatePixelPosition();
+            this.queueLocalActionSpritePreload();
         } catch (error) {
             // Equip must not throw to React/EventBus — that hard-leaves GameWorld to landing.
             console.error('[Player] onEquipItem failed', itemType, itemId, error);
@@ -563,6 +569,35 @@ export class Player extends GameObject {
         const inventoryManager = getInventoryManager(this.scene.game);
         this.appearanceManager.applyAppearanceChange(gender, skinColor, inventoryManager.equippedItems, this.currentState, this.direction, this.shadowManager, underwearColorIndex, hairStyleIndex);
         this.switchPlayerState(this.currentState, true);
+        this.queueLocalActionSpritePreload();
+    }
+
+    /**
+     * Cache this body's run sheets and equipped stand/run sheets without waiting
+     * for the map-enter heavy-decode timer. Spell VFX is queued from GameWorld.
+     */
+    private queueLocalActionSpritePreload(): void {
+        if (!this.isLocalPlayer) {
+            return;
+        }
+        void preloadActionSpriteJobs(
+            this.scene,
+            buildBodyAndEquipmentJobs(this.appearanceManager.getActionPreloadLook()),
+        ).then(() => {
+            this.refreshAppearanceAfterSpriteCache();
+        });
+    }
+
+    /** Re-bind the current pose once preloaded run/equipment textures exist. */
+    public refreshAppearanceAfterSpriteCache(): void {
+        if (isMagiasRitualActive()) {
+            return;
+        }
+        try {
+            this.switchPlayerState(this.currentState, true);
+        } catch (error) {
+            console.warn('[Player] Appearance refresh after sprite cache skipped', error);
+        }
     }
 
     private getEquippedItemsForRemoteAppearance(): Partial<
@@ -2027,6 +2062,11 @@ export class Player extends GameObject {
     /** After map settle: decode idle equipped sheets that stayed on the placeholder. */
     public startPendingEquippedAppearanceLoads(): void {
         this.appearanceManager.startPendingItemAppearanceLoads();
+    }
+
+    /** Stand + run sheet list for the local body. Remote players are not preloaded. */
+    public getActionPreloadLook(): ActionPreloadLook {
+        return this.appearanceManager.getActionPreloadLook();
     }
 
     /**

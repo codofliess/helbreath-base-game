@@ -29,17 +29,21 @@ export function areEffectSpriteLoaded(scene: Scene, spriteName: string, sheetInd
     return areSpriteSheetsLoaded(scene, `sprite-${spriteName}`, new Set([sheetIndex]));
 }
 
-/** Registers only the VFX sheet used by this config (not the whole effect pack). */
+/**
+ * Registers only the VFX sheet used by this config (not the whole effect pack).
+ * Resolves when that sheet can be drawn. Sound decode runs beside it so the
+ * first cast frame does not wait on `decodeAudioData`.
+ */
 export async function loadEffectAssetsOnDemand(scene: Scene, config: EffectConfig): Promise<void> {
     if (!LOAD_EFFECT_ASSETS_ON_DEMAND) {
         return;
     }
+    if (config.sound) {
+        const { key, fileName } = effectSoundFileName(config.sound);
+        void loadSoundAssetOnDemand(scene, key, fileName);
+    }
     await loadSpriteAssetOnDemand(scene, getEffectSpriteAsset(config.sprite), {
         sheetIndices: new Set([config.spriteSheetIndex]),
+        priority: true,
     });
-    if (!config.sound) {
-        return;
-    }
-    const { key, fileName } = effectSoundFileName(config.sound);
-    await loadSoundAssetOnDemand(scene, key, fileName);
 }

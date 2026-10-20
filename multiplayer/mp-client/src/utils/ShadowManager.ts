@@ -1,8 +1,20 @@
 import type { Scene, GameObjects } from 'phaser';
 import type { PivotFrame } from '../Types';
 import { worldCellCenterPixelX, worldCellCenterPixelY } from './CoordinateUtils';
+import { rasterizeOlympiaBodyShadow } from './olympiaBodyShadow';
+import { isWorldCanvasImageSource } from './pendingAppearanceTexture';
 import { getPivotData } from './RegistryUtils';
 import { isSafeDrawableTexture } from './worldCanvasTextureSafety';
+
+const OLYMPIA_SHADOW_BLANK_KEY = 'olympia-body-shadow-blank';
+
+type BakedOlympiaShadow = {
+    originX: number;
+    originY: number;
+};
+
+/** Shared across players. The texture itself lives on the scene that first baked it. */
+const bakedOlympiaShadows = new Map<string, BakedOlympiaShadow>();
 
 /**
  * Configuration for creating a shadow sprite.
@@ -37,6 +49,12 @@ export type ShadowConfig = {
 
     /** Specific frame index to display for static shadows (for map objects) */
     frameIndex?: number;
+
+    /**
+     * Player body shadow. Uses Olympia `PutShadowSprite` (sheared ground darken of the
+     * naked body) instead of a rotated black copy of that sprite.
+     */
+    olympiaBodyShadow?: boolean;
 };
 
 /**
@@ -81,6 +99,26 @@ export class ShadowManager {
     private frameIndex?: number;
 
     /**
+     * When set, the visible shadow is a ground darken. `frameSprite` plays the body
+     * animation off-screen so the pose stays on the same frame as the old shadow clock.
+     */
+    private olympiaBodyShadow = false;
+
+    /** Hidden body-frame clock. Never shown — showing it is the bald-body ghost. */
+    private frameSprite: GameObjects.Sprite | undefined = undefined;
+
+    /** Anchor-space origin of the current Olympia shadow canvas. */
+    private olympiaOriginX = 0;
+
+    private olympiaOriginY = 0;
+
+    /** Caller alpha (0 hides, 1 shows the baked 75% darken). */
+    private requestedAlpha = 1;
+
+    /** Last baked texture key, so a repeated frame tick does not re-read pixels. */
+    private lastOlympiaKey = '';
+
+    /**
      * Creates a new ShadowManager instance.
      * 
      * @param config - Configuration for shadow creation
@@ -96,6 +134,7 @@ export class ShadowManager {
         this.frameRate = config.frameRate ?? 10;
         this.mapObject = config.mapObject ?? false;
         this.frameIndex = config.frameIndex;
+        this.olympiaBodyShadow = config.olympiaBodyShadow ?? false;
 
         this.createShadow();
     }
@@ -131,6 +170,30 @@ export class ShadowManager {
             this.shadowPivotData = pivotData.spriteSheetPivots[pivotIndex];
         }
 
+        if (this.olympiaBodyShadow && !this.mapObject) {
+            // The body texture stays on a hidden clock. The visible sprite is only the
+            // sheared darken, so the naked body cannot draw behind the equipment.
+            this.frameSprite = this.scene.add.sprite(0, 0, shadowTextureKey);
+            this.frameSprite.setVisible(false);
+            this.frameSprite.setAlpha(0);
+            this.frameSprite.setDepth(-100000);
+            this.shadowSprite = this.scene.add.sprite(0, 0, ensureOlympiaShadowBlank(this.scene));
+            this.shadowSprite.setOrigin(0, 0);
+            this.shadowSprite.setRotation(0);
+            this.shadowSprite.setScale(1, 1);
+            this.shadowSprite.setDepth(0);
+            this.shadowSprite.setVisible(false);
+            if (this.scene.anims.exists(shadowAnimationKey)) {
+                this.frameSprite.play({
+                    key: shadowAnimationKey,
+                    frameRate: this.frameRate,
+                });
+                this.bindShadowFrameListener(this.frameSprite, undefined, undefined, undefined);
+            }
+            this.refreshOlympiaFrame();
+            return;
+        }
+
         // Create shadow sprite at initial position
         // For map objects, use specified frameIndex or frame 0 (static); for regular sprites, use texture key
         if (this.mapObject) {
@@ -146,17 +209,12 @@ export class ShadowManager {
         // In Phaser: originX = 0.5 (center), originY = 1.0 (bottom)
         this.shadowSprite.setOrigin(0.5, 1.0);
 
-        // Apply shadow transformations
-        // Rotation: -π/4 radians (exactly -45 degrees) for isometric projection
-        // Scale: Separate X/Y scaling creates flattened isometric shadow
-        //   - scaleX: 1.0 (full width)
-        //   - scaleY: 0.5 (compressed height for flat-on-ground appearance)
-        // Alpha: 50% opacity for semi-transparent shadow
-        // Tint: Pure black color
-        this.shadowSprite.setRotation(-Math.PI / 4); // Exactly -45 degrees for isometric projection
-        this.shadowSprite.setScale(1.0, 0.5);        // Width: 100%, Height: 50% (flattened)
-        this.shadowSprite.setAlpha(0.5);             // 50% opacity (semi-transparent)
-        this.shadowSprite.setTint(0x000000);         // Pure black
+        // Monsters and map decals still use the flattened black sprite.
+        // Players pass olympiaBodyShadow and never take this path.
+        this.shadowSprite.setRotation(-Math.PI / 4);
+        this.shadowSprite.setScale(1.0, 0.5);
+        this.shadowSprite.setAlpha(0.5);
+        this.shadowSprite.setTint(0x000000);
 
         // Set depth to render below object (will be updated in updateDepth)
         this.shadowSprite.setDepth(0);
@@ -171,6 +229,11 @@ export class ShadowManager {
 
         // Initial position update
         this.updatePosition();
+    }
+
+    /** Sprite that advances the body (or monster) frames. Hidden when the Olympia darken is showing. */
+    private animatedSprite(): GameObjects.Sprite | undefined {
+        return this.frameSprite ?? this.shadowSprite;
     }
 
     /**
@@ -244,11 +307,16 @@ export class ShadowManager {
                     playConfig.startFrame = effectiveStartFrame;
                 }
 
+                const animated = this.animatedSprite();
+                if (!animated) {
+                    return;
+                }
+
                 // Reset to frame 0 when starting from non-zero to avoid carryover from previous animation
                 if (effectiveStartFrame > 0) {
                     const firstFrame = anim?.frames?.[0];
                     if (firstFrame?.frame) {
-                        this.shadowSprite.anims.setCurrentFrame(firstFrame);
+                        animated.anims.setCurrentFrame(firstFrame);
                     }
                 }
 
@@ -259,30 +327,17 @@ export class ShadowManager {
 
                 this.stopShadowAnimationForSwitch(shadowAnimationKey);
                 try {
-                    this.shadowSprite.play(playConfig);
+                    animated.play(playConfig);
                 } catch (error) {
                     this.resetShadowAnimationState(shadowAnimationKey);
                     this.setStaticFrameFromAnimation(shadowAnimationKey, effectiveStartFrame);
                     throw error;
                 }
 
-                // Frame limit listener only needed for LOOPING animations (e.g. idle 0-3 wrapping back to 0).
-                // For repeat: 0 (attack, take damage, death), the animation naturally stops at the last frame.
-                if (startFrame !== undefined && endFrame !== undefined && repeat !== 0) {
-                    this.shadowSprite.off(Phaser.Animations.Events.ANIMATION_UPDATE);
-                    this.shadowSprite.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
-                        const frameIndex = typeof frame.index === 'number' ? frame.index : parseInt(String(frame.textureFrame ?? frame.frame?.name ?? frame.index), 10);
-                        if (frameIndex > endFrame || frameIndex < startFrame) {
-                            const currentAnim = this.shadowSprite?.anims?.currentAnim;
-                            const targetFrame = currentAnim?.frames?.find((f: Phaser.Animations.AnimationFrame) => f.index === startFrame) ?? currentAnim?.frames?.[startFrame];
-                            if (targetFrame && this.shadowSprite) {
-                                this.shadowSprite.anims.setCurrentFrame(targetFrame);
-                            }
-                        }
-                    });
-                } else {
-                    this.shadowSprite.off(Phaser.Animations.Events.ANIMATION_UPDATE);
-                }
+                this.bindShadowFrameListener(animated, repeat, startFrame, endFrame);
+            }
+            if (this.olympiaBodyShadow) {
+                this.refreshOlympiaFrame();
             }
         } catch (error) {
             console.warn(
@@ -305,18 +360,54 @@ export class ShadowManager {
         }
     }
 
+    /**
+     * Clamps looping sub-ranges, and for player shadows rebakes the ground darken
+     * on the frame Olympia would pass to `PutShadowSprite`.
+     */
+    private bindShadowFrameListener(
+        animated: GameObjects.Sprite,
+        repeat: number | undefined,
+        startFrame: number | undefined,
+        endFrame: number | undefined,
+    ): void {
+        animated.off(Phaser.Animations.Events.ANIMATION_UPDATE);
+        const clamp = startFrame !== undefined && endFrame !== undefined && repeat !== 0;
+        if (!clamp && !this.olympiaBodyShadow) {
+            return;
+        }
+        animated.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+            if (clamp && startFrame !== undefined && endFrame !== undefined) {
+                const frameIndex = typeof frame.index === 'number'
+                    ? frame.index
+                    : parseInt(String(frame.textureFrame ?? frame.frame?.name ?? frame.index), 10);
+                if (frameIndex > endFrame || frameIndex < startFrame) {
+                    const currentAnim = animated.anims?.currentAnim;
+                    const targetFrame = currentAnim?.frames?.find((f: Phaser.Animations.AnimationFrame) => f.index === startFrame)
+                        ?? currentAnim?.frames?.[startFrame];
+                    if (targetFrame) {
+                        animated.anims.setCurrentFrame(targetFrame);
+                    }
+                }
+            }
+            if (this.olympiaBodyShadow) {
+                this.refreshOlympiaFrame();
+            }
+        });
+    }
+
     private stopShadowAnimationForSwitch(nextAnimationKey: string): void {
-        if (!this.shadowSprite?.anims.isPlaying) {
+        const animated = this.animatedSprite();
+        if (!animated?.anims.isPlaying) {
             return;
         }
 
-        if (!this.shadowSprite.anims.currentAnim || !this.shadowSprite.anims.currentFrame) {
+        if (!animated.anims.currentAnim || !animated.anims.currentFrame) {
             this.resetShadowAnimationState(nextAnimationKey);
             return;
         }
 
         try {
-            this.shadowSprite.anims.stop();
+            animated.anims.stop();
         } catch (error) {
             console.warn(
                 `[ShadowManager] Resetting stale animation state before playing "${nextAnimationKey}"`,
@@ -327,7 +418,8 @@ export class ShadowManager {
     }
 
     private resetShadowAnimationState(nextAnimationKey: string): void {
-        if (!this.shadowSprite) {
+        const animated = this.animatedSprite();
+        if (!animated) {
             return;
         }
 
@@ -342,7 +434,7 @@ export class ShadowManager {
             stopOnFrame?: Phaser.Animations.AnimationFrame | null;
         };
 
-        const animationState = this.shadowSprite.anims as unknown as MutableAnimationState;
+        const animationState = animated.anims as unknown as MutableAnimationState;
         animationState.currentAnim = null;
         animationState.currentFrame = null;
         animationState.nextAnim = null;
@@ -356,7 +448,8 @@ export class ShadowManager {
     }
 
     private setStaticFrameFromAnimation(animationKey: string, frameIndex: number): void {
-        if (!this.shadowSprite) {
+        const animated = this.animatedSprite();
+        if (!animated) {
             return;
         }
 
@@ -366,7 +459,11 @@ export class ShadowManager {
             return;
         }
 
-        this.shadowSprite.setTexture(frame.frame.texture.key, frame.frame.name);
+        animated.setTexture(frame.frame.texture.key, frame.frame.name);
+        if (this.olympiaBodyShadow) {
+            this.refreshOlympiaFrame();
+            return;
+        }
         this.updatePosition();
     }
 
@@ -376,6 +473,14 @@ export class ShadowManager {
      */
     private updatePosition(): void {
         if (!this.shadowSprite) {
+            return;
+        }
+
+        if (this.olympiaBodyShadow) {
+            // Canvas origin is the min sheared pixel, already in anchor space (sX, sY) + pivot.
+            const anchorX = worldCellCenterPixelX(this.worldX) + this.offsetX;
+            const anchorY = worldCellCenterPixelY(this.worldY) + this.offsetY;
+            this.shadowSprite.setPosition(anchorX + this.olympiaOriginX, anchorY + this.olympiaOriginY);
             return;
         }
 
@@ -518,20 +623,167 @@ export class ShadowManager {
      * @param alpha - Alpha value (0-1)
      */
     public setAlpha(alpha: number): void {
-        if (this.shadowSprite) {
-            this.shadowSprite.setAlpha(alpha * 0.5); // Shadow base opacity is 50%
+        this.requestedAlpha = alpha;
+        if (!this.shadowSprite) {
+            return;
         }
+        if (this.olympiaBodyShadow) {
+            // 75% darken is already in the stamp. Extra 0.5 would lighten it past Olympia.
+            this.shadowSprite.setAlpha(alpha);
+            this.shadowSprite.setVisible(alpha > 0 && this.shadowSprite.texture.key !== OLYMPIA_SHADOW_BLANK_KEY);
+            return;
+        }
+        this.shadowSprite.setAlpha(alpha * 0.5);
     }
 
     /**
      * Destroys the shadow sprite and cleans up resources.
      */
     public destroy(): void {
+        const animated = this.animatedSprite();
+        animated?.off(Phaser.Animations.Events.ANIMATION_UPDATE);
+        if (this.frameSprite) {
+            this.frameSprite.destroy();
+            this.frameSprite = undefined;
+        }
         if (this.shadowSprite) {
-            // Remove animation event listener
-            this.shadowSprite.off(Phaser.Animations.Events.ANIMATION_UPDATE);
             this.shadowSprite.destroy();
             this.shadowSprite = undefined;
         }
     }
+
+    /**
+     * Rebuilds the visible ground darken from the hidden body's current frame.
+     * Olympia draws this before equipment, using that same body frame index.
+     */
+    private refreshOlympiaFrame(): void {
+        if (!this.olympiaBodyShadow || !this.shadowSprite || !this.frameSprite) {
+            return;
+        }
+        const sample = this.readBodyFrame();
+        if (!sample) {
+            this.shadowSprite.setVisible(false);
+            return;
+        }
+
+        let pivotX = 0;
+        let pivotY = 0;
+        const pivotFrame = this.shadowPivotData?.[sample.frameIndex];
+        if (pivotFrame && pivotFrame.width !== 0 && pivotFrame.height !== 0) {
+            pivotX = pivotFrame.pivotX;
+            pivotY = pivotFrame.pivotY;
+        }
+
+        const cacheKey = `olympia-body-shadow:${sample.textureKey}:${sample.frameName}:${pivotX}:${pivotY}`;
+        if (cacheKey === this.lastOlympiaKey && this.shadowSprite.texture.key === cacheKey) {
+            return;
+        }
+        let baked = bakedOlympiaShadows.get(cacheKey);
+        if (!baked || !this.scene.textures.exists(cacheKey)) {
+            const stamp = rasterizeOlympiaBodyShadow(
+                sample.width,
+                sample.height,
+                pivotX,
+                pivotY,
+                sample.rgba,
+            );
+            if (!stamp) {
+                this.shadowSprite.setVisible(false);
+                return;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = stamp.width;
+            canvas.height = stamp.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                this.shadowSprite.setVisible(false);
+                return;
+            }
+            ctx.putImageData(new ImageData(stamp.rgba, stamp.width, stamp.height), 0, 0);
+            this.scene.textures.addCanvas(cacheKey, canvas);
+            const texture = this.scene.textures.get(cacheKey) as { source?: Array<{ scaleMode?: number }> };
+            if (texture.source && texture.source[0]) {
+                texture.source[0].scaleMode = 0;
+            }
+            baked = { originX: stamp.originX, originY: stamp.originY };
+            bakedOlympiaShadows.set(cacheKey, baked);
+        }
+
+        this.olympiaOriginX = baked.originX;
+        this.olympiaOriginY = baked.originY;
+        if (this.shadowSprite.texture.key !== cacheKey) {
+            this.shadowSprite.setTexture(cacheKey);
+        }
+        this.shadowSprite.setOrigin(0, 0);
+        this.shadowSprite.setRotation(0);
+        this.shadowSprite.setScale(1, 1);
+        this.shadowSprite.setTint(0xffffff);
+        this.shadowSprite.setAlpha(this.requestedAlpha);
+        this.shadowSprite.setVisible(this.requestedAlpha > 0);
+        this.lastOlympiaKey = cacheKey;
+        this.updatePosition();
+    }
+
+    /** Pixels of the hidden body frame. Refuses the live world canvas. */
+    private readBodyFrame(): {
+        textureKey: string;
+        frameName: string;
+        frameIndex: number;
+        width: number;
+        height: number;
+        rgba: Uint8ClampedArray;
+    } | undefined {
+        const sourceSprite = this.frameSprite;
+        if (!sourceSprite) {
+            return undefined;
+        }
+        const textureKey = sourceSprite.texture?.key;
+        const frame = sourceSprite.frame;
+        if (!textureKey || !frame) {
+            return undefined;
+        }
+        const source = sourceSprite.texture.getSourceImage?.() as CanvasImageSource | undefined;
+        if (!source || isWorldCanvasImageSource(source, this.scene.game?.canvas)) {
+            return undefined;
+        }
+        const width = frame.cutWidth || frame.width;
+        const height = frame.cutHeight || frame.height;
+        if (width <= 0 || height <= 0) {
+            return undefined;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+            return undefined;
+        }
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(source, frame.cutX, frame.cutY, width, height, 0, 0, width, height);
+        const frameName = String(frame.name);
+        // `__BASE` is the whole sheet. Stamping that is a pile of bodies, not one frame.
+        if (frameName === '__BASE' || frameName === '__MISSING' || frameName === '__DEFAULT') {
+            return undefined;
+        }
+        const parsed = parseInt(frameName, 10);
+        const frameIndex = Number.isNaN(parsed) ? 0 : parsed;
+        return {
+            textureKey,
+            frameName,
+            frameIndex,
+            width,
+            height,
+            rgba: ctx.getImageData(0, 0, width, height).data,
+        };
+    }
+}
+
+function ensureOlympiaShadowBlank(scene: Scene): string {
+    if (!scene.textures.exists(OLYMPIA_SHADOW_BLANK_KEY)) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        scene.textures.addCanvas(OLYMPIA_SHADOW_BLANK_KEY, canvas);
+    }
+    return OLYMPIA_SHADOW_BLANK_KEY;
 }
